@@ -1,7 +1,10 @@
 # TODO:
 # - Select/Load characters or unload/select none
-# add modes + add agent mode
-# add a way to switch the selected llm
+# - add modes + add agent mode
+# - add a way to switch the selected llm
+# - model (list, set)
+#   > Needs a way to filter models (since there are lots)
+#   > Needs both name and type so that the system can identify how to run (json or dict?)
 
 import os, uuid
 import file, apiOpenAi, help
