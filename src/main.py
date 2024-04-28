@@ -1,9 +1,11 @@
 # TODO:
-# - Select/Load characters or unload/select none
+# - create new characters or update existing (need to move characters to json files)
 # - add modes + add agent mode
-# - add a way to switch the selected llm
+# - print the conversation from a selected file
+# - add openai streaming support
+# - add ability to rename conversations, and perhaps have ai name conversations automatically
 # - model (list, set)
-#   > Needs a way to filter models (since there are lots)
+#   > Needs a way to filter models (since there are lots) (list image or list llm?)
 #   > Needs both name and type so that the system can identify how to run (json or dict?)
 
 import os, uuid
@@ -19,7 +21,7 @@ selectedCharacter: str = "writer"
 
 conversationDirectory: str = "history"
 conversation: list[str] = []
-characters: list[str] = {
+characters = {
   "default": {"role": "system", "content": "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair."},
   "writer": {"role": "system", "content": "You are a brilliant writer, always addding events and details that give life to the story, making sure to show and not tell about environments, characters, and actions."}
 }
@@ -30,6 +32,14 @@ def clear() -> None:
     os.system("clear")
   else:
     os.system("cls")
+
+# Print currently selected character
+def currentCharacter():
+  global selectedCharacter
+  if (selectedCharacter):
+    print(selectedCharacter)
+  else:
+    print("No character selected")
 
 # Extract all messages from the conversations object
 def extractMessages(conversation) -> list[str]:
@@ -44,6 +54,16 @@ def extractMessages(conversation) -> list[str]:
       print("Error appending message from conversation, skipping line")
 
   return messages
+
+# Return a list of all characters
+def getCharacters() -> list[str]:
+  global characters
+  characterList: list[str] = []
+
+  for character in characters.keys():
+    str(characterList.append(character))
+
+  return characterList
 
 # Get and return user input using a standardized prompt symbol
 def getUserInput() -> str:
@@ -191,6 +211,14 @@ def processArgs(commands: list[str]) -> bool:
         listCharacters(commands[2])
       elif (commands[1] == "list"):
         listCharacters()
+      elif (commands[1] == "remove" or commands[1] == "unset"):
+        removeCharacter()
+      elif ((commands[1] == "set" or commands[1] == "select") and totalCommands > 2):
+        setCharacter(commands[2])
+      elif (commands[1] == "set" or commands[1] == "select"):
+        print("No character selected")
+      elif (commands[1] == "print" or commands[1] == "current"):
+        currentCharacter()
       else:
         help.unrecognizedCommand()
     else:
@@ -211,6 +239,11 @@ def processCommands(userInput: str) -> bool:
     runLlm(userInput)
 
   return exitProgram
+
+# Remove character prompt
+def removeCharacter():
+  global selectedCharacter
+  selectedCharacter = ""
 
 # Organize the conversation and send user query to the selected LLM
 def runLlm(userInput: str) -> None:
@@ -234,10 +267,10 @@ def runLlm(userInput: str) -> None:
   messages = extractMessages(conversation)
 
   # Print all messages in message list for troubleshooting
-  print("##### DEBUG #####")
-  for each in messages:
-    print(each)
-  print("##### END OF DEBUG #####")
+  # print("##### DEBUG #####")
+  # for each in messages:
+  #   print(each)
+  # print("##### END OF DEBUG #####")
 
   # Llm decision tree
   if (selectedLlm == "1"):
@@ -254,6 +287,15 @@ def runLlm(userInput: str) -> None:
       conversation.append({ "line_type": "openai", "contains": file.to_dict(apiResponse)})
 
   file.save_file(file.to_json(conversation), (os.path.join(conversationDirectory, selectedConversation)))
+
+# Set the selected character
+def setCharacter(character: str):
+  global selectedCharacter
+
+  if (character in getCharacters()):
+    selectedCharacter = character
+  else:
+    print("Chosen character not found")
 
 if __name__ == "__main__":
   main()
