@@ -1,0 +1,2 @@
+include:
+  remote: https://gitlab.com/exofox/templates/docker-basic/raw/master/.noversion-ci.yml
