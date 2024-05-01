@@ -1,4 +1,5 @@
-version: '3.9'
+volumes:
+  ollama:
 
 services:
   py:
@@ -17,3 +18,12 @@ services:
       - .env
     volumes:
       - ./:/app
+
+  ollama-server:
+    image: ollama/ollama:latest
+    env_file:
+      - .env
+    ports:
+      - 11434:11434
+    volumes:
+      - ollama:/root/.ollama

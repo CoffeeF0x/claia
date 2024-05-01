@@ -1,4 +1,4 @@
-from openai import OpenAI
+import ollama
 
 def completionCall(messages, apiKey, baseUrl=""):
   result = ""

@@ -4,18 +4,20 @@
 # - print the conversation from a selected file
 # - add openai streaming support
 # - add ability to rename conversations, and perhaps have ai name conversations automatically
+# - create an option to enable a server that serves and updates md files, and sync conversations to md files
 # - model (list, set)
 #   > Needs a way to filter models (since there are lots) (list image or list llm?)
 #   > Needs both name and type so that the system can identify how to run (json or dict?)
 
 import os, uuid
-import file, apiOpenAi, help
+import file, help, tests
+import apiOpenAi, apiOllama
 
 openAiApiToken: str = ""
 localLlmApiToken: str = ""
 localLlmBaseUrl: str = ""
 
-selectedLlm: str = "2" # 1 for localLlm, 2 for OpenAi
+selectedLlm: str = "1" # 1 for localLlm, 2 for OpenAi
 selectedConversation: str = f"{str(uuid.uuid4())}.json"
 selectedCharacter: str = "writer"
 
@@ -112,7 +114,7 @@ def loadEnv() -> bool:
   global localLlmApiToken
   global localLlmBaseUrl
   success: bool = True
- 
+
   if "OPENAI_TOKEN" in os.environ:
     openAiApiToken = os.environ["OPENAI_TOKEN"]
   else:
@@ -223,6 +225,12 @@ def processArgs(commands: list[str]) -> bool:
         help.unrecognizedCommand()
     else:
       help.characterCommands()
+  elif (commands[0] == "t" or commands[0] == "test"):
+    if (totalCommands > 1):
+      if (commands[0] == "stream"):
+        tests.streamingTest()
+    else:
+      pass # add help section for test commands
 
   else:
     help.allCommands()
@@ -241,7 +249,7 @@ def processCommands(userInput: str) -> bool:
   return exitProgram
 
 # Remove character prompt
-def removeCharacter():
+def removeCharacter() -> None:
   global selectedCharacter
   selectedCharacter = ""
 
@@ -274,13 +282,13 @@ def runLlm(userInput: str) -> None:
 
   # Llm decision tree
   if (selectedLlm == "1"):
-    apiResponse = apiOpenAi.openaiCompletionCall(messages, localLlmApiToken, localLlmBaseUrl)
+    apiResponse = apiOpenAi.completionCall(messages, localLlmApiToken, localLlmBaseUrl)
     if (isinstance(apiResponse, str)):
       conversation.append({ "line_type": "error", "contains": file.to_dict(apiResponse)})
     else:
       conversation.append({ "line_type": "openai", "contains": file.to_dict(apiResponse)})
   elif (selectedLlm == "2"):
-    apiResponse = apiOpenAi.openaiCompletionCall(messages, openAiApiToken)
+    apiResponse = apiOpenAi.completionCall(messages, openAiApiToken)
     if (isinstance(apiResponse, str)):
       conversation.append({ "line_type": "error", "contains": file.to_dict(apiResponse)})
     else:
