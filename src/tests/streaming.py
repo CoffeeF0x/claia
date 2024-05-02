@@ -1,6 +1,6 @@
 import openai
 
-def streamingTest():
+def main():
   print("AI Streaming Test. Go!")
 
   response = client.chat.completions.create(

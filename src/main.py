@@ -10,8 +10,9 @@
 #   > Needs both name and type so that the system can identify how to run (json or dict?)
 
 import os, uuid
-import file, help, tests
+import file, help
 import apiOpenAi, apiOllama
+import tests.streaming, tests.techwithtimCodeGenerator
 
 openAiApiToken: str = ""
 localLlmApiToken: str = ""
@@ -227,8 +228,10 @@ def processArgs(commands: list[str]) -> bool:
       help.characterCommands()
   elif (commands[0] == "t" or commands[0] == "test"):
     if (totalCommands > 1):
-      if (commands[0] == "stream"):
-        tests.streamingTest()
+      if (commands[1] == "stream"):
+        tests.streaming.main()
+      elif (commands[1] == "code"):
+        tests.techwithtimCodeGenerator.main()
     else:
       pass # add help section for test commands
 
