@@ -12,7 +12,7 @@
 import os, uuid
 import file, help
 import apiOpenAi, apiOllama
-import tests.streaming, tests.techwithtimCodeGenerator
+import tests.streaming, tests.record #tests.techwithtimCodeGenerator,
 
 openAiApiToken: str = ""
 localLlmApiToken: str = ""
@@ -232,6 +232,8 @@ def processArgs(commands: list[str]) -> bool:
         tests.streaming.main()
       elif (commands[1] == "code"):
         tests.techwithtimCodeGenerator.main()
+      elif (commands[1] == "record"):
+        tests.record.main()
     else:
       pass # add help section for test commands
 

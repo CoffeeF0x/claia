@@ -3,3 +3,5 @@ history/
 __pycache__/
 test/
 data/
+pulseaudio/
+output.wav
