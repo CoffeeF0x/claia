@@ -28,7 +28,7 @@ class CodeOutput(BaseModel):
 ollamaBaseUri = "http://localhost:11434"
 if ("OLLAMA_BASEURL" in os.environ):
   ollamaBaseUri = os.environ["OLLAMA_BASEURL"]
-  print(f"OLLAMA_BASEURL set to {ollamaBaseUri}")
+#   print(f"OLLAMA_BASEURL set to {ollamaBaseUri}")
 else:
   print(f"No OLLAMA_BASEURL environment variable has not been set, using {ollamaBaseUri}")
 

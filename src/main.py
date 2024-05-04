@@ -11,25 +11,12 @@
 
 import os, uuid
 import file, help
-import apiOpenAi, apiOllama
-import tests.streaming, tests.record #tests.techwithtimCodeGenerator,
+import api.openAi
+import tests.streaming, tests.record, tests.techwithtimCodeGenerator, tests.index
 
-openAiApiToken: str = ""
-localLlmApiToken: str = ""
-localLlmBaseUrl: str = ""
+from settings import Settings
 
-selectedLlm: str = "1" # 1 for localLlm, 2 for OpenAi
-selectedConversation: str = f"{str(uuid.uuid4())}.json"
-selectedCharacter: str = "writer"
-
-conversationDirectory: str = "history"
-conversation: list[str] = []
-characters = {
-  "default": {"role": "system", "content": "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair."},
-  "writer": {"role": "system", "content": "You are a brilliant writer, always addding events and details that give life to the story, making sure to show and not tell about environments, characters, and actions."}
-}
-
-# Call the OS to clear the console
+# Clear the console
 def clear() -> None:
   if os.name == "posix":
     os.system("clear")
@@ -37,10 +24,9 @@ def clear() -> None:
     os.system("cls")
 
 # Print currently selected character
-def currentCharacter():
-  global selectedCharacter
-  if (selectedCharacter):
-    print(selectedCharacter)
+def currentCharacter(settings: Settings):
+  if settings.selectedCharacter:
+    print(settings.selectedCharacter)
   else:
     print("No character selected")
 
@@ -49,22 +35,24 @@ def extractMessages(conversation) -> list[str]:
   messages: list[str] = []
 
   for message in conversation:
-    if (message["line_type"] == "basic"):
+    if message["line_type"] == "basic":
       messages.append(message["contains"])
-    elif (message["line_type"] == "openai"):
-      messages.append({ "role": message["contains"]["choices"][0]["message"]["role"], "content": message["contains"]["choices"][0]["message"]["content"]})
+    elif message["line_type"] == "openai":
+      messages.append({
+        "role": message["contains"]["choices"][0]["message"]["role"],
+        "content": message["contains"]["choices"][0]["message"]["content"]
+      })
     else:
       print("Error appending message from conversation, skipping line")
 
   return messages
 
 # Return a list of all characters
-def getCharacters() -> list[str]:
-  global characters
+def getCharacters(settings: Settings) -> list[str]:
   characterList: list[str] = []
 
-  for character in characters.keys():
-    str(characterList.append(character))
+  for character in settings.characters.keys():
+    characterList.append(character)
 
   return characterList
 
@@ -73,95 +61,57 @@ def getUserInput() -> str:
   return input(":")
 
 # List the available characters
-def listCharacters(characterName: str = "") -> None:
-  global characters
-
-  if (characterName):
-    print(characters[characterName]["content"])
+def listCharacters(settings: Settings, characterName: str = "") -> None:
+  if characterName:
+    print(settings.characters[characterName]["content"])
   else:
-    # print(characters) 
-    for key, prompt in characters.items():
+    for key, prompt in settings.characters.items():
       print(key)
 
 # List all files in the conversation directory without .json file extensions
-def listConversations() -> None:
-  global conversationDirectory
-
-  for each in os.listdir(conversationDirectory):
-    if (each[-5:] == ".json"):
+def listConversations(settings: Settings) -> None:
+  for each in os.listdir(settings.conversationDirectory):
+    if each[-5:] == ".json":
       print(each[:-5])
     else:
       print(each)
 
 # Load a stored conversation 
-def loadConversation(conversationName: str) -> None:
-  global conversation
-  global conversationDirectory
-  global selectedConversation
-
+def loadConversation(settings: Settings, conversationName: str) -> None:
   if (conversationName[-5:] != ".json"):
-    selectedConversation = conversationName + ".json"
+    settings.selectedConversation = conversationName + ".json"
   else:
-    selectedConversation = conversationName
+    settings.selectedConversation = conversationName
 
-  if (os.path.join(conversationDirectory, selectedConversation)):
-    conversation = file.load_file(os.path.join(conversationDirectory, selectedConversation))
+  if (os.path.join(settings.conversationDirectory, settings.selectedConversation)):
+    settings.conversation = file.load_file(os.path.join(settings.conversationDirectory, settings.selectedConversation))
   else:
     print("Conversation not found")
-
-# Load environment variables to use inside the function
-def loadEnv() -> bool:
-  global openAiApiToken
-  global localLlmApiToken
-  global localLlmBaseUrl
-  success: bool = True
-
-  if "OPENAI_TOKEN" in os.environ:
-    openAiApiToken = os.environ["OPENAI_TOKEN"]
-  else:
-    success = False
-    print("No OpenAI API Token found")
-
-  if "LOCALLLM_TOKEN" in os.environ:
-    localLlmApiToken = os.environ["LOCALLLM_TOKEN"]
-  else:
-    success = False
-    print("No LocalLLM API Token found")
-
-  if "LOCALLLM_BASEURL" in os.environ:
-    localLlmBaseUrl = os.environ["LOCALLLM_BASEURL"]
-  else:
-    success = False
-    print("No LocalLLM Base URL found")
-
-  return success
 
 # Main function
 def main() -> None:
   userInput: str = ""
   exitProgram: bool = False
 
-  loadEnv()
+  settings = Settings()
 
   while not exitProgram:
     userInput = getUserInput()
-    exitProgram = processCommands(userInput)
+    exitProgram = processCommands(userInput, settings)
 
 # Create a new conversation
-def newConversation() -> None:
-  global conversation
-  conversation = []
+def newConversation(settings: Settings) -> None:
+  settings.conversation = []
 
 # Print the current conversation
-def printConversation() -> None:
-  global conversation
-  messages = extractMessages(conversation)
+def printConversation(settings: Settings) -> None:
+  messages = extractMessages(settings.conversation)
   for each in messages:
     print("\n##### SOURCE: " + each["role"])
     print(each["content"])
 
 # Process a list of commands or return an error message
-def processArgs(commands: list[str]) -> bool:
+def processArgs(commands: list[str], settings: Settings) -> bool:
   exitProgram: bool = False
   totalCommands: int = len(commands)
   commandCounter: int = 0
@@ -192,17 +142,17 @@ def processArgs(commands: list[str]) -> bool:
   elif (commands[0] == "conversation" or commands[0] == "conversations"):
     if (totalCommands > 1):
       if (commands[1] == "load" and totalCommands > 2):
-        loadConversation(commands[2])
+        loadConversation(settings, commands[2])
       elif (commands[1] == "load"):
         print("No filename provided")
       elif (commands[1] == "print" and totalCommands > 2):
         pass # print the conversation stored in a specific file
       elif (commands[1] == "print"):
-        printConversation()
+        printConversation(settings)
       elif (commands[1] == "new"):
-        newConversation()
+        newConversation(settings)
       elif (commands[1] == "list"):
-        listConversations()
+        listConversations(settings)
       else:
         help.unrecognizedCommand()
     else:
@@ -211,21 +161,22 @@ def processArgs(commands: list[str]) -> bool:
   elif (commands[0] == "character" or commands[0] == "characters"):
     if (totalCommands > 1):
       if (commands[1] == "list" and totalCommands > 2):
-        listCharacters(commands[2])
+        listCharacters(settings, commands[2])
       elif (commands[1] == "list"):
-        listCharacters()
+        listCharacters(settings)
       elif (commands[1] == "remove" or commands[1] == "unset"):
-        removeCharacter()
+        removeCharacter(settings)
       elif ((commands[1] == "set" or commands[1] == "select") and totalCommands > 2):
-        setCharacter(commands[2])
+        setCharacter(commands[2], settings)
       elif (commands[1] == "set" or commands[1] == "select"):
         print("No character selected")
       elif (commands[1] == "print" or commands[1] == "current"):
-        currentCharacter()
+        currentCharacter(settings)
       else:
         help.unrecognizedCommand()
     else:
       help.characterCommands()
+
   elif (commands[0] == "t" or commands[0] == "test"):
     if (totalCommands > 1):
       if (commands[1] == "stream"):
@@ -234,6 +185,8 @@ def processArgs(commands: list[str]) -> bool:
         tests.techwithtimCodeGenerator.main()
       elif (commands[1] == "record"):
         tests.record.main()
+      elif (commands[1] == "index"):
+        tests.index.main()
     else:
       pass # add help section for test commands
 
@@ -243,34 +196,33 @@ def processArgs(commands: list[str]) -> bool:
   return exitProgram
 
 # Check the user input string for any commands or queries
-def processCommands(userInput: str) -> bool:
+def processCommands(userInput: str, settings: Settings) -> bool:
   exitProgram: bool = False
 
   if (userInput and userInput[0] == ":"):
-    exitProgram = processArgs(userInput[1:].split(" "))
+    exitProgram = processArgs(userInput[1:].lower().split(" "), settings)
   else:
-    runLlm(userInput)
+    runLlm(userInput, settings)
 
   return exitProgram
 
 # Remove character prompt
-def removeCharacter() -> None:
-  global selectedCharacter
-  selectedCharacter = ""
+def removeCharacter(settings: Settings) -> None:
+  settings.selectedCharacter = ""
 
 # Organize the conversation and send user query to the selected LLM
-def runLlm(userInput: str) -> None:
-  global conversation
-  global selectedConversation
-  global selectedLlm
-  global conversationDirectory
-  global selectedCharacter
+def runLlm(userInput: str, settings: Settings) -> None:
+  conversation = settings.conversation
+  selectedConversation = settings.selectedConversation
+  selectedLlm = settings.selectedLlm
+  conversationDirectory = settings.conversationDirectory
+  selectedCharacter = settings.selectedCharacter
 
   apiResponse: str = ""
   messages: list[str] = []
 
   if (len(conversation) == 0 and selectedCharacter):
-    conversation.append({ "line_type": "basic", "contains": characters[selectedCharacter]})
+    conversation.append({ "line_type": "basic", "contains": settings.characters[selectedCharacter]})
   for each in messages:
     conversation.append({ "line_type": "basic", "contains": each})
 
@@ -287,13 +239,13 @@ def runLlm(userInput: str) -> None:
 
   # Llm decision tree
   if (selectedLlm == "1"):
-    apiResponse = apiOpenAi.completionCall(messages, localLlmApiToken, localLlmBaseUrl)
+    apiResponse = api.openAi.completionCall(messages, settings.localLlmApiToken, settings.localLlmBaseUrl)
     if (isinstance(apiResponse, str)):
       conversation.append({ "line_type": "error", "contains": file.to_dict(apiResponse)})
     else:
       conversation.append({ "line_type": "openai", "contains": file.to_dict(apiResponse)})
   elif (selectedLlm == "2"):
-    apiResponse = apiOpenAi.completionCall(messages, openAiApiToken)
+    apiResponse = api.openAi.completionCall(messages, settings.openAiApiToken)
     if (isinstance(apiResponse, str)):
       conversation.append({ "line_type": "error", "contains": file.to_dict(apiResponse)})
     else:
@@ -302,11 +254,9 @@ def runLlm(userInput: str) -> None:
   file.save_file(file.to_json(conversation), (os.path.join(conversationDirectory, selectedConversation)))
 
 # Set the selected character
-def setCharacter(character: str):
-  global selectedCharacter
-
-  if (character in getCharacters()):
-    selectedCharacter = character
+def setCharacter(character: str, settings: Settings):
+  if (character in getCharacters(settings)):
+    settings.selectedCharacter = character
   else:
     print("Chosen character not found")
 
