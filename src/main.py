@@ -12,7 +12,7 @@
 import os, uuid
 import file, help
 import api.openAi
-import tests.streaming, tests.record, tests.techwithtimCodeGenerator, tests.index
+import tests.streaming, tests.record, tests.techwithtimCodeGenerator, tests.index #, tests.audio
 
 from settings import Settings
 
@@ -186,7 +186,7 @@ def processArgs(commands: list[str], settings: Settings) -> bool:
       elif (commands[1] == "record"):
         tests.record.main()
       elif (commands[1] == "index"):
-        tests.index.main()
+        tests.index.main(settings)
     else:
       pass # add help section for test commands
 
