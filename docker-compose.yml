@@ -3,13 +3,6 @@ volumes:
   models:
 
 services:
-  py:
-    image: python:3.12-slim
-    env_file:
-      - .env
-    volumes:
-      - ./:/app
-
   dev:
     image: clai:dev
     build:
@@ -17,8 +10,8 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
-    volumes:
-      - ./:/app
+    # volumes:
+    #   - ./:/app
     # deploy:
     #   resources:
     #     reservations:
@@ -26,28 +19,3 @@ services:
     #         - driver: nvidia
     #           device_ids: ['0']
     #           capabilities: [gpu]
-
-  ollama-server:
-    image: ollama/ollama:latest
-    env_file:
-      - .env
-    ports:
-      - 11434:11434
-    volumes:
-      - ollama:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ['0']
-              capabilities: [gpu]
-
-  llama.cpp-server:
-    image: exofox/llama.cpp-server:latest
-    env_file:
-      - .env
-    ports:
-      - 32080:80
-    volumes:
-      - models:/app/models

@@ -1,11 +1,2 @@
-openai
-requests
-ollama
-sounddevice
-soundfile
-numpy
-
-onnxruntime
-levenshtein
-loguru
-jinja2
+torch
+diffusers
