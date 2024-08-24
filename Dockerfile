@@ -15,6 +15,6 @@ ENV LOCALLLM_BASEURL=${LOCALLLM_BASEURL}
 ENV LLAMA_CLOUD_API_KEY=${LLAMA_CLOUD_API_KEY}
 ENV PULSE_SERVER=host.docker.internal
 
-ENTRYPOINT [ "bash" ]
-# ENTRYPOINT [ "python", "src/main.py" ]
+# ENTRYPOINT [ "bash" ]
+ENTRYPOINT [ "python", "src/main.py" ]
 # ENTRYPOINT [ "python", "main.py" ]

@@ -1,6 +1,9 @@
 volumes:
-  ollama:
+  # ollama:
   models:
+  files-db:
+  files-config:
+  files:
 
 services:
   dev:
@@ -10,12 +13,24 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
-    # volumes:
-    #   - ./:/app
+    volumes:
+      - files:/app/files
     # deploy:
     #   resources:
     #     reservations:
     #       devices:
     #         - driver: nvidia
-    #           device_ids: ['0']
+    #           count: all
     #           capabilities: [gpu]
+
+  files:
+    image: filebrowser/filebrowser:s6
+    ports:
+      - ${IP:-0.0.0.0}:${FILES_PORT:-8080}:80
+    # environment:
+    #   - PUID=$(id -u)
+    #   - PGID=$(id -g)
+    volumes:
+      - files-db:/database # filebrowser.db
+      - files-config:/config # settings.json
+      - files:/srv
