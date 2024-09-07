@@ -237,7 +237,7 @@ def runLlm(userInput: str, settings: Settings) -> None:
 
   # Llm decision tree
   if (selectedLlm == "0"):
-    print(ai.main())
+    print(ai.main(settings.anthropicApiToken, "This is a message"))
 
   # if (selectedLlm == "1"):
   #   apiResponse = api.openAi.completionCall(messages, settings.localLlmApiToken, settings.localLlmBaseUrl)
