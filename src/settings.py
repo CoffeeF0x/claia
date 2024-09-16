@@ -54,14 +54,17 @@ class Settings:
     """
     Load configuration settings from environment variables.
     """
-    self.openai_api_token = os.environ.get("TOKEN_OPENAI", self.openai_api_token)
-    self.anthropic_api_token = os.environ.get("TOKEN_ANTHROPIC", self.anthropic_api_token)
-    self.local_llm_api_token = os.environ.get("TOKEN_LOCAL", self.local_llm_api_token)
-    self.local_llm_base_url = os.environ.get("LOCALLLM_BASEURL", self.local_llm_base_url)
-    self.massed_compute_api_token = os.environ.get("TOKEN_MASSEDCOMPUTE", self.massed_compute_api_token)
-    self.selected_character = os.environ.get("SELECTED_CHARACTER", self.selected_character)
-    self.conversation_directory = os.environ.get("CONVERSATION_DIRECTORY", self.conversation_directory)
-    self.selected_conversation = os.environ.get("SELECTED_CONVERSATION", self.selected_conversation)
+    def strip_quotes(value: str) -> str:
+      return value.strip("\"'") if value else value
+
+    self.openai_api_token = strip_quotes(os.environ.get("TOKEN_OPENAI", self.openai_api_token))
+    self.anthropic_api_token = strip_quotes(os.environ.get("TOKEN_ANTHROPIC", self.anthropic_api_token))
+    self.local_llm_api_token = strip_quotes(os.environ.get("TOKEN_LOCAL", self.local_llm_api_token))
+    self.local_llm_base_url = strip_quotes(os.environ.get("LOCALLLM_BASEURL", self.local_llm_base_url))
+    self.massed_compute_api_token = strip_quotes(os.environ.get("TOKEN_MASSEDCOMPUTE", self.massed_compute_api_token))
+    self.selected_character = strip_quotes(os.environ.get("SELECTED_CHARACTER", self.selected_character))
+    self.conversation_directory = strip_quotes(os.environ.get("CONVERSATION_DIRECTORY", self.conversation_directory))
+    self.selected_conversation = strip_quotes(os.environ.get("SELECTED_CONVERSATION", self.selected_conversation))
 
   def load_from_args(self, args: argparse.Namespace) -> None:
     """
