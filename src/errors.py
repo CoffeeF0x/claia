@@ -42,7 +42,7 @@ class Result:
 
   @staticmethod
   def fail(message: str, data: Any = None) -> 'Result':
-    return Result(error=False, data=data, message=message)
+    return Result(success=False, data=data, message=message)
 
   @staticmethod
   def shutdown(message: str = "Shutting down", exit: bool = True, exit_code: int = 0) -> 'Result':

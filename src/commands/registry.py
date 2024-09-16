@@ -1,3 +1,5 @@
+import help
+
 from commands.characters import CharacterCommand
 from commands.conversations import ConversationCommand
 from commands.experimental import ExperimentalCommand
