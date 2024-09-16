@@ -1,5 +1,6 @@
 from commands.characters import CharacterCommand
 from commands.conversations import ConversationCommand
+from commands.experimental import ExperimentalCommand
 from commands.system import SystemCommand
 from errors import Result
 from settings import Settings
@@ -65,4 +66,9 @@ command_registry = {
 
   "conversation":  ConversationCommand(),
   "conversations": ConversationCommand(),
+
+  "e":  ExperimentalCommand(),
+  "exp":  ExperimentalCommand(),
+  "experiment":  ExperimentalCommand(),
+  "experimental":  ExperimentalCommand(),
 }
