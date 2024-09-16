@@ -1,0 +1,92 @@
+from abc import ABC, abstractmethod
+from typing import List, Dict, Any, Optional
+import requests
+
+# Internal dependencies
+from errors import Result
+from settings import Settings
+
+
+
+##################################################
+#                  BASE CLASSES                  #
+##################################################
+class BaseModel(ABC):
+  def __init__(self, model_name: str):
+    self.model_name = model_name
+
+  @abstractmethod
+  def generate(self, messages: list, **kwargs) -> str:
+    """Generate a response based on the given prompt."""
+    pass
+
+  # @property
+  # @abstractmethod
+  # def max_tokens(self) -> int:
+  #   """Return the maximum number of tokens the model can handle."""
+  #   pass
+
+  # @abstractmethod
+  # def get_model_info(self) -> Dict[str, Any]:
+  #   """Return information about the model."""
+  #   pass
+
+
+class APIModel(BaseModel):
+  def __init__(self, model_name: str, base_url: str):
+    super().__init__(model_name)
+    self.base_url = base_url
+    self.session = requests.Session()
+
+  def set_api_key(self, api_key: str) -> None:
+    """Set the API key for authentication."""
+    self.session.headers.update({"Authorization": f"Bearer {api_key}"})
+
+  def set_custom_header(self, header_name: str, header_value: str) -> None:
+    """Set a custom header for authentication or other purposes."""
+    self.session.headers.update({header_name: header_value})
+
+  def request(self, method: str, endpoint: str, data: Optional[Dict] = None, params: Optional[Dict] = None) -> requests.Response:
+    """Make an API request with the configured session."""
+    url = f"{self.base_url}/{endpoint}"
+    response = self.session.request(method, url, json=data, params=params)
+    response.raise_for_status()
+    return response
+
+  def get(self, endpoint: str, params: Optional[Dict] = None) -> requests.Response:
+    """Make a GET request to the API."""
+    return self.request("GET", endpoint, params=params)
+
+  def post(self, endpoint: str, data: Dict) -> requests.Response:
+    """Make a POST request to the API."""
+    return self.request("POST", endpoint, data=data)
+
+  def put(self, endpoint: str, data: Dict) -> requests.Response:
+    """Make a PUT request to the API."""
+    return self.request("PUT", endpoint, data=data)
+
+  def delete(self, endpoint: str) -> requests.Response:
+    """Make a DELETE request to the API."""
+    return self.request("DELETE", endpoint)
+
+
+class LocalModel(BaseModel):
+  @abstractmethod
+  def load(self) -> None:
+    """Load the model."""
+    pass
+
+  @abstractmethod
+  def unload(self) -> None:
+    """Unload the model."""
+    pass
+
+  @abstractmethod
+  def tokenize(self, text: str) -> List[int]:
+    """Tokenize the input text."""
+    pass
+
+  @abstractmethod
+  def detokenize(self, tokens: List[int]) -> str:
+    """Convert tokens back to text."""
+    pass

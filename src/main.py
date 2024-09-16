@@ -13,9 +13,10 @@
 import os
 
 # Internal dependencies
-import file, ai
+import file #, ai
 from commands.registry import run as command
 from errors import Result
+from models.openai import OpenAITextModel
 from settings import Settings, SettingsFactory
 from utilities import *
 
@@ -41,29 +42,29 @@ def processCommands(userInput: str, settings: Settings) -> Result:
 
 # Organize the conversation and send user query to the selected LLM
 def runLlm(userInput: str, settings: Settings) -> None:
-  conversation = settings.conversation
-  selected_conversation = settings.selected_conversation
-  selected_llm = settings.selected_llm
-  conversation_directory = settings.conversation_directory
-  selected_character = settings.selected_character
-
-  apiResponse: str = ""
-  messages: list[str] = []
-
-  if len(conversation) == 0 and selected_character:
-    conversation.append({"line_type": "basic", "contains": settings.characters[selected_character]})
-  for each in messages:
-    conversation.append({"line_type": "basic", "contains": each})
+  if len(settings.conversation) == 0 and settings.selected_character:
+    settings.conversation.append(settings.characters[settings.selected_character])
+  # for each in settings.conversation:
+  #   settings.conversation.append(each)
 
   # Append the user's prompt to the conversation if not empty, then build the message list
   if userInput:
-    conversation.append({"line_type": "basic", "contains": {"role": "user", "content": userInput}})
+    settings.conversation.append({"role": "user", "content": userInput})
 
-  # Llm decision tree
-  if selected_llm == "0":
-    print(ai.main(settings.anthropic_api_token, "This is a message"))
+  # print(f"Here is the conversations thus far: {settings.conversation}")
+  # print(f"Here is the api key: {settings.openai_api_token}")
 
-  file.save_file(file.to_json(conversation), os.path.join(conversation_directory, selected_conversation))
+  # Run Llm
+  # print(ai.main(settings.anthropic_api_token, "This is a message"))
+  llm = OpenAITextModel("gpt-3.5-turbo")
+  llm.set_api_key(settings.openai_api_token)
+
+  # print(f"Here is the request header: {llm.session.headers}")
+  settings.conversation.append(llm.generate(settings.conversation))
+
+  print(settings.conversation)
+
+  file.save_file(file.to_json(settings.conversation), os.path.join(settings.conversation_directory, settings.selected_conversation))
 
 
 
