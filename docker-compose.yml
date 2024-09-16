@@ -15,13 +15,14 @@ services:
       - .env
     volumes:
       - files:/app/files
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+      # - ./output:/app/files
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   files:
     image: filebrowser/filebrowser:s6
