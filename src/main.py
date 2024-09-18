@@ -1,20 +1,19 @@
 # TODO:
 # - create new characters or update existing (need to move characters to json files)
 # - add modes + add agent mode
-# - print the conversation from a selected file
 # - add openai streaming support
 # - add ability to rename conversations, and perhaps have ai name conversations automatically
 # - create an option to enable a server that serves and updates md files, and sync conversations to md files
 # - model (list, set)
 #   > Needs a way to filter models (since there are lots) (list image or list llm?)
 #   > Needs both name and type so that the system can identify how to run (json or dict?)
-# - fix settings help display
 
 import os
 
 # Internal dependencies
 import file #, ai
 from commands.registry import run as command
+from models.registry import run as model_run
 from errors import Result
 from models.openai import OpenAITextModel
 from settings import Settings, SettingsFactory
@@ -50,14 +49,15 @@ def runLlm(userInput: str, settings: Settings) -> None:
   if userInput:
     settings.active_chat.store("user", userInput)
 
-  # Run Llm
-  llm = OpenAITextModel("gpt-3.5-turbo")
-  llm.set_api_key(settings.openai_api_token)
+  # Run the active model
+  result = model_run(settings.active_model, settings.active_chat.messages(), settings=settings)
 
-  response = llm.generate(settings.active_chat.messages())
-  settings.active_chat.store("assistant", response['content'])
-
-  print(response['content'])
+  if result.is_error():
+    print(f"Error running model: {result.get_message()}")
+  else:
+    response = result.data
+    settings.active_chat.store("assistant", response["content"])
+    print(response["content"])
 
   # Save the updated chat history
   settings.active_chat.save()

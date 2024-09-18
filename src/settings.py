@@ -20,11 +20,11 @@ class Settings:
     local_llm_api_token (str): API token for local LLM.
     local_llm_base_url (str): Base URL for local LLM.
     massed_compute_api_token (str): API token for Massed Compute.
-    selected_llm (str): Currently selected LLM.
     prompt_store_directory (str): Directory to store LLM prompt stores.
     chat_history_directory (str): Directory to store chat histories.
     active_prompt (Optional[LLMPromptStore]): Currently active system prompt.
     active_chat (Optional[ChatHistory]): Currently active chat history.
+    active_model (str): Currently active model name.
   """
 
   def __init__(self):
@@ -34,11 +34,12 @@ class Settings:
     self.local_llm_api_token: str = ""
     self.local_llm_base_url: str = ""
     self.massed_compute_api_token: str = ""
-    self.selected_llm: str = "0"
+    self.model_directory: str = "models"
     self.prompt_store_directory: str = "prompts"
     self.chat_history_directory: str = "history"
     self.active_prompt: LLMPromptStore = LLMPromptStore.load_default_or_first(self.prompt_store_directory)
     self.active_chat: ChatHistory = ChatHistory(self.chat_history_directory, "New Conversation", [])
+    self.active_model: str = "gpt-3.5-turbo"  # Default model
 
   def load_from_env(self) -> None:
     """
@@ -54,6 +55,8 @@ class Settings:
     self.massed_compute_api_token = strip_quotes(os.environ.get("TOKEN_MASSEDCOMPUTE", self.massed_compute_api_token))
     self.prompt_store_directory = strip_quotes(os.environ.get("PROMPT_STORE_DIRECTORY", self.prompt_store_directory))
     self.chat_history_directory = strip_quotes(os.environ.get("CHAT_HISTORY_DIRECTORY", self.chat_history_directory))
+    self.model_directory = strip_quotes(os.environ.get("MODEL_DIRECTORY", self.model_directory))
+    self.active_model = strip_quotes(os.environ.get("ACTIVE_MODEL", self.active_model))
 
   def load_from_args(self, args: argparse.Namespace) -> None:
     """
@@ -114,9 +117,9 @@ class SettingsFactory:
     parser.add_argument("--local-llm-api-token", help="LocalLLM API Token")
     parser.add_argument("--local-llm-base-url", help="LocalLLM Base URL")
     parser.add_argument("--massed-compute-api-token", help="Massed Compute API Token")
-    parser.add_argument("--selected-llm", help="Selected LLM")
     parser.add_argument("--prompt-store-directory", help="Prompt Store Directory")
     parser.add_argument("--chat-history-directory", help="Chat History Directory")
+    parser.add_argument("--active-model", help="Active Model")
     args = parser.parse_args()
 
     # Load from command-line arguments (overrides environment variables)
@@ -131,4 +134,3 @@ if __name__ == "__main__":
     print("Settings loaded successfully")
   else:
     print("Error loading settings")
-

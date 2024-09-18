@@ -11,6 +11,8 @@ def allCommands() -> None:
   print("    - commands related to characters or system promts")
   print("  conversation, conversations")
   print("    - commands related to conversations and saved messages")
+  print("  model, models")
+  print("    - commands related to selecting and managing language models")
 
 def characterCommands() -> None:
   print("Here are the available character commands:")
@@ -36,6 +38,17 @@ def conversationCommands() -> None:
 
 def expirimentalCommands() -> None:
   print("Here are the available expirimental commands:")
+
+def modelCommands() -> None:
+  print("Here are the available model commands:")
+  print("  list")
+  print("    - list all available models")
+  print("  list <model>")
+  print("    - display details about a specific model")
+  print("  set, select <model>")
+  print("    - select a model to use for generation")
+  print("  print, current")
+  print("    - display the current model selection")
 
 def systemCommands() -> None:
   print("Here are the available system commands:")

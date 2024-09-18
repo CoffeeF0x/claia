@@ -71,6 +71,19 @@ class APIModel(BaseModel):
 
 
 class LocalModel(BaseModel):
+  model = None
+
+  def __init__(self, model_name: str, model_path: str, defer_loading: bool = False):
+    super().__init__(model_name)
+    self.model_path = model_path
+    self.loaded = not defer_loading
+
+    if not defer_loading:
+      self.load()
+
+  def is_loaded(self) -> bool:
+    return self.loaded
+
   @abstractmethod
   def load(self) -> None:
     """Load the model."""
@@ -79,7 +92,7 @@ class LocalModel(BaseModel):
   @abstractmethod
   def unload(self) -> None:
     """Unload the model."""
-    pass
+    self.model = None
 
   @abstractmethod
   def tokenize(self, text: str) -> List[int]:
@@ -89,4 +102,9 @@ class LocalModel(BaseModel):
   @abstractmethod
   def detokenize(self, tokens: List[int]) -> str:
     """Convert tokens back to text."""
+    pass
+
+  @abstractmethod
+  def download(self, model_path: str) -> None:
+    """Download the model to the specified path."""
     pass
