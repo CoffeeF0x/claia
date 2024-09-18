@@ -1,8 +1,7 @@
 torch
 diffusers
-
-diffusers
 transformers
 accelerate
 scipy
 safetensors
+markdownify
