@@ -42,29 +42,25 @@ def processCommands(userInput: str, settings: Settings) -> Result:
 
 # Organize the conversation and send user query to the selected LLM
 def runLlm(userInput: str, settings: Settings) -> None:
-  if len(settings.conversation) == 0 and settings.selected_character:
-    settings.conversation.append(settings.characters[settings.selected_character])
-  # for each in settings.conversation:
-  #   settings.conversation.append(each)
+  # If the conversation is empty and a character is selected, add the system prompt
+  if len(settings.active_chat.messages()) == 0 and settings.active_prompt:
+    settings.active_chat.store("system", settings.active_prompt.prompt)
 
-  # Append the user's prompt to the conversation if not empty, then build the message list
+  # Append the user's prompt to the conversation if not empty
   if userInput:
-    settings.conversation.append({"role": "user", "content": userInput})
-
-  # print(f"Here is the conversations thus far: {settings.conversation}")
-  # print(f"Here is the api key: {settings.openai_api_token}")
+    settings.active_chat.store("user", userInput)
 
   # Run Llm
-  # print(ai.main(settings.anthropic_api_token, "This is a message"))
   llm = OpenAITextModel("gpt-3.5-turbo")
   llm.set_api_key(settings.openai_api_token)
 
-  # print(f"Here is the request header: {llm.session.headers}")
-  settings.conversation.append(llm.generate(settings.conversation))
+  response = llm.generate(settings.active_chat.messages())
+  settings.active_chat.store("assistant", response['content'])
 
-  print(settings.conversation)
+  print(response['content'])
 
-  file.save_file(file.to_json(settings.conversation), os.path.join(settings.conversation_directory, settings.selected_conversation))
+  # Save the updated chat history
+  settings.active_chat.save()
 
 
 

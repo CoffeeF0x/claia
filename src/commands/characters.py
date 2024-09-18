@@ -1,6 +1,7 @@
 from commands.base import Command
 from errors import Result
 from settings import Settings
+import help
 
 
 
@@ -38,30 +39,41 @@ class CharacterCommand(Command):
 ##################################################
 # Print currently selected character
 def currentCharacter(settings: Settings):
-  if settings.selected_character:
-    print(settings.selected_character)
+  if settings.active_prompt:
+    print(settings.active_prompt.title)
   else:
     print("No character selected")
 
 # Return a list of all characters
 def getCharacters(settings: Settings) -> list[str]:
-  return list(settings.characters.keys())
+  return settings.active_prompt.list_files(settings.prompt_store_directory)
 
 # List the available characters
-def listCharacters(settings: Settings, characterName: str = "") -> None:
-  if characterName:
-    print(settings.characters[characterName]["content"])
+def listCharacters(settings: Settings, character_id: str = "") -> None:
+  characters = getCharacters(settings)
+  if character_id:
+    if character_id in characters:
+      prompt_store = settings.active_prompt.load(f"{character_id}.json", settings.prompt_store_directory)
+      print(f"Title: {prompt_store.title}")
+      print(f"Prompt: {prompt_store.prompt}")
+      if prompt_store.description:
+        print(f"Description: {prompt_store.description}")
+    else:
+      print(f"Character with ID {character_id} not found")
   else:
-    for key in settings.characters:
-      print(key)
+    for character in characters:
+      prompt_store = settings.active_prompt.load(character, settings.prompt_store_directory)
+      print(f"{prompt_store.unique_id}: {prompt_store.title}")
 
 # Remove character prompt
 def removeCharacter(settings: Settings) -> None:
-  settings.selected_character = ""
+  settings.active_prompt = None
 
 # Set the selected character
-def setCharacter(character: str, settings: Settings):
-  if character in getCharacters(settings):
-    settings.selected_character = character
+def setCharacter(character_id: str, settings: Settings):
+  characters = getCharacters(settings)
+  if f"{character_id}.json" in characters:
+    settings.active_prompt = settings.active_prompt.load(f"{character_id}.json", settings.prompt_store_directory)
+    print(f"Selected character: {settings.active_prompt.title}")
   else:
     print("Chosen character not found")

@@ -1,10 +1,9 @@
-from os import listdir, path
-
 # Internal dependencies
-import file
+import help
 
 from commands.base import Command
 from errors import Result
+from file import ChatHistory
 from settings import Settings
 
 
@@ -20,9 +19,9 @@ class ConversationCommand(Command):
       if commands[1] == "load" and len(commands) > 2:
         loadConversation(settings, commands[2])
       elif commands[1] == "load":
-        print("No filename provided")
+        print("No conversation ID provided")
       elif commands[1] == "print" and len(commands) > 2:
-        pass  # print the conversation stored in a specific file
+        printConversation(settings, commands[2])
       elif commands[1] == "print":
         printConversation(settings)
       elif commands[1] == "new":
@@ -41,33 +40,48 @@ class ConversationCommand(Command):
 ##################################################
 #                   FUNCTIONS                    #
 ##################################################
-# List all files in the conversation directory without .json file extensions
+# List all conversations
 def listConversations(settings: Settings) -> None:
-  for each in listdir(settings.conversation_directory):
-    if each.endswith(".json"):
-      print(each[:-5])
-    else:
-      print(each)
+  conversations = ChatHistory.list_files(settings.chat_history_directory)
+  for conversation in conversations:
+    chat_history = ChatHistory.load(conversation, settings.chat_history_directory)
+    print(f"{chat_history.unique_id}: {chat_history.title}")
 
 # Load a stored conversation
-def loadConversation(settings: Settings, conversationName: str) -> None:
-  if not conversationName.endswith(".json"):
-    settings.selected_conversation = conversationName + ".json"
-  else:
-    settings.selected_conversation = conversationName
-
-  full_path = path.join(settings.conversation_directory, settings.selected_conversation)
-  if path.exists(full_path):
-    settings.conversation = file.load_file(full_path)
+def loadConversation(settings: Settings, conversation_id: str) -> None:
+  conversations = ChatHistory.list_files(settings.chat_history_directory)
+  if f"{conversation_id}.json" in conversations:
+    settings.active_chat = ChatHistory.load(f"{conversation_id}.json", settings.chat_history_directory)
+    print(f"Loaded conversation: {settings.active_chat.title}")
   else:
     print("Conversation not found")
 
 # Create a new conversation
 def newConversation(settings: Settings) -> None:
-  settings.conversation = []
+  title = "New Conversation"
+  # title = input("Enter a title for the new conversation: ")
+  new_chat = ChatHistory(settings.chat_history_directory, title, [])
+  new_chat.save()
+  settings.active_chat = new_chat
+  print(f"Created new conversation: {title} (ID: {new_chat.unique_id})")
+  print("This is now the active conversation.")
 
-# Print the current conversation
-def printConversation(settings: Settings) -> None:
-  for each in settings.conversation:
-    print("\n##### SOURCE: " + each["role"])
-    print(each["content"])
+# Print the current conversation or a specific conversation
+def printConversation(settings: Settings, conversation_id: str = None) -> None:
+  if conversation_id:
+    conversations = ChatHistory.list_files(settings.chat_history_directory)
+    if f"{conversation_id}.json" in conversations:
+      chat_history = ChatHistory.load(f"{conversation_id}.json", settings.chat_history_directory)
+    else:
+      print(f"Conversation with ID {conversation_id} not found")
+      return
+  elif settings.active_chat:
+    chat_history = settings.active_chat
+  else:
+    print("No active conversation selected")
+    return
+
+  print(f"\nConversation: {chat_history.title}")
+  for message in chat_history.chat_history:
+    print(f"\n##### SOURCE: {message['role']}")
+    print(message['content'])

@@ -6,9 +6,9 @@ and load settings from various sources (environment variables and command-line a
 """
 
 import os
-import uuid
-from typing import Dict, Any
+from typing import Dict, Optional
 import argparse
+from file import LLMPromptStore, ChatHistory
 
 class Settings:
   """
@@ -21,34 +21,24 @@ class Settings:
     local_llm_base_url (str): Base URL for local LLM.
     massed_compute_api_token (str): API token for Massed Compute.
     selected_llm (str): Currently selected LLM.
-    selected_conversation (str): Currently selected conversation.
-    selected_character (str): Currently selected character.
-    conversation_directory (str): Directory to store conversations.
-    conversation (list): List to store conversation history.
-    characters (Dict[str, Dict[str, str]]): Dictionary of available characters.
+    prompt_store_directory (str): Directory to store LLM prompt stores.
+    chat_history_directory (str): Directory to store chat histories.
+    active_prompt (Optional[LLMPromptStore]): Currently active system prompt.
+    active_chat (Optional[ChatHistory]): Currently active chat history.
   """
 
   def __init__(self):
+    print("Initializing Settings")
     self.openai_api_token: str = ""
     self.anthropic_api_token: str = ""
     self.local_llm_api_token: str = ""
     self.local_llm_base_url: str = ""
     self.massed_compute_api_token: str = ""
     self.selected_llm: str = "0"
-    self.selected_conversation: str = f"{str(uuid.uuid4())}.json"
-    self.selected_character: str = "writer"
-    self.conversation_directory: str = "history"
-    self.conversation: list[str] = []
-    self.characters: Dict[str, Dict[str, str]] = {
-      "default": {
-        "role": "system",
-        "content": "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair."
-      },
-      "writer": {
-        "role": "system",
-        "content": "You are a brilliant writer, always adding events and details that give life to the story, making sure to show and not tell about environments, characters, and actions."
-      }
-    }
+    self.prompt_store_directory: str = "prompts"
+    self.chat_history_directory: str = "history"
+    self.active_prompt: LLMPromptStore = LLMPromptStore.load_default_or_first(self.prompt_store_directory)
+    self.active_chat: ChatHistory = ChatHistory(self.chat_history_directory, "New Conversation", [])
 
   def load_from_env(self) -> None:
     """
@@ -62,9 +52,8 @@ class Settings:
     self.local_llm_api_token = strip_quotes(os.environ.get("TOKEN_LOCAL", self.local_llm_api_token))
     self.local_llm_base_url = strip_quotes(os.environ.get("LOCALLLM_BASEURL", self.local_llm_base_url))
     self.massed_compute_api_token = strip_quotes(os.environ.get("TOKEN_MASSEDCOMPUTE", self.massed_compute_api_token))
-    self.selected_character = strip_quotes(os.environ.get("SELECTED_CHARACTER", self.selected_character))
-    self.conversation_directory = strip_quotes(os.environ.get("CONVERSATION_DIRECTORY", self.conversation_directory))
-    self.selected_conversation = strip_quotes(os.environ.get("SELECTED_CONVERSATION", self.selected_conversation))
+    self.prompt_store_directory = strip_quotes(os.environ.get("PROMPT_STORE_DIRECTORY", self.prompt_store_directory))
+    self.chat_history_directory = strip_quotes(os.environ.get("CHAT_HISTORY_DIRECTORY", self.chat_history_directory))
 
   def load_from_args(self, args: argparse.Namespace) -> None:
     """
@@ -126,8 +115,8 @@ class SettingsFactory:
     parser.add_argument("--local-llm-base-url", help="LocalLLM Base URL")
     parser.add_argument("--massed-compute-api-token", help="Massed Compute API Token")
     parser.add_argument("--selected-llm", help="Selected LLM")
-    parser.add_argument("--selected-character", help="Selected Character")
-    parser.add_argument("--conversation-directory", help="Conversation Directory")
+    parser.add_argument("--prompt-store-directory", help="Prompt Store Directory")
+    parser.add_argument("--chat-history-directory", help="Chat History Directory")
     args = parser.parse_args()
 
     # Load from command-line arguments (overrides environment variables)
@@ -142,3 +131,4 @@ if __name__ == "__main__":
     print("Settings loaded successfully")
   else:
     print("Error loading settings")
+
