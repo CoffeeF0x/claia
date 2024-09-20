@@ -65,7 +65,7 @@ def listModels(settings: Settings, model_name: str = "") -> None:
 def setModel(model_name: str, settings: Settings):
   models = definitions.keys()
   if model_name in models:
-    settings.selected_llm = model_name
+    settings.active_model = model_name
     print(f"Selected model: {model_name}")
   else:
     print("Chosen model not found")

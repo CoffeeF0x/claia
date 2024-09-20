@@ -1,3 +1,5 @@
+# NOTE: All key names MUST be lowercase
+
 definitions = {
   "gpt-3.5-turbo": {
     "title": "GPT 3.5 Turbo",
@@ -5,6 +7,8 @@ definitions = {
     "variants": ["gpt-3.5-turbo-0125", "gpt-3.5-turbo-1106", "gpt-3.5-turbo-instruct"],
     "type": "text",
     "sources": ["openai", "openrouter"],
+    "capabilities": ["ttt"],
+    "inputs": ["text"],
     "attributes": {
       "max_output": 4096,
       "context": 16385,
@@ -17,6 +21,8 @@ definitions = {
     "variants": ["gpt-4-0613", "gpt-4-0314"],
     "type": "text",
     "sources": ["openai", "openrouter"],
+    "capabilities": ["ttt"],
+    "inputs": ["text"],
     "attributes": {
       "max_output": 8192,
       "context": 8192,
@@ -29,18 +35,22 @@ definitions = {
     "variants": ["gpt-4-turbo-2024-04-09", "gpt-4-turbo-preview", "gpt-4-0125-preview", "gpt-4-1106-preview"],
     "type": "text",
     "sources": ["openai", "openrouter"],
+    "capabilities": ["ttt"],
+    "inputs": ["text"],
     "attributes": {
       "max_output": 4096,
       "context": 128000,
       "training_data": "Up to December 2023",
     },
   },
-  "MiniCPM3-4B": {
+  "minicpm3-4b": {
     "title": "MiniCPM3-4B",
     "description": "MiniCPM3-4B is the 3rd generation of MiniCPM series with a 32k context window.",
     "variants": [],
     "type": "text",
     "sources": ["local"],
+    "capabilities": ["ttt"],
+    "inputs": ["text"],
     "attributes": {
       "max_output": 1024,
       "context": 32000,
@@ -56,6 +66,7 @@ definitions = {
 }
 
 abbreviations = {
+  "ttt": "text-to-text",
   "tti": "text-to-image",
   "itt": "image-to-text",
   "tts": "text-to-speech",
