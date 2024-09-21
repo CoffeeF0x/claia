@@ -6,8 +6,8 @@ and load settings from various sources (environment variables and command-line a
 """
 
 import os
-from typing import Dict, Optional
 import argparse
+from typing import Dict, Any
 from file import LLMPromptStore, ChatHistory
 
 class Settings:
@@ -37,9 +37,10 @@ class Settings:
     self.model_directory: str = "models"
     self.prompt_store_directory: str = "prompts"
     self.chat_history_directory: str = "history"
+    self.loaded_local_models: Dict[str, Any] = {}
     self.active_prompt: LLMPromptStore = LLMPromptStore.load_default_or_first(self.prompt_store_directory)
     self.active_chat: ChatHistory = ChatHistory(self.chat_history_directory, "New Conversation", [])
-    self.active_model: str = "gpt-3.5-turbo"  # Default model
+    self.active_model: str = "minicpm3-4b"  # Default model
 
   def load_from_env(self) -> None:
     """

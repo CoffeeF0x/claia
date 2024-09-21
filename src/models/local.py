@@ -5,11 +5,9 @@ from typing import List, Dict
 from models.base import LocalModel
 
 class MiniCPM3LocalModel(LocalModel):
-  def __init__(self, model_name: str, model_path: str, defer_loading: bool = False):
+  def __init__(self, model_name: str, model_path: str, defer_loading: bool = False, device = "cpu"):
     model_path = os.path.join(model_path, "MiniCPM3-4B")
-    super().__init__(model_name, model_path, defer_loading)
-    self.tokenizer = None
-    self.device = "cuda" if torch.cuda.is_available() else "cpu"
+    super().__init__(model_name, model_path, defer_loading, device)
 
   def load(self) -> None:
     if not os.path.exists(self.model_path):
@@ -34,7 +32,7 @@ class MiniCPM3LocalModel(LocalModel):
     return self.tokenizer.encode(text)
 
   def detokenize(self, tokens: List[int]) -> str:
-    return self.tokenizer.decode(tokens)
+    return self.tokenizer.decode(tokens, skip_special_tokens=True)
 
   def generate(self, messages: list, **kwargs) -> str:
     if not self.is_loaded():
@@ -50,7 +48,7 @@ class MiniCPM3LocalModel(LocalModel):
     )
 
     output_token_ids = model_outputs[0][len(model_inputs[0]):]
-    response = self.tokenizer.decode(output_token_ids, skip_special_tokens=True)
+    response = self.detokenize(output_token_ids)
     return response
 
   def download(self, model_path: str) -> None:

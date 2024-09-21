@@ -73,10 +73,11 @@ class APIModel(BaseModel):
 class LocalModel(BaseModel):
   model = None
 
-  def __init__(self, model_name: str, model_path: str, defer_loading: bool = False):
+  def __init__(self, model_name: str, model_path: str, defer_loading: bool = False, device: str = "cpu"):
     super().__init__(model_name)
     self.model_path = model_path
     self.loaded = not defer_loading
+    self.device = device
 
     if not defer_loading:
       self.load()

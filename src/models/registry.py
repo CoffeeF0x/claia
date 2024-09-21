@@ -1,3 +1,5 @@
+import torch
+
 from models.base import APIModel, LocalModel
 from models.openai import OpenAITextModel
 from models.local import MiniCPM3LocalModel
@@ -40,9 +42,13 @@ def get_model(model_name: str, source: str = None, settings: Settings = None) ->
     else:
       return Result.fail(f"No API key found for source {chosen_source}.")
   elif issubclass(model_class, LocalModel):
-    model = model_class(model_name, settings.model_directory)
-    if not model.is_loaded():
-      model.load()
+    if model_name in settings.loaded_local_models:
+      model = settings.loaded_local_models[model_name]
+    else:
+      model = model_class(model_name, settings.model_directory, device = "cuda" if torch.cuda.is_available() else "cpu")
+      if not model.is_loaded():
+        model.load()
+      settings.loaded_local_models[model_name] = model
   else:
     return Result.fail(f"Unknown model type for source {chosen_source}.")
 

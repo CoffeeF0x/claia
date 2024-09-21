@@ -5,3 +5,6 @@ accelerate
 scipy
 safetensors
 markdownify
+
+datamodel_code_generator
+jsonschema
