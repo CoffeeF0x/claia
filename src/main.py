@@ -11,7 +11,7 @@
 import os
 
 # Internal dependencies
-import file #, ai
+import file
 from commands.registry import run as command
 from models.registry import run as model_run
 from errors import Result
@@ -56,8 +56,8 @@ def runLlm(userInput: str, settings: Settings) -> None:
     print(f"Error running model: {result.get_message()}")
   else:
     response = result.data
-    settings.active_chat.store("assistant", response["content"])
-    print(response["content"])
+    settings.active_chat.store("assistant", response)
+    print(response)
 
   # Save the updated chat history
   settings.active_chat.save()

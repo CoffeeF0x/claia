@@ -17,4 +17,4 @@ class OpenAITextModel(APIModel):
       "stop": kwargs.get("stop", None),
     }
     response = self.post("chat/completions", data)
-    return response.json()["choices"][0]["message"]
+    return response.json()["choices"][0]["message"]["content"]
