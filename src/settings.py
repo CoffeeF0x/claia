@@ -20,6 +20,8 @@ class Settings:
     local_llm_api_token (str): API token for local LLM.
     local_llm_base_url (str): Base URL for local LLM.
     massed_compute_api_token (str): API token for Massed Compute.
+    zammad_api_token (str): API token for Zammad.
+    zammad_base_url (str): Base URL for Zammad API.
     prompt_store_directory (str): Directory to store LLM prompt stores.
     chat_history_directory (str): Directory to store chat histories.
     active_prompt (Optional[LLMPromptStore]): Currently active system prompt.
@@ -34,6 +36,8 @@ class Settings:
     self.local_llm_api_token: str = ""
     self.local_llm_base_url: str = ""
     self.massed_compute_api_token: str = ""
+    self.zammad_api_token: str = ""
+    self.zammad_base_url: str = ""
     self.model_directory: str = "models"
     self.prompt_store_directory: str = "prompts"
     self.chat_history_directory: str = "history"
@@ -54,6 +58,8 @@ class Settings:
     self.local_llm_api_token = strip_quotes(os.environ.get("TOKEN_LOCAL", self.local_llm_api_token))
     self.local_llm_base_url = strip_quotes(os.environ.get("LOCALLLM_BASEURL", self.local_llm_base_url))
     self.massed_compute_api_token = strip_quotes(os.environ.get("TOKEN_MASSEDCOMPUTE", self.massed_compute_api_token))
+    self.zammad_api_token = strip_quotes(os.environ.get("TOKEN_ZAMMAD", self.zammad_api_token))
+    self.zammad_base_url = strip_quotes(os.environ.get("ZAMMAD_BASEURL", self.zammad_base_url))
     self.prompt_store_directory = strip_quotes(os.environ.get("PROMPT_STORE_DIRECTORY", self.prompt_store_directory))
     self.chat_history_directory = strip_quotes(os.environ.get("CHAT_HISTORY_DIRECTORY", self.chat_history_directory))
     self.model_directory = strip_quotes(os.environ.get("MODEL_DIRECTORY", self.model_directory))
@@ -83,6 +89,8 @@ class Settings:
       ("LocalLLM API Token", self.local_llm_api_token),
       ("LocalLLM Base URL", self.local_llm_base_url),
       ("Massed Compute API Token", self.massed_compute_api_token),
+      ("Zammad API Token", self.zammad_api_token),
+      ("Zammad Base URL", self.zammad_base_url),
     ]
 
     is_valid = True
@@ -118,6 +126,8 @@ class SettingsFactory:
     parser.add_argument("--local-llm-api-token", help="LocalLLM API Token")
     parser.add_argument("--local-llm-base-url", help="LocalLLM Base URL")
     parser.add_argument("--massed-compute-api-token", help="Massed Compute API Token")
+    parser.add_argument("--zammad-api-token", help="Zammad API Token")
+    parser.add_argument("--zammad-base-url", help="Zammad Base URL")
     parser.add_argument("--prompt-store-directory", help="Prompt Store Directory")
     parser.add_argument("--chat-history-directory", help="Chat History Directory")
     parser.add_argument("--active-model", help="Active Model")

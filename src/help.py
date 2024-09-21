@@ -13,6 +13,8 @@ def allCommands() -> None:
   print("    - commands related to conversations and saved messages")
   print("  model, models")
   print("    - commands related to selecting and managing language models")
+  print("  zammad, z")
+  print("    - commands related to interacting with Zammad support ticket system")
 
 def characterCommands() -> None:
   print("Here are the available character commands:")
@@ -57,3 +59,12 @@ def systemCommands() -> None:
   print("    - clear the screen")
   print("  quit, exit, q")
   print("    - terminate the clai software")
+
+def zammadCommands() -> None:
+  print("Here are the available Zammad commands:")
+  print("  list, query")
+  print("    - list tickets using the default query (open tickets)")
+  print("  list, query <query_name>")
+  print("    - list tickets using a specific query")
+  print("  details <ticket_id>")
+  print("    - display details for a specific ticket")

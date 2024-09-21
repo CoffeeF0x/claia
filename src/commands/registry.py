@@ -5,6 +5,7 @@ from commands.conversations import ConversationCommand
 from commands.experimental import ExperimentalCommand
 from commands.models import ModelCommand
 from commands.system import SystemCommand
+from commands.zammad import ZammadCommand
 from errors import Result
 from settings import Settings
 
@@ -77,4 +78,7 @@ command_registry = {
 
   "model":         ModelCommand(),
   "models":        ModelCommand(),
+
+  "z":             ZammadCommand(),
+  "zammad":        ZammadCommand(),
 }
