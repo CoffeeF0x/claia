@@ -1,3 +1,5 @@
+import help
+
 from commands.base import Command
 from errors import Result
 from settings import Settings
