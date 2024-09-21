@@ -36,8 +36,9 @@ def conversationCommands() -> None:
   print("  load <filename>")
   print("    - load a saved conversation")
 
-def expirimentalCommands() -> None:
+def experimentalCommands() -> None:
   print("Here are the available expirimental commands:")
+  print("(it's a secret)")
 
 def modelCommands() -> None:
   print("Here are the available model commands:")
