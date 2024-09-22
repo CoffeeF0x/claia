@@ -45,9 +45,11 @@ def get_model(model_name: str, source: str = None, settings: Settings = None) ->
     if model_name in settings.loaded_local_models:
       model = settings.loaded_local_models[model_name]
     else:
-      model = model_class(model_name, settings.model_directory, device = "cuda" if torch.cuda.is_available() else "cpu")
+      print("\n\n")
+      model = model_class(model_name, settings.model_directory, device = "cuda" if torch.cuda.is_available() else "cpu", log_level=settings.log_level)
       if not model.is_loaded():
         model.load()
+      print("\n\n")
       settings.loaded_local_models[model_name] = model
   else:
     return Result.fail(f"Unknown model type for source {chosen_source}.")
