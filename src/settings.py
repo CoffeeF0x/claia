@@ -7,6 +7,7 @@ and load settings from various sources (environment variables and command-line a
 
 import os
 import argparse
+import logging
 from typing import Dict, Any
 from file import LLMPromptStore, ChatHistory
 
@@ -27,7 +28,16 @@ class Settings:
     active_prompt (Optional[LLMPromptStore]): Currently active system prompt.
     active_chat (Optional[ChatHistory]): Currently active chat history.
     active_model (str): Currently active model name.
+    log_level (str): Logging level.
   """
+
+  LOG_LEVELS = {
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warning": logging.WARNING,
+    "error": logging.ERROR,
+    "critical": logging.CRITICAL
+  }
 
   def __init__(self):
     print("Initializing Settings")
@@ -45,6 +55,7 @@ class Settings:
     self.active_prompt: LLMPromptStore = LLMPromptStore.load_default_or_first(self.prompt_store_directory)
     self.active_chat: ChatHistory = ChatHistory(self.chat_history_directory, "New Conversation", [])
     self.active_model: str = "minicpm3-4b"  # Default model
+    self.log_level: str = "error"  # Default log level
 
   def load_from_env(self) -> None:
     """
@@ -64,6 +75,7 @@ class Settings:
     self.chat_history_directory = strip_quotes(os.environ.get("CHAT_HISTORY_DIRECTORY", self.chat_history_directory))
     self.model_directory = strip_quotes(os.environ.get("MODEL_DIRECTORY", self.model_directory))
     self.active_model = strip_quotes(os.environ.get("ACTIVE_MODEL", self.active_model))
+    self.log_level = os.environ.get("LOG_LEVEL", self.log_level).lower()
 
   def load_from_args(self, args: argparse.Namespace) -> None:
     """
@@ -92,6 +104,10 @@ class Settings:
       ("Zammad API Token", self.zammad_api_token),
       ("Zammad Base URL", self.zammad_base_url),
     ]
+
+    if self.log_level not in self.LOG_LEVELS:
+      print(f"Invalid log level in environment variable. Using default: {self.log_level}")
+      self.log_level = "info"
 
     is_valid = True
     for name, token in required_tokens:
@@ -131,6 +147,9 @@ class SettingsFactory:
     parser.add_argument("--prompt-store-directory", help="Prompt Store Directory")
     parser.add_argument("--chat-history-directory", help="Chat History Directory")
     parser.add_argument("--active-model", help="Active Model")
+    parser.add_argument("--log-level",
+                        choices=Settings.LOG_LEVELS.keys(),
+                        help="Logging level (debug, info, warning, error, critical)")
     args = parser.parse_args()
 
     # Load from command-line arguments (overrides environment variables)

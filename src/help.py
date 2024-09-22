@@ -59,6 +59,10 @@ def systemCommands() -> None:
   print("    - clear the screen")
   print("  quit, exit, q")
   print("    - terminate the clai software")
+  print("  get log_level")
+  print("    - display the current log level")
+  print("  set log_level <level>")
+  print("    - set the log level (debug, info, warning, error, critical)")
 
 def zammadCommands() -> None:
   print("Here are the available Zammad commands:")
