@@ -41,7 +41,7 @@ def processCommands(userInput: str, settings: Settings) -> Result:
 def runLlm(userInput: str, settings: Settings) -> None:
   # If the conversation is empty and a character is selected, add the system prompt
   if len(settings.active_chat.messages()) == 0 and settings.active_prompt:
-    settings.active_chat.store("system", system_prompt + settings.active_prompt.prompt)
+    settings.active_chat.store("system", settings.active_prompt.prompt)
 
   # Append the user's prompt to the conversation if not empty
   if userInput:
