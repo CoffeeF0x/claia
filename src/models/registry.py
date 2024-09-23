@@ -2,6 +2,7 @@ import torch
 
 from models.base import APIModel, LocalModel
 from models.openai import OpenAITextModel
+from models.anthropic import AnthropicTextModel
 from models.local import MiniCPM3LocalModel
 from models.definitions import definitions
 from settings import Settings
@@ -84,5 +85,6 @@ def run(model_name: str, messages: list, source: str = None, settings: Settings 
 ##################################################
 sources = {
   "openai": OpenAITextModel,
+  "anthropic": AnthropicTextModel,
   "local": MiniCPM3LocalModel,
 }

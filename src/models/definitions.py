@@ -43,6 +43,20 @@ definitions = {
       "training_data": "Up to December 2023",
     },
   },
+  "claude-3-5-sonnet-20240620": {
+    "title": "Claude 3.5 Sonnet",
+    "description": "Claude 3.5 Sonnet sets new industry benchmarks for graduate-level reasoning (GPQA), undergraduate-level knowledge (MMLU), and coding proficiency (HumanEval). It shows marked improvement in grasping nuance, humor, and complex instructions, and is exceptional at writing high-quality content with a natural, relatable tone.",
+    "variants": [],
+    "sources": ["anthropic", "openrouter"],
+    "capabilities": ["ttt"],
+    "inputs": ["text"],
+    "outputs": ["text"],
+    "attributes": {
+      "max_output": 8192,
+      "context": 200000,
+      "training_data": "Up to April 2024",
+    },
+  },
   "minicpm3-4b": {
     "title": "MiniCPM3-4B",
     "description": "MiniCPM3-4B is the 3rd generation of MiniCPM series with a 32k context window.",

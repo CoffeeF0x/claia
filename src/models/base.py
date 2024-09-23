@@ -40,7 +40,7 @@ class APIModel(BaseModel):
 
   def set_api_key(self, api_key: str) -> None:
     """Set the API key for authentication."""
-    self.session.headers.update({"Authorization": f"Bearer {api_key}"})
+    self.set_custom_header("Authorization", f"Bearer {api_key}")
 
   def set_custom_header(self, header_name: str, header_value: str) -> None:
     """Set a custom header for authentication or other purposes."""
