@@ -10,7 +10,7 @@ import json
 import argparse
 import logging
 from typing import Dict, Any
-from file import LLMPromptStore, ChatHistory, BaseFile
+from file import LLMPromptStore, ChatHistory
 from functions.definitions import prompt as function_calling_prompt
 
 class Settings:
@@ -98,11 +98,8 @@ class Settings:
     self.zammad_api_token: str = ""
     self.zammad_base_url: str = ""
     self.model_directory: str = self.DEFAULT_MODEL_DIRECTORY
-    # BaseFile(self.model_directory)
     self.prompt_store_directory: str = self.DEFAULT_PROMPT_DIRECTORY
-    # BaseFile(self.prompt_store_directory)
     self.chat_history_directory: str = self.DEFAULT_CHAT_DIRECTORY
-    # BaseFile(self.chat_history_directory)
     self.loaded_local_models: Dict[str, Any] = {}
     self.prompt_store = []
     self.load_all_prompts()
@@ -110,6 +107,13 @@ class Settings:
     self.active_chat: ChatHistory = ChatHistory(self.chat_history_directory, "New Conversation", [])
     self.active_model: str = self.DEFAULT_MODEL
     self.log_level: str = self.DEFAULT_LOG_LEVEL
+
+    # Boolean flags for API key availability
+    self.has_openai_api_token: bool = False
+    self.has_anthropic_api_token: bool = False
+    self.has_local_llm_api_token: bool = False
+    self.has_massed_compute_api_token: bool = False
+    self.has_zammad_api_token: bool = False
 
   def load_all_prompts(self) -> list[LLMPromptStore]:
     # Load default prompts
@@ -162,13 +166,24 @@ class Settings:
     def strip_quotes(value: str) -> str:
       return value.strip("\"'") if value else value
 
-    self.openai_api_token = strip_quotes(os.environ.get("TOKEN_OPENAI", self.openai_api_token))
-    self.anthropic_api_token = strip_quotes(os.environ.get("TOKEN_ANTHROPIC", self.anthropic_api_token))
-    self.local_llm_api_token = strip_quotes(os.environ.get("TOKEN_LOCAL", self.local_llm_api_token))
-    self.local_llm_base_url = strip_quotes(os.environ.get("LOCALLLM_BASEURL", self.local_llm_base_url))
-    self.massed_compute_api_token = strip_quotes(os.environ.get("TOKEN_MASSEDCOMPUTE", self.massed_compute_api_token))
-    self.zammad_api_token = strip_quotes(os.environ.get("TOKEN_ZAMMAD", self.zammad_api_token))
-    self.zammad_base_url = strip_quotes(os.environ.get("ZAMMAD_BASEURL", self.zammad_base_url))
+    self.openai_api_token = strip_quotes(os.environ.get("TOKEN_OPENAI", ""))
+    self.has_openai_api_token = bool(self.openai_api_token)
+
+    self.anthropic_api_token = strip_quotes(os.environ.get("TOKEN_ANTHROPIC", ""))
+    self.has_anthropic_api_token = bool(self.anthropic_api_token)
+
+    self.local_llm_api_token = strip_quotes(os.environ.get("TOKEN_LOCAL", ""))
+    self.has_local_llm_api_token = bool(self.local_llm_api_token)
+
+    self.local_llm_base_url = strip_quotes(os.environ.get("LOCALLLM_BASEURL", ""))
+
+    self.massed_compute_api_token = strip_quotes(os.environ.get("TOKEN_MASSEDCOMPUTE", ""))
+    self.has_massed_compute_api_token = bool(self.massed_compute_api_token)
+
+    self.zammad_api_token = strip_quotes(os.environ.get("TOKEN_ZAMMAD", ""))
+    self.has_zammad_api_token = bool(self.zammad_api_token)
+
+    self.zammad_base_url = strip_quotes(os.environ.get("ZAMMAD_BASEURL", ""))
     self.prompt_store_directory = strip_quotes(os.environ.get("PROMPT_STORE_DIRECTORY", self.prompt_store_directory))
     self.chat_history_directory = strip_quotes(os.environ.get("CHAT_HISTORY_DIRECTORY", self.chat_history_directory))
     self.model_directory = strip_quotes(os.environ.get("MODEL_DIRECTORY", self.model_directory))
@@ -185,35 +200,32 @@ class Settings:
     for key, value in vars(args).items():
       if value is not None:
         setattr(self, key, value)
+        if key.endswith('_api_token'):
+          setattr(self, f'has_{key}', bool(value))
 
   def validate(self) -> bool:
     """
     Validate the configuration settings.
 
     Returns:
-      bool: True if all required settings are present, False otherwise.
+      bool: True if at least one API token is present, False otherwise.
     """
-    required_tokens = [
-      ("OpenAI API Token", self.openai_api_token),
-      ("Anthropic API Token", self.anthropic_api_token),
-      ("LocalLLM API Token", self.local_llm_api_token),
-      ("LocalLLM Base URL", self.local_llm_base_url),
-      ("Massed Compute API Token", self.massed_compute_api_token),
-      ("Zammad API Token", self.zammad_api_token),
-      ("Zammad Base URL", self.zammad_base_url),
-    ]
-
     if self.log_level not in self.LOG_LEVELS:
       print(f"Invalid log level in environment variable. Using default: {self.log_level}")
       self.log_level = "info"
 
-    is_valid = True
-    for name, token in required_tokens:
-      if not token:
-        print(f"No {name} found")
-        is_valid = False
+    api_tokens_present = (
+      self.has_openai_api_token or
+      self.has_anthropic_api_token or
+      self.has_local_llm_api_token or
+      self.has_massed_compute_api_token or
+      self.has_zammad_api_token
+    )
 
-    return is_valid
+    if not api_tokens_present:
+      print("No API tokens found. At least one API token is required.")
+
+    return api_tokens_present
 
 class SettingsFactory:
   """
