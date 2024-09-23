@@ -6,10 +6,12 @@ and load settings from various sources (environment variables and command-line a
 """
 
 import os
+import json
 import argparse
 import logging
 from typing import Dict, Any
-from file import LLMPromptStore, ChatHistory
+from file import LLMPromptStore, ChatHistory, BaseFile
+from functions.definitions import prompt as function_calling_prompt
 
 class Settings:
   """
@@ -39,6 +41,53 @@ class Settings:
     "critical": logging.CRITICAL
   }
 
+  DEFAULT_PROMPTS = [
+    {
+      "name": "default",
+      "title": "Default Assistant",
+      "prompt": "You are a helpful assistant, ready to aid the user with any task or question they might have.",
+      "description": "A general-purpose assistant for various tasks."
+    },
+    {
+      "name": "poet",
+      "title": "Poet",
+      "prompt": "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair.",
+      "description": "A default assistant with a poetic twist."
+    },
+    {
+      "name": "writer",
+      "title": "Writer",
+      "prompt": "You are a brilliant writer, always adding events and details that give life to the story, making sure to show and not tell about environments, characters, and actions.",
+      "description": "An assistant for creative writing tasks."
+    },
+    {
+      "name": "also-writer",
+      "title": "Also Writer",
+      "prompt": "You are a creative writer, skilled in crafting engaging narratives and vivid descriptions. Help the user with their writing tasks, offering suggestions for plot, character development, and prose.",
+      "description": "An assistant for creative writing tasks."
+    },
+    {
+      "name": "programmer",
+      "title": "Programmer",
+      "prompt": "You are a skilled programmer, proficient in multiple programming languages. You provide clear explanations and code examples to help with various programming tasks.",
+      "description": "An assistant for programming and coding tasks."
+    },
+    {
+      "name": "analyst",
+      "title": "Analyst",
+      "prompt": "You are a data analyst with expertise in statistics and data visualization. You help interpret data, suggest analysis methods, and explain complex analytical concepts.",
+      "description": "An assistant for data analysis and interpretation."
+    }
+  ]
+
+  DEFAULT_PROMPT_NAME = "default"
+  DEFAULT_MODEL = "minicpm3-4b"
+  DEFAULT_LOG_LEVEL = "error"
+  DEFAULT_MODEL_DIRECTORY = "models"
+  DEFAULT_PROMPT_DIRECTORY = "prompts"
+  DEFAULT_CHAT_DIRECTORY = "history"
+  FUNCTION_CALLING_PROMPT_NAME = "functions"
+
   def __init__(self):
     print("Initializing Settings")
     self.openai_api_token: str = ""
@@ -48,14 +97,63 @@ class Settings:
     self.massed_compute_api_token: str = ""
     self.zammad_api_token: str = ""
     self.zammad_base_url: str = ""
-    self.model_directory: str = "models"
-    self.prompt_store_directory: str = "prompts"
-    self.chat_history_directory: str = "history"
+    self.model_directory: str = self.DEFAULT_MODEL_DIRECTORY
+    # BaseFile(self.model_directory)
+    self.prompt_store_directory: str = self.DEFAULT_PROMPT_DIRECTORY
+    # BaseFile(self.prompt_store_directory)
+    self.chat_history_directory: str = self.DEFAULT_CHAT_DIRECTORY
+    # BaseFile(self.chat_history_directory)
     self.loaded_local_models: Dict[str, Any] = {}
-    self.active_prompt: LLMPromptStore = LLMPromptStore.load_default_or_first(self.prompt_store_directory)
+    self.prompt_store = []
+    self.load_all_prompts()
+    self.active_prompt = self.get_prompt(self.FUNCTION_CALLING_PROMPT_NAME)
     self.active_chat: ChatHistory = ChatHistory(self.chat_history_directory, "New Conversation", [])
-    self.active_model: str = "minicpm3-4b"  # Default model
-    self.log_level: str = "error"  # Default log level
+    self.active_model: str = self.DEFAULT_MODEL
+    self.log_level: str = self.DEFAULT_LOG_LEVEL
+
+  def load_all_prompts(self) -> list[LLMPromptStore]:
+    # Load default prompts
+    for prompt in self.DEFAULT_PROMPTS:
+      if not self.prompt_exists(prompt['name']):
+        self.prompt_store.append(LLMPromptStore(self.prompt_store_directory, prompt['name'], prompt['title'], prompt['prompt'], prompt['description']))
+      else:
+        pass
+        # TODO: log error, prompt name already exists
+
+    # Load function calling prompt
+    if not self.prompt_exists(self.FUNCTION_CALLING_PROMPT_NAME):
+      self.prompt_store.append(
+        LLMPromptStore(
+          self.prompt_store_directory,
+          self.FUNCTION_CALLING_PROMPT_NAME,
+          "Function Calling Assistant",
+          function_calling_prompt,
+          "An assistant capable of calling functions."
+        )
+      )
+    else:
+      pass
+      # TODO: log error, function calling prompt name already exists
+
+    # Load prompts from the directory
+    # TODO: Update to use the file get function, and maybe add a get all stores type function that returns a list of LLMPromptStore objects
+    files = LLMPromptStore.list_files(self.prompt_store_directory)
+    for filename in files:
+      full_path = os.path.join(self.prompt_store_directory, filename)
+      with open(full_path, 'r') as file:
+        data = json.load(file)
+        if not self.prompt_exists(data['name']):
+          self.prompt_store.append(LLMPromptStore(self.prompt_store_directory, data['name'], data['title'], data['prompt'], data['description']))
+        else:
+          pass
+          # TODO: log error, prompt name already exists
+
+  def prompt_exists(self, name: str) -> bool:
+    formatted_name = LLMPromptStore.validate_and_format_name(name)
+    return any(prompt.name == formatted_name for prompt in self.prompt_store)
+
+  def get_prompt(self, name: str) -> LLMPromptStore:
+    return next((p for p in self.prompt_store if p.name == name), None)
 
   def load_from_env(self) -> None:
     """
