@@ -8,10 +8,11 @@
 #   > Needs a way to filter models (since there are lots) (list image or list llm?)
 #   > Needs both name and type so that the system can identify how to run (json or dict?)
 
-import os
+import os, json
 
 # Internal dependencies
-import file
+from functions.tests import *
+from functions.definitions import prompt as system_prompt
 from commands.registry import run as command
 from models.registry import run as model_run
 from errors import Result
@@ -43,7 +44,7 @@ def processCommands(userInput: str, settings: Settings) -> Result:
 def runLlm(userInput: str, settings: Settings) -> None:
   # If the conversation is empty and a character is selected, add the system prompt
   if len(settings.active_chat.messages()) == 0 and settings.active_prompt:
-    settings.active_chat.store("system", settings.active_prompt.prompt)
+    settings.active_chat.store("system", system_prompt + settings.active_prompt.prompt)
 
   # Append the user's prompt to the conversation if not empty
   if userInput:
@@ -51,11 +52,32 @@ def runLlm(userInput: str, settings: Settings) -> None:
 
   # Run the active model
   result = model_run(settings.active_model, settings.active_chat.messages(), settings=settings)
+  call_result = None
 
   if result.is_error():
     print(f"Error running model: {result.get_message()}")
   else:
-    response = result.data
+    if result.data and "[FUNCTION_CALL]" in result.data:
+      start = result.data.index("[FUNCTION_CALL]") + len("[FUNCTION_CALL]")
+      end = result.data.index("[/FUNCTION_CALL]")
+      function_call = json.loads(result.data[start:end])
+
+      # Execute the function
+      if function_call["name"] == "get_current_time":
+        call_result = get_current_time()
+      elif function_call["name"] == "get_current_date":
+        call_result = get_current_date()
+      elif function_call["name"] == "get_user_name":
+        call_result = get_user_name()
+      elif function_call["name"] == "greet_user":
+        call_result = greet_user(function_call["parameters"]["name"])
+      else:
+        call_result = "Unknown function"
+
+    if call_result:
+      response = call_result
+    else:
+      response = result.data
     settings.active_chat.store("assistant", response)
     print(response)
 
