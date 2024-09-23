@@ -32,11 +32,5 @@ class AnthropicTextModel(APIModel):
     if system_prompt:
       data["system"] = system_prompt
 
-    print("-" * 50)
-    print(self.session.headers)
-    print("-" * 50)
-    print(data)
-    print("-" * 50)
-
     response = self.post("messages", data)
     return response.json()["content"][0]["text"]
