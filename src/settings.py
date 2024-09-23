@@ -103,7 +103,7 @@ class Settings:
     self.loaded_local_models: Dict[str, Any] = {}
     self.prompt_store = []
     self.load_all_prompts()
-    self.active_prompt = self.get_prompt(self.FUNCTION_CALLING_PROMPT_NAME)
+    self.active_prompt = self.get_prompt(self.DEFAULT_PROMPT_NAME)
     self.active_chat: ChatHistory = ChatHistory(self.chat_history_directory, "New Conversation", [])
     self.active_model: str = self.DEFAULT_MODEL
     self.log_level: str = self.DEFAULT_LOG_LEVEL
