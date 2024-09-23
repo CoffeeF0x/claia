@@ -4,11 +4,9 @@
 # - add openai streaming support
 # - add ability to rename conversations, and perhaps have ai name conversations automatically
 # - create an option to enable a server that serves and updates md files, and sync conversations to md files
-# - model (list, set)
-#   > Needs a way to filter models (since there are lots) (list image or list llm?)
-#   > Needs both name and type so that the system can identify how to run (json or dict?)
+# - Needs a way to filter models (since there are lots) (model list partname?)
 
-import os, json
+import json
 
 # Internal dependencies
 from functions.tests import *
@@ -16,7 +14,6 @@ from functions.definitions import prompt as system_prompt
 from commands.registry import run as command
 from models.registry import run as model_run
 from errors import Result
-from models.openai import OpenAITextModel
 from settings import Settings, SettingsFactory
 from utilities import *
 
