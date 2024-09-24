@@ -1,6 +1,3 @@
-# Internal dependencies
-from settings import Settings
-
 # External dependencies
 import requests
 import urllib.parse
@@ -8,70 +5,94 @@ import urllib.parse
 from aia import AIASession
 from tempfile import NamedTemporaryFile
 
+class ZammadAPI:
+  """Class for interacting with the Zammad API."""
+  def __init__(self, base_url = str, api_token = str) -> None:
+    self.base_url = base_url
+    self.api_token = api_token
+    self.headers = {
+      "Authorization": f"Token token={self.api_token}",
+      "Content-Type": "application/json"
+    }
+    self.session = AIASession()
 
-def invoke_zammad_api(settings: Settings, endpoint: str) -> dict:
-  headers = {
-    "Authorization": f"Token token={settings.zammad_api_token}",
-    "Content-Type": "application/json"
-  }
+  def get(self, endpoint: str):
+    response = None
+    url = f"{self.base_url}{endpoint}"
+    cadata = self.session.cadata_from_url(url)
 
-  url = f"{settings.zammad_base_url}{endpoint}"
-  session = AIASession()
-  cadata = session.cadata_from_url(url)
-  with NamedTemporaryFile("w") as pem_file:
-    pem_file.write(cadata)
-    pem_file.flush()
-    response = requests.get(url, headers=headers, verify=pem_file.name)
+    with NamedTemporaryFile("w") as pem_file:
+      pem_file.write(cadata)
+      pem_file.flush()
+      response = requests.get(url, headers=self.headers, verify=pem_file.name)
 
-  response.raise_for_status()
-  return response.json()
+    response.raise_for_status()
+    return response.json()
 
-def listTickets(settings: Settings, query_name: str = "open-tickets") -> None:
-  queries = {
-    "open-tickets": "state_id:1",
-  }
+  def list_tickets(self, query_name: str = "open-tickets", limit: int = 100, full_response: bool = True):
+    queries = {
+      "new-tickets": "state_id:1",
+      "open-tickets": "state_id:1 OR state_id:2 OR state_id:3",
+      "reminder-tickets": "state_id:3",
+    }
+    response = None
+    tickets = None
+    page = 1
 
-  if query_name in queries:
-    query = queries[query_name]
-  else:
-    query = query_name
+    if query_name in queries:
+      query = queries[query_name]
+    else:
+      query = query_name
 
-  encoded_query = urllib.parse.quote(query)
-  endpoint = f"tickets/search?query={encoded_query}&limit=10"
+    encoded_query = urllib.parse.quote(query)
 
-  try:
-    result = invoke_zammad_api(settings, endpoint)
-    print(f"Tickets matching query '{query_name}':")
-    for ticket_id in result['tickets']:
-      print(f"- Ticket ID: {ticket_id}")
-  except Exception as e:
-    print(f"Error listing tickets: {str(e)}")
+    try:
+      response = self.get(f"tickets/search?query={encoded_query}&page={page}&per_page={limit}")
+      tickets = response["tickets"]
+      ticket_count = response["tickets_count"]
+      print(f"tickets: {ticket_count}")
 
-def getTicketDetails(settings: Settings, ticket_id: str) -> None:
-  try:
-    ticket = invoke_zammad_api(settings, f"tickets/{ticket_id}")
-    articles = invoke_zammad_api(settings, f"ticket_articles/by_ticket/{ticket_id}")
+      while full_response and response["tickets_count"] > 0:
+        print(f"total tickets: {ticket_count}")
+        page += 1
+        response = self.get(f"tickets/search?query={encoded_query}&page={page}&per_page={limit}")
+        tickets.extend(response["tickets"])
+        ticket_count += response["tickets_count"]
 
-    print("Ticket Details:")
-    print(f"Ticket ID: {ticket['id']}")
-    print(f"Number: {ticket['number']}")
-    print(f"Title: {ticket['title']}")
-    print(f"State: {ticket['state_id']}")
-    print(f"Priority: {ticket['priority_id']}")
-    print(f"Created At: {ticket['created_at']}")
-    print(f"Updated At: {ticket['updated_at']}")
+    except Exception as e:
+      print(f"Error listing tickets: {str(e)}")
 
-    print("\nArticles:")
-    for article in articles:
-      print(f"\nArticle ID: {article['id']}")
-      print(f"From: {article['from']}")
-      print(f"To: {article['to']}")
-      print(f"CC: {article['cc']}")
-      print(f"Subject: {article['subject']}")
-      print(f"Created At: {article['created_at']}")
-      print(f"Updated At: {article['updated_at']}")
-      print(f"Body:\n{article['body']}")
-      print("-" * 50)
+    return tickets
 
-  except Exception as e:
-    print(f"Error getting ticket details: {str(e)}")
+  def get_ticket_details(self, ticket_id: str) -> None:
+    response = ""
+
+    try:
+      ticket = self.get(f"tickets/{ticket_id}")
+      articles = self.get(f"ticket_articles/by_ticket/{ticket_id}")
+
+      response +=  "Ticket Details:"
+      response +=  f"\nTicket ID: {ticket['id']}"
+      response +=  f"\nNumber: {ticket['number']}"
+      response +=  f"\nTitle: {ticket['title']}"
+      response +=  f"\nState: {ticket['state_id']}"
+      response +=  f"\nPriority: {ticket['priority_id']}"
+      response +=  f"\nCreated At: {ticket['created_at']}"
+      response +=  f"\nUpdated At: {ticket['updated_at']}"
+
+      response +=  "\n\nArticles:"
+      for article in articles:
+        response +=  f"\nArticle ID: {article['id']}"
+        response +=  f"\nFrom: {article['from']}"
+        response +=  f"\nTo: {article['to']}"
+        response +=  f"\nCC: {article['cc']}"
+        response +=  f"\nSubject: {article['subject']}"
+        response +=  f"\nCreated At: {article['created_at']}"
+        response +=  f"\nUpdated At: {article['updated_at']}"
+        response +=  f"\nBody:\n{article['body']}"
+        response +=  "\n" + ("-" * 50)
+
+    except Exception as e:
+      response =  f"Error getting ticket details: {str(e)}"
+
+    return response

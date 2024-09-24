@@ -11,6 +11,7 @@ import json
 
 # Internal dependencies
 from functions.tests import *
+from functions.zammad import ZammadAPI
 from functions.definitions import prompt as system_prompt
 from commands.registry import run as command
 from models.registry import run as model_run
@@ -40,16 +41,25 @@ def processCommands(userInput: str, settings: Settings) -> Result:
 
 # Organize the conversation and send user query to the selected LLM
 def runLlm(userInput: str, settings: Settings) -> None:
+  pruned_messages = []
+  zammad: ZammadAPI = ZammadAPI(settings.zammad_base_url, settings.zammad_api_token)
+
+  for message in settings.active_chat.messages():
+    if message["role"] in ["system", "user", "assistant"]:
+      pruned_messages.append(message)
+
   # If the conversation is empty and a character is selected, add the system prompt
-  if len(settings.active_chat.messages()) == 0 and settings.active_prompt:
+  if len(pruned_messages) == 0 and settings.active_prompt:
+    pruned_messages.append({"role": "system", "content": settings.active_prompt.prompt})
     settings.active_chat.store("system", settings.active_prompt.prompt)
 
   # Append the user's prompt to the conversation if not empty
   if userInput:
+    pruned_messages.append({"role": "user", "content": userInput})
     settings.active_chat.store("user", userInput)
 
   # Run the active model
-  result = model_run(settings.active_model, settings.active_chat.messages(), settings=settings)
+  result = model_run(settings.active_model, pruned_messages, settings=settings)
   call_result = None
 
   if result.is_error():
@@ -59,23 +69,30 @@ def runLlm(userInput: str, settings: Settings) -> None:
       start = result.data.index("[FUNCTION_CALL]") + len("[FUNCTION_CALL]")
       end = result.data.index("[/FUNCTION_CALL]")
       function_call = json.loads(result.data[start:end])
+      function_name = function_call["name"]
 
       # Execute the function
-      if function_call["name"] == "get_current_time":
+      if function_name == "get_current_time":
         call_result = get_current_time()
-      elif function_call["name"] == "get_current_date":
+      elif function_name == "get_current_date":
         call_result = get_current_date()
-      elif function_call["name"] == "get_user_name":
+      elif function_name == "get_user_name":
         call_result = get_user_name()
-      elif function_call["name"] == "greet_user":
+      elif function_name == "greet_user":
         call_result = greet_user(function_call["parameters"]["name"])
+      elif function_name == "get_ticket_details":
+        call_result = zammad.get_ticket_details(function_call["parameters"]["id"])
+      elif function_name == "list_tickets":
+        call_result = zammad.list_tickets()
       else:
         call_result = "Unknown function"
 
     if call_result:
       response = call_result
+      settings.active_chat.store("tool-call", result.data)
     else:
       response = result.data
+
     settings.active_chat.store("assistant", response)
     print(response)
 
