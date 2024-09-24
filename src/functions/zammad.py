@@ -16,21 +16,44 @@ class ZammadAPI:
     }
     self.session = AIASession()
 
-  def get(self, endpoint: str):
-    response = None
+  def _make_request(self, method: str, endpoint: str, data=None):
     url = f"{self.base_url}{endpoint}"
     cadata = self.session.cadata_from_url(url)
 
     with NamedTemporaryFile("w") as pem_file:
       pem_file.write(cadata)
       pem_file.flush()
-      response = requests.get(url, headers=self.headers, verify=pem_file.name)
+
+      if method.lower() == 'get':
+        response = requests.get(url, headers=self.headers, verify=pem_file.name)
+      elif method.lower() == 'post':
+          response = requests.post(url, headers=self.headers, json=data, verify=pem_file.name)
+      else:
+          raise ValueError(f"Unsupported HTTP method: {method}")
 
     response.raise_for_status()
     return response.json()
 
+  def get(self, endpoint: str):
+    return self._make_request('get', endpoint)
+
+  def post(self, endpoint: str, data: dict):
+    return self._make_request('post', endpoint, data)
+
   def add_tag(self, ticket_id: int, tag: str):
-    print(f"Added {tag} tag to ticket {ticket_id}")
+    data = {
+      "item": tag,
+      "object": "Ticket",
+      "o_id": ticket_id
+    }
+
+    try:
+      response = self.post("tags/add", data)
+      print(f"Successfully added tag '{tag}' to ticket {ticket_id}")
+      return response
+    except Exception as e:
+      print(f"Error adding tag '{tag}' to ticket {ticket_id}: {str(e)}")
+      return None
 
   def list_tickets(self, query_name: str = "open-tickets", limit: int = 100, full_response: bool = True):
     queries = {
