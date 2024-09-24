@@ -29,6 +29,9 @@ class ZammadAPI:
     response.raise_for_status()
     return response.json()
 
+  def add_tag(self, ticket_id: int, tag: str):
+    print(f"Added {tag} tag to ticket {ticket_id}")
+
   def list_tickets(self, query_name: str = "open-tickets", limit: int = 100, full_response: bool = True):
     queries = {
       "new-tickets": "state_id:1",
