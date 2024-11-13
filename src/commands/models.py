@@ -1,8 +1,7 @@
 from commands.base import Command
 from errors import Result
 from settings import Settings
-from models.definitions import definitions
-from models.registry import sources, run
+from models.definitions import definitions, sources
 import help
 
 
@@ -19,6 +18,8 @@ class ModelCommand(Command):
         listModels(settings, commands[2])
       elif commands[1] == "list":
         listModels(settings)
+      elif commands[1] in ["set", "select"] and len(commands) > 3:
+        setModel(commands[2], settings, commands[3])
       elif commands[1] in ["set", "select"] and len(commands) > 2:
         setModel(commands[2], settings)
       elif commands[1] in ["set", "select"]:
@@ -40,32 +41,61 @@ class ModelCommand(Command):
 # Print currently selected model
 def currentModel(settings: Settings):
   if settings.active_model:
-    print(f"Current model: {settings.active_model}")
+    source_str = f" ({settings.active_model_source})" if settings.active_model_source else ""
+    print(f"Current model: {settings.active_model}{source_str}")
   else:
     print("No model selected")
 
 # List the available models
 def listModels(settings: Settings, model_name: str = "") -> None:
-  models = definitions.keys()
   if model_name:
-    if model_name in models:
+    if model_name in definitions:
       model_info = definitions[model_name]
       print(f"Name: {model_name}")
       print(f"Title: {model_info['title']}")
       print(f"Description: {model_info['description']}")
-      print(f"Sources: {', '.join(model_info['sources'])}")
-      print(f"Attributes: {model_info['attributes']}")
+      
+      # List available sources for this model
+      available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
+      print(f"Available Sources: {', '.join(available_sources)}")
+      
+      if "training_data" in model_info:
+        print(f"Training Data: {model_info['training_data']}")
+      if "capabilities" in model_info:
+        print(f"Capabilities: {', '.join(model_info['capabilities'])}")
     else:
       print(f"Model with name {model_name} not found")
   else:
-    for model_name in models:
-      print(model_name)
+    # Get max model name length for padding
+    max_name_length = max(len(name) for name in definitions.keys())
+    
+    for model_name in definitions.keys():
+      # Get available sources for this model
+      available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
+      sources_str = f" ({', '.join(available_sources)})"
+      
+      # Print model name padded to align sources
+      print(f"{model_name:<{max_name_length}}{sources_str}")
 
 # Set the selected model
-def setModel(model_name: str, settings: Settings):
-  models = definitions.keys()
-  if model_name in models:
-    settings.active_model = model_name
-    print(f"Selected model: {model_name}")
+def setModel(model_name: str, settings: Settings, source: str = None):
+  if model_name not in definitions:
+    print(f"Model '{model_name}' not found")
+    return
+
+  # Get available sources for this model
+  available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
+  
+  if source:
+    if source not in available_sources:
+      print(f"Invalid source '{source}' for model '{model_name}'")
+      print(f"Available sources: {', '.join(available_sources)}")
+      return
+    chosen_source = source
   else:
-    print("Chosen model not found")
+    chosen_source = available_sources[0]
+
+  settings.active_model = model_name
+  settings.active_model_source = chosen_source
+  source_str = f" using source '{chosen_source}'"
+  print(f"Selected model: {model_name}{source_str}")

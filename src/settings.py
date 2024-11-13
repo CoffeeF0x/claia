@@ -33,6 +33,7 @@ class Settings:
     active_model (str): Currently active model name.
     log_level (str): Logging level.
     openrouter_api_token (str): API token for OpenRouter.
+    active_model_source (Optional[str]): Currently active model source (e.g. "anthropic", "openai", etc).
   """
 
   LOG_LEVELS = {
@@ -109,6 +110,7 @@ class Settings:
     self.active_prompt = self.get_prompt(self.DEFAULT_PROMPT_NAME)
     self.active_chat: ChatHistory = ChatHistory(self.chat_history_directory, "New Conversation", [])
     self.active_model: str = self.DEFAULT_MODEL
+    self.active_model_source: str = None
     self.log_level: str = self.DEFAULT_LOG_LEVEL
     self.openrouter_api_token: str = ""
     # self.openrouter_http_referer: str = "http://localhost:3000"  # Default value
@@ -199,6 +201,7 @@ class Settings:
     self.chat_history_directory = strip_quotes(os.environ.get("CHAT_HISTORY_DIRECTORY", self.chat_history_directory))
     self.model_directory = strip_quotes(os.environ.get("MODEL_DIRECTORY", self.model_directory))
     self.active_model = strip_quotes(os.environ.get("ACTIVE_MODEL", self.active_model))
+    self.active_model_source = strip_quotes(os.environ.get("ACTIVE_MODEL_SOURCE", self.active_model_source))
     self.log_level = os.environ.get("LOG_LEVEL", self.log_level).lower()
 
     self.openrouter_api_token = strip_quotes(os.environ.get("TOKEN_OPENROUTER", ""))
@@ -277,6 +280,7 @@ class SettingsFactory:
     parser.add_argument("--prompt-store-directory", help="Prompt Store Directory")
     parser.add_argument("--chat-history-directory", help="Chat History Directory")
     parser.add_argument("--active-model", help="Active Model")
+    parser.add_argument("--active-model-source", help="Active Model Source")
     parser.add_argument("--log-level",
                         choices=Settings.LOG_LEVELS.keys(),
                         help="Logging level (debug, info, warning, error, critical)")

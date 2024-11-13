@@ -6,6 +6,7 @@ from commands.experimental import ExperimentalCommand
 from commands.models import ModelCommand
 from commands.system import SystemCommand
 from commands.zammad import ZammadCommand
+from commands.massedcompute import MassedComputeCommand
 from errors import Result
 from settings import Settings
 
@@ -81,4 +82,7 @@ command_registry = {
 
   "z":             ZammadCommand(),
   "zammad":        ZammadCommand(),
+
+  "mc":            MassedComputeCommand(),
+  "massedcompute": MassedComputeCommand(),
 }

@@ -15,6 +15,8 @@ def allCommands() -> None:
   print("    - commands related to selecting and managing language models")
   print("  zammad, z")
   print("    - commands related to interacting with Zammad support ticket system")
+  print("  massedcompute, mc")
+  print("    - commands related to deploying and managing GPU instances")
 
 def characterCommands() -> None:
   print("Here are the available character commands:")
@@ -72,3 +74,21 @@ def zammadCommands() -> None:
   print("    - list tickets using a specific query")
   print("  details <ticket_id>")
   print("    - display details for a specific ticket")
+
+def massedcomputeCommands() -> None:
+  print("Here are the available MassedCompute commands:")
+  print("  deploy <image_id> <instance_name> <startup_script>")
+  print("    - Deploy cheapest available GPU instance")
+  print("    - Available startup scripts: jupyter, ssh, pytorch, tensorflow")
+  print("  terminate <uuid> <uuid2> <uuid3> <cont.>")
+  print("    - Terminate one or more instances by UUID")
+  print("  details <uuid>")
+  print("    - Get detailed information about a specific instance")
+  print("  list")
+  print("    - List running instances (default)")
+  print("  list instances")
+  print("    - List running instances")
+  print("  list gpus")
+  print("    - List available GPU configurations")
+  print("  list images")
+  print("    - List available VM images")

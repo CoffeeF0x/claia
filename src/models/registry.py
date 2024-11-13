@@ -11,7 +11,7 @@ from errors import Result
 #                   FUNCTIONS                    #
 ##################################################
 # Get the appropriate model based on the model name and source
-def get_model(model_name: str, source: str = None, settings: Settings = None) -> Result:
+def get_model(model_name: str, settings: Settings = None) -> Result:
   result = Result()
 
   if model_name not in definitions:
@@ -22,10 +22,9 @@ def get_model(model_name: str, source: str = None, settings: Settings = None) ->
   if not available_sources:
     return Result.fail(f"No sources available for model {model_name}.")
 
-  if source:
-    if source not in available_sources:
-      return Result.fail(f"Source {source} not available for model {model_name}.")
-    chosen_source = source
+  # Use active_model_source from settings if available, otherwise use first available source
+  if settings and settings.active_model_source and settings.active_model_source in available_sources:
+    chosen_source = settings.active_model_source
   else:
     chosen_source = available_sources[0]
 
@@ -90,8 +89,8 @@ def get_api_key_for_source(source: str, settings: Settings) -> str:
 #   return result
 
 # Run the model with the given messages and settings
-def run(model_name: str, messages: list, source: str = None, settings: Settings = None, reset_context: bool = False, **kwargs) -> Result:
-  result = get_model(model_name, source, settings)
+def run(model_name: str, messages: list, settings: Settings = None, reset_context: bool = False, **kwargs) -> Result:
+  result = get_model(model_name, settings)
   if result.is_error():
     return result
 
