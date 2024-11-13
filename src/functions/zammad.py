@@ -60,6 +60,8 @@ class ZammadAPI:
       "new-tickets": "state_id:1",
       "open-tickets": "state_id:1 OR state_id:2 OR state_id:3",
       "reminder-tickets": "state_id:3",
+      "untagged-tickets": "(state_id:1 OR state_id:2 OR state_id:3) AND !(tags:AI-Tagged)",
+      "high-priority": "priority.name:\"3 high\""
     }
     response = None
     tickets = None

@@ -2,8 +2,9 @@ import torch
 
 from models.base import APIModel, LocalModel
 from models.openai import OpenAITextModel
+from models.runpod import RunpodTextModel
 from models.anthropic import AnthropicTextModel
-from models.local import MiniCPM3LocalModel
+from models.local import MiniCPM3_4B_LocalModel, Qwen2p5_32B_InstructLocalModel
 from models.definitions import definitions
 from settings import Settings
 from errors import Result
@@ -66,25 +67,49 @@ def get_api_key_for_source(source: str, settings: Settings) -> str:
     api_key = settings.openai_api_token
   elif source == "anthropic":
     api_key = settings.anthropic_api_token
+  elif source == "runpod":
+    api_key = settings.runpod_api_token
 
   return api_key
 
+# def reset_model_context(model_name: str, settings: Settings) -> Result:
+#   result = Result()
+
+#   if model_name not in settings.loaded_local_models:
+#     return Result.fail(f"Model {model_name} is not currently loaded.")
+
+#   model = settings.loaded_local_models[model_name]
+
+#   if hasattr(model, 'reset_context'):
+#     model.reset_context()
+#     result.data = f"Context reset for model {model_name}"
+#   else:
+#     return Result.fail(f"Model {model_name} does not support context resetting.")
+
+#   return result
+
 # Run the model with the given messages and settings
-def run(model_name: str, messages: list, source: str = None, settings: Settings = None, **kwargs) -> Result:
+def run(model_name: str, messages: list, source: str = None, settings: Settings = None, reset_context: bool = False, **kwargs) -> Result:
   result = get_model(model_name, source, settings)
   if result.is_error():
     return result
 
   model = result.data
-  return Result(data=model.generate(messages, **kwargs))
 
+  # if reset_context and hasattr(model, 'reset_context'):
+  #   model.reset_context()
+
+  return Result(data=model.generate(messages, **kwargs))
 
 
 ##################################################
 #            MODEL SOURCES DEFINITION            #
 ##################################################
 sources = {
+  "runpod": RunpodTextModel,
   "openai": OpenAITextModel,
   "anthropic": AnthropicTextModel,
-  "local": MiniCPM3LocalModel,
+  "local-minicpm3-4b": MiniCPM3_4B_LocalModel,
+  "local-qwen2.5-32b-instruct": Qwen2p5_32B_InstructLocalModel,
 }
+

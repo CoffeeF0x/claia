@@ -21,6 +21,7 @@ class Settings:
     openai_api_token (str): API token for OpenAI.
     anthropic_api_token (str): API token for Anthropic.
     local_llm_api_token (str): API token for local LLM.
+    runpod_api_token (str): API token for RunPod.
     local_llm_base_url (str): Base URL for local LLM.
     massed_compute_api_token (str): API token for Massed Compute.
     zammad_api_token (str): API token for Zammad.
@@ -81,7 +82,7 @@ class Settings:
   ]
 
   DEFAULT_PROMPT_NAME = "default"
-  DEFAULT_MODEL = "minicpm3-4b"
+  DEFAULT_MODEL = "claude-3-5-sonnet-20240620"
   DEFAULT_LOG_LEVEL = "error"
   DEFAULT_MODEL_DIRECTORY = "models"
   DEFAULT_PROMPT_DIRECTORY = "prompts"
@@ -93,6 +94,7 @@ class Settings:
     self.openai_api_token: str = ""
     self.anthropic_api_token: str = ""
     self.local_llm_api_token: str = ""
+    self.runpod_api_token: str = ""
     self.local_llm_base_url: str = ""
     self.massed_compute_api_token: str = ""
     self.zammad_api_token: str = ""
@@ -112,6 +114,7 @@ class Settings:
     self.has_openai_api_token: bool = False
     self.has_anthropic_api_token: bool = False
     self.has_local_llm_api_token: bool = False
+    self.has_runpod_api_token: bool = False
     self.has_massed_compute_api_token: bool = False
     self.has_zammad_api_token: bool = False
 
@@ -175,6 +178,9 @@ class Settings:
     self.local_llm_api_token = strip_quotes(os.environ.get("TOKEN_LOCAL", ""))
     self.has_local_llm_api_token = bool(self.local_llm_api_token)
 
+    self.runpod_api_token = strip_quotes(os.environ.get("TOKEN_RUNPOD", ""))
+    self.has_runpod_api_token = bool(self.runpod_api_token)
+
     self.local_llm_base_url = strip_quotes(os.environ.get("LOCALLLM_BASEURL", ""))
 
     self.massed_compute_api_token = strip_quotes(os.environ.get("TOKEN_MASSEDCOMPUTE", ""))
@@ -218,6 +224,7 @@ class Settings:
       self.has_openai_api_token or
       self.has_anthropic_api_token or
       self.has_local_llm_api_token or
+      self.has_runpod_api_token or
       self.has_massed_compute_api_token or
       self.has_zammad_api_token
     )
@@ -250,6 +257,7 @@ class SettingsFactory:
     parser.add_argument("--openai-api-token", help="OpenAI API Token")
     parser.add_argument("--anthropic-api-token", help="Anthropic API Token")
     parser.add_argument("--local-llm-api-token", help="LocalLLM API Token")
+    parser.add_argument("--runpod-api-token", help="RunPod API Token")
     parser.add_argument("--local-llm-base-url", help="LocalLLM Base URL")
     parser.add_argument("--massed-compute-api-token", help="Massed Compute API Token")
     parser.add_argument("--zammad-api-token", help="Zammad API Token")

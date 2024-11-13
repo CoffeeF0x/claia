@@ -40,7 +40,7 @@ class ModelCommand(Command):
 # Print currently selected model
 def currentModel(settings: Settings):
   if settings.active_model:
-    print(f"Current model: {settings.selected_llm}")
+    print(f"Current model: {settings.active_model}")
   else:
     print("No model selected")
 

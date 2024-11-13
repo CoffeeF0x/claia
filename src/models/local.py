@@ -38,6 +38,25 @@ class TransformersLocalModel(LocalModel):
         self.loaded = True
         logging.info("Model loaded successfully")
 
+    def reset_context(self) -> None:
+      # logging.info("Resetting model context")
+      # if self.is_loaded():
+      #   # Clear past key values
+      #   self.model.config.use_cache = False
+      #   self.model.config.use_cache = True
+
+      #   # Reset any stateful components
+      #   for module in self.model.modules():
+      #     if hasattr(module, 'reset_parameters'):
+      #       module.reset_parameters()
+
+      #   # Clear CUDA cache if using GPU
+      #   if self.device != "cpu":
+      #     torch.cuda.empty_cache()
+
+      # logging.info("Model context reset successfully")
+      pass
+
     def unload(self) -> None:
         logging.info("Unloading model")
         self.model = None
@@ -66,7 +85,7 @@ class TransformersLocalModel(LocalModel):
 
         model_outputs = self.model.generate(
             model_inputs,
-            max_new_tokens=kwargs.get('max_new_tokens', 4096),
+            max_new_tokens=kwargs.get('max_new_tokens', 8192),
             top_p=kwargs.get('top_p', 0.7),
             temperature=kwargs.get('temperature', 0.7)
         )
