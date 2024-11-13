@@ -1,11 +1,7 @@
 import torch
 
 from models.base import APIModel, LocalModel
-from models.openai import OpenAITextModel
-from models.runpod import RunpodTextModel
-from models.anthropic import AnthropicTextModel
-from models.local import MiniCPM3_4B_LocalModel, Qwen2p5_32B_InstructLocalModel
-from models.definitions import definitions
+from models.definitions import definitions, sources
 from settings import Settings
 from errors import Result
 
@@ -21,8 +17,10 @@ def get_model(model_name: str, source: str = None, settings: Settings = None) ->
   if model_name not in definitions:
     return Result.fail(f"Model {model_name} not found in definitions.")
 
-  model_def = definitions[model_name]
-  available_sources = model_def["sources"]
+  # Find available sources for this model
+  available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
+  if not available_sources:
+    return Result.fail(f"No sources available for model {model_name}.")
 
   if source:
     if source not in available_sources:
@@ -31,13 +29,12 @@ def get_model(model_name: str, source: str = None, settings: Settings = None) ->
   else:
     chosen_source = available_sources[0]
 
-  if chosen_source not in sources:
-    return Result.fail(f"Source {chosen_source} not implemented.")
-
-  model_class = sources[chosen_source]
+  source_config = sources[chosen_source]
+  model_class = source_config["class"]
+  model_config = source_config["models"][model_name]
 
   if issubclass(model_class, APIModel):
-    model = model_class(model_name)
+    model = model_class(model_config["model_id"])
     api_key = get_api_key_for_source(chosen_source, settings)
     if api_key:
       model.set_api_key(api_key)
@@ -48,7 +45,9 @@ def get_model(model_name: str, source: str = None, settings: Settings = None) ->
       model = settings.loaded_local_models[model_name]
     else:
       print("\n\n")
-      model = model_class(model_name, settings.model_directory, device = "cuda" if torch.cuda.is_available() else "cpu", log_level=settings.log_level)
+      model = model_class(model_config["model_id"], settings.model_directory, 
+                         device="cuda" if torch.cuda.is_available() else "cpu", 
+                         log_level=settings.log_level)
       if not model.is_loaded():
         model.load()
       print("\n\n")
@@ -69,6 +68,8 @@ def get_api_key_for_source(source: str, settings: Settings) -> str:
     api_key = settings.anthropic_api_token
   elif source == "runpod":
     api_key = settings.runpod_api_token
+  elif source == "openrouter":
+    api_key = settings.openrouter_api_token
 
   return api_key
 
@@ -100,16 +101,3 @@ def run(model_name: str, messages: list, source: str = None, settings: Settings 
   #   model.reset_context()
 
   return Result(data=model.generate(messages, **kwargs))
-
-
-##################################################
-#            MODEL SOURCES DEFINITION            #
-##################################################
-sources = {
-  "runpod": RunpodTextModel,
-  "openai": OpenAITextModel,
-  "anthropic": AnthropicTextModel,
-  "local-minicpm3-4b": MiniCPM3_4B_LocalModel,
-  "local-qwen2.5-32b-instruct": Qwen2p5_32B_InstructLocalModel,
-}
-

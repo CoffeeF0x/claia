@@ -32,6 +32,7 @@ class Settings:
     active_chat (Optional[ChatHistory]): Currently active chat history.
     active_model (str): Currently active model name.
     log_level (str): Logging level.
+    openrouter_api_token (str): API token for OpenRouter.
   """
 
   LOG_LEVELS = {
@@ -109,7 +110,10 @@ class Settings:
     self.active_chat: ChatHistory = ChatHistory(self.chat_history_directory, "New Conversation", [])
     self.active_model: str = self.DEFAULT_MODEL
     self.log_level: str = self.DEFAULT_LOG_LEVEL
-
+    self.openrouter_api_token: str = ""
+    # self.openrouter_http_referer: str = "http://localhost:3000"  # Default value
+    # self.openrouter_app_title: str = "Local Development"  # Default value
+    
     # Boolean flags for API key availability
     self.has_openai_api_token: bool = False
     self.has_anthropic_api_token: bool = False
@@ -117,6 +121,7 @@ class Settings:
     self.has_runpod_api_token: bool = False
     self.has_massed_compute_api_token: bool = False
     self.has_zammad_api_token: bool = False
+    self.has_openrouter_api_token: bool = False
 
   def load_all_prompts(self) -> list[LLMPromptStore]:
     # Load default prompts
@@ -196,6 +201,12 @@ class Settings:
     self.active_model = strip_quotes(os.environ.get("ACTIVE_MODEL", self.active_model))
     self.log_level = os.environ.get("LOG_LEVEL", self.log_level).lower()
 
+    self.openrouter_api_token = strip_quotes(os.environ.get("TOKEN_OPENROUTER", ""))
+    self.has_openrouter_api_token = bool(self.openrouter_api_token)
+    
+    # self.openrouter_http_referer = strip_quotes(os.environ.get("OPENROUTER_HTTP_REFERER", self.openrouter_http_referer))
+    # self.openrouter_app_title = strip_quotes(os.environ.get("OPENROUTER_APP_TITLE", self.openrouter_app_title))
+
   def load_from_args(self, args: argparse.Namespace) -> None:
     """
     Load configuration settings from command-line arguments.
@@ -226,7 +237,8 @@ class Settings:
       self.has_local_llm_api_token or
       self.has_runpod_api_token or
       self.has_massed_compute_api_token or
-      self.has_zammad_api_token
+      self.has_zammad_api_token or
+      self.has_openrouter_api_token
     )
 
     if not api_tokens_present:
@@ -268,6 +280,7 @@ class SettingsFactory:
     parser.add_argument("--log-level",
                         choices=Settings.LOG_LEVELS.keys(),
                         help="Logging level (debug, info, warning, error, critical)")
+    parser.add_argument("--openrouter-api-token", help="OpenRouter API Token")
     args = parser.parse_args()
 
     # Load from command-line arguments (overrides environment variables)
