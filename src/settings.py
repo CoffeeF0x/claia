@@ -34,6 +34,7 @@ class Settings:
     log_level (str): Logging level.
     openrouter_api_token (str): API token for OpenRouter.
     active_model_source (Optional[str]): Currently active model source (e.g. "anthropic", "openai", etc).
+    huggingface_api_token (str): API token for Hugging Face.
   """
 
   LOG_LEVELS = {
@@ -115,6 +116,7 @@ class Settings:
     self.openrouter_api_token: str = ""
     # self.openrouter_http_referer: str = "http://localhost:3000"  # Default value
     # self.openrouter_app_title: str = "Local Development"  # Default value
+    self.huggingface_api_token: str = ""
     
     # Boolean flags for API key availability
     self.has_openai_api_token: bool = False
@@ -124,6 +126,7 @@ class Settings:
     self.has_massed_compute_api_token: bool = False
     self.has_zammad_api_token: bool = False
     self.has_openrouter_api_token: bool = False
+    self.has_huggingface_api_token: bool = False
 
   def load_all_prompts(self) -> list[LLMPromptStore]:
     # Load default prompts
@@ -207,6 +210,9 @@ class Settings:
     self.openrouter_api_token = strip_quotes(os.environ.get("TOKEN_OPENROUTER", ""))
     self.has_openrouter_api_token = bool(self.openrouter_api_token)
     
+    self.huggingface_api_token = strip_quotes(os.environ.get("TOKEN_HUGGINGFACE", ""))
+    self.has_huggingface_api_token = bool(self.huggingface_api_token)
+    
     # self.openrouter_http_referer = strip_quotes(os.environ.get("OPENROUTER_HTTP_REFERER", self.openrouter_http_referer))
     # self.openrouter_app_title = strip_quotes(os.environ.get("OPENROUTER_APP_TITLE", self.openrouter_app_title))
 
@@ -241,7 +247,8 @@ class Settings:
       self.has_runpod_api_token or
       self.has_massed_compute_api_token or
       self.has_zammad_api_token or
-      self.has_openrouter_api_token
+      self.has_openrouter_api_token or
+      self.has_huggingface_api_token
     )
 
     if not api_tokens_present:
@@ -285,6 +292,7 @@ class SettingsFactory:
                         choices=Settings.LOG_LEVELS.keys(),
                         help="Logging level (debug, info, warning, error, critical)")
     parser.add_argument("--openrouter-api-token", help="OpenRouter API Token")
+    parser.add_argument("--huggingface-api-token", help="Hugging Face API Token")
     args = parser.parse_args()
 
     # Load from command-line arguments (overrides environment variables)

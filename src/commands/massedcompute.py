@@ -5,33 +5,23 @@ import help
 import requests
 from typing import Optional, Dict, Any, List
 import logging
+import subprocess
+import platform
+import os
 
 ##################################################
 #                  CONSTANTS                     #
 ##################################################
 STARTUP_SCRIPTS = {
-  "jupyter": [
-    "#!/bin/bash",
-    "pip3 install jupyterlab",
-    "jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser",
-    "--NotebookApp.token='' --NotebookApp.password=''"
+  "vllm": [
+    "docker run --runtime nvidia --gpus all -v ~/.cache/huggingface:/root/.cache/huggingface --env HUGGING_FACE_HUB_TOKEN={hf_token} -p 8000:8000 --ipc=host vllm/vllm-openai:latest --model mistralai/Mistral-7B-v0.1"
   ],
-  "ssh": [
-    "#!/bin/bash",
-    "sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config",
-    "systemctl restart sshd"
-  ],
-  "pytorch": [
-    "#!/bin/bash",
-    "pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118"
-  ],
-  "tensorflow": [
-    "#!/bin/bash",
-    "pip3 install tensorflow tensorflow-gpu",
-    "python3 -c \"import tensorflow as tf; print('TensorFlow version:', tf.__version__);",
-    "print('GPU Available:', tf.config.list_physical_devices('GPU'))\""
+  "test": [
+    "echo 'foxes will rule the world!' > /home/Ubuntu/test.txt"
   ]
 }
+
+SSH_CONNECT_TIMEOUT = "30"  # Timeout in seconds for SSH connection attempts
 
 ##################################################
 #                 COMMAND CLASS                  #
@@ -54,6 +44,16 @@ class MassedComputeCommand(Command):
           getInstanceDetails(settings, commands[2])
         else:
           print("Error: Must specify instance UUID")
+      elif commands[1] == "ssh":
+        if len(commands) > 2:
+          sshToInstance(settings, commands[2])
+        else:
+          print("Error: Must specify instance UUID")
+      elif commands[1] == "run":
+        if len(commands) > 3:
+          runScript(settings, commands[2], commands[3])
+        else:
+          print("Error: Must specify instance identifier and script name")
       elif commands[1] == "list":
         if len(commands) <= 2 or commands[2] in ["instance", "instances"]:
           listInstances(settings)
@@ -138,19 +138,27 @@ def format_instances_table(instances: List[Dict[str, Any]]) -> List[str]:
     
   return output
 
-def get_startup_script(script_name: str) -> Optional[str]:
+def get_startup_script(script_name: str, settings: Optional[Settings] = None) -> Optional[str]:
   """
   Get a startup script by name, joining the commands with && if found.
   
   Args:
       script_name: Name of the script to retrieve
+      settings: Optional Settings object for token replacement
       
   Returns:
       Joined script commands if found, None otherwise
   """
   if script_name not in STARTUP_SCRIPTS:
     return None
-  return " && ".join(STARTUP_SCRIPTS[script_name])
+    
+  script = " && ".join(STARTUP_SCRIPTS[script_name])
+  
+  # Replace tokens if settings provided
+  if settings and settings.has_huggingface_token:
+    script = script.format(hf_token=settings.huggingface_token)
+    
+  return script
 
 ##################################################
 #                   FUNCTIONS                    #
@@ -163,8 +171,9 @@ def deployInstance(settings: Settings, args: list[str]) -> None:
     image_id = 18  # Default image ID
     instance_name = None
     startup_script = None
+    ssh_keys = []
     
-    # Parse arguments
+    # Parse first three optional arguments
     if len(args) > 0:
       try:
         image_id = int(args[0])
@@ -177,15 +186,54 @@ def deployInstance(settings: Settings, args: list[str]) -> None:
       
     if len(args) > 2:
       script_name = args[2].lower()
-      startup_script = get_startup_script(script_name)
+      startup_script = get_startup_script(script_name, settings)
       if startup_script is None:
         print(f"Unknown startup script: {script_name}")
         print("Available scripts:", ", ".join(STARTUP_SCRIPTS.keys()))
         return
+
+    # Handle SSH keys, preserving quoted strings as single keys
+    if len(args) > 3:
+      current_key = []
+      in_quotes = False
       
-    response = api.deploy_cheapest_instance(image_id, instance_name, startup_script)
+      for arg in args[3:]:
+        if arg.startswith('"') and arg.endswith('"'):
+          # Handle key wrapped in quotes
+          ssh_keys.append(arg.strip('"'))
+        elif arg.startswith('"'):
+          # Start of quoted key
+          in_quotes = True
+          current_key = [arg.strip('"')]
+        elif arg.endswith('"'):
+          # End of quoted key
+          in_quotes = False
+          current_key.append(arg.strip('"'))
+          ssh_keys.append(' '.join(current_key))
+          current_key = []
+        elif in_quotes:
+          # Middle of quoted key
+          current_key.append(arg)
+        else:
+          # Regular unquoted key
+          ssh_keys.append(arg)
+      
+      # Handle unclosed quotes
+      if current_key:
+        ssh_keys.append(' '.join(current_key))
+      
+    response = api.deploy_cheapest_instance(
+      image_id, 
+      instance_name, 
+      startup_script,
+      ssh_keys
+    )
     instance_uuid = response.get('response')
     print(f"Deployed instance with UUID: {instance_uuid}")
+    if ssh_keys:
+      print("Added SSH keys:")
+      for key in ssh_keys:
+        print(f"  - {key}")
     
   except Exception as e:
     print(f"Error: {str(e)}")
@@ -241,14 +289,57 @@ def listGPUs(settings: Settings) -> None:
     print(f"Error listing GPU inventory: {str(e)}")
 
 def terminateInstances(settings: Settings, args: list[str]) -> None:
-  """Terminates one or more instances by UUID."""
+  """Terminates one or more instances by UUID or name."""
   if not args:
-    print("Error: Must specify at least one instance UUID to terminate")
+    print("Error: Must specify at least one instance UUID or name to terminate")
     return
 
   try:
     api = MassedComputeAPI(settings)
-    response = api.terminate_instances(args)
+    instances = api.get_instances()
+    uuids_to_terminate = []
+    
+    # Process each argument (UUID or name)
+    for identifier in args:
+      # Check if it matches any instance names
+      matching_instances = [i for i in instances if i.get('name') == identifier]
+      
+      if matching_instances:
+        if len(matching_instances) > 1:
+          print(f"\nWarning: Multiple instances found with name '{identifier}':")
+          for inst in matching_instances:
+            print(f"  {inst.get('name')} (UUID: {inst.get('uuid')})")
+          print("Please use UUID to terminate specific instance")
+          continue
+        else:
+          instance_uuid = matching_instances[0].get('uuid')
+          instance_name = matching_instances[0].get('name')
+          print(f"Found instance '{instance_name}' with UUID: {instance_uuid}")
+          uuids_to_terminate.append(instance_uuid)
+      else:
+        # Assume it's a UUID
+        uuids_to_terminate.append(identifier)
+    
+    if not uuids_to_terminate:
+      print("No valid instances found to terminate")
+      return
+      
+    # Confirm termination
+    print("\nPreparing to terminate the following instances:")
+    for uuid in uuids_to_terminate:
+      matching = next((i for i in instances if i.get('uuid') == uuid), None)
+      if matching:
+        print(f"  {matching.get('name')} ({uuid})")
+      else:
+        print(f"  {uuid}")
+        
+    confirm = input("\nAre you sure you want to terminate these instances? (y/N): ")
+    if confirm.lower() != 'y':
+      print("Termination cancelled")
+      return
+    
+    # Proceed with termination
+    response = api.terminate_instances(uuids_to_terminate)
     
     # Print results
     terminated = response.get('response', {}).get('data', {}).get('terminated_instances', [])
@@ -264,14 +355,36 @@ def terminateInstances(settings: Settings, args: list[str]) -> None:
   except Exception as e:
     print(f"Error terminating instances: {str(e)}")
 
-def getInstanceDetails(settings: Settings, instance_uuid: str) -> None:
-  """Gets detailed information about a specific instance."""
+def getInstanceDetails(settings: Settings, identifier: str) -> None:
+  """
+  Gets detailed information about a specific instance.
+  
+  Args:
+      identifier: Either UUID or name of the instance to query
+  """
   try:
     api = MassedComputeAPI(settings)
-    instance = api.get_instance_details(instance_uuid)
+    
+    # First try to get instance directly if UUID was provided
+    instance = None
+    try:
+      instance = api.get_instance_details(identifier)
+    except:
+      # If that fails, try to find instance by name
+      instances = api.get_instances()
+      matching_instances = [i for i in instances if i.get('name') == identifier]
+      
+      if len(matching_instances) > 1:
+        print(f"\nMultiple instances found with name '{identifier}':")
+        for inst in matching_instances:
+          print(f"  {inst.get('name')} (UUID: {inst.get('uuid')})")
+        print("Please use UUID to get details of specific instance")
+        return
+      elif len(matching_instances) == 1:
+        instance = matching_instances[0]
     
     if not instance:
-      print(f"No instance found with UUID: {instance_uuid}")
+      print(f"No instance found with identifier: {identifier}")
       return
       
     # Print basic info
@@ -282,7 +395,13 @@ def getInstanceDetails(settings: Settings, instance_uuid: str) -> None:
     print(f"Status: {instance.get('status', 'N/A')}")
     print(f"IP Address: {instance.get('ip', 'N/A')}")
     print(f"Username: {instance.get('username', 'N/A')}")
+    print(f"Password: {instance.get('password', 'N/A')}")
     print(f"Created: {instance.get('created', 'N/A')}")
+    
+    # Print startup command if present
+    startup_cmd = instance.get('command_startup')
+    if startup_cmd:
+      print(f"Startup Command: {startup_cmd}")
     
     # Print image info
     image = instance.get('image', {})
@@ -305,9 +424,185 @@ def getInstanceDetails(settings: Settings, instance_uuid: str) -> None:
   except Exception as e:
     print(f"Error getting instance details: {str(e)}")
 
+def sshToInstance(settings: Settings, identifier: str) -> None:
+  """
+  Initiates an SSH session to the specified instance.
+  
+  Args:
+      identifier: Either UUID or name of the instance to connect to
+  """
+  try:
+    api = MassedComputeAPI(settings)
+    
+    # First try to get instance directly if UUID was provided
+    instance = None
+    try:
+      instance = api.get_instance_details(identifier)
+    except:
+      # If that fails, try to find instance by name
+      instances = api.get_instances()
+      matching_instances = [i for i in instances if i.get('name') == identifier]
+      
+      if len(matching_instances) > 1:
+        print(f"Multiple instances found with name '{identifier}':")
+        for inst in matching_instances:
+          print(f"  {inst.get('name')} (UUID: {inst.get('uuid')})")
+        print("Please use UUID to connect to specific instance")
+        return
+      elif len(matching_instances) == 1:
+        instance = matching_instances[0]
+    
+    if not instance:
+      print(f"No instance found with identifier: {identifier}")
+      return
+      
+    ip = instance.get('ip')
+    username = instance.get('username')
+    password = instance.get('password')
+    name = instance.get('name')
+    
+    if not all([ip, username, password]):
+      print("Error: Missing connection details for instance")
+      return
+      
+    print(f"\nConnecting to {name} ({username}@{ip})...")
+    
+    # Construct sshpass command based on platform
+    if platform.system() == "Windows":
+      print("Connection details:")
+      print(f"  Host: {ip}")
+      print(f"  Username: {username}")
+      print(f"  Password: {password}")
+      print("\nPlease use these credentials in your SSH client")
+      return
+    
+    # For Unix-like systems, use sshpass
+    ssh_command = [
+      "sshpass",
+      "-p",
+      password,
+      "ssh",
+      "-o", f"ConnectTimeout={SSH_CONNECT_TIMEOUT}",
+      "-o", "StrictHostKeyChecking=no",
+      "-o", "UserKnownHostsFile=/dev/null",
+      f"{username}@{ip}"
+    ]
+    
+    try:
+      subprocess.run(ssh_command)
+    except FileNotFoundError:
+      print("Error: 'sshpass' is required but not installed.")
+      print("Install it with:")
+      if platform.system() == "Darwin":  # macOS
+        print("  brew install hudochenkov/sshpass/sshpass")
+      else:  # Linux
+        print("  sudo apt-get install sshpass  # Ubuntu/Debian")
+        print("  sudo yum install sshpass      # CentOS/RHEL")
+    
+  except Exception as e:
+    print(f"Error connecting to instance: {str(e)}")
+
+def runScript(settings: Settings, identifier: str, script_name: str) -> None:
+  """
+  Runs a predefined script on an existing instance using SSH.
+  
+  Args:
+      identifier: UUID or name of the instance
+      script_name: Name of the script to run
+  """
+  try:
+    api = MassedComputeAPI(settings)
+    
+    # Get instance details
+    instance = None
+    try:
+      instance = api.get_instance_details(identifier)
+    except:
+      instances = api.get_instances()
+      matching_instances = [i for i in instances if i.get('name') == identifier]
+      
+      if len(matching_instances) > 1:
+        print(f"\nMultiple instances found with name '{identifier}':")
+        for inst in matching_instances:
+          print(f"  {inst.get('name')} (UUID: {inst.get('uuid')})")
+        print("Please use UUID to run script on specific instance")
+        return
+      elif len(matching_instances) == 1:
+        instance = matching_instances[0]
+    
+    if not instance:
+      print(f"No instance found with identifier: {identifier}")
+      return
+    
+    # Get script
+    script = get_startup_script(script_name.lower(), settings)
+    if script is None:
+      print(f"Unknown script: {script_name}")
+      print("Available scripts:", ", ".join(STARTUP_SCRIPTS.keys()))
+      return
+    
+    ip = instance.get('ip')
+    username = instance.get('username')
+    password = instance.get('password')
+    name = instance.get('name')
+    
+    if not all([ip, username, password]):
+      print("Error: Missing connection details for instance")
+      return
+      
+    print(f"\nRunning script '{script_name}' on instance '{name}'...")
+    
+    # For Windows, show manual instructions
+    if platform.system() == "Windows":
+      print("\nWindows detected. Please run these commands in your SSH client:")
+      print(f"Host: {ip}")
+      print(f"Username: {username}")
+      print(f"Password: {password}")
+      print("\nCommands to run:")
+      print(script)
+      return
+    
+    # For Unix-like systems, use sshpass to execute the script
+    ssh_command = [
+      "sshpass",
+      "-p",
+      password,
+      "ssh",
+      "-o", f"ConnectTimeout={SSH_CONNECT_TIMEOUT}",
+      "-o", "StrictHostKeyChecking=no",
+      "-o", "UserKnownHostsFile=/dev/null",
+      f"{username}@{ip}",
+      script
+    ]
+    
+    try:
+      result = subprocess.run(ssh_command, capture_output=True, text=True)
+      if result.returncode == 0:
+        print("\nScript executed successfully")
+        if result.stdout:
+          print("\nOutput:")
+          print(result.stdout)
+      else:
+        print("\nScript execution failed")
+        if result.stderr:
+          print("\nError output:")
+          print(result.stderr)
+    except FileNotFoundError:
+      print("Error: 'sshpass' is required but not installed.")
+      print("Install it with:")
+      if platform.system() == "Darwin":  # macOS
+        print("  brew install hudochenkov/sshpass/sshpass")
+      else:  # Linux
+        print("  sudo apt-get install sshpass  # Ubuntu/Debian")
+        print("  sudo yum install sshpass      # CentOS/RHEL")
+    
+  except Exception as e:
+    print(f"Error running script: {str(e)}")
+
 ##################################################
 #                     API                        #
 ##################################################
+# This class is responsible for interacting with the MassedCompute API.
 class MassedComputeAPI:
   def __init__(self, settings: Settings):
     """Initialize MassedCompute API client."""
@@ -343,7 +638,8 @@ class MassedComputeAPI:
     self, 
     image_id: int, 
     instance_name: Optional[str] = None,
-    startup_script: Optional[str] = None
+    startup_script: Optional[str] = None,
+    ssh_keys: Optional[List[str]] = None
   ) -> Dict[str, Any]:
     """
     Deploy the cheapest available GPU instance.
@@ -352,6 +648,7 @@ class MassedComputeAPI:
         image_id: The ID of the image to deploy
         instance_name: Optional name for the instance
         startup_script: Optional startup script to run on instance launch
+        ssh_keys: Optional list of SSH key names to add to the instance
         
     Returns:
         Dict containing the deployment response with instance UUID
@@ -386,6 +683,9 @@ class MassedComputeAPI:
       
     if startup_script:
       deploy_data["command"] = startup_script
+    
+    if ssh_keys:
+      deploy_data["sshKey"] = ssh_keys
 
     deploy_response = requests.post(
       f"{self.base_url}/instance/launch",
