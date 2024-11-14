@@ -49,14 +49,14 @@ def currentModel(settings: Settings):
 # List the available models
 def listModels(settings: Settings, model_name: str = "") -> None:
   if model_name:
-    if model_name in definitions:
+    # Get available sources for this model
+    available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
+    
+    if model_name in definitions and available_sources:
       model_info = definitions[model_name]
       print(f"Name: {model_name}")
       print(f"Title: {model_info['title']}")
       print(f"Description: {model_info['description']}")
-      
-      # List available sources for this model
-      available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
       print(f"Available Sources: {', '.join(available_sources)}")
       
       if "training_data" in model_info:
@@ -64,12 +64,22 @@ def listModels(settings: Settings, model_name: str = "") -> None:
       if "capabilities" in model_info:
         print(f"Capabilities: {', '.join(model_info['capabilities'])}")
     else:
-      print(f"Model with name {model_name} not found")
+      print(f"Model with name {model_name} not found or has no available sources")
   else:
-    # Get max model name length for padding
-    max_name_length = max(len(name) for name in definitions.keys())
+    # Filter models to only those with available sources
+    available_models = {
+      name: model for name, model in definitions.items() 
+      if any(name in sources[s]["models"] for s in sources.keys())
+    }
     
-    for model_name in definitions.keys():
+    if not available_models:
+      print("No models available with configured sources")
+      return
+      
+    # Get max model name length for padding
+    max_name_length = max(len(name) for name in available_models.keys())
+    
+    for model_name in available_models.keys():
       # Get available sources for this model
       available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
       sources_str = f" ({', '.join(available_sources)})"
@@ -79,12 +89,12 @@ def listModels(settings: Settings, model_name: str = "") -> None:
 
 # Set the selected model
 def setModel(model_name: str, settings: Settings, source: str = None):
-  if model_name not in definitions:
-    print(f"Model '{model_name}' not found")
-    return
-
   # Get available sources for this model
   available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
+
+  if model_name not in definitions or not available_sources:
+    print(f"Model '{model_name}' not found or has no available sources")
+    return
   
   if source:
     if source not in available_sources:

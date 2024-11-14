@@ -61,21 +61,21 @@ sources = {
       }
     }
   },
-  "runpod": {
-    "class": RunpodTextModel,
-    "inputs": ["text"],
-    "outputs": ["text"],
-    "models": {
-      "qwen2.5-72b-instruct": {
-        "model_id": "qwen2.5-72b-instruct",
-        "variants": [],
-        "attributes": {
-          "max_output": 8192,
-          "context": 131072,
-        }
-      }
-    }
-  },
+  # "runpod": {
+  #   "class": RunpodTextModel,
+  #   "inputs": ["text"],
+  #   "outputs": ["text"],
+  #   "models": {
+  #     "qwen2.5-72b-instruct": {
+  #       "model_id": "qwen2.5-72b-instruct",
+  #       "variants": [],
+  #       "attributes": {
+  #         "max_output": 8192,
+  #         "context": 131072,
+  #       }
+  #     }
+  #   }
+  # },
   "local-minicpm3-4b": {
     "class": MiniCPM3_4B_LocalModel,
     "inputs": ["text"],
@@ -216,6 +216,7 @@ definitions = {
 }
 
 
+
 ##################################################
 #            CAPABILITY ABBREVIATIONS            #
 ##################################################
@@ -230,6 +231,7 @@ abbreviations = {
   "llm": "large-language-model",
   "slm": "small-language-model"
 }
+
 
 
 ##################################################
