@@ -52,7 +52,7 @@ sources = {
     "outputs": ["text"],
     "models": {
       "claude-3-5-sonnet-20240620": {
-        "model_id": "claude-3-sonnet-20240620",
+        "model_id": "claude-3-5-sonnet-20240620",
         "variants": [],
         "attributes": {
           "max_output": 8192,
