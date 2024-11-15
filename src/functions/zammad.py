@@ -1,6 +1,9 @@
 # External dependencies
 import requests
 import urllib.parse
+import re
+from bs4 import BeautifulSoup
+from typing import List
 
 from aia import AIASession
 from tempfile import NamedTemporaryFile
@@ -92,35 +95,79 @@ class ZammadAPI:
 
     return tickets
 
+  def _clean_html_content(self, text: str) -> str:
+    if not text:
+      return ""
+    
+    # First use BeautifulSoup to handle HTML properly
+    soup = BeautifulSoup(text, 'html.parser')
+    clean_text = soup.get_text(separator='\n')
+    
+    # Remove extra whitespace and normalize newlines
+    clean_text = re.sub(r'\n\s*\n', '\n\n', clean_text.strip())
+    
+    return clean_text
+
+  def _extract_unique_content(self, articles: List[dict]) -> List[dict]:
+    seen_content = set()
+    unique_articles = []
+    
+    for article in articles:
+      # Clean the body content
+      clean_body = self._clean_html_content(article['body'])
+      
+      # Split into paragraphs and process each
+      paragraphs = clean_body.split('\n\n')
+      unique_paragraphs = []
+      
+      for para in paragraphs:
+        # Normalize the paragraph to help with matching
+        normalized_para = re.sub(r'\s+', ' ', para.strip())
+        if len(normalized_para) > 30:  # Only check substantial paragraphs
+          if normalized_para not in seen_content:
+            seen_content.add(normalized_para)
+            unique_paragraphs.append(para)
+      
+      if unique_paragraphs:
+        # Create a new article with only unique content
+        new_article = article.copy()
+        new_article['body'] = '\n\n'.join(unique_paragraphs)
+        unique_articles.append(new_article)
+    
+    return unique_articles
+
   def get_ticket_details(self, ticket_id: str) -> None:
     response = ""
 
     try:
       ticket = self.get(f"tickets/{ticket_id}")
       articles = self.get(f"ticket_articles/by_ticket/{ticket_id}")
+      
+      # Process articles to remove duplicates
+      unique_articles = self._extract_unique_content(articles)
 
-      response +=  "Ticket Details:"
-      response +=  f"\nTicket ID: {ticket['id']}"
-      response +=  f"\nNumber: {ticket['number']}"
-      response +=  f"\nTitle: {ticket['title']}"
-      response +=  f"\nState: {ticket['state_id']}"
-      response +=  f"\nPriority: {ticket['priority_id']}"
-      response +=  f"\nCreated At: {ticket['created_at']}"
-      response +=  f"\nUpdated At: {ticket['updated_at']}"
+      response += "Ticket Details:"
+      response += f"\nTicket ID: {ticket['id']}"
+      response += f"\nNumber: {ticket['number']}"
+      response += f"\nTitle: {ticket['title']}"
+      response += f"\nState: {ticket['state_id']}"
+      response += f"\nPriority: {ticket['priority_id']}"
+      response += f"\nCreated At: {ticket['created_at']}"
+      response += f"\nUpdated At: {ticket['updated_at']}"
 
-      response +=  "\n\nArticles:"
-      for article in articles:
-        response +=  f"\nArticle ID: {article['id']}"
-        response +=  f"\nFrom: {article['from']}"
-        response +=  f"\nTo: {article['to']}"
-        response +=  f"\nCC: {article['cc']}"
-        response +=  f"\nSubject: {article['subject']}"
-        response +=  f"\nCreated At: {article['created_at']}"
-        response +=  f"\nUpdated At: {article['updated_at']}"
-        response +=  f"\nBody:\n{article['body']}"
-        response +=  "\n" + ("-" * 50)
+      response += "\n\nArticles:"
+      for article in unique_articles:
+        response += f"\nArticle ID: {article['id']}"
+        response += f"\nFrom: {article['from']}"
+        response += f"\nTo: {article['to']}"
+        response += f"\nCC: {article['cc']}"
+        response += f"\nSubject: {article['subject']}"
+        response += f"\nCreated At: {article['created_at']}"
+        response += f"\nUpdated At: {article['updated_at']}"
+        response += f"\nBody:\n{article['body']}"
+        response += "\n" + ("-" * 50)
 
     except Exception as e:
-      response =  f"Error getting ticket details: {str(e)}"
+      response = f"Error getting ticket details: {str(e)}"
 
     return response

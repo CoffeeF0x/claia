@@ -10,3 +10,5 @@ datamodel_code_generator
 jsonschema
 
 aia
+
+beautifulsoup4
