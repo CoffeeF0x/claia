@@ -52,8 +52,14 @@ def modelCommands() -> None:
   print("    - display details about a specific model")
   print("  set, select <model>")
   print("    - select a model to use for generation")
+  print("  set, select <model> <source>")
+  print("    - select a model with specific source to use for generation")
   print("  print, current")
   print("    - display the current model selection")
+  print("  vllm-url")
+  print("    - display the current VLLM base URL")
+  print("  vllm-url <url>")
+  print("    - set the VLLM base URL")
 
 def systemCommands() -> None:
   print("Here are the available system commands:")
@@ -77,9 +83,10 @@ def zammadCommands() -> None:
 
 def massedcomputeCommands() -> None:
   print("Here are the available MassedCompute commands:")
-  print("  deploy <image_id> <instance_name> <startup_script> <ssh_key1> ... <ssh_keyN>")
+  print("  deploy cheapest <image_id> <instance_name> <startup_script> <ssh_key1> ... <ssh_keyN>")
   print("    - Deploy cheapest available GPU instance")
-  print("    - Available startup scripts: jupyter, ssh, pytorch, tensorflow")
+  print("  deploy specific <image_id> <instance_name> <product_name> <startup_script> <ssh_key1> ... <ssh_keyN>")
+  print("    - Deploy a specific GPU instance")
   print("  terminate <uuid|name> <uuid2|name2> ... <uuidN|nameN>")
   print("    - Terminate one or more instances by UUID or name")
   print("  details <uuid|name>")
@@ -92,7 +99,9 @@ def massedcomputeCommands() -> None:
   print("    - List running instances (default)")
   print("  list instances")
   print("    - List running instances")
-  print("  list gpus")
+  print("  list gpus [sort_by]")
   print("    - List available GPU configurations")
+  print("    - Optional sort_by: price/p, vram/v, value/val, available/a")
+  print("    - Add '-' prefix for reverse sort (e.g., -price)")
   print("  list images")
   print("    - List available VM images")

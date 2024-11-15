@@ -14,7 +14,7 @@ import os
 ##################################################
 STARTUP_SCRIPTS = {
   "vllm": [
-    "docker run --runtime nvidia --gpus all -v ~/.cache/huggingface:/root/.cache/huggingface --env HUGGING_FACE_HUB_TOKEN={hf_token} -p 8000:8000 --ipc=host vllm/vllm-openai:latest --model mistralai/Mistral-7B-v0.1"
+    "sudo docker run -dit --runtime nvidia --ipc=host --gpus all -v ~/.cache/huggingface:/root/.cache/huggingface --env HUGGING_FACE_HUB_TOKEN={hf_token} -p 8000:8000 vllm/vllm-openai:latest --model Qwen/Qwen2.5-72B-Instruct --max-model-len 2048 --tensor-parallel-size 2"
   ],
   "test": [
     "echo 'foxes will rule the world!' > /home/Ubuntu/test.txt"
@@ -22,6 +22,18 @@ STARTUP_SCRIPTS = {
 }
 
 SSH_CONNECT_TIMEOUT = "30"  # Timeout in seconds for SSH connection attempts
+
+# GPU VRAM in GB for each GPU type
+GPU_VRAM = {
+  "a6000": 48,    # RTX A6000
+  "h100": 80,     # H100
+  "l40": 48,      # NVIDIA L40
+  "a5000": 24,    # RTX A5000
+  "l40s": 48,     # L40S
+  "a100": 80,     # A100
+  "a30": 24,      # NVIDIA A30
+  "h100_nvl": 94  # H100 NVL
+}
 
 ##################################################
 #                 COMMAND CLASS                  #
@@ -36,7 +48,15 @@ class MassedComputeCommand(Command):
 
     if len(commands) > 1:
       if commands[1] == "deploy":
-        deployInstance(settings, commands[2:])
+        if len(commands) > 2:
+          if commands[2] == "cheapest":
+            deployCheapestInstance(settings, commands[3:])
+          elif commands[2] == "specific":
+            deploySpecificInstance(settings, commands[3:])
+          else:
+            help.massedcomputeCommands()
+        else:
+          help.massedcomputeCommands()
       elif commands[1] == "terminate":
         terminateInstances(settings, commands[2:])
       elif commands[1] == "details":
@@ -58,7 +78,7 @@ class MassedComputeCommand(Command):
         if len(commands) <= 2 or commands[2] in ["instance", "instances"]:
           listInstances(settings)
         elif commands[2] in ["gpu", "gpus"]:
-          listGPUs(settings)
+          listGPUs(settings, commands)
         elif commands[2] in ["image", "images"]:
           listImages(settings)
         else:
@@ -155,35 +175,35 @@ def get_startup_script(script_name: str, settings: Optional[Settings] = None) ->
   script = " && ".join(STARTUP_SCRIPTS[script_name])
   
   # Replace tokens if settings provided
-  if settings and settings.has_huggingface_token:
-    script = script.format(hf_token=settings.huggingface_token)
+  if settings and settings.has_huggingface_api_token:
+    script = script.format(hf_token=settings.huggingface_api_token)
     
   return script
 
 ##################################################
 #                   FUNCTIONS                    #
 ##################################################
-def deployInstance(settings: Settings, args: list[str]) -> None:
+def deployCheapestInstance(settings: Settings, args: list[str]) -> None:
+  """Deploy the cheapest available GPU instance."""
   try:
     api = MassedComputeAPI(settings)
     
-    # Default image ID and optional name handling
-    image_id = 18  # Default image ID
-    instance_name = None
+    # Parse arguments
+    if len(args) < 2:
+      print("Error: Required arguments: <image_id> <instance_name>")
+      return
+      
+    try:
+      image_id = int(args[0])
+    except ValueError:
+      print(f"Invalid image ID: {args[0]}")
+      return
+      
+    instance_name = args[1]
     startup_script = None
     ssh_keys = []
     
-    # Parse first three optional arguments
-    if len(args) > 0:
-      try:
-        image_id = int(args[0])
-      except ValueError:
-        print(f"Invalid image ID: {args[0]}")
-        return
-        
-    if len(args) > 1:
-      instance_name = args[1]
-      
+    # Handle optional startup script
     if len(args) > 2:
       script_name = args[2].lower()
       startup_script = get_startup_script(script_name, settings)
@@ -191,52 +211,177 @@ def deployInstance(settings: Settings, args: list[str]) -> None:
         print(f"Unknown startup script: {script_name}")
         print("Available scripts:", ", ".join(STARTUP_SCRIPTS.keys()))
         return
-
-    # Handle SSH keys, preserving quoted strings as single keys
+        
+    # Handle optional SSH keys
     if len(args) > 3:
-      current_key = []
-      in_quotes = False
-      
-      for arg in args[3:]:
-        if arg.startswith('"') and arg.endswith('"'):
-          # Handle key wrapped in quotes
-          ssh_keys.append(arg.strip('"'))
-        elif arg.startswith('"'):
-          # Start of quoted key
-          in_quotes = True
-          current_key = [arg.strip('"')]
-        elif arg.endswith('"'):
-          # End of quoted key
-          in_quotes = False
-          current_key.append(arg.strip('"'))
-          ssh_keys.append(' '.join(current_key))
-          current_key = []
-        elif in_quotes:
-          # Middle of quoted key
-          current_key.append(arg)
-        else:
-          # Regular unquoted key
-          ssh_keys.append(arg)
-      
-      # Handle unclosed quotes
-      if current_key:
-        ssh_keys.append(' '.join(current_key))
-      
+      ssh_keys = handle_ssh_keys(args[3:])
+    
     response = api.deploy_cheapest_instance(
-      image_id, 
-      instance_name, 
+      image_id,
+      instance_name,
       startup_script,
       ssh_keys
     )
+    
     instance_uuid = response.get('response')
     print(f"Deployed instance with UUID: {instance_uuid}")
     if ssh_keys:
       print("Added SSH keys:")
       for key in ssh_keys:
         print(f"  - {key}")
-    
+        
   except Exception as e:
     print(f"Error: {str(e)}")
+
+def deploySpecificInstance(settings: Settings, args: list[str]) -> None:
+  """Deploy a specific GPU instance type."""
+  try:
+    api = MassedComputeAPI(settings)
+    
+    # Parse arguments
+    if len(args) < 3:
+      print("Error: Required arguments: <image_id> <instance_name> <product_name>")
+      return
+
+    try:
+      image_id = int(args[0])
+    except ValueError:
+      print(f"Invalid image ID: {args[0]}")
+      return
+      
+    instance_name = args[1]
+    product_name = args[2].lower()  # Convert input to lowercase
+    startup_script = None
+    ssh_keys = []
+    
+    # Verify the product exists (case-insensitive)
+    inventory = api.get_gpu_inventory()
+    matching_products = [
+      info['instance_type']['name'] 
+      for info in inventory.values() 
+      if info['instance_type']['name'].lower() == product_name
+    ]
+    
+    if not matching_products:
+      print(f"Error: Invalid product name '{args[2]}'")
+      print("\nAvailable products:")
+      for info in inventory.values():
+        name = info['instance_type']['name']
+        desc = info['instance_type']['description']
+        print(f"  {name}: {desc}")
+      return
+    
+    # Use the correct casing from the inventory
+    product_name = matching_products[0]
+    
+    # Handle optional startup script
+    if len(args) > 3:
+      script_name = args[3].lower()
+      startup_script = get_startup_script(script_name, settings)
+      if startup_script is None:
+        print(f"Unknown startup script: {script_name}")
+        print("Available scripts:", ", ".join(STARTUP_SCRIPTS.keys()))
+        return
+        
+    # Handle optional SSH keys
+    if len(args) > 4:
+      ssh_keys = handle_ssh_keys(args[4:])
+    
+    try:
+      response = api.deploy_specific_instance(
+        image_id,
+        product_name,
+        instance_name,
+        startup_script,
+        ssh_keys
+      )
+      
+      instance_uuid = response.get('response')
+      print(f"Deployed instance with UUID: {instance_uuid}")
+      if ssh_keys:
+        print("Added SSH keys:")
+        for key in ssh_keys:
+          print(f"  - {key}")
+          
+    except requests.exceptions.HTTPError as e:
+      if e.response is not None:
+        error_data = e.response.json()
+        if 'response' in error_data:
+          error_resp = error_data['response']
+          if error_resp.get('code') == 'global/invalid_parameter' and 'capacity' in error_resp.get('message', '').lower():
+            print(f"\nError: Not enough capacity for {product_name}")
+            print("\nAvailable alternatives:")
+            print("-" * 102)
+            print(f"{'Product':<15} {'Description':<25} {'VRAM':<10} {'Price/Hr':<10} {'GB/$Hr':<10} {'Available':<10}")
+            print("-" * 102)
+            
+            # Show available alternatives
+            for info in inventory.values():
+              instance_type = info.get('instance_type', {})
+              capacity = info.get('capacity_available', 0)
+              if capacity > 0:  # Only show products with capacity
+                name = instance_type.get('name', 'N/A')
+                desc = instance_type.get('description', 'N/A')
+                price = instance_type.get('price_cents_per_hour', 0) / 100
+                
+                # Calculate VRAM and GB/$ per hour if possible
+                vram = "N/A"
+                gb_per_dollar = "N/A"
+                for gpu_type, vram_amount in GPU_VRAM.items():
+                  if gpu_type.lower() in name.lower():
+                    multiplier = 1
+                    if "gpu_" in name.lower() and "x_" in name.lower():
+                      try:
+                        multiplier = int(name.split("x_")[0].split("gpu_")[1])
+                      except ValueError:
+                        pass
+                    total_vram = vram_amount * multiplier
+                    vram = f"{total_vram}GB"
+                    if price > 0:
+                      gb_per_dollar = f"{total_vram/price:.1f}"
+                    break
+                
+                print(f"{name[:15]:<15} {desc[:25]:<25} {vram:<10} ${price:<9.2f} {gb_per_dollar:<10} {capacity:<10}")
+            return
+          
+      # If we couldn't parse the error or it's a different error, show the original message
+      print(f"Error deploying instance: {str(e)}")
+        
+  except Exception as e:
+    print(f"Error: {str(e)}")
+
+def handle_ssh_keys(key_args: List[str]) -> List[str]:
+  """Helper function to process SSH key arguments."""
+  ssh_keys = []
+  current_key = []
+  in_quotes = False
+  
+  for arg in key_args:
+    if arg.startswith('"') and arg.endswith('"'):
+      # Handle key wrapped in quotes
+      ssh_keys.append(arg.strip('"'))
+    elif arg.startswith('"'):
+      # Start of quoted key
+      in_quotes = True
+      current_key = [arg.strip('"')]
+    elif arg.endswith('"'):
+      # End of quoted key
+      in_quotes = False
+      current_key.append(arg.strip('"'))
+      ssh_keys.append(' '.join(current_key))
+      current_key = []
+    elif in_quotes:
+      # Middle of quoted key
+      current_key.append(arg)
+    else:
+      # Regular unquoted key
+      ssh_keys.append(arg)
+  
+  # Handle unclosed quotes
+  if current_key:
+    ssh_keys.append(' '.join(current_key))
+    
+  return ssh_keys
 
 def listImages(settings: Settings) -> None:
   """Lists all available images that can be deployed."""
@@ -264,18 +409,26 @@ def listInstances(settings: Settings) -> None:
   except Exception as e:
     print(f"Error listing instances: {str(e)}")
 
-def listGPUs(settings: Settings) -> None:
-  """Lists all available GPU configurations."""
+def listGPUs(settings: Settings, commands: List[str]) -> None:
+  """
+  Lists all available GPU configurations.
+  
+  Args:
+      settings: Settings object containing API credentials
+      commands: List of command arguments for sorting
+  """
   try:
     api = MassedComputeAPI(settings)
     inventory = api.get_gpu_inventory()
 
     # Format and print GPU inventory
     print("\nAvailable GPU Configurations:")
-    print("-" * 72)
-    print(f"{'Product':<15} {'Description':<25} {'Price/Hr':<10} {'Available':<10}")
-    print("-" * 72)
+    print("-" * 102)
+    print(f"{'Product':<15} {'Description':<25} {'VRAM':<10} {'Price/Hr':<10} {'GB/$Hr':<10} {'Available':<10}")
+    print("-" * 102)
 
+    # Prepare data for sorting
+    gpu_data = []
     for product_info in inventory.values():
       instance_type = product_info.get('instance_type', {})
       name = instance_type.get('name', 'N/A')
@@ -283,7 +436,71 @@ def listGPUs(settings: Settings) -> None:
       price = instance_type.get('price_cents_per_hour', 0) / 100
       capacity = product_info.get('capacity_available', 0)
 
-      print(f"{name[:15]:<15} {desc[:25]:<25} ${price:<9.2f} {capacity:<10}")
+      # Calculate VRAM and GB/$ per hour if possible
+      vram_amount = 0
+      gb_per_dollar = 0
+      vram_str = "N/A"
+      gb_per_dollar_str = "N/A"
+      
+      for gpu_type, vram in GPU_VRAM.items():
+        if gpu_type.lower() in name.lower():
+          # Extract multiplier from name (1x, 2x, etc)
+          multiplier = 1
+          if "gpu_" in name.lower() and "x_" in name.lower():
+            try:
+              multiplier = int(name.split("x_")[0].split("gpu_")[1])
+            except ValueError:
+              pass
+          vram_amount = vram * multiplier
+          vram_str = f"{vram_amount}GB"
+          if price > 0:
+            gb_per_dollar = vram_amount/price
+            gb_per_dollar_str = f"{gb_per_dollar:.1f}"
+          break
+
+      gpu_data.append({
+        'name': name,
+        'desc': desc,
+        'vram': vram_amount,
+        'vram_str': vram_str,
+        'price': price,
+        'gb_per_dollar': gb_per_dollar,
+        'gb_per_dollar_str': gb_per_dollar_str,
+        'capacity': capacity
+      })
+
+    # Sort data if sort parameter is provided
+    if len(commands) > 3:
+      sort_by = commands[3].lower()
+      reverse = True if sort_by.startswith('-') else False
+      sort_by = sort_by.lstrip('-')
+      
+      sort_key = None
+      if sort_by in ['price', 'p']:
+        sort_key = 'price'
+      elif sort_by in ['vram', 'v']:
+        sort_key = 'vram'
+      elif sort_by in ['value', 'val']:
+        sort_key = 'gb_per_dollar'
+      elif sort_by in ['available', 'a']:
+        sort_key = 'capacity'
+        
+      if sort_key:
+        gpu_data.sort(key=lambda x: x[sort_key], reverse=reverse)
+      else:
+        print(f"\nUnknown sort parameter: {sort_by}")
+        print("Available sort options:")
+        print("  price, p       - Sort by price per hour")
+        print("  vram, v        - Sort by total VRAM")
+        print("  value, val     - Sort by GB/$Hr")
+        print("  available, a   - Sort by available capacity")
+        print("Add '-' prefix for reverse sort (e.g., -price)")
+        return
+
+    # Print sorted data
+    for gpu in gpu_data:
+      print(f"{gpu['name'][:15]:<15} {gpu['desc'][:25]:<25} {gpu['vram_str']:<10} "
+            f"${gpu['price']:<9.2f} {gpu['gb_per_dollar_str']:<10} {gpu['capacity']:<10}")
 
   except Exception as e:
     print(f"Error listing GPU inventory: {str(e)}")
@@ -739,3 +956,48 @@ class MassedComputeAPI:
     )
     response.raise_for_status()
     return response.json().get('runningInstances')[0]
+
+  def deploy_specific_instance(
+    self,
+    image_id: int,
+    product_name: str,
+    instance_name: Optional[str] = None,
+    startup_script: Optional[str] = None,
+    ssh_keys: Optional[List[str]] = None
+  ) -> Dict[str, Any]:
+    """
+    Deploy a specific GPU instance type.
+    
+    Args:
+        image_id: The ID of the image to deploy
+        product_name: The specific product name to deploy
+        instance_name: Optional name for the instance
+        startup_script: Optional startup script to run on instance launch
+        ssh_keys: Optional list of SSH key names to add to the instance
+        
+    Returns:
+        Dict containing the deployment response with instance UUID
+    """
+    deploy_data = {
+      "imageId": image_id,
+      "productName": product_name,
+      "regionName": "any"
+    }
+    
+    if instance_name:
+      deploy_data["instanceName"] = instance_name
+      
+    if startup_script:
+      deploy_data["command"] = startup_script
+    
+    if ssh_keys:
+      deploy_data["sshKey"] = ssh_keys
+
+    deploy_response = requests.post(
+      f"{self.base_url}/instance/launch",
+      headers=self.headers,
+      json=deploy_data
+    )
+    deploy_response.raise_for_status()
+    
+    return deploy_response.json()

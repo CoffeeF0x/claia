@@ -35,6 +35,7 @@ class Settings:
     openrouter_api_token (str): API token for OpenRouter.
     active_model_source (Optional[str]): Currently active model source (e.g. "anthropic", "openai", etc).
     huggingface_api_token (str): API token for Hugging Face.
+    vllm_base_url (str): Base URL for VLLM.
   """
 
   LOG_LEVELS = {
@@ -85,7 +86,8 @@ class Settings:
   ]
 
   DEFAULT_PROMPT_NAME = "default"
-  DEFAULT_MODEL = "claude-3-5-sonnet-20240620"
+  DEFAULT_MODEL = "qwen2.5-72b-instruct" # "claude-3-5-sonnet-20240620"
+  DEFAULT_MODEL_SOURCE = "vllm" # None
   DEFAULT_LOG_LEVEL = "error"
   DEFAULT_MODEL_DIRECTORY = "models"
   DEFAULT_PROMPT_DIRECTORY = "prompts"
@@ -111,12 +113,13 @@ class Settings:
     self.active_prompt = self.get_prompt(self.DEFAULT_PROMPT_NAME)
     self.active_chat: ChatHistory = ChatHistory(self.chat_history_directory, "New Conversation", [])
     self.active_model: str = self.DEFAULT_MODEL
-    self.active_model_source: str = None
+    self.active_model_source: str = self.DEFAULT_MODEL_SOURCE
     self.log_level: str = self.DEFAULT_LOG_LEVEL
     self.openrouter_api_token: str = ""
     # self.openrouter_http_referer: str = "http://localhost:3000"  # Default value
     # self.openrouter_app_title: str = "Local Development"  # Default value
     self.huggingface_api_token: str = ""
+    self.vllm_base_url: str = None
     
     # Boolean flags for API key availability
     self.has_openai_api_token: bool = False

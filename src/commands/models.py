@@ -26,6 +26,10 @@ class ModelCommand(Command):
         print("No model selected")
       elif commands[1] in ["print", "current"]:
         currentModel(settings)
+      elif commands[1] == "vllm-url" and len(commands) > 2:
+        setVLLMUrl(settings, commands[2])
+      elif commands[1] == "vllm-url":
+        printVLLMUrl(settings)
       else:
         help.unrecognizedCommand()
     else:
@@ -109,3 +113,15 @@ def setModel(model_name: str, settings: Settings, source: str = None):
   settings.active_model_source = chosen_source
   source_str = f" using source '{chosen_source}'"
   print(f"Selected model: {model_name}{source_str}")
+
+# Set or update the VLLM base URL
+def setVLLMUrl(settings: Settings, url: str) -> None:
+  settings.vllm_base_url = url
+  print(f"VLLM base URL set to: {url}")
+
+# Print the current VLLM base URL
+def printVLLMUrl(settings: Settings) -> None:
+  if settings.vllm_base_url:
+    print(f"Current VLLM base URL: {settings.vllm_base_url}")
+  else:
+    print("No VLLM base URL set")

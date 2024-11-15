@@ -3,6 +3,7 @@ from models.runpod import RunpodTextModel
 from models.anthropic import AnthropicTextModel
 from models.local import MiniCPM3_4B_LocalModel, Qwen2p5_32B_InstructLocalModel
 from models.openrouter import OpenRouterTextModel
+from models.vllm import VLLMTextModel
 
 
 
@@ -153,6 +154,61 @@ sources = {
         }
       }
     }
+  },
+  "vllm": {
+    "class": VLLMTextModel,
+    "inputs": ["text"],
+    "outputs": ["text"],
+    "models": {
+      "mistral-7b": {
+        "model_id": "mistralai/Mistral-7B-Instruct-v0.1",
+        "variants": [],
+        "attributes": {
+          "max_output": 4096,
+          "context": 8192,
+        }
+      },
+      "mixtral-8x7b": {
+        "model_id": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+        "variants": [],
+        "attributes": {
+          "max_output": 4096,
+          "context": 32768,
+        }
+      },
+      "llama2-70b": {
+        "model_id": "meta-llama/Llama-2-70b-chat-hf",
+        "variants": [],
+        "attributes": {
+          "max_output": 4096,
+          "context": 4096,
+        }
+      },
+      "minicpm3-4b": {
+        "model_id": "openbmb/MiniCPM3-4B",
+        "variants": [],
+        "attributes": {
+          "max_output": 1024,
+          "context": 32000,
+        }
+      },
+      "qwen2.5-32b-instruct": {
+        "model_id": "Qwen/Qwen2.5-32B-Instruct",
+        "variants": [],
+        "attributes": {
+          "max_output": 8192,
+          "context": 131072,
+        }
+      },
+      "qwen2.5-72b-instruct": {
+        "model_id": "Qwen/Qwen2.5-72B-Instruct",
+        "variants": [],
+        "attributes": {
+          "max_output": 8192,
+          "context": 131072,
+        }
+      }
+    }
   }
 }
 
@@ -214,6 +270,24 @@ definitions = {
     "capabilities": ["ttt"],
     "training_data": "Not specified",
   },
+  "mistral-7b": {
+    "title": "Mistral 7B Instruct",
+    "description": "Mistral 7B is a 7-billion parameter language model demonstrating state-of-the-art performance among models of comparable size.",
+    "capabilities": ["ttt"],
+    "training_data": "Not specified",
+  },
+  "mixtral-8x7b": {
+    "title": "Mixtral 8x7B Instruct",
+    "description": "Mixtral 8x7B is a Mixture of Experts model with 8 experts of 7B parameters each. It outperforms Llama 2 70B on most benchmarks.",
+    "capabilities": ["ttt"],
+    "training_data": "Not specified",
+  },
+  "llama2-70b": {
+    "title": "Llama 2 70B Chat",
+    "description": "Meta's largest Llama 2 model fine-tuned for chat/instruct scenarios.",
+    "capabilities": ["ttt"],
+    "training_data": "Up to 2023",
+  }
 }
 
 

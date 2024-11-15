@@ -33,11 +33,17 @@ def get_model(model_name: str, settings: Settings = None) -> Result:
   model_config = source_config["models"][model_name]
 
   if issubclass(model_class, APIModel):
-    model = model_class(model_config["model_id"])
+    if chosen_source == "vllm":
+      if not settings or not settings.vllm_base_url:
+        return Result.fail("VLLM requires a base URL to be specified in settings.")
+      model = model_class(model_config["model_id"], base_url=settings.vllm_base_url)
+    else:
+      model = model_class(model_config["model_id"])
+    
     api_key = get_api_key_for_source(chosen_source, settings)
     if api_key:
       model.set_api_key(api_key)
-    else:
+    elif chosen_source != "vllm":  # VLLM doesn't require an API key
       return Result.fail(f"No API key found for source {chosen_source}.")
   elif issubclass(model_class, LocalModel):
     if model_name in settings.loaded_local_models:
