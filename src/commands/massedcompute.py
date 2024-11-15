@@ -14,7 +14,89 @@ import os
 ##################################################
 STARTUP_SCRIPTS = {
   "vllm": [
-    "sudo docker run -dit --runtime nvidia --ipc=host --gpus all -v ~/.cache/huggingface:/root/.cache/huggingface --env HUGGING_FACE_HUB_TOKEN={hf_token} -p 8000:8000 vllm/vllm-openai:latest --model Qwen/Qwen2.5-72B-Instruct --max-model-len 2048 --tensor-parallel-size 2"
+    # Create network for containers
+    "docker network create vllm-network || true",
+    
+    # Create Traefik config directories
+    "mkdir -p ~/traefik/config ~/traefik/acme ~/traefik/logs",
+    
+    # Create Traefik static config
+    'echo "api:"                                                                          > ~/traefik/config/traefik.yml',
+    'echo "  dashboard: true"                                                            >> ~/traefik/config/traefik.yml',
+    'echo "  debug: false"                                                               >> ~/traefik/config/traefik.yml',
+    'echo "  insecure: true"                                                             >> ~/traefik/config/traefik.yml',
+    'echo "  disabledashboardad: true"                                                   >> ~/traefik/config/traefik.yml',
+    'echo ""                                                                             >> ~/traefik/config/traefik.yml',
+    'echo "log:"                                                                         >> ~/traefik/config/traefik.yml',
+    'echo "  level: \\"INFO\\""                                                          >> ~/traefik/config/traefik.yml',
+    'echo ""                                                                             >> ~/traefik/config/traefik.yml',
+    'echo "ping: {{}}"                                                                   >> ~/traefik/config/traefik.yml',
+    'echo ""                                                                             >> ~/traefik/config/traefik.yml',
+    'echo "providers:"                                                                   >> ~/traefik/config/traefik.yml',
+    'echo "  docker:"                                                                    >> ~/traefik/config/traefik.yml',
+    'echo "    endpoint: \\"unix:///var/run/docker.sock\\""                              >> ~/traefik/config/traefik.yml',
+    'echo "    exposedByDefault: false"                                                  >> ~/traefik/config/traefik.yml',
+    # 'echo "  file:"                                                                    >> ~/traefik/config/traefik.yml',
+    # 'echo "    filename: \\"/etc/traefik/services.yaml\\""                             >> ~/traefik/config/traefik.yml',
+    'echo ""                                                                             >> ~/traefik/config/traefik.yml',
+    'echo "accessLog:"                                                                   >> ~/traefik/config/traefik.yml',
+    'echo "  filePath: \\"/logs/access.log\\""                                           >> ~/traefik/config/traefik.yml',
+    'echo ""                                                                             >> ~/traefik/config/traefik.yml',
+    'echo "entryPoints:"                                                                 >> ~/traefik/config/traefik.yml',
+    'echo "  web:"                                                                       >> ~/traefik/config/traefik.yml',
+    'echo "    address: \\":80\\""                                                       >> ~/traefik/config/traefik.yml',
+    'echo "    http:"                                                                    >> ~/traefik/config/traefik.yml',
+    'echo "      redirections:"                                                          >> ~/traefik/config/traefik.yml',
+    'echo "        entryPoint:"                                                          >> ~/traefik/config/traefik.yml',
+    'echo "          to: websecure"                                                      >> ~/traefik/config/traefik.yml',
+    'echo "          scheme: https"                                                      >> ~/traefik/config/traefik.yml',
+    'echo "  websecure:"                                                                 >> ~/traefik/config/traefik.yml',
+    'echo "    address: \\":443\\""                                                      >> ~/traefik/config/traefik.yml',
+    'echo ""                                                                             >> ~/traefik/config/traefik.yml',
+    'echo "certificatesResolvers:"                                                       >> ~/traefik/config/traefik.yml',
+    'echo "  letsencrypt:"                                                               >> ~/traefik/config/traefik.yml',
+    'echo "    acme:"                                                                    >> ~/traefik/config/traefik.yml',
+    'echo "      email: \\"{email}\\""                                                   >> ~/traefik/config/traefik.yml',
+    'echo "      caServer: \\"https://acme-v02.api.letsencrypt.org/directory\\""         >> ~/traefik/config/traefik.yml',
+    'echo "      storage: \\"/acme/letsencrypt.json\\""                                  >> ~/traefik/config/traefik.yml',
+    'echo "      tlsChallenge: {{}}"                                                     >> ~/traefik/config/traefik.yml',
+    'echo "  staging:"                                                                   >> ~/traefik/config/traefik.yml',
+    'echo "    acme:"                                                                    >> ~/traefik/config/traefik.yml',
+    'echo "      email: \\"{email}\\""                                                   >> ~/traefik/config/traefik.yml',
+    'echo "      caServer: \\"https://acme-staging-v02.api.letsencrypt.org/directory\\"" >> ~/traefik/config/traefik.yml',
+    'echo "      storage: \\"/acme/staging.json\\""                                      >> ~/traefik/config/traefik.yml',
+    'echo "      tlsChallenge: {{}}"                                                     >> ~/traefik/config/traefik.yml',
+    
+    # Start VLLM container
+    "sudo docker run -d --name vllm --network vllm-network --runtime nvidia --ipc=host --gpus all " +
+    "-v ~/.cache/huggingface:/root/.cache/huggingface " +
+    "-e HUGGING_FACE_HUB_TOKEN={hf_token} " +
+    "-l 'traefik.enable=true' " +
+    "-l 'traefik.http.routers.vllm.rule=Host(`{subdomain}.{zone}`)' " +
+    "-l 'traefik.http.routers.vllm.entrypoints=websecure' " +
+    "-l 'traefik.http.routers.vllm.tls.certresolver=letsencrypt' " +
+    "-l 'traefik.http.services.vllm.loadbalancer.server.port=8000' " +
+    "vllm/vllm-openai:latest --model Qwen/Qwen2.5-72B-Instruct --max-model-len 26000 --tensor-parallel-size 4",
+    
+    # Start Traefik container
+    "sudo docker run -d --name traefik --network vllm-network " +
+    "-v /var/run/docker.sock:/var/run/docker.sock:ro " +
+    "-v ~/traefik/config:/etc/traefik " +
+    "-v ~/traefik/acme:/acme " +
+    "-v ~/traefik/logs:/logs " +
+    "-p 80:80 -p 443:443 " +
+    # "-p 8080:8080 " +  # Added port for Traefik dashboard
+    "traefik:latest",
+    
+    # Start DDNS updater container
+    "sudo docker run -d --name ddns-updater " +
+    "-e ZONE={zone} " +
+    "-e SUBDOMAIN={subdomain} " +
+    "-e API_KEY={cloudflare_token} " +
+    "oznu/cloudflare-ddns:latest",
+    
+    # Print success message
+    "echo 'Containers deployed successfully. VLLM will be available at https://{subdomain}.{zone} once DNS propagates'"
   ],
   "test": [
     "echo 'foxes will rule the world!' > /home/Ubuntu/test.txt"
@@ -158,13 +240,14 @@ def format_instances_table(instances: List[Dict[str, Any]]) -> List[str]:
     
   return output
 
-def get_startup_script(script_name: str, settings: Optional[Settings] = None) -> Optional[str]:
+def get_startup_script(script_name: str, settings: Optional[Settings] = None, extra_params: Optional[Dict[str, str]] = None) -> Optional[str]:
   """
   Get a startup script by name, joining the commands with && if found.
   
   Args:
       script_name: Name of the script to retrieve
       settings: Optional Settings object for token replacement
+      extra_params: Optional dictionary of additional parameters to replace
       
   Returns:
       Joined script commands if found, None otherwise
@@ -174,11 +257,45 @@ def get_startup_script(script_name: str, settings: Optional[Settings] = None) ->
     
   script = " && ".join(STARTUP_SCRIPTS[script_name])
   
-  # Replace tokens if settings provided
+  # Create parameters dictionary
+  params = {}
+  
+  # Add HuggingFace token if available
   if settings and settings.has_huggingface_api_token:
-    script = script.format(hf_token=settings.huggingface_api_token)
+    params['hf_token'] = settings.huggingface_api_token
+  
+  # Add VLLM-specific parameters if available
+  if settings:
+    if settings.vllm_zone and settings.vllm_subdomain:
+      params['subdomain'] = settings.vllm_subdomain
+    if settings.vllm_email:
+      params['email'] = settings.vllm_email
+    if settings.vllm_zone:
+      params['zone'] = settings.vllm_zone
+    if settings.has_cloudflare_api_token:
+      params['cloudflare_token'] = settings.cloudflare_api_token
+  
+  # Add any additional parameters
+  if extra_params:
+    params.update(extra_params)
+  
+  # Replace all parameters in the script
+  try:
+    script = script.format(**params)
+  except KeyError as e:
+    missing_param = str(e).strip("'")
+    raise ValueError(f"Missing required parameter: {missing_param}")
     
   return script
+
+def parse_extra_params(args: List[str]) -> Dict[str, str]:
+  """Parse key=value parameters from argument list."""
+  params = {}
+  for arg in args:
+    if '=' in arg:
+      key, value = arg.split('=', 1)
+      params[key] = value
+  return params
 
 ##################################################
 #                   FUNCTIONS                    #
@@ -203,18 +320,22 @@ def deployCheapestInstance(settings: Settings, args: list[str]) -> None:
     startup_script = None
     ssh_keys = []
     
-    # Handle optional startup script
+    # Handle optional startup script and parameters
     if len(args) > 2:
       script_name = args[2].lower()
-      startup_script = get_startup_script(script_name, settings)
+      # Parse any extra parameters (format: key=value)
+      extra_params = parse_extra_params(args[3:])
+      
+      startup_script = get_startup_script(script_name, settings, extra_params)
       if startup_script is None:
         print(f"Unknown startup script: {script_name}")
         print("Available scripts:", ", ".join(STARTUP_SCRIPTS.keys()))
         return
         
-    # Handle optional SSH keys
-    if len(args) > 3:
-      ssh_keys = handle_ssh_keys(args[3:])
+    # Handle optional SSH keys (any remaining args that aren't key=value)
+    remaining_args = [arg for arg in args[3:] if '=' not in arg]
+    if remaining_args:
+      ssh_keys = handle_ssh_keys(remaining_args)
     
     response = api.deploy_cheapest_instance(
       image_id,
@@ -424,7 +545,7 @@ def listGPUs(settings: Settings, commands: List[str]) -> None:
     # Format and print GPU inventory
     print("\nAvailable GPU Configurations:")
     print("-" * 102)
-    print(f"{'Product':<15} {'Description':<25} {'VRAM':<10} {'Price/Hr':<10} {'GB/$Hr':<10} {'Available':<10}")
+    print(f"{'Product':<15} {'Description':<25} {'VRAM':<10} {'Price/Hr':<10} {'$/Hr/GB':<10} {'Available':<10}")
     print("-" * 102)
 
     # Prepare data for sorting
@@ -436,11 +557,15 @@ def listGPUs(settings: Settings, commands: List[str]) -> None:
       price = instance_type.get('price_cents_per_hour', 0) / 100
       capacity = product_info.get('capacity_available', 0)
 
-      # Calculate VRAM and GB/$ per hour if possible
+      # Skip if sorting by available and capacity is 0
+      if len(commands) > 3 and commands[3].lower().lstrip('-') in ['available', 'a'] and capacity == 0:
+        continue
+
+      # Calculate VRAM and $/Hr/GB if possible
       vram_amount = 0
-      gb_per_dollar = 0
+      price_per_gb = 0
       vram_str = "N/A"
-      gb_per_dollar_str = "N/A"
+      price_per_gb_str = "N/A"
       
       for gpu_type, vram in GPU_VRAM.items():
         if gpu_type.lower() in name.lower():
@@ -453,9 +578,9 @@ def listGPUs(settings: Settings, commands: List[str]) -> None:
               pass
           vram_amount = vram * multiplier
           vram_str = f"{vram_amount}GB"
-          if price > 0:
-            gb_per_dollar = vram_amount/price
-            gb_per_dollar_str = f"{gb_per_dollar:.1f}"
+          if vram_amount > 0:
+            price_per_gb = price/vram_amount
+            price_per_gb_str = f"${price_per_gb:.3f}"
           break
 
       gpu_data.append({
@@ -464,8 +589,8 @@ def listGPUs(settings: Settings, commands: List[str]) -> None:
         'vram': vram_amount,
         'vram_str': vram_str,
         'price': price,
-        'gb_per_dollar': gb_per_dollar,
-        'gb_per_dollar_str': gb_per_dollar_str,
+        'price_per_gb': price_per_gb,
+        'price_per_gb_str': price_per_gb_str,
         'capacity': capacity
       })
 
@@ -481,7 +606,7 @@ def listGPUs(settings: Settings, commands: List[str]) -> None:
       elif sort_by in ['vram', 'v']:
         sort_key = 'vram'
       elif sort_by in ['value', 'val']:
-        sort_key = 'gb_per_dollar'
+        sort_key = 'price_per_gb'
       elif sort_by in ['available', 'a']:
         sort_key = 'capacity'
         
@@ -492,15 +617,15 @@ def listGPUs(settings: Settings, commands: List[str]) -> None:
         print("Available sort options:")
         print("  price, p       - Sort by price per hour")
         print("  vram, v        - Sort by total VRAM")
-        print("  value, val     - Sort by GB/$Hr")
-        print("  available, a   - Sort by available capacity")
+        print("  value, val     - Sort by $/Hr/GB")
+        print("  available, a   - Sort by available capacity (hides unavailable)")
         print("Add '-' prefix for reverse sort (e.g., -price)")
         return
 
     # Print sorted data
     for gpu in gpu_data:
       print(f"{gpu['name'][:15]:<15} {gpu['desc'][:25]:<25} {gpu['vram_str']:<10} "
-            f"${gpu['price']:<9.2f} {gpu['gb_per_dollar_str']:<10} {gpu['capacity']:<10}")
+            f"${gpu['price']:<9.2f} {gpu['price_per_gb_str']:<10} {gpu['capacity']:<10}")
 
   except Exception as e:
     print(f"Error listing GPU inventory: {str(e)}")

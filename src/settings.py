@@ -35,7 +35,9 @@ class Settings:
     openrouter_api_token (str): API token for OpenRouter.
     active_model_source (Optional[str]): Currently active model source (e.g. "anthropic", "openai", etc).
     huggingface_api_token (str): API token for Hugging Face.
-    vllm_base_url (str): Base URL for VLLM.
+    vllm_zone (str): Zone for VLLM.
+    vllm_email (str): Email for VLLM.
+    vllm_subdomain (str): Subdomain for VLLM.
   """
 
   LOG_LEVELS = {
@@ -95,7 +97,7 @@ class Settings:
   FUNCTION_CALLING_PROMPT_NAME = "functions"
 
   def __init__(self):
-    print("Initializing Settings")
+    # print("Initializing Settings")
     self.openai_api_token: str = ""
     self.anthropic_api_token: str = ""
     self.local_llm_api_token: str = ""
@@ -116,10 +118,13 @@ class Settings:
     self.active_model_source: str = self.DEFAULT_MODEL_SOURCE
     self.log_level: str = self.DEFAULT_LOG_LEVEL
     self.openrouter_api_token: str = ""
-    # self.openrouter_http_referer: str = "http://localhost:3000"  # Default value
-    # self.openrouter_app_title: str = "Local Development"  # Default value
     self.huggingface_api_token: str = ""
-    self.vllm_base_url: str = None
+    self.cloudflare_api_token: str = ""
+    
+    # VLLM specific settings
+    self.vllm_zone: str = None
+    self.vllm_email: str = None
+    self.vllm_subdomain: str = None
     
     # Boolean flags for API key availability
     self.has_openai_api_token: bool = False
@@ -130,6 +135,7 @@ class Settings:
     self.has_zammad_api_token: bool = False
     self.has_openrouter_api_token: bool = False
     self.has_huggingface_api_token: bool = False
+    self.has_cloudflare_api_token: bool = False
 
   def load_all_prompts(self) -> list[LLMPromptStore]:
     # Load default prompts
@@ -216,8 +222,13 @@ class Settings:
     self.huggingface_api_token = strip_quotes(os.environ.get("TOKEN_HUGGINGFACE", ""))
     self.has_huggingface_api_token = bool(self.huggingface_api_token)
     
-    # self.openrouter_http_referer = strip_quotes(os.environ.get("OPENROUTER_HTTP_REFERER", self.openrouter_http_referer))
-    # self.openrouter_app_title = strip_quotes(os.environ.get("OPENROUTER_APP_TITLE", self.openrouter_app_title))
+    self.cloudflare_api_token = strip_quotes(os.environ.get("TOKEN_CLOUDFLARE", ""))
+    self.has_cloudflare_api_token = bool(self.cloudflare_api_token)
+    
+    # Load VLLM specific settings
+    self.vllm_zone = strip_quotes(os.environ.get("VLLM_ZONE", ""))
+    self.vllm_email = strip_quotes(os.environ.get("VLLM_EMAIL", ""))
+    self.vllm_subdomain = strip_quotes(os.environ.get("VLLM_SUBDOMAIN", ""))
 
   def load_from_args(self, args: argparse.Namespace) -> None:
     """
@@ -251,7 +262,8 @@ class Settings:
       self.has_massed_compute_api_token or
       self.has_zammad_api_token or
       self.has_openrouter_api_token or
-      self.has_huggingface_api_token
+      self.has_huggingface_api_token or
+      self.has_cloudflare_api_token
     )
 
     if not api_tokens_present:
@@ -296,6 +308,10 @@ class SettingsFactory:
                         help="Logging level (debug, info, warning, error, critical)")
     parser.add_argument("--openrouter-api-token", help="OpenRouter API Token")
     parser.add_argument("--huggingface-api-token", help="Hugging Face API Token")
+    parser.add_argument("--cloudflare-api-token", help="Cloudflare API Token")
+    parser.add_argument("--vllm-zone", help="VLLM Zone")
+    parser.add_argument("--vllm-email", help="VLLM Email")
+    parser.add_argument("--vllm-subdomain", help="VLLM Subdomain")
     args = parser.parse_args()
 
     # Load from command-line arguments (overrides environment variables)

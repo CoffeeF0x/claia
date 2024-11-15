@@ -26,10 +26,24 @@ class ModelCommand(Command):
         print("No model selected")
       elif commands[1] in ["print", "current"]:
         currentModel(settings)
-      elif commands[1] == "vllm-url" and len(commands) > 2:
-        setVLLMUrl(settings, commands[2])
-      elif commands[1] == "vllm-url":
-        printVLLMUrl(settings)
+      elif commands[1] == "vllm":
+        if len(commands) > 2:
+          if commands[2] == "zone" and len(commands) > 3:
+            setVLLMZone(settings, commands[3])
+          elif commands[2] == "zone":
+            printVLLMZone(settings)
+          elif commands[2] == "email" and len(commands) > 3:
+            setVLLMEmail(settings, commands[3])
+          elif commands[2] == "email":
+            printVLLMEmail(settings)
+          elif commands[2] == "subdomain" and len(commands) > 3:
+            setVLLMSubdomain(settings, commands[3])
+          elif commands[2] == "subdomain":
+            printVLLMSubdomain(settings)
+          else:
+            help.vllmCommands()
+        else:
+          help.vllmCommands()
       else:
         help.unrecognizedCommand()
     else:
@@ -114,14 +128,33 @@ def setModel(model_name: str, settings: Settings, source: str = None):
   source_str = f" using source '{chosen_source}'"
   print(f"Selected model: {model_name}{source_str}")
 
-# Set or update the VLLM base URL
-def setVLLMUrl(settings: Settings, url: str) -> None:
-  settings.vllm_base_url = url
-  print(f"VLLM base URL set to: {url}")
+# VLLM specific functions
+def setVLLMZone(settings: Settings, zone: str) -> None:
+  settings.vllm_zone = zone
+  print(f"VLLM zone set to: {zone}")
 
-# Print the current VLLM base URL
-def printVLLMUrl(settings: Settings) -> None:
-  if settings.vllm_base_url:
-    print(f"Current VLLM base URL: {settings.vllm_base_url}")
+def printVLLMZone(settings: Settings) -> None:
+  if settings.vllm_zone:
+    print(f"Current VLLM zone: {settings.vllm_zone}")
   else:
-    print("No VLLM base URL set")
+    print("No VLLM zone set")
+
+def setVLLMEmail(settings: Settings, email: str) -> None:
+  settings.vllm_email = email
+  print(f"VLLM email set to: {email}")
+
+def printVLLMEmail(settings: Settings) -> None:
+  if settings.vllm_email:
+    print(f"Current VLLM email: {settings.vllm_email}")
+  else:
+    print("No VLLM email set")
+
+def setVLLMSubdomain(settings: Settings, subdomain: str) -> None:
+  settings.vllm_subdomain = subdomain
+  print(f"VLLM subdomain set to: {subdomain}")
+
+def printVLLMSubdomain(settings: Settings) -> None:
+  if settings.vllm_subdomain:
+    print(f"Current VLLM subdomain: {settings.vllm_subdomain}")
+  else:
+    print("No VLLM subdomain set")

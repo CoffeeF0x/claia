@@ -34,9 +34,9 @@ def get_model(model_name: str, settings: Settings = None) -> Result:
 
   if issubclass(model_class, APIModel):
     if chosen_source == "vllm":
-      if not settings or not settings.vllm_base_url:
-        return Result.fail("VLLM requires a base URL to be specified in settings.")
-      model = model_class(model_config["model_id"], base_url=settings.vllm_base_url)
+      if not settings or not (settings.vllm_zone and settings.vllm_subdomain):
+        return Result.fail("VLLM requires zone and subdomain to be specified in settings.")
+      model = model_class(model_config["model_id"], base_url=f"https://{settings.vllm_subdomain}.{settings.vllm_zone}")
     else:
       model = model_class(model_config["model_id"])
     
