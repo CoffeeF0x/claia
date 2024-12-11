@@ -45,49 +45,43 @@ def zammad_run_process(settings: Settings, zammad: ZammadAPI) -> Result:
 
   for selected_ticket in temp_tickets:
     ticket_details = zammad.get_ticket_details(selected_ticket)
-    summary_messages = [
-      {"role": "system", "content": zammad_summarize_prompt},
-      {"role": "user", "content": ticket_details}
-    ]
     tagging_messages = [
       {"role": "system", "content": zammad_tag_prompt},
+      {"role": "user", "content": ticket_details}
     ]
 
     print("-" * 50)
     print("-" * 50)
     print(f"RAW TICKET DATA:\n{ticket_details}")
 
-    # summarize ticket
-    summary_result = model_run(settings.active_model, summary_messages, settings=settings)
-
-    if summary_result.is_error():
-      print(f"Error running summary model: {summary_result.get_message()}")
+    tagging_result = model_run(settings.active_model, tagging_messages, settings=settings)
+    if tagging_result.is_error():
+      print(f"Error running tagging model: {tagging_result.get_message()}")
     else:
       print("-" * 50)
-      print(f"Summary Result:\n{summary_result.data}")
+      print(f"Tagging Result:\n{tagging_result.data}")
       print("-" * 50)
-      print(f"RAW TICKET DATA:\n{ticket_details}")
+      # Remove any escape characters and check for tags
+      if tagging_result.data:
+        cleaned_response = tagging_result.data.replace("\\", "")
+        try:
+          if cleaned_response and "[TAG]" in cleaned_response and "[/TAG]" in cleaned_response:
+            start = cleaned_response.index("[TAG]") + len("[TAG]")
+            end = cleaned_response.index("[/TAG]")
+            tag = cleaned_response[start:end].strip()
 
-      # tag ticket
-      tagging_messages.append({"role": "user", "content": summary_result.data + "\n\n\nRAW TICKET DATA\n" + ("-" * 50) + ticket_details})
-      tagging_result = model_run(settings.active_model, tagging_messages, settings=settings)
-      if tagging_result.is_error():
-        print(f"Error running tagging model: {tagging_result.get_message()}")
-      else:
-        print("-" * 50)
-        print(f"Tagging Result:\n{tagging_result.data}")
-        print("-" * 50)
-        if tagging_result.data and "[TAG]" in tagging_result.data:
-          start = tagging_result.data.index("[TAG]") + len("[TAG]")
-          end = tagging_result.data.index("[/TAG]")
-          tag = tagging_result.data[start:end]
-
-          if tag in ["Phishing", "Spam", "Completed", "NetworkHardware", "Jenzabar", "LMS", "Report", "Printers", "Forms", "Adobe", "InfoMaker", "Salesforce", "Classroom", "Login", "Student", "Filter", "Video", "NoCategoryFound"]:
-            zammad.add_tag(selected_ticket, f"AI-{tag}")
+            if tag in ["Phishing", "Spam", "Completed", "NetworkHardware", "Jenzabar", "LMS", "Report", "Printers", "Forms", "Adobe", "InfoMaker", "Salesforce", "Classroom", "Login", "Student", "Filter", "Video", "NoCategoryFound"]:
+              zammad.add_tag(selected_ticket, f"AI-{tag}")
+            else:
+              zammad.add_tag(selected_ticket, "AI-Unknown")
           else:
-            zammad.add_tag(selected_ticket, "AI-Unknown")
+            print("Missing tag markers in response, using AI-Blank")
+            zammad.add_tag(selected_ticket, "AI-Blank")
+        except Exception as e:
+          print(f"Error extracting tag: {e}, using AI-Error")
+          zammad.add_tag(selected_ticket, "AI-Error")
 
-          zammad.add_tag(selected_ticket, "AI-Tagged")
+        zammad.add_tag(selected_ticket, "AI-Tagged")
 
 def zammad_remove_ai_tags(settings: Settings, zammad: ZammadAPI) -> Result:
   result: Result = Result()

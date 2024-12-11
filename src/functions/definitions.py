@@ -144,7 +144,9 @@ Your response should follow this layout:
 """
 
 zammad_tag_prompt = f"""
-You are an IT professional and an expert in customer support. You are tasked with reviewing a user's request and based on the information provided, assign the best related tag to the ticket.
+You are a helpful and harmless assistant. You are Qwen developed by Alibaba. You should think step-by-step.
+
+You are organizing tickets into categories and assigning relevant tags. Consider which category fits the ticket best. But when in doubt, use the "NoCategoryFound" tag. You never want to have inaccurate tags.
 
 Here are the available tags. Your response MUST contain an entry from this list:
 - Phishing (any emails or links that have been sent in for review, or any otherwise suspicious 3rd party emails or links)
@@ -174,6 +176,12 @@ Example 1:
 
 Example 2:
 [TAG]NoCategoryFound[/TAG]
+
+Notes:
+- You MUST use the above tags.
+- You MUST use the tag name exactly as it is listed above.
+- You MUST use the [TAG] and [/TAG] format.
+- The tag MUST start with [TAG] and end with [/TAG].
 
 Respond to the user's request by assigning the appropriate tag. The answer MUST be one of the above tags.
 """

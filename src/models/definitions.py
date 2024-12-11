@@ -207,6 +207,14 @@ sources = {
           "max_output": 8192,
           "context": 131072,
         }
+      },
+      "qwq-32b": {
+        "model_id": "Qwen/QwQ-32B-Preview",
+        "variants": [],
+        "attributes": {
+          "max_output": 512,
+          "context": 32768,
+        }
       }
     }
   }
@@ -287,6 +295,12 @@ definitions = {
     "description": "Meta's largest Llama 2 model fine-tuned for chat/instruct scenarios.",
     "capabilities": ["ttt"],
     "training_data": "Up to 2023",
+  },
+  "qwq-32b": {
+    "title": "QwQ-32B Preview",
+    "description": "An experimental research model by the Qwen Team focused on advancing AI reasoning capabilities. Features enhanced analytical abilities while having specific limitations in language mixing, recursive reasoning, and safety considerations. Built on Qwen2.5-32B-Instruct base.",
+    "capabilities": ["ttt"],
+    "training_data": "Not specified",
   }
 }
 

@@ -29,8 +29,8 @@ class VLLMTextModel(APIModel):
       "messages": messages,
       "model": self.model_name,
       "max_tokens": kwargs.get("max_tokens", 4096),
-      "temperature": kwargs.get("temperature", 0.7),
-      "top_p": kwargs.get("top_p", 1.0),
+      "temperature": kwargs.get("temperature", 0.3),
+      "top_p": kwargs.get("top_p", 0.6),
       "stream": kwargs.get("stream", False),
       "stop": kwargs.get("stop", None),
     }

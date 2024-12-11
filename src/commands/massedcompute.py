@@ -14,6 +14,10 @@ import os
 ##################################################
 STARTUP_SCRIPTS = {
   "vllm": [
+    # Add http and https to ufw
+    "ufw allow http",
+    "ufw allow https",
+
     # Create network for containers
     "docker network create vllm-network || true",
     
@@ -76,7 +80,7 @@ STARTUP_SCRIPTS = {
     "-l 'traefik.http.routers.vllm.entrypoints=websecure' " +
     "-l 'traefik.http.routers.vllm.tls.certresolver=letsencrypt' " +
     "-l 'traefik.http.services.vllm.loadbalancer.server.port=8000' " +
-    "vllm/vllm-openai:latest --model Qwen/Qwen2.5-72B-Instruct --max-model-len 26000 --tensor-parallel-size 4",
+    "vllm/vllm-openai:latest --model Qwen/QwQ-32B-Preview --max-model-len 32768 --tensor-parallel-size 4",
     
     # Start Traefik container
     "sudo docker run -d --name traefik --network vllm-network " +
@@ -544,9 +548,9 @@ def listGPUs(settings: Settings, commands: List[str]) -> None:
 
     # Format and print GPU inventory
     print("\nAvailable GPU Configurations:")
-    print("-" * 102)
-    print(f"{'Product':<15} {'Description':<25} {'VRAM':<10} {'Price/Hr':<10} {'$/Hr/GB':<10} {'Available':<10}")
-    print("-" * 102)
+    print("-" * 122)  # Increased width
+    print(f"{'Product':<25} {'Description':<25} {'VRAM':<10} {'Price/Hr':<10} {'$/Hr/GB':<10} {'Available':<10}")  # Increased Product width
+    print("-" * 122)  # Increased width
 
     # Prepare data for sorting
     gpu_data = []
@@ -624,7 +628,7 @@ def listGPUs(settings: Settings, commands: List[str]) -> None:
 
     # Print sorted data
     for gpu in gpu_data:
-      print(f"{gpu['name'][:15]:<15} {gpu['desc'][:25]:<25} {gpu['vram_str']:<10} "
+      print(f"{gpu['name'][:25]:<25} {gpu['desc'][:25]:<25} {gpu['vram_str']:<10} "  # Increased name width to 25
             f"${gpu['price']:<9.2f} {gpu['price_per_gb_str']:<10} {gpu['capacity']:<10}")
 
   except Exception as e:
