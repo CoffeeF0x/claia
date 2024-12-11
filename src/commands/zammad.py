@@ -30,6 +30,8 @@ class ZammadCommand(Command):
         print(zammad.get(commands[2]))
       elif commands[1] == "process":
         zammad_run_process(settings, zammad)
+      elif commands[1] == "untag":
+        zammad_remove_ai_tags(settings, zammad)
       else:
         help.unrecognizedCommand()
     else:
@@ -86,3 +88,27 @@ def zammad_run_process(settings: Settings, zammad: ZammadAPI) -> Result:
             zammad.add_tag(selected_ticket, "AI-Unknown")
 
           zammad.add_tag(selected_ticket, "AI-Tagged")
+
+def zammad_remove_ai_tags(settings: Settings, zammad: ZammadAPI) -> Result:
+  result: Result = Result()
+  tickets = zammad.list_tickets("tagged-tickets")
+  
+  if not tickets:
+    print("No tagged tickets found")
+    return result
+    
+  print(f"Found {len(tickets)} tagged tickets. Processing...")
+  removed_count = 0
+  
+  for ticket_id in tickets:
+    tags = zammad.list_tags(ticket_id)
+    ai_tags = [tag for tag in tags if tag.startswith("AI-")]
+    
+    if ai_tags:
+      print(f"\nRemoving {len(ai_tags)} AI tags from ticket {ticket_id}:")
+      for tag in ai_tags:
+        if zammad.remove_tag(ticket_id, tag):
+          removed_count += 1
+  
+  print(f"\nCompleted! Removed {removed_count} AI tags from {len(tickets)} tickets")
+  return result

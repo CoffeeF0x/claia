@@ -30,12 +30,14 @@ class ZammadAPI:
       if method.lower() == 'get':
         response = requests.get(url, headers=self.headers, verify=pem_file.name)
       elif method.lower() == 'post':
-          response = requests.post(url, headers=self.headers, json=data, verify=pem_file.name)
+        response = requests.post(url, headers=self.headers, json=data, verify=pem_file.name)
+      elif method.lower() == 'delete':
+        response = requests.delete(url, headers=self.headers, json=data, verify=pem_file.name)
       else:
-          raise ValueError(f"Unsupported HTTP method: {method}")
+        raise ValueError(f"Unsupported HTTP method: {method}")
 
     response.raise_for_status()
-    return response.json()
+    return response.json() if response.content else None
 
   def get(self, endpoint: str):
     return self._make_request('get', endpoint)
@@ -64,6 +66,7 @@ class ZammadAPI:
       "open-tickets": "state_id:1 OR state_id:2 OR state_id:3",
       "reminder-tickets": "state_id:3",
       "untagged-tickets": "(state_id:1 OR state_id:2 OR state_id:3) AND !(tags:AI-Tagged)",
+      "tagged-tickets": "tags:AI-Tagged",
       "high-priority": "priority.name:\"3 high\""
     }
     response = None
@@ -78,7 +81,7 @@ class ZammadAPI:
     encoded_query = urllib.parse.quote(query)
 
     try:
-      response = self.get(f"tickets/search?query={encoded_query}&page={page}&per_page={limit}")
+      response = self.get(f"tickets/search?query={encoded_query}&page={page}&per_page={limit}&sort_by=updated_at&order_by=asc")
       tickets = response["tickets"]
       ticket_count = response["tickets_count"]
       print(f"tickets: {ticket_count}")
@@ -86,7 +89,7 @@ class ZammadAPI:
       while full_response and response["tickets_count"] > 0:
         print(f"total tickets: {ticket_count}")
         page += 1
-        response = self.get(f"tickets/search?query={encoded_query}&page={page}&per_page={limit}")
+        response = self.get(f"tickets/search?query={encoded_query}&page={page}&per_page={limit}&sort_by=updated_at&order_by=asc")
         tickets.extend(response["tickets"])
         ticket_count += response["tickets_count"]
 
@@ -171,3 +174,30 @@ class ZammadAPI:
       response = f"Error getting ticket details: {str(e)}"
 
     return response
+
+  def list_tags(self, ticket_id: int) -> list:
+    """List all tags for a specific ticket."""
+    try:
+      response = self.get(f"tags?object=Ticket&o_id={ticket_id}")
+      return response.get("tags", [])
+    except Exception as e:
+      print(f"Error listing tags for ticket {ticket_id}: {str(e)}")
+      return []
+
+  def remove_tag(self, ticket_id: int, tag: str) -> bool:
+    """Remove a specific tag from a ticket."""
+    data = {
+      "item": tag,
+      "object": "Ticket",
+      "o_id": ticket_id
+    }
+
+    try:
+      # The endpoint documentation shows DELETE, but since we're using _make_request,
+      # we'll need to add DELETE support to it
+      response = self._make_request('delete', "tags/remove", data)
+      print(f"Successfully removed tag '{tag}' from ticket {ticket_id}")
+      return True
+    except Exception as e:
+      print(f"Error removing tag '{tag}' from ticket {ticket_id}: {str(e)}")
+      return False

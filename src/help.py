@@ -105,6 +105,8 @@ def zammadCommands() -> None:
   print("    - display details for a specific ticket")
   print("  process")
   print("    - process untagged tickets with AI for summarization and tagging")
+  print("  untag")
+  print("    - remove all AI-generated tags from tagged tickets")
 
 def massedcomputeCommands() -> None:
   print("Here are the available MassedCompute commands:")
