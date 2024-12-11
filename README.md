@@ -8,6 +8,8 @@ The docker compose file also includes filebrowser, since some usecases may requi
 - https://github.com/filebrowser/filebrowser
 - https://filebrowser.org/
 
+~~Any audio streaming will be handled by a pulseaudio server.~~
+
 ## Design Goals
 
 Clai's name is, perhaps obviously so, a portmanteu. It combines the terms for CLI and AI into a single word. This is also the focus of the program itself, while it may incorparate various hardware, it is at it's root a cli application.
