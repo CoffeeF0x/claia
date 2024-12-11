@@ -166,6 +166,7 @@ Here are the available tags. Your response MUST contain an entry from this list:
 - Student (any student submitted request that doesn't fit the other categories, these would likely be simple issues, this could be trouble with an office license, library access issues, laptop is having trouble, etc)
 - Filter (the website filter, wifi is blocking a device's access)
 - Video (any video uploads or class videos if requested by a faculty or staff member. This includes Zoom, YouTube, Teams Meetings, and misc recordings)
+- AccountManagement (misc account management issues, such as disabling or adding permissions, updating account names, etc)
 - NoCategoryFound (use this if no other category seems related or is just not a good fit)
 
 Assign a tag using the following format:

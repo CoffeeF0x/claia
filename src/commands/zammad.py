@@ -70,7 +70,7 @@ def zammad_run_process(settings: Settings, zammad: ZammadAPI) -> Result:
             end = cleaned_response.index("[/TAG]")
             tag = cleaned_response[start:end].strip()
 
-            if tag in ["Phishing", "Spam", "Completed", "NetworkHardware", "Jenzabar", "LMS", "Report", "Printers", "Forms", "Adobe", "InfoMaker", "Salesforce", "Classroom", "Login", "Student", "Filter", "Video", "NoCategoryFound"]:
+            if tag in ["Phishing", "Spam", "Completed", "NetworkHardware", "Jenzabar", "LMS", "Report", "Printers", "Forms", "Adobe", "InfoMaker", "Salesforce", "Classroom", "Login", "Student", "Filter", "Video", "AccountManagement", "NoCategoryFound"]:
               zammad.add_tag(selected_ticket, f"AI-{tag}")
             else:
               zammad.add_tag(selected_ticket, "AI-Unknown")
