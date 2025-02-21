@@ -12,11 +12,12 @@ stages:
   - upload
 
 before_script:
-  - echo "Installing system dependencies..."
-  - apt-get update && apt-get install -y curl jq
-  - echo "Current working directory: $(pwd)"
-  - echo "Directory contents:"
-  - ls -la
+  - |
+    echo "Installing system dependencies..."
+    apt-get update && apt-get install -y curl jq
+    echo "Current working directory: $(pwd)"
+    echo "Directory contents:"
+    ls -la
 
 build:
   stage: build
