@@ -5,6 +5,7 @@ variables:
   B2_BUCKET: ${B2_BUCKET_ID}
   ARTIFACT_PATH: "dist"
   B2_PATH: "" # path inside the bucket to upload to, leave empty for root bucket path
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
 
 stages:
   - build
@@ -19,11 +20,19 @@ before_script:
 
 build:
   stage: build
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - .pip-cache/
   script:
     - echo "Making build script executable..."
     - chmod +x build.sh
     - echo "Build script contents:"
     - cat build.sh
+    - echo "Python version:"
+    - python --version
+    - echo "Pip version:"
+    - pip --version
     - echo "Starting build process..."
     - ./build.sh ${BINARY_NAME}
     - echo "Build complete. Checking artifact directory:"
@@ -31,6 +40,7 @@ build:
   artifacts:
     paths:
       - ${ARTIFACT_PATH}/
+    expire_in: 1 week
   only:
     - main
 
@@ -40,31 +50,47 @@ upload:
     - echo "Starting upload process..."
     - echo "Checking artifact directory contents:"
     - ls -la ${ARTIFACT_PATH}/
+    - echo "Checking B2 bucket ID:"
+    - echo "B2_BUCKET=${B2_BUCKET}"
     
     # Authenticate with B2
     - echo "Authenticating with B2..."
-    - >
-      export B2_AUTH_TOKEN=$(curl -s -u "${B2_APPLICATION_KEY_ID}:${B2_APPLICATION_KEY}" \
-        https://api.backblazeb2.com/b2api/v2/b2_authorize_account | jq -r .authorizationToken)
-    - >
-      export B2_API_URL=$(curl -s -u "${B2_APPLICATION_KEY_ID}:${B2_APPLICATION_KEY}" \
-        https://api.backblazeb2.com/b2api/v2/b2_authorize_account | jq -r .apiUrl)
+    - |
+      B2_RESPONSE=$(curl -s -u "${B2_APPLICATION_KEY_ID}:${B2_APPLICATION_KEY}" \
+        https://api.backblazeb2.com/b2api/v2/b2_authorize_account)
+      if [ $? -ne 0 ]; then
+        echo "B2 authentication failed"
+        echo "$B2_RESPONSE"
+        exit 1
+      fi
+    - export B2_AUTH_TOKEN=$(echo "$B2_RESPONSE" | jq -r .authorizationToken)
+    - export B2_API_URL=$(echo "$B2_RESPONSE" | jq -r .apiUrl)
     - echo "B2 authentication complete. API URL obtained."
 
     # Get upload URL and auth token
     - echo "Getting upload URL..."
-    - >
-      export UPLOAD_AUTH=$(curl -s -H "Authorization: ${B2_AUTH_TOKEN}" \
+    - |
+      UPLOAD_RESPONSE=$(curl -s -H "Authorization: ${B2_AUTH_TOKEN}" \
         ${B2_API_URL}/b2api/v2/b2_get_upload_url \
         -d "{\"bucketId\":\"${B2_BUCKET}\"}")
-    - export UPLOAD_URL=$(echo $UPLOAD_AUTH | jq -r .uploadUrl)
-    - export UPLOAD_AUTH_TOKEN=$(echo $UPLOAD_AUTH | jq -r .authorizationToken)
+      if [ $? -ne 0 ]; then
+        echo "Failed to get upload URL"
+        echo "$UPLOAD_RESPONSE"
+        exit 1
+      fi
+    - export UPLOAD_URL=$(echo "$UPLOAD_RESPONSE" | jq -r .uploadUrl)
+    - export UPLOAD_AUTH_TOKEN=$(echo "$UPLOAD_RESPONSE" | jq -r .authorizationToken)
     - echo "Upload URL obtained."
 
     # Upload files
     - echo "Starting file upload process..."
-    - >
+    - |
       for file in ${ARTIFACT_PATH}/*; do
+        if [ ! -f "$file" ]; then
+          echo "No files found in ${ARTIFACT_PATH}"
+          exit 1
+        fi
+        
         filename=$(basename $file)
         echo "Uploading file: $filename"
 
@@ -81,12 +107,18 @@ upload:
         echo "SHA1: $sha1"
 
         echo "Sending file to B2..."
-        curl -v -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
+        UPLOAD_RESULT=$(curl -v -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
           -H "X-Bz-File-Name: ${B2_PATH}${filename}" \
           -H "Content-Type: ${content_type}" \
           -H "X-Bz-Content-Sha1: $sha1" \
           --data-binary "@$file" \
-          ${UPLOAD_URL}
+          ${UPLOAD_URL})
+        
+        if [ $? -ne 0 ]; then
+          echo "Upload failed for $filename"
+          echo "$UPLOAD_RESULT"
+          exit 1
+        fi
         
         echo "Upload complete for $filename"
       done
