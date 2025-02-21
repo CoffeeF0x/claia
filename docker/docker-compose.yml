@@ -6,16 +6,34 @@ volumes:
   files:
 
 services:
-  dev:
+  claia:
     image: clai:dev
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../
+      dockerfile: ./docker/Dockerfile
     env_file:
-      - .env
+      - ../.env
     volumes:
       - files:/app/files
       # - ./output:/app/files
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  claia-test:
+    image: clai:test
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile.test
+    env_file:
+      - ../.env
+    volumes:
+      - files:/app/files
+    # - ./output:/app/files
     # deploy:
     #   resources:
     #     reservations:

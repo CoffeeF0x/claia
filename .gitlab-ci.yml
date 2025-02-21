@@ -1,2 +1,68 @@
-include:
-  remote: https://gitlab.com/exofox/templates/docker-basic/raw/master/.noversion-ci.yml
+image: python:3.12-slim
+
+variables:
+  BINARY_NAME: "claia"
+  B2_BUCKET: ${B2_BUCKET_ID}
+  ARTIFACT_PATH: "dist"
+  B2_PATH: "" # path inside the bucket to upload to, leave empty for root bucket path
+
+stages:
+  - build
+  - upload
+
+before_script:
+  - apt-get update && apt-get install -y curl jq
+
+build:
+  stage: build
+  script:
+    - chmod +x build.sh
+    - ./build.sh ${BINARY_NAME}
+  artifacts:
+    paths:
+      - ${ARTIFACT_PATH}/
+  only:
+    - main
+
+upload:
+  stage: upload
+  script:
+    # Authenticate with B2
+    - >
+      export B2_AUTH_TOKEN=$(curl -s -u "${B2_APPLICATION_KEY_ID}:${B2_APPLICATION_KEY}" \
+        https://api.backblazeb2.com/b2api/v2/b2_authorize_account | jq -r .authorizationToken)
+    - >
+      export B2_API_URL=$(curl -s -u "${B2_APPLICATION_KEY_ID}:${B2_APPLICATION_KEY}" \
+        https://api.backblazeb2.com/b2api/v2/b2_authorize_account | jq -r .apiUrl)
+
+    # Get upload URL and auth token
+    - >
+      export UPLOAD_AUTH=$(curl -s -H "Authorization: ${B2_AUTH_TOKEN}" \
+        ${B2_API_URL}/b2api/v2/b2_get_upload_url \
+        -d "{\"bucketId\":\"${B2_BUCKET}\"}")
+    - export UPLOAD_URL=$(echo $UPLOAD_AUTH | jq -r .uploadUrl)
+    - export UPLOAD_AUTH_TOKEN=$(echo $UPLOAD_AUTH | jq -r .authorizationToken)
+
+    # Upload files
+    - >
+      for file in ${ARTIFACT_PATH}/*; do
+        filename=$(basename $file)
+
+        # Set content type based on file extension
+        if [[ $file == *.txt ]]; then
+          content_type="text/plain"
+        else
+          content_type="application/octet-stream"
+        fi
+
+        curl -s -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
+          -H "X-Bz-File-Name: ${B2_PATH}${filename}" \
+          -H "Content-Type: ${content_type}" \
+          -H "X-Bz-Content-Sha1: $(sha1sum $file | awk '{print $1}')" \
+          --data-binary "@$file" \
+          ${UPLOAD_URL}
+      done
+  needs:
+    - build
+  only:
+    - main

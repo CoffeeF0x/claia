@@ -12,3 +12,5 @@ jsonschema
 aia
 
 beautifulsoup4
+
+pyinstaller
