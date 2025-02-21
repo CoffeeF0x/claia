@@ -34,8 +34,6 @@ build:
     - python --version
     - echo "Pip version:"
     - pip --version
-    - echo "Checking build directory:"
-    - ls -la build/
     - echo "Starting build process..."
     - ./build.sh ${BINARY_NAME}
     - echo "Checking build directory after build:"
