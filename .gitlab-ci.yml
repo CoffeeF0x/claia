@@ -36,6 +36,8 @@ build:
     - pip --version
     - echo "Starting build process..."
     - ./build.sh ${BINARY_NAME}
+    - echo "Checking root directory after build:"
+    - ls -la
     - echo "Checking build directory after build:"
     - ls -la build/
     - echo "Build complete. Checking artifact directory:"
