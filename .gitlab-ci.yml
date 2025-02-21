@@ -85,7 +85,7 @@ upload:
       fi
     - export UPLOAD_URL=$(echo "$UPLOAD_RESPONSE" | jq -r .uploadUrl)
     - export UPLOAD_AUTH_TOKEN=$(echo "$UPLOAD_RESPONSE" | jq -r .authorizationToken)
-    - echo "Upload URL obtained."
+    - echo "Upload URL obtained (${UPLOAD_URL})"
 
     # Upload files
     - echo "Starting file upload process..."
