@@ -23,7 +23,7 @@ pyinstaller --onefile \
   main.py
 
 # Move binary to dist
-mv "dist/${BINARY_NAME}" "../${DIST_DIR}/"
+mv "${BINARY_NAME}" "../${DIST_DIR}/"
 
 # Create version file
 if [ ! -z "$CI_COMMIT_SHA" ]; then
