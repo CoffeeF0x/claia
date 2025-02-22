@@ -19,7 +19,7 @@ build_and_upload:
       - .pip-cache/
   script:
     # Install dependencies and build binary
-    - apt-get update && apt-get install -y build-essential curl jq split
+    - apt-get update && apt-get install -y build-essential curl jq coreutils
     - chmod +x build.sh
     - ./build.sh ${BINARY_NAME}
 
