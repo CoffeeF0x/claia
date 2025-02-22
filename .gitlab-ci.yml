@@ -57,12 +57,12 @@ build_and_upload:
 
         sha1=$(sha1sum $file | awk '{print $1}')
 
-        # Stream file to curl instead of loading it all into memory
-        cat "$file" | curl -s -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
+        # Use -T for efficient file upload
+        curl -s -T "$file" \
+          -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
           -H "X-Bz-File-Name: ${B2_PATH}${filename}" \
           -H "Content-Type: ${content_type}" \
           -H "X-Bz-Content-Sha1: $sha1" \
-          --data-binary @- \
           ${UPLOAD_URL}
       done
   only:
