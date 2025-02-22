@@ -6,6 +6,7 @@ variables:
   ARTIFACT_PATH: "dist"
   B2_PATH: "" # path inside the bucket to upload to, leave empty for root bucket path
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+  CHUNK_SIZE: "50M"
 
 stages:
   - build_and_upload
@@ -18,7 +19,7 @@ build_and_upload:
       - .pip-cache/
   script:
     # Install dependencies and build binary
-    - apt-get update && apt-get install -y build-essential curl jq
+    - apt-get update && apt-get install -y build-essential curl jq split
     - chmod +x build.sh
     - ./build.sh ${BINARY_NAME}
 
@@ -47,23 +48,62 @@ build_and_upload:
         fi
 
         filename=$(basename $file)
+        filesize=$(stat -f%z "$file")
 
-        # Set content type based on file extension
-        if [[ $file == *.txt ]]; then
-          content_type="text/plain"
+        # If file is larger than 50MB, split it
+        if [ $filesize -gt 52428800 ]; then
+          echo "Splitting large file: $filename"
+          cd ${ARTIFACT_PATH}
+          split -b ${CHUNK_SIZE} "$filename" "${filename}.part."
+          
+          # Upload parts
+          for part in ${filename}.part.*; do
+            if [[ $part == *.txt ]]; then
+              content_type="text/plain"
+            else
+              content_type="application/octet-stream"
+            fi
+
+            sha1=$(sha1sum "$part" | awk '{print $1}')
+            
+            curl -s -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
+              -H "X-Bz-File-Name: ${B2_PATH}${part}" \
+              -H "Content-Type: ${content_type}" \
+              -H "X-Bz-Content-Sha1: $sha1" \
+              --data-binary "@$part" \
+              ${UPLOAD_URL}
+          done
+
+          # Create and upload manifest
+          echo "${filename}" > "${filename}.manifest"
+          ls ${filename}.part.* >> "${filename}.manifest"
+          
+          sha1=$(sha1sum "${filename}.manifest" | awk '{print $1}')
+          curl -s -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
+            -H "X-Bz-File-Name: ${B2_PATH}${filename}.manifest" \
+            -H "Content-Type: text/plain" \
+            -H "X-Bz-Content-Sha1: $sha1" \
+            --data-binary "@${filename}.manifest" \
+            ${UPLOAD_URL}
+
+          cd ..
         else
-          content_type="application/octet-stream"
+          # Upload small files normally
+          if [[ $file == *.txt ]]; then
+            content_type="text/plain"
+          else
+            content_type="application/octet-stream"
+          fi
+
+          sha1=$(sha1sum "$file" | awk '{print $1}')
+          
+          curl -s -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
+            -H "X-Bz-File-Name: ${B2_PATH}${filename}" \
+            -H "Content-Type: ${content_type}" \
+            -H "X-Bz-Content-Sha1: $sha1" \
+            --data-binary "@$file" \
+            ${UPLOAD_URL}
         fi
-
-        sha1=$(sha1sum $file | awk '{print $1}')
-
-        # Use -T for efficient file upload
-        curl -s -T "$file" \
-          -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
-          -H "X-Bz-File-Name: ${B2_PATH}${filename}" \
-          -H "Content-Type: ${content_type}" \
-          -H "X-Bz-Content-Sha1: $sha1" \
-          ${UPLOAD_URL}
       done
   only:
     - main
