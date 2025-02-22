@@ -48,7 +48,7 @@ build_and_upload:
         fi
 
         filename=$(basename $file)
-        filesize=$(stat -f%z "$file")
+        filesize=$(stat -c%s "$file")
 
         # If file is larger than 50MB, split it
         if [ $filesize -gt 52428800 ]; then
