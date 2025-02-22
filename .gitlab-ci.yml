@@ -8,37 +8,21 @@ variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
 
 stages:
-  - build
-  - upload
+  - build_and_upload
 
-build:
-  stage: build
+build_and_upload:
+  stage: build_and_upload
   cache:
     key: ${CI_COMMIT_REF_SLUG}
     paths:
       - .pip-cache/
   script:
-    - apt-get update && apt-get install -y build-essential
+    # Install dependencies and build binary
+    - apt-get update && apt-get install -y build-essential curl jq
     - chmod +x build.sh
     - ./build.sh ${BINARY_NAME}
-    - echo "Build completed"
-    - echo "Checking root directory"
-    - ls -la
-    - echo "Checking build directory"
-    - ls -la build
-    - echo "Checking dist directory"
-    - ls -la ${ARTIFACT_PATH}
-  artifacts:
-    paths:
-      - ${ARTIFACT_PATH}/
-    expire_in: 1 week
-  only:
-    - main
 
-upload:
-  stage: upload
-  script:
-    - apt-get update && apt-get install -y curl jq
+    # B2 Authentication
     - >
       export B2_AUTH_TOKEN=$(curl -s -u "${B2_APPLICATION_KEY_ID}:${B2_APPLICATION_KEY}" \
         https://api.backblazeb2.com/b2api/v2/b2_authorize_account | jq -r .authorizationToken)
@@ -80,7 +64,5 @@ upload:
           --data-binary "@$file" \
           ${UPLOAD_URL}
       done
-  needs:
-    - build
   only:
     - main
