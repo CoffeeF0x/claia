@@ -9,6 +9,11 @@ ARG BINARY_NAME
 
 WORKDIR /build
 
+# Install only runtime dependencies
+RUN apt-get update \
+  && apt-get install -y build-essential \
+  && rm -rf /var/lib/apt/lists/*
+
 # Copy build requirements
 COPY build.sh .
 COPY requirements.txt .
@@ -29,14 +34,15 @@ ENV BINARY_NAME=${BINARY_NAME}
 WORKDIR /app
 
 # Install only runtime dependencies
-RUN apt-get update && apt-get install -y \
-  pulseaudio \
-  libportaudio2 \
-  alsa-utils \
-  sox \
-  libsox-fmt-all \
-  espeak-ng \
-  sshpass \
+RUN apt-get update \
+  && apt-get install -y \
+    pulseaudio \
+    libportaudio2 \
+    alsa-utils \
+    sox \
+    libsox-fmt-all \
+    espeak-ng \
+    sshpass \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy the compiled binary from builder

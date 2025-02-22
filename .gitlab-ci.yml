@@ -11,14 +11,6 @@ stages:
   - build
   - upload
 
-before_script:
-  - |
-    echo "Installing system dependencies..."
-    apt-get update && apt-get install -y curl jq binutils
-    echo "Current working directory: $(pwd)"
-    echo "Directory contents:"
-    ls -la
-
 build:
   stage: build
   cache:
@@ -26,22 +18,16 @@ build:
     paths:
       - .pip-cache/
   script:
-    - echo "Making build script executable..."
+    - apt-get update && apt-get install -y build-essential
     - chmod +x build.sh
-    - echo "Build script contents:"
-    - cat build.sh
-    - echo "Python version:"
-    - python --version
-    - echo "Pip version:"
-    - pip --version
-    - echo "Starting build process..."
     - ./build.sh ${BINARY_NAME}
-    - echo "Checking root directory after build:"
+    - echo "Build completed"
+    - echo "Checking root directory"
     - ls -la
-    - echo "Checking build directory after build:"
-    - ls -la build/
-    - echo "Build complete. Checking artifact directory:"
-    - ls -la ${ARTIFACT_PATH}/
+    - echo "Checking build directory"
+    - ls -la build
+    - echo "Checking dist directory"
+    - ls -la ${ARTIFACT_PATH}
   artifacts:
     paths:
       - ${ARTIFACT_PATH}/
@@ -52,6 +38,7 @@ build:
 upload:
   stage: upload
   script:
+    - apt-get update && apt-get install -y curl jq
     - >
       export B2_AUTH_TOKEN=$(curl -s -u "${B2_APPLICATION_KEY_ID}:${B2_APPLICATION_KEY}" \
         https://api.backblazeb2.com/b2api/v2/b2_authorize_account | jq -r .authorizationToken)
@@ -66,10 +53,8 @@ upload:
         -d "{\"bucketId\":\"${B2_BUCKET}\"}")
     - export UPLOAD_URL=$(echo $UPLOAD_AUTH | jq -r .uploadUrl)
     - export UPLOAD_AUTH_TOKEN=$(echo $UPLOAD_AUTH | jq -r .authorizationToken)
-    - echo "Upload URL obtained (${UPLOAD_URL})"
 
     # Upload files
-    - echo "Starting file upload process..."
     - >
       for file in ${ARTIFACT_PATH}/*; do
         if [ ! -f "$file" ]; then
@@ -78,7 +63,6 @@ upload:
         fi
 
         filename=$(basename $file)
-        echo "Uploading file: $filename"
 
         # Set content type based on file extension
         if [[ $file == *.txt ]]; then
@@ -87,28 +71,15 @@ upload:
           content_type="application/octet-stream"
         fi
 
-        echo "Content type: $content_type"
-        echo "Calculating SHA1..."
         sha1=$(sha1sum $file | awk '{print $1}')
-        echo "SHA1: $sha1"
 
-        echo "Sending file to B2..."
-        UPLOAD_RESULT=$(curl -v -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
+        curl -s -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
           -H "X-Bz-File-Name: ${B2_PATH}${filename}" \
           -H "Content-Type: ${content_type}" \
           -H "X-Bz-Content-Sha1: $sha1" \
           --data-binary "@$file" \
-          ${UPLOAD_URL})
-
-        if [ $? -ne 0 ]; then
-          echo "Upload failed for $filename"
-          echo "$UPLOAD_RESULT"
-          exit 1
-        fi
-
-        echo "Upload complete for $filename"
+          ${UPLOAD_URL}
       done
-    - echo "All files uploaded successfully"
   needs:
     - build
   only:
