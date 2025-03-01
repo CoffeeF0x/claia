@@ -1,6 +1,7 @@
 #!/bin/bash
 PACKAGE_NAME=${1:-"claia"}
 DIST_DIR=${2:-"dist"}
+TEMP_DIR=$(mktemp -d)
 
 # Create dist directory if it doesn't exist
 mkdir -p "${DIST_DIR}"
@@ -12,5 +13,12 @@ if [ ! -z "$CI_COMMIT_SHA" ]; then
   echo "${DATE}-${SHORT_HASH}" > "${DIST_DIR}/version.txt"
 fi
 
+# Copy source files to temp directory
+cp -r src/* "${TEMP_DIR}/"
+cp requirements.txt README.md "${TEMP_DIR}/"
+
 # Package source code
-zip -r "${DIST_DIR}/${PACKAGE_NAME}.zip" src/ requirements.txt README.md -x "**/__pycache__/**" "**/*.pyc"
+cd "${TEMP_DIR}" && zip -r "${DIST_DIR}/${PACKAGE_NAME}.zip" . -x "**/__pycache__/**" "**/*.pyc"
+
+# Clean up
+rm -rf "${TEMP_DIR}"
