@@ -42,6 +42,24 @@ services:
     #           count: all
     #           capabilities: [gpu]
 
+  claia-package:
+    image: clai:package
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile.package
+    env_file:
+      - ../.env
+    volumes:
+      - files:/app/files
+    # - ./output:/app/files
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
   files:
     image: filebrowser/filebrowser:s6
     ports:
