@@ -2,7 +2,6 @@ image: python:3.12-slim
 
 variables:
   BINARY_NAME: "claia"
-  B2_BUCKET: ${B2_BUCKET_ID}
   ARTIFACT_PATH: "dist"
   B2_PATH: "" # path inside the bucket to upload to, leave empty for root bucket path
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
@@ -10,60 +9,104 @@ variables:
 stages:
   - build_and_upload
 
-build_and_upload:
-  stage: build_and_upload
+.setup_dependencies:
+  before_script:
+    - apt-get update && apt-get install -y build-essential curl jq zip
+
+# YAML anchors for reusable script blocks
+.b2_auth: &b2_auth
+  # B2 Authentication
+  - >
+    export B2_AUTH_TOKEN=$(curl -s -u "${B2_APPLICATION_KEY_ID}:${B2_APPLICATION_KEY}" \
+      https://api.backblazeb2.com/b2api/v2/b2_authorize_account | jq -r .authorizationToken)
+  - >
+    export B2_API_URL=$(curl -s -u "${B2_APPLICATION_KEY_ID}:${B2_APPLICATION_KEY}" \
+      https://api.backblazeb2.com/b2api/v2/b2_authorize_account | jq -r .apiUrl)
+
+.b2_get_upload_url: &b2_get_upload_url
+  # Get upload URL and auth token
+  - >
+    export UPLOAD_AUTH=$(curl -s -H "Authorization: ${B2_AUTH_TOKEN}" \
+      ${B2_API_URL}/b2api/v2/b2_get_upload_url \
+      -d "{\"bucketId\":\"${B2_BUCKET}\"}")
+  - export UPLOAD_URL=$(echo $UPLOAD_AUTH | jq -r .uploadUrl)
+  - export UPLOAD_AUTH_TOKEN=$(echo $UPLOAD_AUTH | jq -r .authorizationToken)
+
+.b2_upload_files: &b2_upload_files
+  # Upload files
+  - >
+    for file in ${ARTIFACT_PATH}/*; do
+      if [ ! -f "$file" ]; then
+        echo "No files found in ${ARTIFACT_PATH}"
+        exit 1
+      fi
+
+      filename=$(basename $file)
+
+      # Set content type based on file extension
+      if [[ $file == *.txt ]]; then
+        content_type="text/plain"
+      elif [[ $file == *.zip ]]; then
+        content_type="application/zip"
+      else
+        content_type="application/octet-stream"
+      fi
+
+      sha1=$(sha1sum $file | awk '{print $1}')
+
+      # Use -T for efficient file upload
+      curl -s -T "$file" -X POST \
+        -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
+        -H "X-Bz-File-Name: ${B2_PATH}${filename}" \
+        -H "Content-Type: ${content_type}" \
+        -H "X-Bz-Content-Sha1: $sha1" \
+        ${UPLOAD_URL}
+    done
+
+.common_job_config: &common_job_config
+  extends:
+    - .setup_dependencies
   cache:
     key: ${CI_COMMIT_REF_SLUG}
     paths:
       - .pip-cache/
+
+main_build_and_upload:
+  <<: *common_job_config
+  stage: build_and_upload
   script:
-    # Install dependencies and build binary
-    - apt-get update && apt-get install -y build-essential curl jq
+    # Build binary
     - chmod +x build.sh
     - ./build.sh ${BINARY_NAME}
 
-    # B2 Authentication
-    - >
-      export B2_AUTH_TOKEN=$(curl -s -u "${B2_APPLICATION_KEY_ID}:${B2_APPLICATION_KEY}" \
-        https://api.backblazeb2.com/b2api/v2/b2_authorize_account | jq -r .authorizationToken)
-    - >
-      export B2_API_URL=$(curl -s -u "${B2_APPLICATION_KEY_ID}:${B2_APPLICATION_KEY}" \
-        https://api.backblazeb2.com/b2api/v2/b2_authorize_account | jq -r .apiUrl)
+    # Set bucket and credentials for main branch
+    - export B2_BUCKET=${MAIN_B2_BUCKET_ID}
+    - export B2_APPLICATION_KEY_ID=${MAIN_B2_APPLICATION_KEY_ID}
+    - export B2_APPLICATION_KEY=${MAIN_B2_APPLICATION_KEY}
 
-    # Get upload URL and auth token
-    - >
-      export UPLOAD_AUTH=$(curl -s -H "Authorization: ${B2_AUTH_TOKEN}" \
-        ${B2_API_URL}/b2api/v2/b2_get_upload_url \
-        -d "{\"bucketId\":\"${B2_BUCKET}\"}")
-    - export UPLOAD_URL=$(echo $UPLOAD_AUTH | jq -r .uploadUrl)
-    - export UPLOAD_AUTH_TOKEN=$(echo $UPLOAD_AUTH | jq -r .authorizationToken)
-
-    # Upload files
-    - >
-      for file in ${ARTIFACT_PATH}/*; do
-        if [ ! -f "$file" ]; then
-          echo "No files found in ${ARTIFACT_PATH}"
-          exit 1
-        fi
-
-        filename=$(basename $file)
-
-        # Set content type based on file extension
-        if [[ $file == *.txt ]]; then
-          content_type="text/plain"
-        else
-          content_type="application/octet-stream"
-        fi
-
-        sha1=$(sha1sum $file | awk '{print $1}')
-
-        # Use -T for efficient file upload
-        curl -s -T "$file" -X POST \
-          -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
-          -H "X-Bz-File-Name: ${B2_PATH}${filename}" \
-          -H "Content-Type: ${content_type}" \
-          -H "X-Bz-Content-Sha1: $sha1" \
-          ${UPLOAD_URL}
-      done
+    # B2 Authentication and Upload
+    - *b2_auth
+    - *b2_get_upload_url
+    - *b2_upload_files
   only:
     - main
+
+dev_build_and_upload:
+  <<: *common_job_config
+  stage: build_and_upload
+  script:
+    # Build source package
+    - chmod +x package.sh
+    - ./package.sh ${BINARY_NAME}
+
+    # Set bucket and credentials for dev branch
+    - export B2_BUCKET=${DEV_B2_BUCKET_ID}
+    - export B2_APPLICATION_KEY_ID=${DEV_B2_APPLICATION_KEY_ID}
+    - export B2_APPLICATION_KEY=${DEV_B2_APPLICATION_KEY}
+
+    # B2 Authentication and Upload
+    - *b2_auth
+    - *b2_get_upload_url
+    - *b2_upload_files
+  only:
+    - dev
