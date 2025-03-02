@@ -4,10 +4,22 @@ import urllib.parse
 import re
 from bs4 import BeautifulSoup
 from typing import List
-
-from aia import AIASession
 from tempfile import NamedTemporaryFile
 
+# Try to import AIA, but make it optional
+try:
+  from aia import AIASession
+except ImportError:
+  # Create a fallback class if AIA is not available
+  class AIASession:
+    def cadata_from_url(self, url):
+      return ""
+
+
+
+##################################################
+#                  ZAMMAD API                    #
+##################################################
 class ZammadAPI:
   """Class for interacting with the Zammad API."""
   def __init__(self, base_url = str, api_token = str) -> None:

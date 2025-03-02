@@ -1,8 +1,14 @@
-import help
+# External dependencies
+import json
+import torch
 
+# Internal dependencies
 from commands.base import Command
 from errors import Result
 from settings import Settings
+
+# Module dependencies
+from modules.experimental.functions import get_current_time, get_current_date, get_user_name, greet_user, FUNCTION_DEFINITIONS
 
 
 
@@ -21,9 +27,9 @@ class ExperimentalCommand(Command):
       elif commands[1] == "function":
         test_function_calling(settings)
       else:
-        help.unrecognizedCommand()
+        print_help()
     else:
-      help.experimentalCommands()
+      print_help()
 
     return result
 
@@ -33,7 +39,9 @@ class ExperimentalCommand(Command):
 #                   FUNCTIONS                    #
 ##################################################
 def test():
-  import torch
+  """
+  Test function for Stable Diffusion.
+  """
   from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
 
   model_id = "stabilityai/stable-diffusion-2-1"
@@ -49,8 +57,10 @@ def test():
   image.save("files/astronaut_rides_horse.png")
 
 def minitest():
+  """
+  Test function for MiniCPM3 model.
+  """
   from transformers import AutoModelForCausalLM, AutoTokenizer
-  import torch
 
   path = "openbmb/MiniCPM3-4B"
   device = "cuda"
@@ -78,87 +88,18 @@ def minitest():
   print(responses)
 
 def test_function_calling(settings: Settings):
+  """
+  Test function for function calling capabilities.
+
+  Args:
+    settings: The Claia settings
+  """
   from models.registry import run as model_run
-  from errors import Result
-  import json
-
-  # Define sample functions
-  def get_current_time():
-    import datetime
-    return datetime.datetime.now().strftime("%H:%M:%S")
-
-  def get_current_date():
-    import datetime
-    return datetime.date.today().strftime("%Y-%m-%d")
-
-  def get_user_name():
-    return "John Doe"
-
-  def greet_user(name):
-    return f"Hello, {name}!"
-
-  # Define function list
-  function_list = [
-    {
-      "name": "get_current_time",
-      "description": "Returns the current time",
-      "parameters": {
-        "type": "object",
-        "properties": {}
-      },
-      "returns": {
-        "type": "string",
-        "description": "The current time in HH:MM:SS format"
-      }
-    },
-    {
-      "name": "get_current_date",
-      "description": "Returns the current date",
-      "parameters": {
-        "type": "object",
-        "properties": {}
-      },
-      "returns": {
-        "type": "string",
-        "description": "The current date in YYYY-MM-DD format"
-      }
-    },
-    {
-      "name": "get_user_name",
-      "description": "Returns a hardcoded user name",
-      "parameters": {
-        "type": "object",
-        "properties": {}
-      },
-      "returns": {
-        "type": "string",
-        "description": "The hardcoded user name"
-      }
-    },
-    {
-      "name": "greet_user",
-      "description": "Greets a user by name",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "The name of the user to greet"
-            }
-          },
-        "required": ["name"]
-      },
-      "returns": {
-        "type": "string",
-        "description": "A greeting message"
-      }
-    }
-  ]
 
   # Prepare system message with function definitions
   system_message = f"""You are an AI assistant capable of calling functions. Here are the available functions:
 
-{json.dumps(function_list, indent=2)}
+{json.dumps(FUNCTION_DEFINITIONS, indent=2)}
 
 When you need to call a function, use the following format:
 [FUNCTION_CALL]{{
@@ -216,3 +157,10 @@ Respond to the user's request by calling the appropriate function when necessary
         print(f"Function result: {result}")
 
   print("\nFunction calling test completed.")
+
+def print_help():
+  """Print help information for experimental commands."""
+  print("Experimental Commands:")
+  print("  experimental test       - Test Stable Diffusion")
+  print("  experimental mini       - Test MiniCPM3 model")
+  print("  experimental function   - Test function calling capabilities")

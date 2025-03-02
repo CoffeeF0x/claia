@@ -10,14 +10,22 @@
 import json
 
 # Internal dependencies
-from functions.tests import *
-from functions.zammad import ZammadAPI
-from functions.definitions import prompt as system_prompt
 from commands.registry import run as command
 from models.registry import run as model_run
 from errors import Result
 from settings import Settings, SettingsFactory
 from utilities import *
+
+# Try to import optional modules
+try:
+  from modules import discover_modules, get_module_functions, get_function_definitions
+  # Initialize modules
+  discover_modules()
+  HAS_MODULE_SYSTEM = True
+except ImportError:
+  # Module system not available, that's okay
+  HAS_MODULE_SYSTEM = False
+  pass
 
 
 
@@ -42,7 +50,6 @@ def processCommands(userInput: str, settings: Settings) -> Result:
 # Organize the conversation and send user query to the selected LLM
 def runLlm(userInput: str, settings: Settings) -> None:
   pruned_messages = []
-  zammad: ZammadAPI = ZammadAPI(settings.zammad_base_url, settings.zammad_api_token)
 
   for message in settings.active_chat.messages():
     if message["role"] in ["system", "user", "assistant"]:
@@ -72,20 +79,22 @@ def runLlm(userInput: str, settings: Settings) -> None:
       function_name = function_call["name"]
 
       # Execute the function
-      if function_name == "get_current_time":
-        call_result = get_current_time()
-      elif function_name == "get_current_date":
-        call_result = get_current_date()
-      elif function_name == "get_user_name":
-        call_result = get_user_name()
-      elif function_name == "greet_user":
-        call_result = greet_user(function_call["parameters"]["name"])
-      elif function_name == "get_ticket_details":
-        call_result = zammad.get_ticket_details(function_call["parameters"]["id"])
-      elif function_name == "list_tickets":
-        call_result = zammad.list_tickets()
+      # Check for module functions first
+      if HAS_MODULE_SYSTEM:
+        module_functions = get_module_functions(settings)
+        if function_name in module_functions:
+          try:
+            # Call the module function with parameters
+            if "parameters" in function_call:
+              call_result = module_functions[function_name](**function_call["parameters"])
+            else:
+              call_result = module_functions[function_name]()
+          except Exception as e:
+            call_result = f"Error executing function {function_name}: {str(e)}"
+        else:
+          call_result = f"Unknown function: {function_name}"
       else:
-        call_result = "Unknown function"
+        call_result = f"Unknown function: {function_name}"
 
     if call_result:
       response = call_result

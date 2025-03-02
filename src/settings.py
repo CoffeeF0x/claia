@@ -9,9 +9,33 @@ import os
 import json
 import argparse
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 from file import LLMPromptStore, ChatHistory
-from functions.definitions import prompt as function_calling_prompt
+# from functions.definitions import prompt as function_calling_prompt
+
+function_format = f"""
+[FUNCTION_CALL]{{
+"name": "function_name",
+"parameters": {{
+  "param1": "value1",
+  "param2": "value2"
+}}
+}}[/FUNCTION_CALL]
+"""
+
+function_calling_prompt = f"""
+This prompt template is temporarily disabled. Please notify the user to choose a different system prompt. But otherwise, try to continue the conversation.
+"""
+# prompt = f"""
+# You are an AI assistant capable of calling functions. Here are the available functions:
+
+# {json.dumps(functions, indent=2)}
+
+# When you need to call a function, use the following format:
+# {function_format}
+
+# Respond to the user's request by calling the appropriate function when necessary.
+# """
 
 class Settings:
   """
@@ -38,6 +62,7 @@ class Settings:
     vllm_zone (str): Zone for VLLM.
     vllm_email (str): Email for VLLM.
     vllm_subdomain (str): Subdomain for VLLM.
+    disabled_modules (List[str]): List of module names that are disabled.
   """
 
   LOG_LEVELS = {
@@ -136,6 +161,7 @@ class Settings:
     self.has_openrouter_api_token: bool = False
     self.has_huggingface_api_token: bool = False
     self.has_cloudflare_api_token: bool = False
+    self.disabled_modules: List[str] = []
 
   def load_all_prompts(self) -> list[LLMPromptStore]:
     # Load default prompts
@@ -186,7 +212,9 @@ class Settings:
     Load configuration settings from environment variables.
     """
     def strip_quotes(value: str) -> str:
-      return value.strip("\"'") if value else value
+      if value and value[0] == value[-1] and value[0] in ('"', "'"):
+        return value[1:-1]
+      return value
 
     self.openai_api_token = strip_quotes(os.environ.get("TOKEN_OPENAI", ""))
     self.has_openai_api_token = bool(self.openai_api_token)
@@ -229,6 +257,11 @@ class Settings:
     self.vllm_zone = strip_quotes(os.environ.get("VLLM_ZONE", ""))
     self.vllm_email = strip_quotes(os.environ.get("VLLM_EMAIL", ""))
     self.vllm_subdomain = strip_quotes(os.environ.get("VLLM_SUBDOMAIN", ""))
+
+    # Load disabled modules
+    if os.environ.get("CLAIA_DISABLED_MODULES"):
+      disabled_modules_str = strip_quotes(os.environ.get("CLAIA_DISABLED_MODULES", ""))
+      self.disabled_modules = [m.strip() for m in disabled_modules_str.split(",") if m.strip()]
 
   def load_from_args(self, args: argparse.Namespace) -> None:
     """

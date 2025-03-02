@@ -1,5 +1,6 @@
 import os
-import torch
+from torch import bfloat16
+from torch.cuda import empty_cache
 import logging
 from transformers import AutoModelForCausalLM, AutoTokenizer, logging as transformers_logging
 from typing import List, Dict
@@ -31,7 +32,7 @@ class TransformersLocalModel(LocalModel):
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
-            torch_dtype=torch.bfloat16,
+            torch_dtype=bfloat16,
             device_map=self.device,
             trust_remote_code=True
         )
@@ -52,7 +53,7 @@ class TransformersLocalModel(LocalModel):
 
       #   # Clear CUDA cache if using GPU
       #   if self.device != "cpu":
-      #     torch.cuda.empty_cache()
+      #     empty_cache()
 
       # logging.info("Model context reset successfully")
       pass
@@ -61,7 +62,7 @@ class TransformersLocalModel(LocalModel):
         logging.info("Unloading model")
         self.model = None
         self.tokenizer = None
-        torch.cuda.empty_cache()
+        empty_cache()
         self.loaded = False
         logging.info("Model unloaded successfully")
 
@@ -110,7 +111,7 @@ class MiniCPM3_4B_LocalModel(TransformersLocalModel):
 
         AutoModelForCausalLM.from_pretrained(
             "openbmb/MiniCPM3-4B",
-            torch_dtype=torch.bfloat16,
+            torch_dtype=bfloat16,
             trust_remote_code=True
         ).save_pretrained(model_path)
 
@@ -136,7 +137,7 @@ class Qwen2p5_32B_InstructLocalModel(TransformersLocalModel):
 
         AutoModelForCausalLM.from_pretrained(
             "Qwen/Qwen2.5-32B-Instruct",
-            torch_dtype=torch.bfloat16,
+            torch_dtype=bfloat16,
             trust_remote_code=True
         ).save_pretrained(model_path)
 

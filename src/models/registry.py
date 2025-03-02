@@ -1,9 +1,15 @@
-import torch
-
 from models.base import APIModel, LocalModel
 from models.definitions import definitions, sources
 from settings import Settings
 from errors import Result
+
+# Try to import optional modules
+try:
+  from modules import get_function_definitions
+  HAS_MODULE_SYSTEM = True
+except ImportError:
+  # Module system not available, that's okay
+  HAS_MODULE_SYSTEM = False
 
 
 
@@ -39,7 +45,7 @@ def get_model(model_name: str, settings: Settings = None) -> Result:
       model = model_class(model_config["model_id"], base_url=f"https://{settings.vllm_subdomain}.{settings.vllm_zone}")
     else:
       model = model_class(model_config["model_id"])
-    
+
     api_key = get_api_key_for_source(chosen_source, settings)
     if api_key:
       model.set_api_key(api_key)
@@ -49,34 +55,33 @@ def get_model(model_name: str, settings: Settings = None) -> Result:
     if model_name in settings.loaded_local_models:
       model = settings.loaded_local_models[model_name]
     else:
-      print("\n\n")
-      model = model_class(model_config["model_id"], settings.model_directory, 
-                         device="cuda" if torch.cuda.is_available() else "cpu", 
-                         log_level=settings.log_level)
-      if not model.is_loaded():
-        model.load()
-      print("\n\n")
-      settings.loaded_local_models[model_name] = model
+      try:
+        model = model_class(model_config["model_id"])
+        if settings:
+          settings.loaded_local_models[model_name] = model
+      except Exception as e:
+        return Result.fail(f"Error loading local model {model_name}: {str(e)}")
   else:
-    return Result.fail(f"Unknown model type for source {chosen_source}.")
+    return Result.fail(f"Unknown model class for source {chosen_source}.")
 
   result.data = model
   return result
 
+# Get the API key for the given source from settings
 def get_api_key_for_source(source: str, settings: Settings) -> str:
-  """Get the appropriate API key based on the source."""
-  api_key = ""
+  if not settings:
+    return None
 
   if source == "openai":
-    api_key = settings.openai_api_token
+    return settings.openai_api_token
   elif source == "anthropic":
-    api_key = settings.anthropic_api_token
+    return settings.anthropic_api_token
   elif source == "runpod":
-    api_key = settings.runpod_api_token
+    return settings.runpod_api_token
   elif source == "openrouter":
-    api_key = settings.openrouter_api_token
-
-  return api_key
+    return settings.openrouter_api_token
+  else:
+    return None
 
 # def reset_model_context(model_name: str, settings: Settings) -> Result:
 #   result = Result()
@@ -94,6 +99,46 @@ def get_api_key_for_source(source: str, settings: Settings) -> str:
 
 #   return result
 
+# Get function definitions from modules
+def get_all_function_definitions(settings: Settings = None) -> list:
+  """
+  Get all function definitions, including those from modules and tools.
+
+  Args:
+    settings: Optional settings object to check if modules are enabled
+
+  Returns:
+    list: List of function definitions
+  """
+  # Initialize empty list for function definitions
+  function_definitions = []
+
+  # Add module function definitions if available
+  if HAS_MODULE_SYSTEM:
+    try:
+      module_definitions = get_function_definitions()
+
+      # Filter out disabled modules
+      if settings and hasattr(settings, "disabled_modules"):
+        module_definitions = [
+          definition for definition in module_definitions 
+          if not any(definition["name"].startswith(f"{module}_") for module in settings.disabled_modules)
+        ]
+
+      function_definitions.extend(module_definitions)
+    except Exception as e:
+      print(f"Error getting module function definitions: {e}")
+
+  # TODO: Add tool function definitions when implemented
+  # if HAS_TOOL_SYSTEM:
+  #   try:
+  #     tool_definitions = get_tool_definitions()
+  #     function_definitions.extend(tool_definitions)
+  #   except Exception as e:
+  #     print(f"Error getting tool function definitions: {e}")
+
+  return function_definitions
+
 # Run the model with the given messages and settings
 def run(model_name: str, messages: list, settings: Settings = None, reset_context: bool = False, **kwargs) -> Result:
   result = get_model(model_name, settings)
@@ -101,6 +146,11 @@ def run(model_name: str, messages: list, settings: Settings = None, reset_contex
     return result
 
   model = result.data
+
+  # Add function definitions if supported by the model
+  if hasattr(model, 'supports_functions') and model.supports_functions:
+    function_definitions = get_all_function_definitions(settings)
+    kwargs['functions'] = function_definitions
 
   # if reset_context and hasattr(model, 'reset_context'):
   #   model.reset_context()

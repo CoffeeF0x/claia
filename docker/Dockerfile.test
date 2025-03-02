@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install -r requirements.txt --no-cache-dir
 
-COPY src/ .
+COPY src/ src/
+COPY modules/ modules/
 
-ENTRYPOINT [ "python", "main.py" ]
+ENTRYPOINT [ "python", "src/main.py" ]
