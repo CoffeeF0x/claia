@@ -10,7 +10,8 @@ pyinstaller --onefile \
   --name "${BINARY_NAME}" \
   --add-data "src/models:models" \
   --add-data "src/commands:commands" \
-  --add-data "src/functions:functions" \
+  --add-data "src/modules:modules" \
+  --add-data "src/tools:tools" \
   --distpath "${DIST_DIR}" \
   src/main.py
 
