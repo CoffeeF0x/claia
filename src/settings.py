@@ -11,31 +11,7 @@ import argparse
 import logging
 from typing import Dict, Any, List
 from file import LLMPromptStore, ChatHistory
-# from functions.definitions import prompt as function_calling_prompt
-
-function_format = f"""
-[FUNCTION_CALL]{{
-"name": "function_name",
-"parameters": {{
-  "param1": "value1",
-  "param2": "value2"
-}}
-}}[/FUNCTION_CALL]
-"""
-
-function_calling_prompt = f"""
-This prompt template is temporarily disabled. Please notify the user to choose a different system prompt. But otherwise, try to continue the conversation.
-"""
-# prompt = f"""
-# You are an AI assistant capable of calling functions. Here are the available functions:
-
-# {json.dumps(functions, indent=2)}
-
-# When you need to call a function, use the following format:
-# {function_format}
-
-# Respond to the user's request by calling the appropriate function when necessary.
-# """
+from tools import get_function_calling_prompt
 
 class Settings:
   """
@@ -63,6 +39,8 @@ class Settings:
     vllm_email (str): Email for VLLM.
     vllm_subdomain (str): Subdomain for VLLM.
     disabled_modules (List[str]): List of module names that are disabled.
+    module_functions (Dict): Dictionary of module functions.
+    module_function_definitions (List): List of module function definitions.
   """
 
   LOG_LEVELS = {
@@ -145,12 +123,12 @@ class Settings:
     self.openrouter_api_token: str = ""
     self.huggingface_api_token: str = ""
     self.cloudflare_api_token: str = ""
-    
+
     # VLLM specific settings
     self.vllm_zone: str = None
     self.vllm_email: str = None
     self.vllm_subdomain: str = None
-    
+
     # Boolean flags for API key availability
     self.has_openai_api_token: bool = False
     self.has_anthropic_api_token: bool = False
@@ -162,6 +140,37 @@ class Settings:
     self.has_huggingface_api_token: bool = False
     self.has_cloudflare_api_token: bool = False
     self.disabled_modules: List[str] = []
+
+    # Module functions and definitions
+    self.module_functions = {}
+    self.module_function_definitions = []
+
+    # Initialize module functions and definitions
+    self._initialize_modules()
+
+  def _initialize_modules(self):
+    """
+    Initialize module functions and definitions.
+    This is done during Settings initialization to avoid circular dependencies.
+    """
+    try:
+      from modules import discover_modules, get_module_functions, get_function_definitions
+
+      # Initialize modules
+      discover_modules()
+
+      # Get module functions and definitions
+      self.module_functions = get_module_functions(self)
+      self.module_function_definitions = get_function_definitions()
+    except ImportError:
+      # Module system not available, that's okay
+      self.module_functions = {}
+      self.module_function_definitions = []
+    except Exception as e:
+      # Handle other exceptions
+      print(f"Error initializing modules: {str(e)}")
+      self.module_functions = {}
+      self.module_function_definitions = []
 
   def load_all_prompts(self) -> list[LLMPromptStore]:
     # Load default prompts
@@ -179,7 +188,7 @@ class Settings:
           self.prompt_store_directory,
           self.FUNCTION_CALLING_PROMPT_NAME,
           "Function Calling Assistant",
-          function_calling_prompt,
+          get_function_calling_prompt(self),
           "An assistant capable of calling functions."
         )
       )

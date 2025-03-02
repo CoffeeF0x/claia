@@ -96,8 +96,6 @@ def get_module_commands() -> Dict[str, Any]:
       # Module doesn't have commands.py, that's okay
       pass
 
-  print(f"Loaded commands: {list(commands.keys())}")
-  print(f"Command values: {list(commands.values())}")
   return commands
 
 def get_module_functions(settings=None) -> Dict[str, Callable]:

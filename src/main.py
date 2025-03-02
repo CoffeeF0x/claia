@@ -15,17 +15,7 @@ from models.registry import run as model_run
 from errors import Result
 from settings import Settings, SettingsFactory
 from utilities import *
-
-# Try to import optional modules
-try:
-  from modules import discover_modules, get_module_functions, get_function_definitions
-  # Initialize modules
-  discover_modules()
-  HAS_MODULE_SYSTEM = True
-except ImportError:
-  # Module system not available, that's okay
-  HAS_MODULE_SYSTEM = False
-  pass
+from tools import process_function_calls
 
 
 
@@ -67,41 +57,18 @@ def runLlm(userInput: str, settings: Settings) -> None:
 
   # Run the active model
   result = model_run(settings.active_model, pruned_messages, settings=settings)
-  call_result = None
 
   if result.is_error():
     print(f"Error running model: {result.get_message()}")
   else:
-    if result.data and "[FUNCTION_CALL]" in result.data:
-      start = result.data.index("[FUNCTION_CALL]") + len("[FUNCTION_CALL]")
-      end = result.data.index("[/FUNCTION_CALL]")
-      function_call = json.loads(result.data[start:end])
-      function_name = function_call["name"]
+    # Process any function calls in the response
+    response, raw_function_call = process_function_calls(result.data, settings)
 
-      # Execute the function
-      # Check for module functions first
-      if HAS_MODULE_SYSTEM:
-        module_functions = get_module_functions(settings)
-        if function_name in module_functions:
-          try:
-            # Call the module function with parameters
-            if "parameters" in function_call:
-              call_result = module_functions[function_name](**function_call["parameters"])
-            else:
-              call_result = module_functions[function_name]()
-          except Exception as e:
-            call_result = f"Error executing function {function_name}: {str(e)}"
-        else:
-          call_result = f"Unknown function: {function_name}"
-      else:
-        call_result = f"Unknown function: {function_name}"
+    # Store the function call if one was made
+    if raw_function_call:
+      settings.active_chat.store("tool-call", raw_function_call)
 
-    if call_result:
-      response = call_result
-      settings.active_chat.store("tool-call", result.data)
-    else:
-      response = result.data
-
+    # Store and display the final response
     settings.active_chat.store("assistant", response)
     print(response)
 
