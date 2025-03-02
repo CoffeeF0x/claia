@@ -41,6 +41,8 @@ class Settings:
     disabled_modules (List[str]): List of module names that are disabled.
     module_functions (Dict): Dictionary of module functions.
     module_function_definitions (List): List of module function definitions.
+    min_function_calls (int): Minimum number of function calls to process.
+    max_function_calls (int): Maximum number of function calls to process.
   """
 
   LOG_LEVELS = {
@@ -98,6 +100,8 @@ class Settings:
   DEFAULT_PROMPT_DIRECTORY = "prompts"
   DEFAULT_CHAT_DIRECTORY = "history"
   FUNCTION_CALLING_PROMPT_NAME = "functions"
+  DEFAULT_MIN_FUNCTION_CALLS = 5
+  DEFAULT_MAX_FUNCTION_CALLS = 10
 
   def __init__(self):
     # print("Initializing Settings")
@@ -123,6 +127,10 @@ class Settings:
     self.openrouter_api_token: str = ""
     self.huggingface_api_token: str = ""
     self.cloudflare_api_token: str = ""
+
+    # Function calling settings
+    self.min_function_calls: int = self.DEFAULT_MIN_FUNCTION_CALLS
+    self.max_function_calls: int = self.DEFAULT_MAX_FUNCTION_CALLS
 
     # VLLM specific settings
     self.vllm_zone: str = None

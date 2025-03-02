@@ -62,11 +62,16 @@ def runLlm(userInput: str, settings: Settings) -> None:
     print(f"Error running model: {result.get_message()}")
   else:
     # Process any function calls in the response
-    response, raw_function_call = process_function_calls(result.data, settings)
+    original_response = result.data
+    processed_response = process_function_calls(original_response, settings)
 
-    # Store the function call if one was made
-    if raw_function_call:
-      settings.active_chat.store("tool-call", raw_function_call)
+    # Check if function calls were processed by comparing responses
+    if processed_response != original_response:
+      # Store the original response as a tool call if it was processed
+      settings.active_chat.store("tool-call", original_response)
+      response = processed_response
+    else:
+      response = original_response
 
     # Store and display the final response
     settings.active_chat.store("assistant", response)
