@@ -1,18 +1,130 @@
 """
 This module manages the configuration settings for the CLAI application.
 
-It provides a Settings class to store settings and a SettingsFactory to create
-and load settings from various sources (environment variables and command-line arguments).
+It maintains a list of settings for the various libraries and modules used by CLAI,
+and loads settings from various sources (environment variables and command-line arguments).
 """
 
+# External dependencies
 import os
 import json
 import argparse
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple, Optional
+
+# Internal dependencies
 from file import LLMPromptStore, ChatHistory
 from tools import get_function_calling_prompt
 
+
+
+########################################################################
+#                               CONSTANTS                              #
+########################################################################
+# Logging levels
+LOG_LEVELS = {
+  "debug":    logging.DEBUG,
+  "info":     logging.INFO,
+  "warning":  logging.WARNING,
+  "error":    logging.ERROR,
+  "critical": logging.CRITICAL
+}
+
+# Default prompts
+DEFAULT_PROMPTS = [
+  {
+    "name": "default",
+    "title": "Default Assistant",
+    "prompt": "You are a helpful assistant, ready to aid the user with any task or question they might have.",
+    "description": "A general-purpose assistant for various tasks."
+  },
+  {
+    "name": "poet",
+    "title": "Poet",
+    "prompt": "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair.",
+    "description": "A default assistant with a poetic twist."
+  },
+  {
+    "name": "writer",
+    "title": "Writer",
+    "prompt": "You are a brilliant writer, always adding events and details that give life to the story, making sure to show and not tell about environments, characters, and actions.",
+    "description": "An assistant for creative writing tasks."
+  },
+  {
+    "name": "also-writer",
+    "title": "Also Writer",
+    "prompt": "You are a creative writer, skilled in crafting engaging narratives and vivid descriptions. Help the user with their writing tasks, offering suggestions for plot, character development, and prose.",
+    "description": "An assistant for creative writing tasks."
+  },
+  {
+    "name": "programmer",
+    "title": "Programmer",
+    "prompt": "You are a skilled programmer, proficient in multiple programming languages. You provide clear explanations and code examples to help with various programming tasks.",
+    "description": "An assistant for programming and coding tasks."
+  },
+  {
+    "name": "analyst",
+    "title": "Analyst",
+    "prompt": "You are a data analyst with expertise in statistics and data visualization. You help interpret data, suggest analysis methods, and explain complex analytical concepts.",
+    "description": "An assistant for data analysis and interpretation."
+  }
+]
+
+# Format: (variable_name, default_value, externally_settable, help_text)
+CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
+  # API Tokens
+  ("openai_api_token",                  "",                            True,  "OpenAI API Token"),
+  ("anthropic_api_token",               "",                            True,  "Anthropic API Token"),
+  ("local_llm_api_token",               "",                            True,  "LocalLLM API Token"),
+  ("runpod_api_token",                  "",                            True,  "RunPod API Token"),
+  ("massed_compute_api_token",          "",                            True,  "Massed Compute API Token"),
+  ("zammad_api_token",                  "",                            True,  "Zammad API Token"),
+  ("openrouter_api_token",              "",                            True,  "OpenRouter API Token"),
+  ("huggingface_api_token",             "",                            True,  "Hugging Face API Token"),
+  ("cloudflare_api_token",              "",                            True,  "Cloudflare API Token"),
+
+  # URLs and Endpoints
+  ("local_llm_base_url",                "",                            True,  "LocalLLM Base URL"),
+  ("zammad_base_url",                   "",                            True,  "Zammad Base URL"),
+
+  # Directories
+  ("model_directory",                   "models",                      True,  "Directory for model files"),
+  ("prompt_store_directory",            "prompts",                     True,  "Directory for prompt stores"),
+  ("chat_history_directory",            "history",                     True,  "Directory for chat histories"),
+
+  # Model Settings
+  ("active_model",                      "qwen2.5-72b-instruct",        True,  "Active model name"),
+  ("active_model_source",               "vllm",                        True,  "Active model source"),
+
+  # VLLM Settings
+  ("vllm_zone",                         "",                            True,  "VLLM Zone"),
+  ("vllm_email",                        "",                            True,  "VLLM Email"),
+  ("vllm_subdomain",                    "",                            True,  "VLLM Subdomain"),
+
+  # Prompt Settings
+  ("default_prompt_name",               "default",                     True,  "Default prompt name to use"),
+  ("function_calling_prompt_name",      "functions",                   False, "Name of the function calling prompt"),
+
+  # Application Settings
+  ("log_level",                         "error",                       True,  "Logging level"),
+  ("disabled_modules",                  "",                            True,  "Comma-separated list of disabled modules"),
+  ("min_function_calls",                5,                             True,  "Minimum number of function calls to process"),
+  ("max_function_calls",                10,                            True,  "Maximum number of function calls to process"),
+
+  # Internal Settings (not settable externally)
+  ("loaded_local_models",               {},                            False, "Dictionary of loaded local models"),
+  ("prompt_store",                      [],                            False, "List of prompt stores"),
+  ("active_prompt",                     None,                          False, "Currently active prompt"),
+  ("active_chat",                       None,                          False, "Currently active chat"),
+  ("module_functions",                  {},                            False, "Dictionary of module functions"),
+  ("module_function_definitions",       [],                            False, "List of module function definitions")
+]
+
+
+
+########################################################################
+#                               CLASSES                                #
+########################################################################
 class Settings:
   """
   Stores and manages configuration settings for the CLAI application.
@@ -43,118 +155,134 @@ class Settings:
     module_function_definitions (List): List of module function definitions.
     min_function_calls (int): Minimum number of function calls to process.
     max_function_calls (int): Maximum number of function calls to process.
+    default_prompt_name (str): Default prompt name to use.
   """
 
-  LOG_LEVELS = {
-    "debug": logging.DEBUG,
-    "info": logging.INFO,
-    "warning": logging.WARNING,
-    "error": logging.ERROR,
-    "critical": logging.CRITICAL
-  }
-
-  DEFAULT_PROMPTS = [
-    {
-      "name": "default",
-      "title": "Default Assistant",
-      "prompt": "You are a helpful assistant, ready to aid the user with any task or question they might have.",
-      "description": "A general-purpose assistant for various tasks."
-    },
-    {
-      "name": "poet",
-      "title": "Poet",
-      "prompt": "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair.",
-      "description": "A default assistant with a poetic twist."
-    },
-    {
-      "name": "writer",
-      "title": "Writer",
-      "prompt": "You are a brilliant writer, always adding events and details that give life to the story, making sure to show and not tell about environments, characters, and actions.",
-      "description": "An assistant for creative writing tasks."
-    },
-    {
-      "name": "also-writer",
-      "title": "Also Writer",
-      "prompt": "You are a creative writer, skilled in crafting engaging narratives and vivid descriptions. Help the user with their writing tasks, offering suggestions for plot, character development, and prose.",
-      "description": "An assistant for creative writing tasks."
-    },
-    {
-      "name": "programmer",
-      "title": "Programmer",
-      "prompt": "You are a skilled programmer, proficient in multiple programming languages. You provide clear explanations and code examples to help with various programming tasks.",
-      "description": "An assistant for programming and coding tasks."
-    },
-    {
-      "name": "analyst",
-      "title": "Analyst",
-      "prompt": "You are a data analyst with expertise in statistics and data visualization. You help interpret data, suggest analysis methods, and explain complex analytical concepts.",
-      "description": "An assistant for data analysis and interpretation."
-    }
-  ]
-
-  DEFAULT_PROMPT_NAME = "default"
-  DEFAULT_MODEL = "qwen2.5-72b-instruct" # "claude-3-5-sonnet-20240620"
-  DEFAULT_MODEL_SOURCE = "vllm" # None
-  DEFAULT_LOG_LEVEL = "error"
-  DEFAULT_MODEL_DIRECTORY = "models"
-  DEFAULT_PROMPT_DIRECTORY = "prompts"
-  DEFAULT_CHAT_DIRECTORY = "history"
-  FUNCTION_CALLING_PROMPT_NAME = "functions"
-  DEFAULT_MIN_FUNCTION_CALLS = 5
-  DEFAULT_MAX_FUNCTION_CALLS = 10
-
   def __init__(self):
-    # print("Initializing Settings")
-    self.openai_api_token: str = ""
-    self.anthropic_api_token: str = ""
-    self.local_llm_api_token: str = ""
-    self.runpod_api_token: str = ""
-    self.local_llm_base_url: str = ""
-    self.massed_compute_api_token: str = ""
-    self.zammad_api_token: str = ""
-    self.zammad_base_url: str = ""
-    self.model_directory: str = self.DEFAULT_MODEL_DIRECTORY
-    self.prompt_store_directory: str = self.DEFAULT_PROMPT_DIRECTORY
-    self.chat_history_directory: str = self.DEFAULT_CHAT_DIRECTORY
+    """Initialize configuration from environment variables and command line arguments."""
+    # Initialize module-related attributes
     self.loaded_local_models: Dict[str, Any] = {}
     self.prompt_store = []
-    self.load_all_prompts()
-    self.active_prompt = self.get_prompt(self.DEFAULT_PROMPT_NAME)
-    self.active_chat: ChatHistory = ChatHistory(self.chat_history_directory, "New Conversation", [])
-    self.active_model: str = self.DEFAULT_MODEL
-    self.active_model_source: str = self.DEFAULT_MODEL_SOURCE
-    self.log_level: str = self.DEFAULT_LOG_LEVEL
-    self.openrouter_api_token: str = ""
-    self.huggingface_api_token: str = ""
-    self.cloudflare_api_token: str = ""
-
-    # Function calling settings
-    self.min_function_calls: int = self.DEFAULT_MIN_FUNCTION_CALLS
-    self.max_function_calls: int = self.DEFAULT_MAX_FUNCTION_CALLS
-
-    # VLLM specific settings
-    self.vllm_zone: str = None
-    self.vllm_email: str = None
-    self.vllm_subdomain: str = None
-
-    # Boolean flags for API key availability
-    self.has_openai_api_token: bool = False
-    self.has_anthropic_api_token: bool = False
-    self.has_local_llm_api_token: bool = False
-    self.has_runpod_api_token: bool = False
-    self.has_massed_compute_api_token: bool = False
-    self.has_zammad_api_token: bool = False
-    self.has_openrouter_api_token: bool = False
-    self.has_huggingface_api_token: bool = False
-    self.has_cloudflare_api_token: bool = False
-    self.disabled_modules: List[str] = []
-
-    # Module functions and definitions
+    self.active_prompt = None
+    self.active_chat = None
     self.module_functions = {}
     self.module_function_definitions = []
+    self.disabled_modules = []
+
+    # Boolean flags for API key availability
+    self.has_openai_api_token = False
+    self.has_anthropic_api_token = False
+    self.has_local_llm_api_token = False
+    self.has_runpod_api_token = False
+    self.has_massed_compute_api_token = False
+    self.has_zammad_api_token = False
+    self.has_openrouter_api_token = False
+    self.has_huggingface_api_token = False
+    self.has_cloudflare_api_token = False
+
+    # Load configuration
+    self._load_config()
+
+    # Initialize after loading config
+    self.load_all_prompts()
+    self.active_prompt = self.get_prompt(self.default_prompt_name)
+    self.active_chat = ChatHistory(self.chat_history_directory, "New Conversation", [])
 
     # Initialize module functions and definitions
     self._initialize_modules()
+
+  def _load_config(self):
+    """
+    Load configuration from environment variables and command line arguments.
+    Command line arguments take precedence over environment variables.
+    """
+    parser = argparse.ArgumentParser(description='CLAI Settings')
+
+    # Add arguments based on CONFIG_VARS, but only for externally settable ones
+    for var_name, default, externally_settable, help_text in CONFIG_VARS:
+      if externally_settable:
+        cli_name = f"--{var_name.replace('_', '-')}"
+
+        # Handle special case for boolean values
+        if isinstance(default, bool):
+          parser.add_argument(
+            cli_name,
+            type=lambda x: x.lower() == 'true',
+            default=None,
+            help=help_text)
+        # Handle special case for integer values
+        elif isinstance(default, int):
+          parser.add_argument(
+            cli_name,
+            type=int,
+            default=None,
+            help=help_text)
+        else:
+          parser.add_argument(
+            cli_name,
+            default=None,
+            help=help_text)
+
+    args = parser.parse_args()
+
+    # Build config dictionary using helper function
+    config_dict = {
+      var_name: self._get_config_value(var_name, default, args, externally_settable)
+      for var_name, default, externally_settable, _ in CONFIG_VARS
+    }
+
+    # Set all configuration values as instance attributes
+    for key, value in config_dict.items():
+      setattr(self, key, value)
+
+    # Process special cases
+    if self.disabled_modules and isinstance(self.disabled_modules, str):
+      self.disabled_modules = [m.strip() for m in self.disabled_modules.split(",") if m.strip()]
+
+    # Set API token flags
+    self.has_openai_api_token = bool(self.openai_api_token)
+    self.has_anthropic_api_token = bool(self.anthropic_api_token)
+    self.has_local_llm_api_token = bool(self.local_llm_api_token)
+    self.has_runpod_api_token = bool(self.runpod_api_token)
+    self.has_massed_compute_api_token = bool(self.massed_compute_api_token)
+    self.has_zammad_api_token = bool(self.zammad_api_token)
+    self.has_openrouter_api_token = bool(self.openrouter_api_token)
+    self.has_huggingface_api_token = bool(self.huggingface_api_token)
+    self.has_cloudflare_api_token = bool(self.cloudflare_api_token)
+
+  def _get_config_value(self, var_name: str, default: Any, args: argparse.Namespace, externally_settable: bool) -> Any:
+    """
+    Helper function to get configuration value from either CLI args or environment variables.
+    CLI args take precedence over environment variables.
+
+    Args:
+        var_name: The base variable name in snake_case
+        default: Default value if neither CLI arg nor env var is set
+        args: Parsed command line arguments
+        externally_settable: Whether this setting can be set from outside the application
+    """
+    # If not externally settable, just return the default
+    if not externally_settable:
+      return default
+
+    # Convert naming conventions
+    env_name = var_name.upper()
+    cli_name = var_name.replace('_', '-')
+
+    # Get value from CLI args (they're already parsed with defaults)
+    cli_value = getattr(args, var_name, None)
+
+    # If CLI value is None, try environment variable
+    if cli_value is None:
+      env_value = os.getenv(env_name)
+      if env_value is not None:
+        # Strip quotes if present
+        if env_value and env_value[0] == env_value[-1] and env_value[0] in ('"', "'"):
+          env_value = env_value[1:-1]
+        return env_value
+      return default
+
+    return cli_value
 
   def _initialize_modules(self):
     """
@@ -182,7 +310,7 @@ class Settings:
 
   def load_all_prompts(self) -> list[LLMPromptStore]:
     # Load default prompts
-    for prompt in self.DEFAULT_PROMPTS:
+    for prompt in DEFAULT_PROMPTS:
       if not self.prompt_exists(prompt['name']):
         self.prompt_store.append(LLMPromptStore(self.prompt_store_directory, prompt['name'], prompt['title'], prompt['prompt'], prompt['description']))
       else:
@@ -190,11 +318,11 @@ class Settings:
         # TODO: log error, prompt name already exists
 
     # Load function calling prompt
-    if not self.prompt_exists(self.FUNCTION_CALLING_PROMPT_NAME):
+    if not self.prompt_exists(self.function_calling_prompt_name):
       self.prompt_store.append(
         LLMPromptStore(
           self.prompt_store_directory,
-          self.FUNCTION_CALLING_PROMPT_NAME,
+          self.function_calling_prompt_name,
           "Function Calling Assistant",
           get_function_calling_prompt(self),
           "An assistant capable of calling functions."
@@ -224,75 +352,6 @@ class Settings:
   def get_prompt(self, name: str) -> LLMPromptStore:
     return next((p for p in self.prompt_store if p.name == name), None)
 
-  def load_from_env(self) -> None:
-    """
-    Load configuration settings from environment variables.
-    """
-    def strip_quotes(value: str) -> str:
-      if value and value[0] == value[-1] and value[0] in ('"', "'"):
-        return value[1:-1]
-      return value
-
-    self.openai_api_token = strip_quotes(os.environ.get("TOKEN_OPENAI", ""))
-    self.has_openai_api_token = bool(self.openai_api_token)
-
-    self.anthropic_api_token = strip_quotes(os.environ.get("TOKEN_ANTHROPIC", ""))
-    self.has_anthropic_api_token = bool(self.anthropic_api_token)
-
-    self.local_llm_api_token = strip_quotes(os.environ.get("TOKEN_LOCAL", ""))
-    self.has_local_llm_api_token = bool(self.local_llm_api_token)
-
-    self.runpod_api_token = strip_quotes(os.environ.get("TOKEN_RUNPOD", ""))
-    self.has_runpod_api_token = bool(self.runpod_api_token)
-
-    self.local_llm_base_url = strip_quotes(os.environ.get("LOCALLLM_BASEURL", ""))
-
-    self.massed_compute_api_token = strip_quotes(os.environ.get("TOKEN_MASSEDCOMPUTE", ""))
-    self.has_massed_compute_api_token = bool(self.massed_compute_api_token)
-
-    self.zammad_api_token = strip_quotes(os.environ.get("TOKEN_ZAMMAD", ""))
-    self.has_zammad_api_token = bool(self.zammad_api_token)
-
-    self.zammad_base_url = strip_quotes(os.environ.get("ZAMMAD_BASEURL", ""))
-    self.prompt_store_directory = strip_quotes(os.environ.get("PROMPT_STORE_DIRECTORY", self.prompt_store_directory))
-    self.chat_history_directory = strip_quotes(os.environ.get("CHAT_HISTORY_DIRECTORY", self.chat_history_directory))
-    self.model_directory = strip_quotes(os.environ.get("MODEL_DIRECTORY", self.model_directory))
-    self.active_model = strip_quotes(os.environ.get("ACTIVE_MODEL", self.active_model))
-    self.active_model_source = strip_quotes(os.environ.get("ACTIVE_MODEL_SOURCE", self.active_model_source))
-    self.log_level = os.environ.get("LOG_LEVEL", self.log_level).lower()
-
-    self.openrouter_api_token = strip_quotes(os.environ.get("TOKEN_OPENROUTER", ""))
-    self.has_openrouter_api_token = bool(self.openrouter_api_token)
-    
-    self.huggingface_api_token = strip_quotes(os.environ.get("TOKEN_HUGGINGFACE", ""))
-    self.has_huggingface_api_token = bool(self.huggingface_api_token)
-    
-    self.cloudflare_api_token = strip_quotes(os.environ.get("TOKEN_CLOUDFLARE", ""))
-    self.has_cloudflare_api_token = bool(self.cloudflare_api_token)
-    
-    # Load VLLM specific settings
-    self.vllm_zone = strip_quotes(os.environ.get("VLLM_ZONE", ""))
-    self.vllm_email = strip_quotes(os.environ.get("VLLM_EMAIL", ""))
-    self.vllm_subdomain = strip_quotes(os.environ.get("VLLM_SUBDOMAIN", ""))
-
-    # Load disabled modules
-    if os.environ.get("CLAIA_DISABLED_MODULES"):
-      disabled_modules_str = strip_quotes(os.environ.get("CLAIA_DISABLED_MODULES", ""))
-      self.disabled_modules = [m.strip() for m in disabled_modules_str.split(",") if m.strip()]
-
-  def load_from_args(self, args: argparse.Namespace) -> None:
-    """
-    Load configuration settings from command-line arguments.
-
-    Args:
-      args (argparse.Namespace): Parsed command-line arguments.
-    """
-    for key, value in vars(args).items():
-      if value is not None:
-        setattr(self, key, value)
-        if key.endswith('_api_token'):
-          setattr(self, f'has_{key}', bool(value))
-
   def validate(self) -> bool:
     """
     Validate the configuration settings.
@@ -300,9 +359,9 @@ class Settings:
     Returns:
       bool: True if at least one API token is present, False otherwise.
     """
-    if self.log_level not in self.LOG_LEVELS:
+    if self.log_level not in LOG_LEVELS:
       print(f"Invalid log level in environment variable. Using default: {self.log_level}")
-      self.log_level = "info"
+      self.log_level = "error"
 
     api_tokens_present = (
       self.has_openai_api_token or
@@ -321,57 +380,11 @@ class Settings:
 
     return api_tokens_present
 
-class SettingsFactory:
-  """
-  Factory class for creating and loading Settings objects.
-  """
 
-  @staticmethod
-  def create_settings() -> Settings:
-    """
-    Create and load a Settings object from environment variables and command-line arguments.
-
-    Returns:
-      Settings: A fully loaded Settings object.
-    """
-    settings = Settings()
-
-    # Load from environment variables
-    settings.load_from_env()
-
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(description="CLAI Settings")
-    parser.add_argument("--openai-api-token", help="OpenAI API Token")
-    parser.add_argument("--anthropic-api-token", help="Anthropic API Token")
-    parser.add_argument("--local-llm-api-token", help="LocalLLM API Token")
-    parser.add_argument("--runpod-api-token", help="RunPod API Token")
-    parser.add_argument("--local-llm-base-url", help="LocalLLM Base URL")
-    parser.add_argument("--massed-compute-api-token", help="Massed Compute API Token")
-    parser.add_argument("--zammad-api-token", help="Zammad API Token")
-    parser.add_argument("--zammad-base-url", help="Zammad Base URL")
-    parser.add_argument("--prompt-store-directory", help="Prompt Store Directory")
-    parser.add_argument("--chat-history-directory", help="Chat History Directory")
-    parser.add_argument("--active-model", help="Active Model")
-    parser.add_argument("--active-model-source", help="Active Model Source")
-    parser.add_argument("--log-level",
-                        choices=Settings.LOG_LEVELS.keys(),
-                        help="Logging level (debug, info, warning, error, critical)")
-    parser.add_argument("--openrouter-api-token", help="OpenRouter API Token")
-    parser.add_argument("--huggingface-api-token", help="Hugging Face API Token")
-    parser.add_argument("--cloudflare-api-token", help="Cloudflare API Token")
-    parser.add_argument("--vllm-zone", help="VLLM Zone")
-    parser.add_argument("--vllm-email", help="VLLM Email")
-    parser.add_argument("--vllm-subdomain", help="VLLM Subdomain")
-    args = parser.parse_args()
-
-    # Load from command-line arguments (overrides environment variables)
-    settings.load_from_args(args)
-
-    return settings
 
 # Usage example
 if __name__ == "__main__":
-  settings = SettingsFactory.create_settings()
+  settings = Settings()
   if settings.validate():
     print("Settings loaded successfully")
   else:

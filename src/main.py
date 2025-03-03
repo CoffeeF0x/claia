@@ -13,7 +13,7 @@ import json
 from commands import run as command
 from models import run as model_run
 from errors import Result
-from settings import Settings, SettingsFactory
+from settings import Settings
 from utilities import *
 from tools import process_function_calls
 
@@ -89,7 +89,7 @@ def main() -> None:
   userInput: str = ""
   result: Result = Result()
 
-  settings = SettingsFactory.create_settings()
+  settings = Settings()
 
   while not result.is_exit():
     userInput = getUserInput()
