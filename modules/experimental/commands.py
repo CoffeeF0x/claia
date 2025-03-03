@@ -27,11 +27,18 @@ class ExperimentalCommand(Command):
       elif commands[1] == "function":
         test_function_calling(settings)
       else:
-        print_help()
+        self.help()
     else:
-      print_help()
+      self.help()
 
     return result
+
+  def help(self) -> None:
+    """Display help information for experimental commands."""
+    print("Experimental Commands:")
+    print("  experimental test       - Test Stable Diffusion")
+    print("  experimental mini       - Test MiniCPM3 model")
+    print("  experimental function   - Test function calling capabilities")
 
 
 
@@ -157,10 +164,3 @@ Respond to the user's request by calling the appropriate function when necessary
         print(f"Function result: {result}")
 
   print("\nFunction calling test completed.")
-
-def print_help():
-  """Print help information for experimental commands."""
-  print("Experimental Commands:")
-  print("  experimental test       - Test Stable Diffusion")
-  print("  experimental mini       - Test MiniCPM3 model")
-  print("  experimental function   - Test function calling capabilities")

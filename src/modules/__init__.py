@@ -168,10 +168,36 @@ def get_function_definitions() -> List[Dict[str, Any]]:
 
   return definitions
 
+def help() -> str:
+  """
+  Return help information for the module system.
+  
+  Returns:
+    str: Help information for the module system
+  """
+  modules = discover_modules()
+  module_list = list(modules.keys())
+  
+  help_text = "Module System Help:\n"
+  help_text += "  The module system allows extending Claia with additional functionality.\n\n"
+  
+  if module_list:
+    help_text += "Available modules:\n"
+    for module_name in module_list:
+      help_text += f"  - {module_name}\n"
+    help_text += "\nUse 'help <module>' for module-specific help."
+  else:
+    help_text += "No modules are currently installed."
+  
+  return help_text
+
 # Export the functions
 __all__ = [
   "discover_modules",
   "get_module_commands",
   "get_module_functions",
-  "get_function_definitions"
+  "get_function_definitions",
+  "get_module_list",
+  "get_module_help",
+  "help"
 ]

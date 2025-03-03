@@ -2,7 +2,6 @@ from commands.base import Command
 from errors import Result
 from settings import Settings
 from models.definitions import definitions, sources
-import help
 
 
 
@@ -41,15 +40,55 @@ class ModelCommand(Command):
           elif commands[2] == "subdomain":
             printVLLMSubdomain(settings)
           else:
-            help.vllmCommands()
+            self.vllm_help()
         else:
-          help.vllmCommands()
+          self.vllm_help()
       else:
-        help.unrecognizedCommand()
+        self.unrecognizedCommand()
     else:
-      help.modelCommands()
+      self.help()
 
     return result
+
+  def help(self) -> None:
+    print("Here are the available model commands:")
+    print("  list")
+    print("    - list all available models")
+    print("  list <model>")
+    print("    - display details about a specific model")
+    print("  set, select <model>")
+    print("    - select a model to use for generation")
+    print("  set, select <model> <source>")
+    print("    - select a model with specific source to use for generation")
+    print("  print, current")
+    print("    - display the current model selection")
+    print("  vllm zone")
+    print("    - display the current VLLM zone")
+    print("  vllm zone <zone>")
+    print("    - set the VLLM zone")
+    print("  vllm email")
+    print("    - display the current VLLM email")
+    print("  vllm email <email>")
+    print("    - set the VLLM email")
+    print("  vllm subdomain")
+    print("    - display the current VLLM subdomain")
+    print("  vllm subdomain <subdomain>")
+    print("    - set the VLLM subdomain")
+
+  def vllm_help(self) -> None:
+    print("Here are the available VLLM commands:")
+    print("  zone")
+    print("    - display the current VLLM zone")
+    print("  zone <zone>")
+    print("    - set the VLLM zone (e.g., example.com)")
+    print("  email")
+    print("    - display the current VLLM email")
+    print("  email <email>")
+    print("    - set the VLLM email (used for SSL certificates)")
+    print("  subdomain")
+    print("    - display the current VLLM subdomain")
+    print("  subdomain <subdomain>")
+    print("    - set the VLLM subdomain (e.g., vllm)")
 
 
 

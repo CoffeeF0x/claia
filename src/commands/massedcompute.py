@@ -1,7 +1,6 @@
 from commands.base import Command
 from errors import Result
 from settings import Settings
-import help
 import requests
 from typing import Optional, Dict, Any, List
 import logging
@@ -140,9 +139,9 @@ class MassedComputeCommand(Command):
           elif commands[2] == "specific":
             deploySpecificInstance(settings, commands[3:])
           else:
-            help.massedcomputeCommands()
+            self.help()
         else:
-          help.massedcomputeCommands()
+          self.help()
       elif commands[1] == "terminate":
         terminateInstances(settings, commands[2:])
       elif commands[1] == "details":
@@ -168,13 +167,38 @@ class MassedComputeCommand(Command):
         elif commands[2] in ["image", "images"]:
           listImages(settings)
         else:
-          help.unrecognizedCommand()
+          self.unrecognizedCommand()
       else:
-        help.unrecognizedCommand()
+        self.unrecognizedCommand()
     else:
-      help.massedcomputeCommands()
+      self.help()
 
     return result
+
+  def help(self) -> None:
+    print("Here are the available MassedCompute commands:")
+    print("  deploy cheapest <image_id> <instance_name> <startup_script> <ssh_key1> ... <ssh_keyN>")
+    print("    - Deploy cheapest available GPU instance")
+    print("  deploy specific <image_id> <instance_name> <product_name> <startup_script> <ssh_key1> ... <ssh_keyN>")
+    print("    - Deploy a specific GPU instance")
+    print("  terminate <uuid|name> <uuid2|name2> ... <uuidN|nameN>")
+    print("    - Terminate one or more instances by UUID or name")
+    print("  details <uuid|name>")
+    print("    - Get detailed information about a specific instance")
+    print("  ssh <uuid|name>")
+    print("    - Connect to instance via SSH using UUID or instance name")
+    print("  run <uuid|name> <script_name>")
+    print("    - Run a predefined script on an instance")
+    print("  list")
+    print("    - List running instances (default)")
+    print("  list instances")
+    print("    - List running instances")
+    print("  list gpus [sort_by]")
+    print("    - List available GPU configurations")
+    print("    - Optional sort_by: price/p, vram/v, value/val, available/a")
+    print("    - Add '-' prefix for reverse sort (e.g., -price)")
+    print("  list images")
+    print("    - List available VM images")
 
 ##################################################
 #                HELPER FUNCTIONS                #

@@ -1,6 +1,4 @@
 # Internal dependencies
-import help
-
 from commands.base import Command
 from errors import Result
 from file import ChatHistory
@@ -29,11 +27,22 @@ class ConversationCommand(Command):
       elif commands[1] == "list":
         listConversations(settings)
       else:
-        help.unrecognizedCommand()
+        self.unrecognizedCommand()
     else:
-      help.conversationCommands()
+      self.help()
 
     return result
+
+  def help(self) -> None:
+    print("Here are the available conversation commands:")
+    print("  list")
+    print("    - list any saved conversations")
+    print("  new")
+    print("    - start a new conversation")
+    print("  print")
+    print("    - display the current conversation")
+    print("  load <filename>")
+    print("    - load a saved conversation")
 
 
 

@@ -1,5 +1,3 @@
-import help
-
 from commands.base import Command
 from errors import Result
 from settings import Settings
@@ -28,11 +26,22 @@ class CharacterCommand(Command):
       elif commands[1] in ["print", "current"]:
         current_character(settings)
       else:
-        help.unrecognizedCommand()
+        self.unrecognizedCommand()
     else:
-      help.characterCommands()
+      self.help()
 
     return result
+
+  def help(self) -> None:
+    print("Here are the available character commands:")
+    print("  list <optional: character>")
+    print("    - list all available characters or details about a specific character")
+    print("  remove, unset <character>")
+    print("    - remove the current character selection")
+    print("  set, select <character>")
+    print("    - select a character to use in the conversation")
+    print("  print, current")
+    print("    - display the current character selection")
 
 
 

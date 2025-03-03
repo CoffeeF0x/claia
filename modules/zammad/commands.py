@@ -45,11 +45,15 @@ class ZammadCommand(Command):
         zammad_remove_ai_tags(settings, zammad)
       else:
         print("Unrecognized zammad command")
-        print_help()
+        self.help()
     else:
-      print_help()
+      self.help()
 
     return result
+
+  def help(self) -> None:
+    """Display help information for zammad commands."""
+    print_help()
 
 
 
@@ -127,15 +131,6 @@ def zammad_remove_ai_tags(settings: Settings, zammad: ZammadAPI) -> Result:
   print(f"\nCompleted! Removed {removed_count} AI tags from {len(tickets)} tickets")
   return result
 
-def print_help():
-  """Print help information for zammad commands."""
-  print("Zammad Commands:")
-  print("  zammad list [query]      - List tickets (optional query)")
-  print("  zammad details <id>      - Show ticket details")
-  print("  zammad test <endpoint>   - Test API endpoint")
-  print("  zammad process           - Process untagged tickets")
-  print("  zammad untag             - Remove AI tags from tickets")
-
 zammad_summarize_prompt = f"""
 You are an expert IT professional. You offer all sorts of support ranging from simple device advice to complex education software systems. You are tasked with summarizing and describing all relevant information about a provided ticket. Don't make any note on whether or not this is submitted by a student, staff, or faculty.
 
@@ -192,3 +187,12 @@ Notes:
 
 Respond to the user's request by assigning the appropriate tag. The answer MUST be one of the above tags.
 """
+
+def print_help():
+  """Print help information for zammad commands."""
+  print("Zammad Commands:")
+  print("  zammad list [query]      - List tickets (optional query)")
+  print("  zammad details <id>      - Show ticket details")
+  print("  zammad test <endpoint>   - Test API endpoint")
+  print("  zammad process           - Process untagged tickets")
+  print("  zammad untag             - Remove AI tags from tickets")
