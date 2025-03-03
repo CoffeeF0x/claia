@@ -78,14 +78,12 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
   ("local_llm_api_token",               "",                            True,  "LocalLLM API Token"),
   ("runpod_api_token",                  "",                            True,  "RunPod API Token"),
   ("massed_compute_api_token",          "",                            True,  "Massed Compute API Token"),
-  ("zammad_api_token",                  "",                            True,  "Zammad API Token"),
   ("openrouter_api_token",              "",                            True,  "OpenRouter API Token"),
   ("huggingface_api_token",             "",                            True,  "Hugging Face API Token"),
   ("cloudflare_api_token",              "",                            True,  "Cloudflare API Token"),
 
   # URLs and Endpoints
   ("local_llm_base_url",                "",                            True,  "LocalLLM Base URL"),
-  ("zammad_base_url",                   "",                            True,  "Zammad Base URL"),
 
   # Directories
   ("model_directory",                   "models",                      True,  "Directory for model files"),
@@ -136,8 +134,6 @@ class Settings:
     runpod_api_token (str): API token for RunPod.
     local_llm_base_url (str): Base URL for local LLM.
     massed_compute_api_token (str): API token for Massed Compute.
-    zammad_api_token (str): API token for Zammad.
-    zammad_base_url (str): Base URL for Zammad API.
     prompt_store_directory (str): Directory to store LLM prompt stores.
     chat_history_directory (str): Directory to store chat histories.
     active_prompt (Optional[LLMPromptStore]): Currently active system prompt.
@@ -175,7 +171,6 @@ class Settings:
     self.has_local_llm_api_token = False
     self.has_runpod_api_token = False
     self.has_massed_compute_api_token = False
-    self.has_zammad_api_token = False
     self.has_openrouter_api_token = False
     self.has_huggingface_api_token = False
     self.has_cloudflare_api_token = False
@@ -245,7 +240,6 @@ class Settings:
     self.has_local_llm_api_token = bool(self.local_llm_api_token)
     self.has_runpod_api_token = bool(self.runpod_api_token)
     self.has_massed_compute_api_token = bool(self.massed_compute_api_token)
-    self.has_zammad_api_token = bool(self.zammad_api_token)
     self.has_openrouter_api_token = bool(self.openrouter_api_token)
     self.has_huggingface_api_token = bool(self.huggingface_api_token)
     self.has_cloudflare_api_token = bool(self.cloudflare_api_token)
@@ -369,7 +363,6 @@ class Settings:
       self.has_local_llm_api_token or
       self.has_runpod_api_token or
       self.has_massed_compute_api_token or
-      self.has_zammad_api_token or
       self.has_openrouter_api_token or
       self.has_huggingface_api_token or
       self.has_cloudflare_api_token
