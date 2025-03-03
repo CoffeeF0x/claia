@@ -58,7 +58,7 @@ class ZammadCommand(Command):
 ##################################################
 def zammad_run_process(settings: Settings, zammad: ZammadAPI) -> Result:
   # Import here to avoid circular imports
-  from models.registry import run as model_run
+  from models import run as model_run
 
   tickets = zammad.list_tickets("untagged-tickets")
   temp_tickets = tickets[11:]  # Select the first ticket for demonstration purposes

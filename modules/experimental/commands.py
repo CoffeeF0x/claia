@@ -94,7 +94,7 @@ def test_function_calling(settings: Settings):
   Args:
     settings: The Claia settings
   """
-  from models.registry import run as model_run
+  from models import run as model_run
 
   # Prepare system message with function definitions
   system_message = f"""You are an AI assistant capable of calling functions. Here are the available functions:

@@ -10,8 +10,8 @@
 import json
 
 # Internal dependencies
-from commands.registry import run as command
-from models.registry import run as model_run
+from commands import run as command
+from models import run as model_run
 from errors import Result
 from settings import Settings, SettingsFactory
 from utilities import *
