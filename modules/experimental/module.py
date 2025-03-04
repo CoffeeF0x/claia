@@ -1,21 +1,19 @@
 # External dependencies
 import json
 import torch
+from typing import Dict, Any
 
 # Internal dependencies
 from commands.base import Command
 from errors import Result
 from settings import Settings
 
-# Module dependencies
-from modules.experimental.functions import get_current_time, get_current_date, get_user_name, greet_user, FUNCTION_DEFINITIONS
-
 
 
 ##################################################
 #                 COMMAND CLASS                  #
 ##################################################
-class ExperimentalCommand(Command):
+class ModuleCommands(Command):
   def execute(self, commands: list[str], settings: Settings) -> Result:
     result: Result = Result()
 
@@ -164,3 +162,38 @@ Respond to the user's request by calling the appropriate function when necessary
         print(f"Function result: {result}")
 
   print("\nFunction calling test completed.")
+
+
+
+def sample_function(params: Dict[str, Any]) -> Dict[str, Any]:
+  """
+  A sample function that demonstrates how to create a module function.
+
+  Args:
+    params: Function parameters
+
+  Returns:
+    Dict[str, Any]: Function result
+  """
+  return {
+    "success": True,
+    "message": "Sample function executed successfully!",
+    "data": params
+  }
+
+FUNCTION_DEFINITIONS = [
+  {
+    "name": "sample_function",
+    "description": "A sample function that demonstrates module functionality",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Text to process"
+        }
+      },
+      "required": ["text"]
+    }
+  }
+]

@@ -1,203 +1,190 @@
 """
-Module loader system for Claia
+This module handles loading and managing external modules for the CLAI application.
+
+It provides functionality to load command and function modules from the specified
+modules directory in the settings.
 """
 
+# External dependencies
 import os
-import importlib
 import importlib.util
-import sys
-from typing import Dict, List, Any, Optional, Callable
-import inspect
+import logging
+from typing import List, Dict, Any, Optional, Tuple
+
+# Internal dependencies
+from commands.base import Command
+from errors import Result
+
+
+########################################################################
+#                               CONSTANTS                              #
+########################################################################
+logger = logging.getLogger(__name__)
 
 
 
-##################################################
-#                   CONSTANTS                    #
-##################################################
-# Define the module directories to search
-MODULE_DIRS = [
-  os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "modules")
-]
+########################################################################
+#                              FUNCTIONS                               #
+########################################################################
+def load(settings) -> None:
+    """
+    Load all modules from the modules directory.
 
-# Add user module directory if specified in environment
-if "CLAIA_MODULE_PATH" in os.environ:
-  MODULE_DIRS.extend(os.environ["CLAIA_MODULE_PATH"].split(os.pathsep))
+    Args:
+        settings: Application settings
+    """
+    # Get modules directory
+    modules_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    modules_dir = os.path.join(modules_dir, settings.modules_directory)
 
+    # Ensure the modules directory exists
+    if not os.path.exists(modules_dir):
+        logger.error(f"Modules directory not found: {modules_dir}")
+        return
 
+    # Initialize module lists if they don't exist
+    if not hasattr(settings, "command_modules"):
+        settings.command_modules = []
+    if not hasattr(settings, "function_modules"):
+        settings.function_modules = []
 
-##################################################
-#                   FUNCTIONS                    #
-##################################################
-def discover_modules() -> Dict[str, Any]:
-  """
-  Discover all available modules in the module directories.
+    # Scan each module directory
+    for item in os.listdir(modules_dir):
+        module_path = os.path.join(modules_dir, item)
 
-  Returns:
-    Dict[str, Any]: Dictionary of module names to module objects
-  """
-  modules = {}
+        # Skip if not a directory
+        if not os.path.isdir(module_path):
+            continue
 
-  for module_dir in MODULE_DIRS:
-    if not os.path.exists(module_dir):
-      continue
-
-    for item in os.listdir(module_dir):
-      module_path = os.path.join(module_dir, item)
-
-      # Check if it's a directory with an __init__.py file
-      if os.path.isdir(module_path) and os.path.exists(os.path.join(module_path, "__init__.py")):
-        module_name = item
+        # Look for module.py file
+        module_file = os.path.join(module_path, "module.py")
+        if not os.path.exists(module_file):
+            logger.warning(f"No module.py found in {item}, skipping")
+            continue
 
         try:
-          # Import the module
-          spec = importlib.util.spec_from_file_location(
-            f"modules.{module_name}",
-            os.path.join(module_path, "__init__.py")
-          )
-          if spec and spec.loader:
+            # Check if the module has commands or functions without fully loading it
+            has_commands = False
+            has_functions = False
+
+            # Load the module to check its contents
+            spec = importlib.util.spec_from_file_location(f"modules.{item}", module_file)
+            if spec is None or spec.loader is None:
+                logger.error(f"Failed to load module spec for {item}")
+                continue
+
             module = importlib.util.module_from_spec(spec)
-            sys.modules[f"modules.{module_name}"] = module
             spec.loader.exec_module(module)
-            modules[module_name] = module
+
+            # Check for ModuleCommands class
+            if hasattr(module, "ModuleCommands"):
+                has_commands = True
+                if item not in settings.command_modules:
+                    settings.command_modules.append(item)
+                    logger.info(f"Registered command module: {item}")
+
+            # Check for functions
+            if hasattr(module, "FUNCTION_DEFINITIONS"):
+                has_functions = True
+                if item not in settings.function_modules:
+                    settings.function_modules.append(item)
+                    logger.info(f"Registered function module: {item}")
+
+            if has_commands or has_functions:
+                logger.info(f"Successfully registered module: {item}")
+            else:
+                logger.warning(f"Module {item} has no commands or functions")
+
         except Exception as e:
-          print(f"Error loading module {module_name}: {e}")
+            logger.error(f"Error scanning module {item}: {str(e)}")
 
-  return modules
+def get_module_path(module_name: str) -> str:
+    """
+    Get the file path for a module.
 
-def get_module_commands() -> Dict[str, Any]:
-  """
-  Get all command classes from loaded modules.
+    Args:
+        module_name: Name of the module
 
-  Returns:
-    Dict[str, Any]: Dictionary of command names to command classes
-  """
-  commands = {}
-  modules = discover_modules()
+    Returns:
+        str: Absolute path to the module.py file
+    """
+    # Get the modules directory by going up three directories from __file__
+    # __file__ is in src/modules/__init__.py, so we need to go up to the root directory
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(base_dir, "modules", module_name, "module.py")
 
-  for module_name, module in modules.items():
-    # Check if the module has a commands.py file
+def get_module_commands(module_name: str) -> Optional[Command]:
+    """
+    Load and return a command instance from a module.
+
+    Args:
+        module_name: Name of the module to load
+
+    Returns:
+        Optional[Command]: Command instance or None if not found
+    """
     try:
-      commands_module = importlib.import_module(f"modules.{module_name}.commands")
+        # Get the module path
+        module_path = get_module_path(module_name)
 
-      # Look for command classes
-      for attr_name in dir(commands_module):
-        attr = getattr(commands_module, attr_name)
+        if not os.path.exists(module_path):
+            logger.error(f"Module file not found: {module_path}")
+            return None
 
-        # Check if it's a class that ends with "Command"
-        if isinstance(attr, type) and attr_name.endswith("Command"):
-          command_name = module_name.lower()
-          try:
-            # Use inspect.isabstract to check if the class is abstract
-            if not inspect.isabstract(attr):
-              commands[command_name] = attr()
-          except Exception as e:
-            print(f"Error instantiating command {attr_name} from module {module_name}: {e}")
-    except ImportError:
-      # Module doesn't have commands.py, that's okay
-      pass
+        # Load the module
+        spec = importlib.util.spec_from_file_location(f"modules.{module_name}", module_path)
+        if spec is None or spec.loader is None:
+            logger.error(f"Failed to load module spec for {module_name}")
+            return None
 
-  return commands
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
 
-def get_module_functions(settings=None) -> Dict[str, Callable]:
-  """
-  Get all functions from loaded modules that are enabled in settings.
+        # Check for ModuleCommands class
+        if hasattr(module, "ModuleCommands"):
+            command_class = getattr(module, "ModuleCommands")
+            command_instance = command_class()
+            # Set the command name to the module name
+            command_instance.name = module_name
+            return command_instance
 
-  Args:
-    settings: Optional settings object to check if modules are enabled
+        return None
+    except Exception as e:
+        logger.error(f"Error loading command from module {module_name}: {str(e)}")
+        return None
 
-  Returns:
-    Dict[str, Callable]: Dictionary of function names to function objects
-  """
-  functions = {}
-  modules = discover_modules()
+def get_module_functions(module_name: str) -> List[Dict[str, Any]]:
+    """
+    Load and return function definitions from a module.
 
-  for module_name, module in modules.items():
-    # Skip if module is disabled in settings
-    if settings and hasattr(settings, "disabled_modules") and module_name in settings.disabled_modules:
-      continue
+    Args:
+        module_name: Name of the module to load
 
-    # Check if the module has a functions.py file
+    Returns:
+        List[Dict[str, Any]]: List of function definitions or empty list if not found
+    """
     try:
-      functions_module = importlib.import_module(f"modules.{module_name}.functions")
+        # Get the module path
+        module_path = get_module_path(module_name)
 
-      # Look for functions
-      for attr_name in dir(functions_module):
-        attr = getattr(functions_module, attr_name)
+        if not os.path.exists(module_path):
+            logger.error(f"Module file not found: {module_path}")
+            return []
 
-        # Skip private attributes and non-functions
-        if attr_name.startswith("_") or not callable(attr):
-          continue
+        # Load the module
+        spec = importlib.util.spec_from_file_location(f"modules.{module_name}", module_path)
+        if spec is None or spec.loader is None:
+            logger.error(f"Failed to load module spec for {module_name}")
+            return []
 
-        # Add the function with a prefix to avoid name collisions
-        function_name = f"{module_name}_{attr_name}"
-        functions[function_name] = attr
-    except ImportError:
-      # Module doesn't have functions.py, that's okay
-      pass
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
 
-  return functions
+        # Check for FUNCTION_DEFINITIONS
+        if hasattr(module, "FUNCTION_DEFINITIONS"):
+            return module.FUNCTION_DEFINITIONS
 
-def get_function_definitions() -> List[Dict[str, Any]]:
-  """
-  Get function definitions for all module functions.
-
-  Returns:
-    List[Dict[str, Any]]: List of function definitions
-  """
-  definitions = []
-  modules = discover_modules()
-
-  for module_name, module in modules.items():
-    # Check if the module has a functions.py file
-    try:
-      functions_module = importlib.import_module(f"modules.{module_name}.functions")
-
-      # Check if the module has a FUNCTION_DEFINITIONS attribute
-      if hasattr(functions_module, "FUNCTION_DEFINITIONS"):
-        module_definitions = getattr(functions_module, "FUNCTION_DEFINITIONS")
-
-        # Add module name prefix to function names
-        for definition in module_definitions:
-          if "name" in definition:
-            definition["name"] = f"{module_name}_{definition['name']}"
-
-        definitions.extend(module_definitions)
-    except ImportError:
-      # Module doesn't have functions.py, that's okay
-      pass
-
-  return definitions
-
-def help() -> str:
-  """
-  Return help information for the module system.
-  
-  Returns:
-    str: Help information for the module system
-  """
-  modules = discover_modules()
-  module_list = list(modules.keys())
-  
-  help_text = "Module System Help:\n"
-  help_text += "  The module system allows extending Claia with additional functionality.\n\n"
-  
-  if module_list:
-    help_text += "Available modules:\n"
-    for module_name in module_list:
-      help_text += f"  - {module_name}\n"
-    help_text += "\nUse 'help <module>' for module-specific help."
-  else:
-    help_text += "No modules are currently installed."
-  
-  return help_text
-
-# Export the functions
-__all__ = [
-  "discover_modules",
-  "get_module_commands",
-  "get_module_functions",
-  "get_function_definitions",
-  "get_module_list",
-  "get_module_help",
-  "help"
-]
+        return []
+    except Exception as e:
+        logger.error(f"Error loading functions from module {module_name}: {str(e)}")
+        return []

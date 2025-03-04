@@ -3,14 +3,6 @@ from models.definitions import definitions, sources
 from settings import Settings
 from errors import Result
 
-# Try to import optional modules
-try:
-  from modules import get_function_definitions
-  HAS_MODULE_SYSTEM = True
-except ImportError:
-  # Module system not available, that's okay
-  HAS_MODULE_SYSTEM = False
-
 
 
 ##################################################
@@ -99,46 +91,6 @@ def get_api_key_for_source(source: str, settings: Settings) -> str:
 
 #   return result
 
-# Get function definitions from modules
-def get_all_function_definitions(settings: Settings = None) -> list:
-  """
-  Get all function definitions, including those from modules and tools.
-
-  Args:
-    settings: Optional settings object to check if modules are enabled
-
-  Returns:
-    list: List of function definitions
-  """
-  # Initialize empty list for function definitions
-  function_definitions = []
-
-  # Add module function definitions if available
-  if HAS_MODULE_SYSTEM:
-    try:
-      module_definitions = get_function_definitions()
-
-      # Filter out disabled modules
-      if settings and hasattr(settings, "disabled_modules"):
-        module_definitions = [
-          definition for definition in module_definitions 
-          if not any(definition["name"].startswith(f"{module}_") for module in settings.disabled_modules)
-        ]
-
-      function_definitions.extend(module_definitions)
-    except Exception as e:
-      print(f"Error getting module function definitions: {e}")
-
-  # TODO: Add tool function definitions when implemented
-  # if HAS_TOOL_SYSTEM:
-  #   try:
-  #     tool_definitions = get_tool_definitions()
-  #     function_definitions.extend(tool_definitions)
-  #   except Exception as e:
-  #     print(f"Error getting tool function definitions: {e}")
-
-  return function_definitions
-
 # Run the model with the given messages and settings
 def run(model_name: str, messages: list, settings: Settings = None, reset_context: bool = False, **kwargs) -> Result:
   result = get_model(model_name, settings)
@@ -146,11 +98,6 @@ def run(model_name: str, messages: list, settings: Settings = None, reset_contex
     return result
 
   model = result.data
-
-  # Add function definitions if supported by the model
-  if hasattr(model, 'supports_functions') and model.supports_functions:
-    function_definitions = get_all_function_definitions(settings)
-    kwargs['functions'] = function_definitions
 
   # if reset_context and hasattr(model, 'reset_context'):
   #   model.reset_context()

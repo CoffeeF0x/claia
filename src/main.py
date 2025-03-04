@@ -10,12 +10,14 @@
 import json
 
 # Internal dependencies
+from modules import load as load_modules
+
 from commands import run as command
 from models import run as model_run
 from errors import Result
 from settings import Settings
 from utilities import *
-from tools import process_function_calls
+from tools import process_function_calls, add_function_calling_prompt_to_store
 
 
 
@@ -86,10 +88,17 @@ def runLlm(userInput: str, settings: Settings) -> None:
 #                 MAIN FUNCTION                  #
 ##################################################
 def main() -> None:
+  # Create application settings
+  settings = Settings()
+
+  # Load modules
+  load_modules(settings)
+
+  # Load function calling prompt into the prompt store
+  add_function_calling_prompt_to_store(settings)
+
   userInput: str = ""
   result: Result = Result()
-
-  settings = Settings()
 
   while not result.is_exit():
     userInput = getUserInput()

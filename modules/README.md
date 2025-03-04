@@ -37,12 +37,12 @@ from commands.base import Command
 from errors import Result
 from settings import Settings
 
-class MyModuleCommand(Command):
+class ModuleCommands(Command):
     def execute(self, commands: list[str], settings: Settings) -> Result:
         result = Result()
-        
+
         # Command implementation
-        
+
         return result
 ```
 
@@ -76,11 +76,11 @@ FUNCTION_DEFINITIONS = [
 def my_function(param1: str, param2: int = 0) -> str:
     """
     Implementation of my_function.
-    
+
     Args:
         param1: Description of parameter 1
         param2: Description of parameter 2
-        
+
     Returns:
         str: Result of the function
     """
@@ -105,17 +105,3 @@ You can specify additional directories to search for modules by setting the `CLA
 ```
 export CLAIA_MODULE_PATH=/path/to/my/modules:/path/to/more/modules
 ```
-
-## Disabling Modules
-
-You can disable specific modules by setting the `CLAIA_DISABLED_MODULES` environment variable:
-
-```
-export CLAIA_DISABLED_MODULES=module1,module2
-```
-
-This will prevent the functions from these modules from being available to the AI.
-
-## Example Modules
-
-- `zammad`: Integration with the Zammad ticketing system 

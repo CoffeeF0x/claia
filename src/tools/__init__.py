@@ -10,6 +10,7 @@ import importlib
 from typing import Dict, Any, List, Callable
 
 # Import tool functions
+from modules import get_module_functions
 from tools.functions import (
   get_current_time,
   get_current_date,
@@ -17,6 +18,7 @@ from tools.functions import (
   greet_user,
   FUNCTION_DEFINITIONS
 )
+from file import LLMPromptStore
 
 
 
@@ -47,18 +49,6 @@ When you need to call a function, use the following format:
 You can call multiple functions in a single response if needed. Each function call will be replaced with its result.
 Incorporate the function call(s) into your response where necessary.
 """
-# Respond to the user's request by calling the appropriate function when necessary.
-# """
-
-# Module system availability flag
-HAS_MODULE_SYSTEM = False
-
-# Try to check if modules are available without importing the full module
-try:
-  spec = importlib.util.find_spec('modules')
-  HAS_MODULE_SYSTEM = spec is not None
-except:
-  pass
 
 
 
@@ -95,13 +85,13 @@ def get_function_definitions(settings=None) -> List[Dict[str, Any]]:
     List[Dict[str, Any]]: Combined list of function definitions
   """
   all_definitions = list(FUNCTION_DEFINITIONS)
-  
-  # Add module definitions if available
-  if HAS_MODULE_SYSTEM and settings:
-    # Access module_function_definitions directly from settings if available
-    if hasattr(settings, 'module_function_definitions') and settings.module_function_definitions:
-      all_definitions.extend(settings.module_function_definitions)
-  
+
+  if settings and settings.has_function_modules():
+    # Load functions from each module
+    for module_name in settings.function_modules:
+      module_functions = get_module_functions(module_name)
+      all_definitions.extend(module_functions)
+
   return all_definitions
 
 def get_all_functions(settings=None) -> Dict[str, Callable]:
@@ -115,13 +105,15 @@ def get_all_functions(settings=None) -> Dict[str, Callable]:
     Dict[str, Callable]: Dictionary of function names to function objects
   """
   all_functions = get_functions()
-  
-  # Add module functions if available
-  if HAS_MODULE_SYSTEM and settings:
-    # Access module_functions directly from settings if available
-    if hasattr(settings, 'module_functions') and settings.module_functions:
-      all_functions.update(settings.module_functions)
-  
+
+  if settings and settings.has_function_modules():
+    # Load functions from each module
+    for module_name in settings.function_modules:
+      module_functions = get_module_functions(module_name)
+      for func_def in module_functions:
+        if "name" in func_def:
+          all_functions[func_def["name"]] = None  # We'll import dynamically when needed
+
   return all_functions
 
 
@@ -142,9 +134,21 @@ def execute_function(function_name: str, function_call: Dict[str, Any], settings
     str: Result of the function call or error message
   """
   all_functions = get_all_functions(settings)
-  
+
   if function_name in all_functions:
     try:
+      # If the function is None, it means it's from a module and needs to be imported
+      if all_functions[function_name] is None:
+        # Find which module contains this function
+        for module_name in settings.function_modules:
+          module_functions = get_module_functions(module_name)
+          if any(func_def["name"] == function_name for func_def in module_functions):
+            # Import the function from the module
+            module = importlib.import_module(f"modules.{module_name}.module")
+            func = getattr(module, function_name)
+            all_functions[function_name] = func
+            break
+
       # Call the function with parameters
       if "parameters" in function_call:
         return all_functions[function_name](**function_call["parameters"])
@@ -180,26 +184,26 @@ def process_function_calls(response: str, settings=None) -> str:
 
   processed_response = response
   call_count = 0
-  
+
   # Process function calls until we reach the maximum or no more calls are found
   while "[FUNCTION_CALL]" in processed_response and call_count < max_calls:
     try:
       # Find all function calls in the response
       start_marker = "[FUNCTION_CALL]"
       end_marker = "[/FUNCTION_CALL]"
-      
+
       # Find all start and end positions
       start_positions = []
       end_positions = []
       pos = 0
-      
+
       while True:
         start_pos = processed_response.find(start_marker, pos)
         if start_pos == -1:
           break
         start_positions.append(start_pos)
         pos = start_pos + len(start_marker)
-      
+
       pos = 0
       while True:
         end_pos = processed_response.find(end_marker, pos)
@@ -207,11 +211,11 @@ def process_function_calls(response: str, settings=None) -> str:
           break
         end_positions.append(end_pos + len(end_marker))
         pos = end_pos + len(end_marker)
-      
+
       # If no valid function calls found, break
       if not start_positions or not end_positions or len(start_positions) != len(end_positions):
         break
-      
+
       # Process function calls from innermost to outermost
       # Find the innermost function call (one with no other start markers between its start and end)
       innermost_idx = None
@@ -222,33 +226,33 @@ def process_function_calls(response: str, settings=None) -> str:
         if not has_nested:
           innermost_idx = i
           break
-      
+
       if innermost_idx is None:
         # Something is wrong with the function call format
         break
-      
+
       # Extract the innermost function call
       start_pos = start_positions[innermost_idx]
       end_pos = end_positions[innermost_idx]
       function_call_str = processed_response[start_pos + len(start_marker):end_pos - len(end_marker)]
       full_function_call = processed_response[start_pos:end_pos]
-      
+
       # Parse the function call
       function_call = json.loads(function_call_str)
       function_name = function_call["name"]
-      
+
       # Execute the function
       result = execute_function(function_name, function_call, settings)
-      
+
       # Replace the function call with its result
       processed_response = processed_response.replace(full_function_call, result)
-      
+
       call_count += 1
-      
+
       # If we've processed the minimum number of calls and there are no more, break
       if call_count >= min_calls and "[FUNCTION_CALL]" not in processed_response:
         break
-        
+
     except Exception as e:
       # If there's an error processing the function call, add an error message
       # but continue processing other function calls
@@ -263,7 +267,7 @@ def process_function_calls(response: str, settings=None) -> str:
         # just append the error message and break
         processed_response += f"\n\n{error_msg}"
         break
-  
+
   return processed_response
 
 
@@ -287,6 +291,35 @@ def get_function_calling_prompt(settings=None) -> str:
     function_format=FUNCTION_FORMAT
   )
 
+
+
+###################################################
+#                    FUNCTIONS                    #
+###################################################
+def add_function_calling_prompt_to_store(settings) -> None:
+  """
+  Adds the function calling prompt to the prompt store in the settings object.
+
+  Args:
+    settings: The settings object containing the prompt store
+  """
+  function_calling_prompt_name = "functions"
+
+  # Check if prompt already exists
+  if not settings.prompt_exists(function_calling_prompt_name):
+    # Get the function calling prompt
+    function_calling_prompt = get_function_calling_prompt(settings)
+
+    # Add to prompt store
+    settings.prompt_store.append(
+      LLMPromptStore(
+        settings.prompt_store_directory,
+        function_calling_prompt_name,
+        "Function Calling Assistant",
+        function_calling_prompt,
+        "An assistant capable of calling functions."
+      )
+    )
 
 
 # Export the functions

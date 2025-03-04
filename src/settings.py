@@ -14,7 +14,6 @@ from typing import Dict, Any, List, Tuple, Optional
 
 # Internal dependencies
 from file import LLMPromptStore, ChatHistory
-from tools import get_function_calling_prompt
 
 
 
@@ -89,6 +88,7 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
   ("model_directory",                   "models",                      True,  "Directory for model files"),
   ("prompt_store_directory",            "prompts",                     True,  "Directory for prompt stores"),
   ("chat_history_directory",            "history",                     True,  "Directory for chat histories"),
+  ("modules_directory",                 "modules",                     True,  "Directory for modules"),
 
   # Model Settings
   ("active_model",                      "qwen2.5-72b-instruct",        True,  "Active model name"),
@@ -101,21 +101,11 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
 
   # Prompt Settings
   ("default_prompt_name",               "default",                     True,  "Default prompt name to use"),
-  ("function_calling_prompt_name",      "functions",                   False, "Name of the function calling prompt"),
 
   # Application Settings
   ("log_level",                         "error",                       True,  "Logging level"),
-  ("disabled_modules",                  "",                            True,  "Comma-separated list of disabled modules"),
   ("min_function_calls",                5,                             True,  "Minimum number of function calls to process"),
   ("max_function_calls",                10,                            True,  "Maximum number of function calls to process"),
-
-  # Internal Settings (not settable externally)
-  ("loaded_local_models",               {},                            False, "Dictionary of loaded local models"),
-  ("prompt_store",                      [],                            False, "List of prompt stores"),
-  ("active_prompt",                     None,                          False, "Currently active prompt"),
-  ("active_chat",                       None,                          False, "Currently active chat"),
-  ("module_functions",                  {},                            False, "Dictionary of module functions"),
-  ("module_function_definitions",       [],                            False, "List of module function definitions")
 ]
 
 
@@ -146,9 +136,6 @@ class Settings:
     vllm_zone (str): Zone for VLLM.
     vllm_email (str): Email for VLLM.
     vllm_subdomain (str): Subdomain for VLLM.
-    disabled_modules (List[str]): List of module names that are disabled.
-    module_functions (Dict): Dictionary of module functions.
-    module_function_definitions (List): List of module function definitions.
     min_function_calls (int): Minimum number of function calls to process.
     max_function_calls (int): Maximum number of function calls to process.
     default_prompt_name (str): Default prompt name to use.
@@ -156,14 +143,12 @@ class Settings:
 
   def __init__(self):
     """Initialize configuration from environment variables and command line arguments."""
-    # Initialize module-related attributes
     self.loaded_local_models: Dict[str, Any] = {}
     self.prompt_store = []
     self.active_prompt = None
     self.active_chat = None
-    self.module_functions = {}
-    self.module_function_definitions = []
-    self.disabled_modules = []
+    self.command_modules = []
+    self.function_modules = []
 
     # Boolean flags for API key availability
     self.has_openai_api_token = False
@@ -182,9 +167,6 @@ class Settings:
     self.load_all_prompts()
     self.active_prompt = self.get_prompt(self.default_prompt_name)
     self.active_chat = ChatHistory(self.chat_history_directory, "New Conversation", [])
-
-    # Initialize module functions and definitions
-    self._initialize_modules()
 
   def _load_config(self):
     """
@@ -230,10 +212,6 @@ class Settings:
     for key, value in config_dict.items():
       setattr(self, key, value)
 
-    # Process special cases
-    if self.disabled_modules and isinstance(self.disabled_modules, str):
-      self.disabled_modules = [m.strip() for m in self.disabled_modules.split(",") if m.strip()]
-
     # Set API token flags
     self.has_openai_api_token = bool(self.openai_api_token)
     self.has_anthropic_api_token = bool(self.anthropic_api_token)
@@ -278,30 +256,6 @@ class Settings:
 
     return cli_value
 
-  def _initialize_modules(self):
-    """
-    Initialize module functions and definitions.
-    This is done during Settings initialization to avoid circular dependencies.
-    """
-    try:
-      from modules import discover_modules, get_module_functions, get_function_definitions
-
-      # Initialize modules
-      discover_modules()
-
-      # Get module functions and definitions
-      self.module_functions = get_module_functions(self)
-      self.module_function_definitions = get_function_definitions()
-    except ImportError:
-      # Module system not available, that's okay
-      self.module_functions = {}
-      self.module_function_definitions = []
-    except Exception as e:
-      # Handle other exceptions
-      print(f"Error initializing modules: {str(e)}")
-      self.module_functions = {}
-      self.module_function_definitions = []
-
   def load_all_prompts(self) -> list[LLMPromptStore]:
     # Load default prompts
     for prompt in DEFAULT_PROMPTS:
@@ -310,21 +264,6 @@ class Settings:
       else:
         pass
         # TODO: log error, prompt name already exists
-
-    # Load function calling prompt
-    if not self.prompt_exists(self.function_calling_prompt_name):
-      self.prompt_store.append(
-        LLMPromptStore(
-          self.prompt_store_directory,
-          self.function_calling_prompt_name,
-          "Function Calling Assistant",
-          get_function_calling_prompt(self),
-          "An assistant capable of calling functions."
-        )
-      )
-    else:
-      pass
-      # TODO: log error, function calling prompt name already exists
 
     # Load prompts from the directory
     # TODO: Update to use the file get function, and maybe add a get all stores type function that returns a list of LLMPromptStore objects
@@ -373,7 +312,23 @@ class Settings:
 
     return api_tokens_present
 
+  def has_command_modules(self) -> bool:
+    """
+    Check if there are any available command modules.
 
+    Returns:
+      bool: True if there are available command modules, False otherwise
+    """
+    return len(self.command_modules) > 0
+
+  def has_function_modules(self) -> bool:
+    """
+    Check if there are any available function modules.
+
+    Returns:
+      bool: True if there are available function modules, False otherwise
+    """
+    return len(self.function_modules) > 0
 
 # Usage example
 if __name__ == "__main__":

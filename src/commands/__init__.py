@@ -11,13 +11,6 @@ from commands.massedcompute import MassedComputeCommand
 from errors import Result
 from settings import Settings
 
-# Try to import the module system
-try:
-  from modules import get_module_commands, get_module_list, get_module_help
-  HAS_MODULE_SYSTEM = True
-except ImportError:
-  HAS_MODULE_SYSTEM = False
-
 
 
 ##################################################
@@ -74,14 +67,6 @@ def initialize_command_registry() -> Dict[str, Any]:
     "massedcompute": MassedComputeCommand(),
   }
 
-  # Add module commands if the module system is available
-  if HAS_MODULE_SYSTEM:
-    try:
-      module_commands = get_module_commands()
-      registry.update(module_commands)
-    except Exception as e:
-      print(f"Error loading module commands: {e}")
-
   return registry
 
 
@@ -133,46 +118,13 @@ def display_help() -> None:
   print("  help [command|module]")
   print("    - display help information for all commands or a specific command/module")
 
-  # List available modules if the module system is available
-  if HAS_MODULE_SYSTEM:
-    try:
-      modules = get_module_list()
-
-      if modules:
-        print("\nAvailable modules:")
-        for module in modules:
-          print(f"  {module}")
-        print("  Use 'help <module>' for module-specific help")
-    except Exception as e:
-      print(f"Error listing modules: {e}")
-
 # Display help for a specific command or module
 def display_command_help(command_name: str) -> None:
   if command_name in command_registry:
-    command_registry[command_name].help()
-  elif command_name == "modules" and HAS_MODULE_SYSTEM:
-    try:
-      from modules import help as modules_help
-      print(modules_help())
-    except Exception as e:
-      print(f"Error displaying module system help: {e}")
-  elif HAS_MODULE_SYSTEM:
-    try:
-      module_commands = get_module_commands()
-
-      if command_name in module_commands:
-        # Try to get module-specific help
-        module_help = get_module_help(command_name)
-        if module_help:
-          print(module_help)
-        else:
-          print(f"No help available for module: {command_name}")
-      else:
-        print(f"Unknown command or module: {command_name}")
-        display_help()
-    except Exception as e:
-      print(f"Error displaying module help: {e}")
-      display_help()
+    if hasattr(command_registry[command_name], 'help'):
+      command_registry[command_name].help()
+    else:
+      print(f"No help available for command: {command_name}")
   else:
     print(f"Unknown command: {command_name}")
     display_help()
