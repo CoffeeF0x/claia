@@ -1,4 +1,4 @@
-from commands.base import Command
+from commands.base import Command, command
 from errors import Result
 from settings import Settings
 from models.definitions import definitions, sources
@@ -9,191 +9,353 @@ from models.definitions import definitions, sources
 #                 COMMAND CLASS                  #
 ##################################################
 class ModelCommand(Command):
-  def execute(self, commands: list[str], settings: Settings) -> Result:
-    result: Result = Result()
+  @command(
+    path=["list"],
+    description="List all available models or get details about a specific model",
+    help_text="List all available models",
+    parameters={
+      "type": "object",
+      "properties": {
+        "model_name": {
+          "type": "string",
+          "description": "Optional model name to get details for"
+        }
+      }
+    },
+    returns={
+      "type": "string",
+      "description": "List of models or details about a specific model"
+    },
+    ai_callable=True
+  )
+  def list_models(self, settings: Settings, model_name: str = "") -> str:
+    """List the available models or details about a specific model"""
+    result = []
 
-    if len(commands) > 1:
-      if commands[1] == "list" and len(commands) > 2:
-        listModels(settings, commands[2])
-      elif commands[1] == "list":
-        listModels(settings)
-      elif commands[1] in ["set", "select"] and len(commands) > 3:
-        setModel(commands[2], settings, commands[3])
-      elif commands[1] in ["set", "select"] and len(commands) > 2:
-        setModel(commands[2], settings)
-      elif commands[1] in ["set", "select"]:
-        print("No model selected")
-      elif commands[1] in ["print", "current"]:
-        currentModel(settings)
-      elif commands[1] == "vllm":
-        if len(commands) > 2:
-          if commands[2] == "zone" and len(commands) > 3:
-            setVLLMZone(settings, commands[3])
-          elif commands[2] == "zone":
-            printVLLMZone(settings)
-          elif commands[2] == "email" and len(commands) > 3:
-            setVLLMEmail(settings, commands[3])
-          elif commands[2] == "email":
-            printVLLMEmail(settings)
-          elif commands[2] == "subdomain" and len(commands) > 3:
-            setVLLMSubdomain(settings, commands[3])
-          elif commands[2] == "subdomain":
-            printVLLMSubdomain(settings)
-          else:
-            self.vllm_help()
-        else:
-          self.vllm_help()
-      else:
-        self.unrecognizedCommand()
-    else:
-      self.help()
-
-    return result
-
-  def help(self) -> None:
-    print("Here are the available model commands:")
-    print("  list")
-    print("    - list all available models")
-    print("  list <model>")
-    print("    - display details about a specific model")
-    print("  set, select <model>")
-    print("    - select a model to use for generation")
-    print("  set, select <model> <source>")
-    print("    - select a model with specific source to use for generation")
-    print("  print, current")
-    print("    - display the current model selection")
-    print("  vllm zone")
-    print("    - display the current VLLM zone")
-    print("  vllm zone <zone>")
-    print("    - set the VLLM zone")
-    print("  vllm email")
-    print("    - display the current VLLM email")
-    print("  vllm email <email>")
-    print("    - set the VLLM email")
-    print("  vllm subdomain")
-    print("    - display the current VLLM subdomain")
-    print("  vllm subdomain <subdomain>")
-    print("    - set the VLLM subdomain")
-
-  def vllm_help(self) -> None:
-    print("Here are the available VLLM commands:")
-    print("  zone")
-    print("    - display the current VLLM zone")
-    print("  zone <zone>")
-    print("    - set the VLLM zone (e.g., example.com)")
-    print("  email")
-    print("    - display the current VLLM email")
-    print("  email <email>")
-    print("    - set the VLLM email (used for SSL certificates)")
-    print("  subdomain")
-    print("    - display the current VLLM subdomain")
-    print("  subdomain <subdomain>")
-    print("    - set the VLLM subdomain (e.g., vllm)")
-
-
-
-##################################################
-#                   FUNCTIONS                    #
-##################################################
-# Print currently selected model
-def currentModel(settings: Settings):
-  if settings.active_model:
-    source_str = f" ({settings.active_model_source})" if settings.active_model_source else ""
-    print(f"Current model: {settings.active_model}{source_str}")
-  else:
-    print("No model selected")
-
-# List the available models
-def listModels(settings: Settings, model_name: str = "") -> None:
-  if model_name:
-    # Get available sources for this model
-    available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
-    
-    if model_name in definitions and available_sources:
-      model_info = definitions[model_name]
-      print(f"Name: {model_name}")
-      print(f"Title: {model_info['title']}")
-      print(f"Description: {model_info['description']}")
-      print(f"Available Sources: {', '.join(available_sources)}")
-      
-      if "training_data" in model_info:
-        print(f"Training Data: {model_info['training_data']}")
-      if "capabilities" in model_info:
-        print(f"Capabilities: {', '.join(model_info['capabilities'])}")
-    else:
-      print(f"Model with name {model_name} not found or has no available sources")
-  else:
-    # Filter models to only those with available sources
-    available_models = {
-      name: model for name, model in definitions.items() 
-      if any(name in sources[s]["models"] for s in sources.keys())
-    }
-    
-    if not available_models:
-      print("No models available with configured sources")
-      return
-      
-    # Get max model name length for padding
-    max_name_length = max(len(name) for name in available_models.keys())
-    
-    for model_name in available_models.keys():
+    if model_name:
       # Get available sources for this model
       available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
-      sources_str = f" ({', '.join(available_sources)})"
-      
-      # Print model name padded to align sources
-      print(f"{model_name:<{max_name_length}}{sources_str}")
 
-# Set the selected model
-def setModel(model_name: str, settings: Settings, source: str = None):
-  # Get available sources for this model
-  available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
+      if model_name in definitions and available_sources:
+        model_info = definitions[model_name]
+        result.append(f"Name: {model_name}")
+        result.append(f"Title: {model_info['title']}")
+        result.append(f"Description: {model_info['description']}")
+        result.append(f"Available Sources: {', '.join(available_sources)}")
 
-  if model_name not in definitions or not available_sources:
-    print(f"Model '{model_name}' not found or has no available sources")
-    return
-  
-  if source:
-    if source not in available_sources:
-      print(f"Invalid source '{source}' for model '{model_name}'")
-      print(f"Available sources: {', '.join(available_sources)}")
-      return
-    chosen_source = source
-  else:
-    chosen_source = available_sources[0]
+        if "training_data" in model_info:
+          result.append(f"Training Data: {model_info['training_data']}")
+        if "capabilities" in model_info:
+          result.append(f"Capabilities: {', '.join(model_info['capabilities'])}")
+      else:
+        result.append(f"Model with name {model_name} not found or has no available sources")
+    else:
+      # Filter models to only those with available sources
+      available_models = {
+        name: model for name, model in definitions.items()
+        if any(name in sources[s]["models"] for s in sources.keys())
+      }
 
-  settings.active_model = model_name
-  settings.active_model_source = chosen_source
-  source_str = f" using source '{chosen_source}'"
-  print(f"Selected model: {model_name}{source_str}")
+      if not available_models:
+        result.append("No models available with configured sources")
+        return "\n".join(result)
 
-# VLLM specific functions
-def setVLLMZone(settings: Settings, zone: str) -> None:
-  settings.vllm_zone = zone
-  print(f"VLLM zone set to: {zone}")
+      # Get max model name length for padding
+      max_name_length = max(len(name) for name in available_models.keys())
 
-def printVLLMZone(settings: Settings) -> None:
-  if settings.vllm_zone:
-    print(f"Current VLLM zone: {settings.vllm_zone}")
-  else:
-    print("No VLLM zone set")
+      for model_name in available_models.keys():
+        # Get available sources for this model
+        available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
+        sources_str = f" ({', '.join(available_sources)})"
 
-def setVLLMEmail(settings: Settings, email: str) -> None:
-  settings.vllm_email = email
-  print(f"VLLM email set to: {email}")
+        # Add model name padded to align sources
+        result.append(f"{model_name:<{max_name_length}}{sources_str}")
 
-def printVLLMEmail(settings: Settings) -> None:
-  if settings.vllm_email:
-    print(f"Current VLLM email: {settings.vllm_email}")
-  else:
-    print("No VLLM email set")
+    # Print to console and return as string for function calling
+    output = "\n".join(result)
+    print(output)
+    return output
 
-def setVLLMSubdomain(settings: Settings, subdomain: str) -> None:
-  settings.vllm_subdomain = subdomain
-  print(f"VLLM subdomain set to: {subdomain}")
+  @command(
+    path=["set"],
+    description="Set the current model to use for generation",
+    help_text="Select a model to use for generation",
+    parameters={
+      "type": "object",
+      "properties": {
+        "model_name": {
+          "type": "string",
+          "description": "Name of the model to use"
+        },
+        "source": {
+          "type": "string",
+          "description": "Source to use for the model (optional)"
+        }
+      },
+      "required": ["model_name"]
+    },
+    returns={
+      "type": "string",
+      "description": "Confirmation message"
+    },
+    ai_callable=True
+  )
+  def set_model(self, settings: Settings, model_name: str, source: str = None) -> str:
+    """Set the selected model"""
+    # Get available sources for this model
+    available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
 
-def printVLLMSubdomain(settings: Settings) -> None:
-  if settings.vllm_subdomain:
-    print(f"Current VLLM subdomain: {settings.vllm_subdomain}")
-  else:
-    print("No VLLM subdomain set")
+    if model_name not in definitions or not available_sources:
+      msg = f"Model '{model_name}' not found or has no available sources"
+      print(msg)
+      return msg
+
+    if source:
+      if source not in available_sources:
+        msg = f"Invalid source '{source}' for model '{model_name}'. Available sources: {', '.join(available_sources)}"
+        print(msg)
+        return msg
+      chosen_source = source
+    else:
+      chosen_source = available_sources[0]
+
+    settings.active_model = model_name
+    settings.active_model_source = chosen_source
+    source_str = f" using source '{chosen_source}'"
+    msg = f"Selected model: {model_name}{source_str}"
+    print(msg)
+    return msg
+
+  @command(
+    path=["select"],
+    description="Alias for 'set' - select a model to use for generation",
+    help_text="Select a model to use for generation (alias for 'set')",
+    parameters={
+      "type": "object",
+      "properties": {
+        "model_name": {
+          "type": "string",
+          "description": "Name of the model to use"
+        },
+        "source": {
+          "type": "string",
+          "description": "Source to use for the model (optional)"
+        }
+      },
+      "required": ["model_name"]
+    },
+    returns={
+      "type": "string",
+      "description": "Confirmation message"
+    },
+    ai_callable=True
+  )
+  def select_model(self, settings: Settings, model_name: str, source: str = None) -> str:
+    """Alias for set_model"""
+    return self.set_model(settings, model_name, source)
+
+  @command(
+    path=["current"],
+    description="Display the current model selection",
+    help_text="Display the current model selection",
+    parameters={
+      "type": "object",
+      "properties": {}
+    },
+    returns={
+      "type": "string",
+      "description": "Current model information"
+    },
+    ai_callable=True
+  )
+  def current_model(self, settings: Settings) -> str:
+    """Print currently selected model"""
+    if settings.active_model:
+      source_str = f" ({settings.active_model_source})" if settings.active_model_source else ""
+      msg = f"Current model: {settings.active_model}{source_str}"
+      print(msg)
+      return msg
+    else:
+      msg = "No model selected"
+      print(msg)
+      return msg
+
+  @command(
+    path=["print"],
+    description="Display the current model selection",
+    help_text="Display the current model selection (alias for 'current')",
+    parameters={
+      "type": "object",
+      "properties": {}
+    },
+    returns={
+      "type": "string",
+      "description": "Current model information"
+    },
+    ai_callable=True
+  )
+  def print_model(self, settings: Settings) -> str:
+    """Alias for current_model"""
+    return self.current_model(settings)
+
+
+
+  ##################################################
+  #                  VLLM COMMANDS                 #
+  ##################################################
+
+  @command(
+    path=["vllm", "zone"],
+    description="Display the current VLLM zone",
+    help_text="Display the current VLLM zone",
+    parameters={
+      "type": "object",
+      "properties": {}
+    },
+    returns={
+      "type": "string",
+      "description": "Current VLLM zone"
+    },
+    ai_callable=True
+  )
+  def print_vllm_zone(self, settings: Settings) -> str:
+    """Display the current VLLM zone"""
+    if settings.vllm_zone:
+      msg = f"Current VLLM zone: {settings.vllm_zone}"
+      print(msg)
+      return msg
+    else:
+      msg = "No VLLM zone set"
+      print(msg)
+      return msg
+
+  @command(
+    path=["vllm", "zone", "set"],
+    description="Set the VLLM zone",
+    help_text="Set the VLLM zone (e.g., example.com)",
+    parameters={
+      "type": "object",
+      "properties": {
+        "zone": {
+          "type": "string",
+          "description": "Zone to set (e.g., example.com)"
+        }
+      },
+      "required": ["zone"]
+    },
+    returns={
+      "type": "string",
+      "description": "Confirmation message"
+    },
+    ai_callable=True
+  )
+  def set_vllm_zone(self, settings: Settings, zone: str) -> str:
+    """Set the VLLM zone"""
+    settings.vllm_zone = zone
+    msg = f"VLLM zone set to: {zone}"
+    print(msg)
+    return msg
+
+  @command(
+    path=["vllm", "email"],
+    description="Display the current VLLM email",
+    help_text="Display the current VLLM email",
+    parameters={
+      "type": "object",
+      "properties": {}
+    },
+    returns={
+      "type": "string",
+      "description": "Current VLLM email"
+    },
+    ai_callable=True
+  )
+  def print_vllm_email(self, settings: Settings) -> str:
+    """Display the current VLLM email"""
+    if settings.vllm_email:
+      msg = f"Current VLLM email: {settings.vllm_email}"
+      print(msg)
+      return msg
+    else:
+      msg = "No VLLM email set"
+      print(msg)
+      return msg
+
+  @command(
+    path=["vllm", "email", "set"],
+    description="Set the VLLM email",
+    help_text="Set the VLLM email (used for SSL certificates)",
+    parameters={
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "Email to set (used for SSL certificates)"
+        }
+      },
+      "required": ["email"]
+    },
+    returns={
+      "type": "string",
+      "description": "Confirmation message"
+    },
+    ai_callable=True
+  )
+  def set_vllm_email(self, settings: Settings, email: str) -> str:
+    """Set the VLLM email"""
+    settings.vllm_email = email
+    msg = f"VLLM email set to: {email}"
+    print(msg)
+    return msg
+
+  @command(
+    path=["vllm", "subdomain"],
+    description="Display the current VLLM subdomain",
+    help_text="Display the current VLLM subdomain",
+    parameters={
+      "type": "object",
+      "properties": {}
+    },
+    returns={
+      "type": "string",
+      "description": "Current VLLM subdomain"
+    },
+    ai_callable=True
+  )
+  def print_vllm_subdomain(self, settings: Settings) -> str:
+    """Display the current VLLM subdomain"""
+    if settings.vllm_subdomain:
+      msg = f"Current VLLM subdomain: {settings.vllm_subdomain}"
+      print(msg)
+      return msg
+    else:
+      msg = "No VLLM subdomain set"
+      print(msg)
+      return msg
+
+  @command(
+    path=["vllm", "subdomain", "set"],
+    description="Set the VLLM subdomain",
+    help_text="Set the VLLM subdomain (e.g., vllm)",
+    parameters={
+      "type": "object",
+      "properties": {
+        "subdomain": {
+          "type": "string",
+          "description": "Subdomain to set (e.g., vllm)"
+        }
+      },
+      "required": ["subdomain"]
+    },
+    returns={
+      "type": "string",
+      "description": "Confirmation message"
+    },
+    ai_callable=True
+  )
+  def set_vllm_subdomain(self, settings: Settings, subdomain: str) -> str:
+    """Set the VLLM subdomain"""
+    settings.vllm_subdomain = subdomain
+    msg = f"VLLM subdomain set to: {subdomain}"
+    print(msg)
+    return msg
