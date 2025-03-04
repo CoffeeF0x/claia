@@ -2,23 +2,18 @@
 Tools module for Claia
 
 This module provides function calling capabilities for AI models.
-It includes the function calling prompt and tools that can be called by the AI.
+It includes function calling prompt generation and execution.
 """
 
+# External dependencies
 import json
 import importlib
-from typing import Dict, Any, List, Callable
+from typing import Dict, Any, List, Callable, Optional
 
-# Import tool functions
-from modules import get_module_functions
-from tools.functions import (
-  get_current_time,
-  get_current_date,
-  get_user_name,
-  greet_user,
-  FUNCTION_DEFINITIONS
-)
+# Internal dependencies
+from commands import get_function_definitions, execute_command_by_name
 from file import LLMPromptStore
+from settings import Settings
 
 
 
@@ -42,79 +37,12 @@ You are an AI assistant capable of calling functions. Here are the available fun
 
 {function_definitions}
 
-<CURRENT_CURSOR_POSITION>
 When you need to call a function, use the following format:
 {function_format}
 
 You can call multiple functions in a single response if needed. Each function call will be replaced with its result.
 Incorporate the function call(s) into your response where necessary.
 """
-
-
-
-##################################################
-#                 CORE FUNCTIONS                 #
-##################################################
-def get_functions() -> Dict[str, Callable]:
-  """
-  Get all available tool functions.
-
-  Returns:
-    Dict[str, Callable]: Dictionary of function names to function objects
-  """
-  return {
-    "get_current_time": get_current_time,
-    "get_current_date": get_current_date,
-    "get_user_name": get_user_name,
-    "greet_user": greet_user
-  }
-
-
-
-##################################################
-#               FUNCTION DISCOVERY               #
-##################################################
-def get_function_definitions(settings=None) -> List[Dict[str, Any]]:
-  """
-  Get all function definitions from both tools and modules.
-
-  Args:
-    settings: Optional settings object to check if modules are enabled
-
-  Returns:
-    List[Dict[str, Any]]: Combined list of function definitions
-  """
-  all_definitions = list(FUNCTION_DEFINITIONS)
-
-  if settings and settings.has_function_modules():
-    # Load functions from each module
-    for module_name in settings.function_modules:
-      module_functions = get_module_functions(module_name)
-      all_definitions.extend(module_functions)
-
-  return all_definitions
-
-def get_all_functions(settings=None) -> Dict[str, Callable]:
-  """
-  Get all available functions from both tools and modules.
-
-  Args:
-    settings: Optional settings object to check if modules are enabled
-
-  Returns:
-    Dict[str, Callable]: Dictionary of function names to function objects
-  """
-  all_functions = get_functions()
-
-  if settings and settings.has_function_modules():
-    # Load functions from each module
-    for module_name in settings.function_modules:
-      module_functions = get_module_functions(module_name)
-      for func_def in module_functions:
-        if "name" in func_def:
-          all_functions[func_def["name"]] = None  # We'll import dynamically when needed
-
-  return all_functions
 
 
 
@@ -128,36 +56,19 @@ def execute_function(function_name: str, function_call: Dict[str, Any], settings
   Args:
     function_name: Name of the function to execute
     function_call: Dictionary containing function call details
-    settings: Optional settings object to check if modules are enabled
+    settings: Optional settings object
 
   Returns:
     str: Result of the function call or error message
   """
-  all_functions = get_all_functions(settings)
-
-  if function_name in all_functions:
-    try:
-      # If the function is None, it means it's from a module and needs to be imported
-      if all_functions[function_name] is None:
-        # Find which module contains this function
-        for module_name in settings.function_modules:
-          module_functions = get_module_functions(module_name)
-          if any(func_def["name"] == function_name for func_def in module_functions):
-            # Import the function from the module
-            module = importlib.import_module(f"modules.{module_name}.module")
-            func = getattr(module, function_name)
-            all_functions[function_name] = func
-            break
-
-      # Call the function with parameters
-      if "parameters" in function_call:
-        return all_functions[function_name](**function_call["parameters"])
-      else:
-        return all_functions[function_name]()
-    except Exception as e:
-      return f"Error executing function {function_name}: {str(e)}"
-  else:
-    return f"Unknown function: {function_name}"
+  try:
+    # Call the function with parameters
+    if "parameters" in function_call:
+      return execute_command_by_name(function_name, function_call["parameters"], settings)
+    else:
+      return execute_command_by_name(function_name, {}, settings)
+  except Exception as e:
+    return f"Error executing function {function_name}: {str(e)}"
 
 def process_function_calls(response: str, settings=None) -> str:
   """
@@ -167,7 +78,7 @@ def process_function_calls(response: str, settings=None) -> str:
 
   Args:
     response: The model response to process
-    settings: Optional settings object to check if modules are enabled
+    settings: Optional settings object
 
   Returns:
     str: The processed response with function calls replaced by their results
@@ -280,22 +191,34 @@ def get_function_calling_prompt(settings=None) -> str:
   Get the function calling prompt with all available function definitions.
 
   Args:
-    settings: Optional settings object to check if modules are enabled
+    settings: Optional settings object
 
   Returns:
     str: The function calling prompt
   """
-  function_definitions_json = json.dumps(get_function_definitions(settings), indent=2)
-  return FUNCTION_CALLING_PROMPT.format(
-    function_definitions=function_definitions_json,
-    function_format=FUNCTION_FORMAT
-  )
+  try:
+    # Get function definitions from commands
+    function_definitions = get_function_definitions(settings)
+    
+    # Debug output
+    print(f"Found {len(function_definitions)} function definitions")
+    
+    # Convert to JSON with proper indentation
+    function_definitions_json = json.dumps(function_definitions, indent=2)
+    
+    # Format the prompt
+    return FUNCTION_CALLING_PROMPT.format(
+      function_definitions=function_definitions_json,
+      function_format=FUNCTION_FORMAT
+    )
+  except Exception as e:
+    print(f"Error generating function calling prompt: {str(e)}")
+    # Return a basic prompt with no functions in case of error
+    return FUNCTION_CALLING_PROMPT.format(
+      function_definitions="[]",
+      function_format=FUNCTION_FORMAT
+    )
 
-
-
-###################################################
-#                    FUNCTIONS                    #
-###################################################
 def add_function_calling_prompt_to_store(settings) -> None:
   """
   Adds the function calling prompt to the prompt store in the settings object.
@@ -303,42 +226,89 @@ def add_function_calling_prompt_to_store(settings) -> None:
   Args:
     settings: The settings object containing the prompt store
   """
+  if settings is None:
+    return
+    
   function_calling_prompt_name = "functions"
 
   # Check if prompt already exists
   if not settings.prompt_exists(function_calling_prompt_name):
-    # Get the function calling prompt
-    function_calling_prompt = get_function_calling_prompt(settings)
+    try:
+      # Get the function calling prompt
+      function_calling_prompt = get_function_calling_prompt(settings)
 
-    # Add to prompt store
-    settings.prompt_store.append(
-      LLMPromptStore(
-        settings.prompt_store_directory,
-        function_calling_prompt_name,
-        "Function Calling Assistant",
-        function_calling_prompt,
-        "An assistant capable of calling functions."
+      # Add to prompt store
+      settings.prompt_store.append(
+        LLMPromptStore(
+          settings.prompt_store_directory,
+          function_calling_prompt_name,
+          "Function Calling Assistant",
+          function_calling_prompt,
+          "An assistant capable of calling functions."
+        )
       )
-    )
+    except Exception as e:
+      print(f"Error adding function calling prompt to store: {str(e)}")
+
+
+##################################################
+#                 DEBUG FUNCTIONS                #
+##################################################
+def debug_function_definitions(settings=None) -> None:
+  """
+  Print debug information about function definitions.
+  
+  Args:
+    settings: Optional settings object
+  """
+  try:
+    from commands import get_enabled_command_instances
+    
+    print("Debugging function definitions:")
+    
+    # Get all enabled command instances
+    command_instances = get_enabled_command_instances()
+    print(f"Found {len(command_instances)} enabled command instances:")
+    
+    # Check each command instance
+    for i, cmd_instance in enumerate(command_instances):
+      print(f"\n{i+1}. Command instance: {cmd_instance.__class__.__name__}")
+      
+      # Check if it has the get_function_definitions method
+      if hasattr(cmd_instance, 'get_function_definitions'):
+        print(f"  - Has get_function_definitions method: Yes")
+        
+        # Check the function tree
+        if hasattr(cmd_instance, 'function_tree'):
+          print(f"  - Function tree size: {len(cmd_instance.function_tree)}")
+          
+          # Print the top-level keys in the function tree
+          print(f"  - Function tree top-level keys: {list(cmd_instance.function_tree.keys())}")
+          
+          # Try to get function definitions
+          try:
+            func_defs = cmd_instance.get_function_definitions()
+            print(f"  - Function definitions count: {len(func_defs)}")
+          except Exception as e:
+            print(f"  - Error getting function definitions: {str(e)}")
+        else:
+          print(f"  - Function tree: Not found")
+      else:
+        print(f"  - Has get_function_definitions method: No")
+  except Exception as e:
+    print(f"Error in debug_function_definitions: {str(e)}")
 
 
 # Export the functions
 __all__ = [
-  # Function discovery
-  "get_function_definitions",
-  "get_functions",
-  "get_all_functions",
-
   # Function execution
   "execute_function",
   "process_function_calls",
 
   # Prompt generation
   "get_function_calling_prompt",
+  "add_function_calling_prompt_to_store",
 
-  # Tool functions
-  "get_current_time",
-  "get_current_date",
-  "get_user_name",
-  "greet_user"
-]
+  # Debug functions
+  "debug_function_definitions"
+] 

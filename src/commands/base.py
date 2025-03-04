@@ -65,34 +65,46 @@ class Command(ABC):
 
   def _build_function_tree(self):
     """Build command tree from methods decorated with @command"""
-    for attr_name in dir(self):
-      if attr_name.startswith('_'):
-        continue
+    try:
+      self.function_tree = {}
+      self.top_level_commands = {}  # Store top-level commands
 
-      attr = getattr(self, attr_name)
-      if callable(attr) and hasattr(attr, '_command_path'):
-        # Method has command metadata from decorator
-        self._register_command_path(attr._command_path, attr)
+      for attr_name in dir(self):
+        if attr_name.startswith('_'):
+          continue
 
-        # Mark as top level if needed
-        if attr._command_top_level:
-          # For top level commands, use the last part of the path as the command name
-          cmd_name = attr._command_path[-1]
-          self.top_level_commands[cmd_name] = attr
+        try:
+          attr = getattr(self, attr_name)
+          if callable(attr) and hasattr(attr, '_command_path'):
+            # Method has command metadata from decorator
+            self._register_command_path(attr._command_path, attr)
 
-          # Also register any string aliases as top-level commands
-          for alias_path in attr._command_aliases:
-            if isinstance(alias_path, str):
-              self.top_level_commands[alias_path] = attr
-            elif isinstance(alias_path, list) and len(alias_path) == 1:
-              self.top_level_commands[alias_path[0]] = attr
+            # Mark as top level if needed
+            if attr._command_top_level:
+              # For top level commands, use the last part of the path as the command name
+              cmd_name = attr._command_path[-1]
+              self.top_level_commands[cmd_name] = attr
 
-        # Register any aliases in the function tree
-        for alias_path in attr._command_aliases:
-          # Convert string to list if needed
-          if isinstance(alias_path, str):
-            alias_path = [alias_path]
-          self._register_command_path(alias_path, attr)
+              # Also register any string aliases as top-level commands
+              for alias_path in attr._command_aliases:
+                if isinstance(alias_path, str):
+                  self.top_level_commands[alias_path] = attr
+                elif isinstance(alias_path, list) and len(alias_path) == 1:
+                  self.top_level_commands[alias_path[0]] = attr
+
+            # Register any aliases in the function tree
+            for alias_path in attr._command_aliases:
+              # Convert string to list if needed
+              if isinstance(alias_path, str):
+                alias_path = [alias_path]
+              self._register_command_path(alias_path, attr)
+        except Exception as e:
+          print(f"Error processing attribute {attr_name}: {str(e)}")
+    except Exception as e:
+      print(f"Error building function tree: {str(e)}")
+      # Initialize empty trees to prevent further errors
+      self.function_tree = {}
+      self.top_level_commands = {}
 
   def _register_command_path(self, path, func):
     """Register a function at the given path in the function tree"""
@@ -230,7 +242,7 @@ class Command(ABC):
 
     def process_tree(tree, path_prefix):
       for name, node in tree.items():
-        if "function" in node and node.get("ai_callable", False):
+        if isinstance(node, dict) and "function" in node and node.get("ai_callable", False):
           # Create path string for the function name
           func_name = f"{path_prefix}_{name}" if path_prefix else name
 
@@ -241,13 +253,18 @@ class Command(ABC):
             "parameters": node["parameters"],
             "returns": node["returns"]
           }
+
           definitions.append(definition)
-        elif isinstance(node, dict):
+        elif isinstance(node, dict) and "function" not in node:
           # Process nested paths
           new_prefix = f"{path_prefix}_{name}" if path_prefix else name
           process_tree(node, new_prefix)
 
-    process_tree(self.function_tree, "")
+    try:
+      process_tree(self.function_tree, "")
+    except Exception as e:
+      print(f"Error processing function tree: {str(e)}")
+
     return definitions
 
   def get_top_level_commands(self) -> Dict[str, Callable]:

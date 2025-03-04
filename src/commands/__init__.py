@@ -35,7 +35,7 @@ COMMAND_MODULES: List[Tuple[Any, List[str], str, bool]] = [
     "commands related to selecting and managing language models",
     True
   ),
-  
+
   # Tools commands
   (
     ToolsCommand(),
@@ -49,7 +49,7 @@ COMMAND_MODULES: List[Tuple[Any, List[str], str, bool]] = [
     CharacterCommand(),
     ["character", "characters"],
     "commands related to characters or system prompts",
-    False
+    True
   ),
 
   # Conversation commands
@@ -57,7 +57,7 @@ COMMAND_MODULES: List[Tuple[Any, List[str], str, bool]] = [
     ConversationCommand(),
     ["conversation", "conversations"],
     "commands related to conversations and saved messages",
-    False
+    True
   ),
 
   # MassedCompute commands
@@ -65,7 +65,7 @@ COMMAND_MODULES: List[Tuple[Any, List[str], str, bool]] = [
     MassedComputeCommand(),
     ["massedcompute", "mc"],
     "commands related to deploying and managing GPU instances",
-    False
+    True
   )
 ]
 
@@ -131,11 +131,20 @@ def get_function_definitions(settings: Settings = None) -> List[Dict[str, Any]]:
   """
   definitions = []
 
-  # Process each enabled command instance once
-  for cmd_instance in get_enabled_command_instances():
-    if hasattr(cmd_instance, 'get_function_definitions'):
-      cmd_definitions = cmd_instance.get_function_definitions()
-      definitions.extend(cmd_definitions)
+  try:
+    # Process each enabled command instance once
+    for cmd_instance in get_enabled_command_instances():
+      if hasattr(cmd_instance, 'get_function_definitions'):
+        # Make sure we're calling the method, not trying to iterate over it
+        cmd_definitions = cmd_instance.get_function_definitions()
+        if isinstance(cmd_definitions, list):
+          definitions.extend(cmd_definitions)
+        else:
+          print(f"Warning: get_function_definitions for {cmd_instance.__class__.__name__} did not return a list")
+  except Exception as e:
+    print(f"Error getting function definitions: {str(e)}")
+    # Return an empty list in case of error
+    return []
 
   return definitions
 
@@ -152,30 +161,43 @@ def execute_command_by_name(function_name: str, parameters: Dict[str, Any], sett
   Returns:
     Result of the command as a string
   """
-  # Split the function name into parts (path_component1_component2_...)
-  parts = function_name.split('_')
+  if settings is None:
+    return "Error: Settings object is required"
 
-  # Try each enabled command instance
-  for cmd_instance in get_enabled_command_instances():
-    if hasattr(cmd_instance, 'get_function_definitions'):
-      for func_def in cmd_instance.get_function_definitions():
-        if func_def["name"] == function_name:
-          # Found the function, now navigate the command tree to find the handler
-          current = cmd_instance.function_tree
-          for part in parts[:-1]:  # All but the last part
-            if part in current:
-              current = current[part]
+  try:
+    # Split the function name into parts (path_component1_component2_...)
+    parts = function_name.split('_')
+
+    # Try each enabled command instance
+    for cmd_instance in get_enabled_command_instances():
+      if hasattr(cmd_instance, 'get_function_definitions'):
+        for func_def in cmd_instance.get_function_definitions():
+          if func_def["name"] == function_name:
+            # Found the function, now navigate the command tree to find the handler
+            current = cmd_instance.function_tree
+            for part in parts[:-1]:  # All but the last part
+              if part in current:
+                current = current[part]
+              else:
+                return f"Invalid command path: {function_name}"
+
+            # The last part should be the function
+            last_part = parts[-1]
+            if last_part in current and "function" in current[last_part]:
+              func = current[last_part]["function"]
+              try:
+                # Call the function with settings and parameters
+                result = func(settings, **parameters)
+                # Convert Result objects to string
+                if hasattr(result, 'message') and callable(getattr(result, 'message')):
+                  return result.message()
+                return str(result)
+              except Exception as e:
+                return f"Error executing command: {str(e)}"
             else:
-              return f"Invalid command path: {function_name}"
-
-          # The last part should be the function
-          last_part = parts[-1]
-          if last_part in current and "function" in current[last_part]:
-            func = current[last_part]["function"]
-            # Call the function with settings and parameters
-            return func(settings, **parameters)
-          else:
-            return f"Invalid command function: {function_name}"
+              return f"Invalid command function: {function_name}"
+  except Exception as e:
+    return f"Error processing command: {str(e)}"
 
   return f"Unknown function: {function_name}"
 

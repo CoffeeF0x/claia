@@ -20,6 +20,11 @@ from settings import Settings
 class ToolsCommand(Command):
   """Command class for utility tool functions"""
 
+  def __init__(self):
+    """Initialize the ToolsCommand class"""
+    # Make sure to call the parent class constructor
+    super().__init__()
+
   @command(
     path=["time"],
     description="Returns the current time",
@@ -41,9 +46,7 @@ class ToolsCommand(Command):
     Returns:
       str: The current time in HH:MM:SS format
     """
-    result = datetime.datetime.now().strftime("%H:%M:%S")
-    print(result)
-    return result
+    return datetime.datetime.now().strftime("%H:%M:%S")
 
   @command(
     path=["date"],
@@ -66,9 +69,7 @@ class ToolsCommand(Command):
     Returns:
       str: The current date in YYYY-MM-DD format
     """
-    result = datetime.date.today().strftime("%Y-%m-%d")
-    print(result)
-    return result
+    return datetime.date.today().strftime("%Y-%m-%d")
 
   @command(
     path=["username"],
@@ -93,12 +94,9 @@ class ToolsCommand(Command):
     """
     # Use the actual username from settings if available
     if hasattr(settings, "username") and settings.username:
-      result = settings.username
+      return settings.username
     else:
-      result = "John Doe"
-    
-    print(result)
-    return result
+      return "John Doe"
 
   @command(
     path=["greet"],
@@ -130,6 +128,4 @@ class ToolsCommand(Command):
     Returns:
       str: A greeting message
     """
-    result = f"Hello, {name}!"
-    print(result)
-    return result 
+    return f"Hello, {name}!"

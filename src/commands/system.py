@@ -45,7 +45,7 @@ class SystemCommand(Command):
       "type": "string",
       "description": "Shutdown message"
     },
-    ai_callable=False,  # AI shouldn't be able to quit the application
+    ai_callable=True,
     aliases=["exit", "q"],
     top_level=True
   )
@@ -69,9 +69,7 @@ class SystemCommand(Command):
   )
   def get_log_level(self, settings: Settings) -> str:
     """Display the current log level"""
-    msg = f"Current log level: {settings.log_level}"
-    print(msg)
-    return msg
+    return f"Current log level: {settings.log_level}"
 
   @command(
     path=["set", "log_level"],
@@ -100,10 +98,6 @@ class SystemCommand(Command):
     if level in LOG_LEVELS:
       settings.log_level = level
       logging.getLogger().setLevel(LOG_LEVELS[level])
-      msg = f"Log level set to: {level}"
-      print(msg)
-      return msg
+      return f"Log level set to: {level}"
     else:
-      msg = f"Invalid log level. Valid options are: {', '.join(LOG_LEVELS.keys())}"
-      print(msg)
-      return msg
+      return f"Invalid log level. Valid options are: {', '.join(LOG_LEVELS.keys())}"

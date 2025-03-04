@@ -382,7 +382,7 @@ class MassedComputeCommand(Command):
           output.append(f"  - {key}")
 
       result = "\n".join(output)
-      print(result)
+
       return result
 
     except Exception as e:
@@ -489,7 +489,7 @@ class MassedComputeCommand(Command):
             output.append(f"  - {key}")
 
         result = "\n".join(output)
-        print(result)
+
         return result
 
       except requests.exceptions.HTTPError as e:
@@ -638,7 +638,7 @@ class MassedComputeCommand(Command):
         output.append("No instances were terminated")
 
       result = "\n".join(output)
-      print(result)
+
       return result
 
     except Exception as e:
@@ -736,7 +736,7 @@ class MassedComputeCommand(Command):
       ])
 
       result = "\n".join(output)
-      print(result)
+
       return result
 
     except Exception as e:

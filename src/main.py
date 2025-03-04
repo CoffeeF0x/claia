@@ -6,6 +6,7 @@
 # - add ability to rename conversations, and perhaps have ai name conversations automatically
 # - create an option to enable a server that serves and updates md files, and sync conversations to md files
 # - Needs a way to filter models (since there are lots) (model list partname?)
+# - function calling doesn't work on most functions (seems like a path/tree calling issue)
 
 import json
 
