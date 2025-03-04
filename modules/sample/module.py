@@ -15,16 +15,16 @@ from settings import Settings
 
 
 
-########################################################################
-#                               CONSTANTS                              #
-########################################################################
+##################################################
+#                   CONSTANTS                    #
+##################################################
 logger = logging.getLogger(__name__)
 
 
 
-########################################################################
-#                               COMMANDS                               #
-########################################################################
+##################################################
+#                   COMMANDS                     #
+##################################################
 class ModuleCommands(Command):
   """A sample command that demonstrates how to create a module command."""
 
@@ -51,30 +51,30 @@ class ModuleCommands(Command):
 
 
 
-########################################################################
-#                              FUNCTIONS                               #
-########################################################################
-def sample_function(params: Dict[str, Any]) -> Dict[str, Any]:
+##################################################
+#                   FUNCTIONS                    #
+##################################################
+def sample_function(text: str) -> Dict[str, Any]:
   """
   A sample function that demonstrates how to create a module function.
 
   Args:
-    params: Function parameters
+    text: Text to process
 
   Returns:
     Dict[str, Any]: Function result
   """
   return {
     "success": True,
-    "message": "Sample function executed successfully!",
-    "data": params
+    "message": f"Sample function executed successfully with text: {text}",
+    "data": {"text": text}
   }
 
 
 
-########################################################################
-#                            MODULE EXPORTS                            #
-########################################################################
+##################################################
+#                MODULE EXPORTS                  #
+##################################################
 # List of function definitions to be loaded by the module system
 FUNCTION_DEFINITIONS = [
   {
@@ -91,4 +91,4 @@ FUNCTION_DEFINITIONS = [
       "required": ["text"]
     }
   }
-]
+] 

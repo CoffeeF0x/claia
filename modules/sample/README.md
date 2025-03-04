@@ -4,11 +4,11 @@ This is a sample module for the CLAI application that demonstrates how to create
 
 ## Commands
 
-The module provides a command named after the folder name (`sample_module`).
+The module provides a command named after the folder name (`sample`).
 
 Example usage:
 ```
-sample_module arg1 arg2
+:sample arg1 arg2
 ```
 
 ## Functions
@@ -52,9 +52,6 @@ The `FUNCTION_DEFINITIONS` list should contain function definition dictionaries 
       }
     },
     "required": ["required_param_names"]
-  },
-  "function": actual_function_reference
+  }
 }
-```
-
-The `function` key should reference the actual function to be called, which should accept a dictionary of parameters and return a dictionary result. 
+``` 
