@@ -9,6 +9,7 @@ from models.definitions import definitions, sources
 #                 COMMAND CLASS                  #
 ##################################################
 class ModelCommand(Command):
+
   @command(
     path=["list"],
     description="List all available models or get details about a specific model",

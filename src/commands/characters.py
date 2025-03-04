@@ -1,4 +1,4 @@
-from commands.base import Command
+from commands.base import Command, command
 from errors import Result
 from settings import Settings
 from typing import Dict
@@ -9,78 +9,101 @@ from typing import Dict
 #                 COMMAND CLASS                  #
 ##################################################
 class CharacterCommand(Command):
-  def execute(self, commands: list[str], settings: Settings) -> Result:
-    result: Result = Result()
 
-    if len(commands) > 1:
-      if commands[1] == "list" and len(commands) > 2:
-        list_characters(settings, commands[2])
-      elif commands[1] == "list":
-        list_characters(settings)
-      elif commands[1] in ["remove", "unset"]:
-        remove_character(settings)
-      elif commands[1] in ["set", "select"] and len(commands) > 2:
-        set_character(commands[2], settings)
-      elif commands[1] in ["set", "select"]:
-        print("No character selected")
-      elif commands[1] in ["print", "current"]:
-        current_character(settings)
+  @command(
+    path=["list"],
+    description="List all available characters or details about a specific character",
+    help_text="List all available characters or details about a specific character",
+    parameters={
+      "type": "object",
+      "properties": {
+        "character_name": {
+          "type": "string",
+          "description": "Optional name of a specific character to show details for"
+        }
+      }
+    }
+  )
+  def list_characters(self, settings: Settings, character_name: str = "") -> str:
+    """List all available characters or details about a specific character"""
+    if character_name:
+      prompt = next((p for p in settings.prompt_store if p.name == character_name), None)
+      if prompt:
+        output = [
+          f"Name: {prompt.name}",
+          f"Title: {prompt.title}",
+          f"Prompt: {prompt.prompt}"
+        ]
+        if prompt.description:
+          output.append(f"Description: {prompt.description}")
+        print("\n".join(output))
+        return "\n".join(output)
       else:
-        self.unrecognizedCommand()
+        message = f"Character '{character_name}' not found"
+        print(message)
+        return message
     else:
-      self.help()
+      output = []
+      for prompt in settings.prompt_store:
+        output.append(f"{prompt.name}: {prompt.title}")
+      print("\n".join(output))
+      return "\n".join(output)
 
-    return result
+  @command(
+    path=["remove"],
+    description="Remove the current character selection",
+    help_text="Remove the current character selection",
+    aliases=["unset"]
+  )
+  def remove_character(self, settings: Settings) -> str:
+    """Remove the current character selection"""
+    settings.active_prompt = None
+    message = "Active character removed"
+    print(message)
+    return message
 
-  def help(self) -> None:
-    print("Here are the available character commands:")
-    print("  list <optional: character>")
-    print("    - list all available characters or details about a specific character")
-    print("  remove, unset <character>")
-    print("    - remove the current character selection")
-    print("  set, select <character>")
-    print("    - select a character to use in the conversation")
-    print("  print, current")
-    print("    - display the current character selection")
-
-
-
-##################################################
-#                   FUNCTIONS                    #
-##################################################
-# Print currently selected character
-def current_character(settings: Settings):
-  if settings.active_prompt:
-    print(f"Current character: {settings.active_prompt.title}")
-  else:
-    print("No character selected")
-
-# List the available characters
-def list_characters(settings: Settings, character_name: str = "") -> None:
-  if character_name:
-    prompt = next((p for p in settings.prompt_store if p.name == character_name), None)
+  @command(
+    path=["set"],
+    description="Select a character to use in the conversation",
+    help_text="Select a character to use in the conversation",
+    aliases=["select"],
+    parameters={
+      "type": "object",
+      "properties": {
+        "character_name": {
+          "type": "string",
+          "description": "Name of the character to select"
+        }
+      },
+      "required": ["character_name"]
+    }
+  )
+  def set_character(self, settings: Settings, character_name: str) -> str:
+    """Select a character to use in the conversation"""
+    prompt = settings.get_prompt(character_name)
     if prompt:
-      print(f"Name: {prompt.name}")
-      print(f"Title: {prompt.title}")
-      print(f"Prompt: {prompt.prompt}")
-      if prompt.description:
-        print(f"Description: {prompt.description}")
+      settings.active_prompt = prompt
+      message = f"Selected character: {settings.active_prompt.title}"
+      print(message)
+      return message
     else:
-      print(f"Character '{character_name}' not found")
-  else:
-    for prompt in settings.prompt_store:
-      print(f"{prompt.name}: {prompt.title}")
+      message = f"Character '{character_name}' not found"
+      print(message)
+      return message
 
-# Remove character prompt
-def remove_character(settings: Settings) -> None:
-  settings.active_prompt = None
-  print("Active character removed")
-
-# Set the selected character
-def set_character(character_name: str, settings: Settings):
-  prompt = settings.get_prompt(character_name)
-  if prompt:
-    settings.active_prompt = prompt
-    print(f"Selected character: {settings.active_prompt.title}")
-  else:
-    print(f"Character '{character_name}' not found")
+  @command(
+    path=["print"],
+    description="Display the current character selection",
+    help_text="Display the current character selection",
+    aliases=["current"]
+  )
+  def current_character(self, settings: Settings) -> str:
+    """Display the current character selection"""
+    if settings.active_prompt:
+      message = f"Current character: {settings.active_prompt.title}"
+      print(message)
+      return message
+    else:
+      message = "No character selected"
+      print(message)
+      return message
