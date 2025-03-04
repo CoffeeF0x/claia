@@ -33,9 +33,10 @@ def load(settings) -> None:
     Args:
         settings: Application settings
     """
-    # Get modules directory
-    modules_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    modules_dir = os.path.join(modules_dir, settings.modules_directory)
+    # Get modules directory from root of project, not from src
+    modules_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    modules_dir = os.path.join(modules_dir, "..", settings.modules_directory)
+    modules_dir = os.path.abspath(modules_dir)  # Resolve the relative path
 
     # Ensure the modules directory exists
     if not os.path.exists(modules_dir):
@@ -108,10 +109,9 @@ def get_module_path(module_name: str) -> str:
     Returns:
         str: Absolute path to the module.py file
     """
-    # Get the modules directory by going up three directories from __file__
-    # __file__ is in src/modules/__init__.py, so we need to go up to the root directory
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(base_dir, "modules", module_name, "module.py")
+    # Get the modules directory by going up to the project root
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_dir, "..", "modules", module_name, "module.py")
 
 def get_module_commands(module_name: str) -> Optional[Command]:
     """
