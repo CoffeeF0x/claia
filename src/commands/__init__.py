@@ -1,6 +1,6 @@
 # External dependencies
 import importlib
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple, Set
 
 # Internal dependencies
 # from commands.characters import CharacterCommand
@@ -10,6 +10,55 @@ from commands.system import SystemCommand
 # from commands.massedcompute import MassedComputeCommand
 from errors import Result
 from settings import Settings
+
+
+
+##################################################
+#                   CONSTANTS                    #
+##################################################
+# Define command modules with their associated information
+# Format: (command_instance, primary_names, description, is_enabled)
+COMMAND_MODULES: List[Tuple[Any, List[str], str, bool]] = [
+  # System commands
+  (
+    SystemCommand(),
+    ["system", "sys", "s"],
+    "technical commands such as exiting the program and clearing the screen",
+    True
+  ),
+
+  # Model commands
+  (
+    ModelCommand(),
+    ["model", "models"],
+    "commands related to selecting and managing language models",
+    True
+  ),
+
+  # Character commands
+  # (
+  #   CharacterCommand(),
+  #   ["character", "characters"],
+  #   "commands related to characters or system prompts",
+  #   False
+  # ),
+
+  # Conversation commands
+  # (
+  #   ConversationCommand(),
+  #   ["conversation", "conversations"],
+  #   "commands related to conversations and saved messages",
+  #   False
+  # ),
+
+  # MassedCompute commands
+  # (
+  #   MassedComputeCommand(),
+  #   ["massedcompute", "mc"],
+  #   "commands related to deploying and managing GPU instances",
+  #   False
+  # )
+]
 
 
 
@@ -38,36 +87,27 @@ def cleanup_commands(commands: list[str], settings: Settings) -> Result:
 
 # Initialize the command registry with core commands and module commands
 def initialize_command_registry() -> Dict[str, Any]:
-  registry = {
-    # System commands
-    "c":             SystemCommand(),
-    "clear":         SystemCommand(),
-    "cls":           SystemCommand(),
-    "q":             SystemCommand(),
-    "exit":          SystemCommand(),
-    "quit":          SystemCommand(),
-    "s":             SystemCommand(),
-    "sys":           SystemCommand(),
-    "system":        SystemCommand(),
+  registry = {}
 
-    # Character commands
-    # "character":     CharacterCommand(),
-    # "characters":    CharacterCommand(),
+  # Register all enabled command modules
+  for cmd_instance, cmd_names, _, is_enabled in COMMAND_MODULES:
+    if is_enabled:
+      # Register primary command names
+      for name in cmd_names:
+        registry[name] = cmd_instance
 
-    # Conversation commands
-    # "conversation":  ConversationCommand(),
-    # "conversations": ConversationCommand(),
-
-    # Model commands
-    "model":         ModelCommand(),
-    "models":        ModelCommand(),
-
-    # MassedCompute commands
-    # "mc":            MassedComputeCommand(),
-    # "massedcompute": MassedComputeCommand(),
-  }
+      # Register top-level commands if available
+      if hasattr(cmd_instance, 'get_top_level_commands'):
+        top_level_commands = cmd_instance.get_top_level_commands()
+        for cmd_name, cmd_func in top_level_commands.items():
+          registry[cmd_name] = cmd_instance
 
   return registry
+
+# Get all enabled command instances (avoiding duplicates)
+def get_enabled_command_instances() -> List[Any]:
+  """Get a list of all enabled command instances (without duplicates)"""
+  return [cmd for cmd, _, _, enabled in COMMAND_MODULES if enabled]
 
 # Get all function definitions for AI function calling
 def get_function_definitions(settings: Settings = None) -> List[Dict[str, Any]]:
@@ -81,10 +121,13 @@ def get_function_definitions(settings: Settings = None) -> List[Dict[str, Any]]:
     List of function definitions in JSON schema format
   """
   definitions = []
-  for cmd_name, cmd in command_registry.items():
-    if hasattr(cmd, 'get_function_definitions'):
-      cmd_definitions = cmd.get_function_definitions()
+
+  # Process each enabled command instance once
+  for cmd_instance in get_enabled_command_instances():
+    if hasattr(cmd_instance, 'get_function_definitions'):
+      cmd_definitions = cmd_instance.get_function_definitions()
       definitions.extend(cmd_definitions)
+
   return definitions
 
 # Execute a command by name using function calling format
@@ -103,13 +146,13 @@ def execute_command_by_name(function_name: str, parameters: Dict[str, Any], sett
   # Split the function name into parts (path_component1_component2_...)
   parts = function_name.split('_')
 
-  # Find the command class that handles this function
-  for cmd_name, cmd in command_registry.items():
-    if hasattr(cmd, 'get_function_definitions'):
-      for func_def in cmd.get_function_definitions():
+  # Try each enabled command instance
+  for cmd_instance in get_enabled_command_instances():
+    if hasattr(cmd_instance, 'get_function_definitions'):
+      for func_def in cmd_instance.get_function_definitions():
         if func_def["name"] == function_name:
           # Found the function, now navigate the command tree to find the handler
-          current = cmd.function_tree
+          current = cmd_instance.function_tree
           for part in parts[:-1]:  # All but the last part
             if part in current:
               current = current[part]
@@ -120,8 +163,8 @@ def execute_command_by_name(function_name: str, parameters: Dict[str, Any], sett
           last_part = parts[-1]
           if last_part in current and "function" in current[last_part]:
             func = current[last_part]["function"]
-            # Call the function with the command instance, settings, and parameters
-            return func(cmd, settings, **parameters)
+            # Call the function with settings and parameters
+            return func(settings, **parameters)
           else:
             return f"Invalid command function: {function_name}"
 
@@ -163,18 +206,34 @@ def run(input: str, settings: Settings) -> Result:
 # Display help for all commands
 def display_help() -> None:
   print("Here is a list of available commands:")
-  print("  system, sys, s")
-  print("    - technical commands such as exiting the program and clearing the screen")
-  print("  character, characters")
-  print("    - commands related to characters or system promts")
-  print("  conversation, conversations")
-  print("    - commands related to conversations and saved messages")
-  print("  model, models")
-  print("    - commands related to selecting and managing language models")
-  print("  massedcompute, mc")
-  print("    - commands related to deploying and managing GPU instances")
+
+  # Display primary command groups
+  for cmd_instance, cmd_names, description, is_enabled in COMMAND_MODULES:
+    if is_enabled:
+      # Format the command names
+      cmd_names_str = ", ".join(cmd_names)
+      print(f"  {cmd_names_str}")
+      print(f"    - {description}")
+
   print("  help [command|module]")
   print("    - display help information for all commands or a specific command/module")
+
+  # Display top-level commands
+  print("\nTop-level commands:")
+  top_level_commands = set()
+
+  for cmd_instance in get_enabled_command_instances():
+    if hasattr(cmd_instance, 'get_top_level_commands'):
+      for top_cmd, cmd_func in cmd_instance.get_top_level_commands().items():
+        top_level_commands.add(top_cmd)
+        # Also add aliases
+        for alias in cmd_func._command_aliases:
+          if isinstance(alias, str):
+            top_level_commands.add(alias)
+
+  if top_level_commands:
+    print("  " + ", ".join(sorted(top_level_commands)))
+    print("    - these commands can be used directly without a module prefix")
 
 # Display help for a specific command or module
 def display_command_help(command_name: str) -> None:

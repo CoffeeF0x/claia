@@ -1,6 +1,6 @@
 from abc import ABC
 from functools import wraps
-from typing import List, Dict, Any, Callable, Optional
+from typing import List, Dict, Any, Callable, Optional, Union
 
 # Internal dependencies
 from errors import Result
@@ -12,31 +12,38 @@ from settings import Settings
 #                COMMAND DECORATOR               #
 ##################################################
 def command(
-    path: List[str],
+    path: List[str] = None,
     description: str = None,
     help_text: str = None,
     parameters: Dict[str, Any] = None,
     returns: Dict[str, Any] = None,
-    ai_callable: bool = True
+    ai_callable: bool = True,
+    aliases: List[Union[str, List[str]]] = None,
+    top_level: bool = False
 ):
   """
   Decorator for command methods. Registers a method as a command with metadata.
 
   Args:
-    path: The command path (e.g., ["set"] or ["vllm", "zone"])
+    path: The command path (e.g., ["set"] or ["vllm", "zone"]). If None, uses the function name.
     description: Brief description of what the command does (used for AI function calling)
     help_text: Detailed help text shown to users (used for CLI help)
     parameters: JSON Schema for command parameters
     returns: JSON Schema for return value
     ai_callable: Whether this command can be called by AI via function calling
+    aliases: List of alternative paths for the same command (e.g., [["c"], ["cls"]] for clear)
+    top_level: Whether this command should be registered at the top level (without class prefix)
   """
   def decorator(func):
-    func._command_path = path
+    # If path is None, use the function name as the path
+    func._command_path = path or [func.__name__.lower()]
     func._command_description = description or func.__doc__ or ""
     func._command_help_text = help_text or func._command_description
     func._command_parameters = parameters or {}
     func._command_returns = returns or {"type": "string"}
     func._command_ai_callable = ai_callable
+    func._command_aliases = aliases or []
+    func._command_top_level = top_level
 
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -53,6 +60,7 @@ class Command(ABC):
   def __init__(self):
     """Initialize command and build the function tree from decorated methods"""
     self.function_tree = {}
+    self.top_level_commands = {}  # Store top-level commands
     self._build_function_tree()
 
   def _build_function_tree(self):
@@ -64,35 +72,55 @@ class Command(ABC):
       attr = getattr(self, attr_name)
       if callable(attr) and hasattr(attr, '_command_path'):
         # Method has command metadata from decorator
-        path = attr._command_path
-        if not path:
-          continue
+        self._register_command_path(attr._command_path, attr)
 
-        current = self.function_tree
+        # Mark as top level if needed
+        if attr._command_top_level:
+          # For top level commands, use the last part of the path as the command name
+          cmd_name = attr._command_path[-1]
+          self.top_level_commands[cmd_name] = attr
 
-        # Build the nested structure
-        for part in path[:-1]:
-          if part not in current:
-            current[part] = {}
-          current = current[part]
+          # Also register any string aliases as top-level commands
+          for alias_path in attr._command_aliases:
+            if isinstance(alias_path, str):
+              self.top_level_commands[alias_path] = attr
+            elif isinstance(alias_path, list) and len(alias_path) == 1:
+              self.top_level_commands[alias_path[0]] = attr
 
-        # Add the leaf function
-        leaf_name = path[-1]
-        current[leaf_name] = {
-          "function": attr,
-          "description": attr._command_description,
-          "help_text": attr._command_help_text,
-          "parameters": attr._command_parameters,
-          "returns": attr._command_returns,
-          "ai_callable": attr._command_ai_callable
-        }
+        # Register any aliases in the function tree
+        for alias_path in attr._command_aliases:
+          # Convert string to list if needed
+          if isinstance(alias_path, str):
+            alias_path = [alias_path]
+          self._register_command_path(alias_path, attr)
+
+  def _register_command_path(self, path, func):
+    """Register a function at the given path in the function tree"""
+    if not path:
+      return
+
+    current = self.function_tree
+
+    # Build the nested structure
+    for part in path[:-1]:
+      if part not in current:
+        current[part] = {}
+      current = current[part]
+
+    # Add the leaf function
+    leaf_name = path[-1]
+    current[leaf_name] = {
+      "function": func,
+      "description": func._command_description,
+      "help_text": func._command_help_text,
+      "parameters": func._command_parameters,
+      "returns": func._command_returns,
+      "ai_callable": func._command_ai_callable
+    }
 
   def execute(self, commands: list[str], settings: Settings) -> Result:
     """Execute a command by navigating the function tree and calling the appropriate function"""
     result = Result()
-    if len(commands) <= 1:
-      self.help()
-      return result
 
     # Navigate the function tree
     current = self.function_tree
@@ -102,22 +130,39 @@ class Command(ABC):
     args = []
     kwargs = {}
 
-    for cmd in commands[1:]:
-      if cmd.startswith("--"):
-        # Handle flag
-        flag_name = cmd[2:]
-        kwargs[flag_name] = True
-      elif "=" in cmd:
-        # Handle key=value
-        key, value = cmd.split("=", 1)
-        kwargs[key] = value
-      elif cmd in current:
-        # Navigate tree
-        current = current[cmd]
-        path.append(cmd)
-      else:
-        # Positional argument
-        args.append(cmd)
+    # Handle top-level commands
+    if len(commands) == 1 and commands[0] in self.top_level_commands:
+      func = self.top_level_commands[commands[0]]
+      try:
+        func_result = func(settings, *args, **kwargs)
+        if isinstance(func_result, Result):
+          result = func_result
+        return result
+      except Exception as e:
+        result.fail(f"Error executing top-level command: {str(e)}")
+        return result
+
+    # Handle module commands
+    elif len(commands) > 1:
+      for cmd in commands[1:]:
+        if cmd.startswith("--"):
+          # Handle flag
+          flag_name = cmd[2:]
+          kwargs[flag_name] = True
+        elif "=" in cmd:
+          # Handle key=value
+          key, value = cmd.split("=", 1)
+          kwargs[key] = value
+        elif cmd in current:
+          # Navigate tree
+          current = current[cmd]
+          path.append(cmd)
+        else:
+          # Positional argument
+          args.append(cmd)
+    else:
+      self.help()
+      return result
 
     # If we found a function, execute it
     if isinstance(current, dict) and "function" in current:
@@ -142,19 +187,42 @@ class Command(ABC):
     print(f"Here are the available {self.__class__.__name__.replace('Command', '').lower()} commands:")
 
     # Generate help dynamically from function tree
-    def print_commands(tree, prefix=""):
-      for name, node in sorted(tree.items()):
+    # First, collect commands and their aliases
+    command_groups = {}
+
+    def collect_commands(tree, prefix=""):
+      for name, node in tree.items():
         if "function" in node:
           # This is a leaf node (actual command)
           cmd_path = f"{prefix}{name}"
           help_text = node.get("help_text", "No help available")
-          print(f"  {cmd_path}")
-          print(f"    - {help_text}")
+
+          # Get the function object to check for aliases
+          func = node.get("function")
+
+          # Create a unique key for grouping based on the function object id
+          func_id = id(func) if func else cmd_path
+
+          if func_id not in command_groups:
+            command_groups[func_id] = {
+              "paths": [cmd_path],
+              "help_text": help_text
+            }
+          else:
+            command_groups[func_id]["paths"].append(cmd_path)
         else:
           # This is a branch node
-          print_commands(node, f"{prefix}{name} ")
+          collect_commands(node, f"{prefix}{name} ")
 
-    print_commands(self.function_tree)
+    collect_commands(self.function_tree)
+
+    # Display commands with their aliases grouped together
+    for group in command_groups.values():
+      paths = sorted(group["paths"])
+      cmd_display = ", ".join(paths)
+      help_text = group["help_text"]
+      print(f"  {cmd_display}")
+      print(f"    - {help_text}")
 
   def get_function_definitions(self) -> List[Dict[str, Any]]:
     """Get AI-callable function definitions for function calling"""
@@ -181,3 +249,7 @@ class Command(ABC):
 
     process_tree(self.function_tree, "")
     return definitions
+
+  def get_top_level_commands(self) -> Dict[str, Callable]:
+    """Get commands that should be registered at the top level"""
+    return self.top_level_commands
