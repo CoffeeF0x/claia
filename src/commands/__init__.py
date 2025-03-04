@@ -3,11 +3,12 @@ import importlib
 from typing import Dict, Any, List, Tuple, Set
 
 # Internal dependencies
-# from commands.characters import CharacterCommand
-# from commands.conversations import ConversationCommand
+from commands.characters import CharacterCommand
+from commands.conversations import ConversationCommand
 from commands.models import ModelCommand
 from commands.system import SystemCommand
-# from commands.massedcompute import MassedComputeCommand
+from commands.tools import ToolsCommand
+from commands.massedcompute import MassedComputeCommand
 from errors import Result
 from settings import Settings
 
@@ -34,30 +35,38 @@ COMMAND_MODULES: List[Tuple[Any, List[str], str, bool]] = [
     "commands related to selecting and managing language models",
     True
   ),
+  
+  # Tools commands
+  (
+    ToolsCommand(),
+    ["tool", "tools", "utility", "util"],
+    "utility functions such as date, time, and user information",
+    True
+  ),
 
   # Character commands
-  # (
-  #   CharacterCommand(),
-  #   ["character", "characters"],
-  #   "commands related to characters or system prompts",
-  #   False
-  # ),
+  (
+    CharacterCommand(),
+    ["character", "characters"],
+    "commands related to characters or system prompts",
+    False
+  ),
 
   # Conversation commands
-  # (
-  #   ConversationCommand(),
-  #   ["conversation", "conversations"],
-  #   "commands related to conversations and saved messages",
-  #   False
-  # ),
+  (
+    ConversationCommand(),
+    ["conversation", "conversations"],
+    "commands related to conversations and saved messages",
+    False
+  ),
 
   # MassedCompute commands
-  # (
-  #   MassedComputeCommand(),
-  #   ["massedcompute", "mc"],
-  #   "commands related to deploying and managing GPU instances",
-  #   False
-  # )
+  (
+    MassedComputeCommand(),
+    ["massedcompute", "mc"],
+    "commands related to deploying and managing GPU instances",
+    False
+  )
 ]
 
 
