@@ -43,7 +43,7 @@ COMMAND_MODULES: List[Tuple[Any, List[str], str, bool]] = [
   # Tools commands
   (
     ToolsCommand(),
-    ["tool", "tools", "utility", "util"],
+    ["tool", "tools"],
     "utility functions such as date, time, and user information",
     True
   ),

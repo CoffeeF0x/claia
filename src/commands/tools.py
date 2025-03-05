@@ -20,11 +20,6 @@ from settings import Settings
 class ToolsCommand(Command):
   """Command class for utility tool functions"""
 
-  def __init__(self):
-    """Initialize the ToolsCommand class"""
-    # Make sure to call the parent class constructor
-    super().__init__()
-
   @command(
     path=["time"],
     description="Returns the current time",

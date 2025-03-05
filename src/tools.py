@@ -199,13 +199,13 @@ def get_function_calling_prompt(settings=None) -> str:
   try:
     # Get function definitions from commands
     function_definitions = get_function_definitions(settings)
-    
+
     # Debug output
     print(f"Found {len(function_definitions)} function definitions")
-    
+
     # Convert to JSON with proper indentation
     function_definitions_json = json.dumps(function_definitions, indent=2)
-    
+
     # Format the prompt
     return FUNCTION_CALLING_PROMPT.format(
       function_definitions=function_definitions_json,
@@ -228,7 +228,7 @@ def add_function_calling_prompt_to_store(settings) -> None:
   """
   if settings is None:
     return
-    
+
   function_calling_prompt_name = "functions"
 
   # Check if prompt already exists
@@ -252,54 +252,8 @@ def add_function_calling_prompt_to_store(settings) -> None:
 
 
 ##################################################
-#                 DEBUG FUNCTIONS                #
+#                    EXPORTS                     #
 ##################################################
-def debug_function_definitions(settings=None) -> None:
-  """
-  Print debug information about function definitions.
-  
-  Args:
-    settings: Optional settings object
-  """
-  try:
-    from commands import get_enabled_command_instances
-    
-    print("Debugging function definitions:")
-    
-    # Get all enabled command instances
-    command_instances = get_enabled_command_instances()
-    print(f"Found {len(command_instances)} enabled command instances:")
-    
-    # Check each command instance
-    for i, cmd_instance in enumerate(command_instances):
-      print(f"\n{i+1}. Command instance: {cmd_instance.__class__.__name__}")
-      
-      # Check if it has the get_function_definitions method
-      if hasattr(cmd_instance, 'get_function_definitions'):
-        print(f"  - Has get_function_definitions method: Yes")
-        
-        # Check the function tree
-        if hasattr(cmd_instance, 'function_tree'):
-          print(f"  - Function tree size: {len(cmd_instance.function_tree)}")
-          
-          # Print the top-level keys in the function tree
-          print(f"  - Function tree top-level keys: {list(cmd_instance.function_tree.keys())}")
-          
-          # Try to get function definitions
-          try:
-            func_defs = cmd_instance.get_function_definitions()
-            print(f"  - Function definitions count: {len(func_defs)}")
-          except Exception as e:
-            print(f"  - Error getting function definitions: {str(e)}")
-        else:
-          print(f"  - Function tree: Not found")
-      else:
-        print(f"  - Has get_function_definitions method: No")
-  except Exception as e:
-    print(f"Error in debug_function_definitions: {str(e)}")
-
-
-# Export the functions
 __all__ = [
   # Function execution
   "execute_function",
@@ -307,8 +261,5 @@ __all__ = [
 
   # Prompt generation
   "get_function_calling_prompt",
-  "add_function_calling_prompt_to_store",
-
-  # Debug functions
-  "debug_function_definitions"
-] 
+  "add_function_calling_prompt_to_store"
+]
