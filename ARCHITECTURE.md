@@ -8,25 +8,109 @@ CLAIA is a modular system designed to facilitate AI agent interactions, deployme
 
 # CORE CONCEPTS
 
-## Model
-The model represents the core data structures and capabilities:
+## Model System
+The model system handles AI capabilities and deployment configurations:
 
-- **Repository/Store**: Data storage and retrieval mechanisms
-- **Type/Capabilities**: Defines what models can do
-- **Deployments**:
-  - Default (auto scaler/local)
-  - APIs
-  - Local
-  - Auto scale
+- **Capabilities**: Defines what a model can process/produce:
+  - Text (generation, analysis)
+  - Images (generation, transformation)
+  - Audio (speech synthesis, analysis)
+  - Multimodal combinations
 
-Models:
-- Take input
-- Translate output into conversation & basic data
-- Not memory or RAG (these are reserved for agents)
+- **Repository Types**:
+  - HuggingFace Hub
+  - Local model directory
+  - Custom S3 bucket
+  - Private model registry
+  - API endpoints
 
+- **Deployment Methods**:
+  - Local inference (direct model loading)
+  - API client (3rd party services)
+  - Remote deployment (self-hosted cloud)
+  - Hybrid (model partitioning)
 
+## Request Processing
+```mermaid
+graph TD
+    A[User Request] --> B{Request Contents}
+    B --> C[Model/Agent Specified?]
+    C -->|Model| D[Check Capabilities]
+    C -->|Agent| E[Agent Process]
+    D --> F[Verify Deployment Compatibility]
+    E --> F
+    F --> G[Download/Prepare Model]
+    G --> H[Execute Inference]
+    H --> I[Build Conversation Object]
+    I --> J[Return/Save Results]
+```
 
 # CLAIA SYSTEM
+
+## Core Components (Updated)
+- **Model System**: Handles model capabilities, repositories, and deployments
+- **Request Queue**: Manages incoming processing requests
+- **Agent Processor**: Routes requests to appropriate handlers
+- **Conversation Engine**: Maintains context and multimodal outputs
+- **Deployment Manager**: Handles model preparation/execution
+- **Storage System**: Persists conversations and artifacts
+
+## Request Handling Lifecycle
+1. Request ingestion:
+   - Contains: model/agent spec, conversation context, deployment preferences
+   - Example format:
+     ```json
+     {
+       "model": "exofox/image-gen-v5",
+       "repository": "s3://models.exofox.ai",
+       "deployment": "remote-aws-g5",
+       "conversation": {...}
+     }
+     ```
+2. Queue prioritization and dispatch
+3. Handler selection:
+   - Direct model execution if specified
+   - Agent process if defined
+   - Default handler (auto-select based on capabilities)
+4. Model preparation:
+   - Repository authentication
+   - Deployment environment setup
+   - Capability verification
+5. Execution and conversation building
+6. Result delivery and storage
+
+## Deployment Coupling
+Repository and deployment relationships:
+
+| Repository Type     | Supported Deployment Methods           |
+|---------------------|----------------------------------------|
+| HuggingFace Hub     | Local, API, Hybrid                     |
+| Local Directory     | Local, Remote Deployment               |
+| S3 Bucket           | Remote Deployment, Hybrid              |
+| Private Registry    | Remote Deployment, API                 |
+| API Endpoints       | API Client                             |
+
+## Conversation Structure
+Unified object format for multimodal interactions:
+```xml
+<Conversation>
+  <Context>
+    <SystemPrompt>...</SystemPrompt>
+    <Memory>...</Memory>
+    <Artifacts>
+      <Image ref="img123"/>
+      <Audio ref="aud456"/>
+    </Artifacts>
+  </Context>
+  <Interaction>
+    <UserInput>...</UserInput>
+    <ModelResponse model="exofox/image-gen-v5">
+      <Image src="generated_img.jpg"/>
+      <Analysis>Generated landscape image</Analysis>
+    </ModelResponse>
+  </Interaction>
+</Conversation>
+```
 
 ## Core Components
 CLAIA consists of several interconnected components:
@@ -195,9 +279,29 @@ Agent:
 
 # PIECES
 Here are the core pieces of Claia's code:
-- Commands -> Commands used in Claia to initiate processes and change settings
+- Commands
+  - Used in Claia to initiate processes and change settings
+  - Can also be used by the AI models if enabled, therefore doubling as AI "tools"
 - Models
+  - A library of models and capabilities
+  - Also defines what models can be deployed with what services
+  - More or less a dictionary of models that can be used in deployments and from agent processes
 - Deploy
+  - Deploy or connect to a specific model if requested by an agent process
+  - Controls any 'Hives' of resources
+  - Multithreaded if necessary for agent processes
 - Structures (Conversation & Data)
+  - Defines the conversation format and structure
+  - Defines various file structures to load, store, convert, and parse various file types
 - Storage (Data Files, Memory, RAG)
-- Tools -> Functions that can be used 
+  - Uses the structures to define processes to load and store various data components for the agent systems
+- Agents
+  - Processes and sequences of processes that utilize and deploy various models as needed to process a request
+  - The simplest agent is a simple wrapper for a requested model
+  - All requests start here, once popped from the queue a request is sent to an agent
+
+## Updated Considerations
+- **Model Isolation**: Each model deployment runs in isolated environments
+- **Capability Enforcement**: Strict validation of model capabilities vs requests
+- **Deployment Fallbacks**: Automatic fallback to API mode if local deployment fails
+- **Queue Persistence**: Request queue survives restarts
