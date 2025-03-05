@@ -6,8 +6,9 @@
 # - add ability to rename conversations, and perhaps have ai name conversations automatically
 # - create an option to enable a server that serves and updates md files, and sync conversations to md files
 # - Needs a way to filter models (since there are lots) (model list partname?)
-# - function calling doesn't work on most functions (seems like a path/tree calling issue)
+# - function calling doesn't work on most functions (the function calling name is just the final leaf rather than a distinct function name, which is leading to collisions)
 # - run single commands from cli, for example: claia transcribe --file <audio-file>
+# - if a command has an alias, or perhaps just if it's alias matches the root of that path the rest of the commands aren't displayed (in help or executable, test by adding list alias to mc list instances)
 
 import json
 
