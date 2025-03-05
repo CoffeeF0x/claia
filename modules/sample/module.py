@@ -9,7 +9,7 @@ import logging
 from typing import Dict, Any
 
 # Internal dependencies
-from commands.base import Command
+from commands.base import Command, command
 from errors import Result
 from settings import Settings
 
@@ -28,13 +28,39 @@ logger = logging.getLogger(__name__)
 class ModuleCommands(Command):
   """A sample command that demonstrates how to create a module command."""
 
-  def execute(self, commands: list[str], settings: Settings) -> Result:
+  @command(
+    path=["sample"],
+    description="A sample command that demonstrates module functionality",
+    help_text="Execute the sample command with optional arguments",
+    parameters={
+      "type": "object",
+      "properties": {
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional arguments for the sample command"
+        }
+      }
+    },
+    returns={
+      "type": "object",
+      "properties": {
+        "success": {"type": "boolean"},
+        "message": {"type": "string"},
+        "data": {"type": "object"}
+      }
+    },
+    ai_callable=True
+  )
+  def sample_command(self, settings: Settings, *args) -> Result:
     """
     Execute the sample command.
 
     Args:
-      commands: List of command arguments
       settings: Application settings
+      args: Optional command arguments
 
     Returns:
       Result: Command execution result
@@ -42,45 +68,14 @@ class ModuleCommands(Command):
     return Result(
       success=True,
       message="Sample command executed successfully!",
-      data={"args": commands[1:] if len(commands) > 1 else []}
+      data={"args": list(args) if args else []}
     )
 
-  def help(self) -> str:
-    """Return help information for the command."""
-    return "sample - A sample command that demonstrates module functionality"
-
-
-
-##################################################
-#                   FUNCTIONS                    #
-##################################################
-def sample_function(text: str) -> Dict[str, Any]:
-  """
-  A sample function that demonstrates how to create a module function.
-
-  Args:
-    text: Text to process
-
-  Returns:
-    Dict[str, Any]: Function result
-  """
-  return {
-    "success": True,
-    "message": f"Sample function executed successfully with text: {text}",
-    "data": {"text": text}
-  }
-
-
-
-##################################################
-#                MODULE EXPORTS                  #
-##################################################
-# List of function definitions to be loaded by the module system
-FUNCTION_DEFINITIONS = [
-  {
-    "name": "sample_function",
-    "description": "A sample function that demonstrates module functionality",
-    "parameters": {
+  @command(
+    path=["process"],
+    description="Process text using the sample module",
+    help_text="Process the provided text and return a result",
+    parameters={
       "type": "object",
       "properties": {
         "text": {
@@ -89,6 +84,30 @@ FUNCTION_DEFINITIONS = [
         }
       },
       "required": ["text"]
+    },
+    returns={
+      "type": "object",
+      "properties": {
+        "success": {"type": "boolean"},
+        "message": {"type": "string"},
+        "data": {"type": "object"}
+      }
+    },
+    ai_callable=True
+  )
+  def process_text(self, settings: Settings, text: str) -> Dict[str, Any]:
+    """
+    Process the provided text.
+
+    Args:
+      settings: Application settings
+      text: Text to process
+
+    Returns:
+      Dict[str, Any]: Processing result
+    """
+    return {
+      "success": True,
+      "message": f"Sample function executed successfully with text: {text}",
+      "data": {"text": text}
     }
-  }
-] 

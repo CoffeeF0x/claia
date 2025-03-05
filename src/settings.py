@@ -91,8 +91,8 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
   ("modules_directory",                 "modules",                     True,  "Directory for modules"),
 
   # Model Settings
-  ("active_model",                      "qwen2.5-72b-instruct",        True,  "Active model name"),
-  ("active_model_source",               "vllm",                        True,  "Active model source"),
+  ("active_model",                      "gpt-4",                       True,  "Active model name"),
+  ("active_model_source",               "openai",                      True,  "Active model source"),
 
   # VLLM Settings
   ("vllm_zone",                         "",                            True,  "VLLM Zone"),

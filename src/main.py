@@ -7,12 +7,11 @@
 # - create an option to enable a server that serves and updates md files, and sync conversations to md files
 # - Needs a way to filter models (since there are lots) (model list partname?)
 # - function calling doesn't work on most functions (seems like a path/tree calling issue)
+# - run single commands from cli, for example: claia transcribe --file <audio-file>
 
 import json
 
 # Internal dependencies
-from modules import load as load_modules
-
 from commands import run as command
 from models import run as model_run
 from errors import Result
@@ -91,9 +90,6 @@ def runLlm(userInput: str, settings: Settings) -> None:
 def main() -> None:
   # Create application settings
   settings = Settings()
-
-  # Load modules
-  load_modules(settings)
 
   # Load function calling prompt into the prompt store
   add_function_calling_prompt_to_store(settings)

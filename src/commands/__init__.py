@@ -1,5 +1,9 @@
 # External dependencies
 import importlib
+import os
+import sys
+import logging
+import types
 from typing import Dict, Any, List, Tuple, Set
 
 # Internal dependencies
@@ -69,6 +73,100 @@ COMMAND_MODULES: List[Tuple[Any, List[str], str, bool]] = [
   )
 ]
 
+# Logger for module loading
+logger = logging.getLogger(__name__)
+
+
+
+##################################################
+#                MODULE LOADING                  #
+##################################################
+def load_modules() -> None:
+  """
+  Load all available modules from the modules directory.
+  Each module must have a ModuleCommands class that extends Command.
+
+  This function handles namespace collisions by creating uniquely named instances
+  at load time rather than requiring unique class names in the modules.
+  """
+  try:
+    # Get the modules directory path
+    # Assuming the modules directory is at the same level as src
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    modules_dir = os.path.join(base_dir, "modules")
+
+    # Check if modules directory exists
+    if not os.path.isdir(modules_dir):
+      logger.warning(f"Modules directory not found at {modules_dir}")
+      return
+
+    # Add modules directory to Python path if not already there
+    if modules_dir not in sys.path:
+      sys.path.append(modules_dir)
+
+    # Iterate through module directories
+    for module_name in os.listdir(modules_dir):
+      module_path = os.path.join(modules_dir, module_name)
+
+      # Skip non-directories and special directories
+      if not os.path.isdir(module_path) or module_name.startswith('__'):
+        continue
+
+      # Check if module.py exists in the directory
+      module_file = os.path.join(module_path, "module.py")
+      if not os.path.isfile(module_file):
+        logger.warning(f"No module.py found in {module_path}")
+        continue
+
+      try:
+        # Import the module
+        module_import_path = f"{module_name}.module"
+        module = importlib.import_module(module_import_path)
+
+        # Check specifically for ModuleCommands class
+        if hasattr(module, "ModuleCommands"):
+          command_class = module.ModuleCommands
+
+          # Verify it's a subclass of Command
+          is_command_subclass = False
+          for base in command_class.__mro__:
+            if base.__name__ == 'Command' and base.__module__ == 'commands.base':
+              is_command_subclass = True
+              break
+
+          if not is_command_subclass:
+            logger.warning(f"ModuleCommands in {module_import_path} is not a subclass of Command")
+            continue
+
+          # Create an instance of the ModuleCommands class
+          module_command = command_class()
+
+          # Set a unique name for the instance to avoid namespace collisions
+          # This doesn't change the class name, just adds an attribute to the instance
+          module_command._module_name = module_name
+          module_command._module_path = module_path
+
+          # Add to COMMAND_MODULES
+          global COMMAND_MODULES
+          COMMAND_MODULES.append(
+            (
+              module_command,
+              [module_name],  # Use module name as the primary command name
+              f"commands from the {module_name} module",
+              True  # Enable by default
+            )
+          )
+
+          logger.info(f"Successfully loaded module: {module_name}")
+        else:
+          logger.warning(f"No ModuleCommands class found in {module_import_path}")
+
+      except Exception as e:
+        logger.error(f"Error loading module {module_name}: {str(e)}")
+
+  except Exception as e:
+    logger.error(f"Error in load_modules: {str(e)}")
+
 
 
 ##################################################
@@ -96,6 +194,9 @@ def cleanup_commands(commands: list[str], settings: Settings) -> Result:
 
 # Initialize the command registry with core commands and module commands
 def initialize_command_registry() -> Dict[str, Any]:
+  # Load modules first
+  load_modules()
+
   registry = {}
 
   # Register all enabled command modules
