@@ -74,35 +74,14 @@ def create_conversation(settings: Settings, user_input: str = None) -> Conversat
   Returns:
       A conversation object
   """
-  # If we have an active chat in settings, convert it to our new Conversation format
-  if settings.active_chat:
-    # Create a new conversation
-    conversation = Conversation(
-      id=settings.active_chat.id if hasattr(settings.active_chat, 'id') else None,
-      title=settings.active_chat.title if hasattr(settings.active_chat, 'title') else "New Conversation"
-    )
-
-    # Add system prompt if available
-    if settings.active_prompt:
-      conversation.add_message(MessageRole.SYSTEM, settings.active_prompt.prompt)
-
-    # Add existing messages
-    if hasattr(settings.active_chat, 'messages') and callable(settings.active_chat.messages):
-      for msg in settings.active_chat.messages():
-        if msg["role"] == "user":
-          conversation.add_message(MessageRole.USER, msg["content"])
-        elif msg["role"] == "assistant":
-          conversation.add_message(MessageRole.ASSISTANT, msg["content"])
-        elif msg["role"] == "system":
-          # Skip system message as we've already added it
-          pass
+  # If we have an active conversation in settings, use it
+  if settings.active_conversation:
+    conversation = settings.active_conversation
   else:
     # Create a new conversation
-    conversation = Conversation(title="New Conversation")
-
-    # Add system prompt if available
-    if settings.active_prompt:
-      conversation.add_message(MessageRole.SYSTEM, settings.active_prompt.prompt)
+    system_prompt = settings.active_prompt.prompt if settings.active_prompt else None
+    conversation = Conversation(title="New Conversation", system_prompt=system_prompt)
+    settings.active_conversation = conversation
 
   # Add the user's message if not empty
   if user_input:
@@ -135,12 +114,6 @@ def save_conversation_response(conversation: Conversation, response: str, settin
 
   # Add the assistant's response to the conversation
   conversation.add_message(MessageRole.ASSISTANT, final_response)
-
-  # Update the active chat in settings
-  if hasattr(settings, 'active_chat') and hasattr(settings.active_chat, 'store'):
-    # Store in the old format for backward compatibility
-    settings.active_chat.store("assistant", final_response)
-    settings.active_chat.save()
 
   # Save the conversation
   if hasattr(settings, 'chat_history_directory'):

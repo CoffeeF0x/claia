@@ -1,7 +1,15 @@
+"""
+This module contains commands for managing conversations.
+"""
+
+# External dependencies
+import os
+import json
+
 # Internal dependencies
 from commands.base import Command, command
 from errors import Result
-from file import ChatHistory
+from conversations import Conversation, MessageRole
 from settings import Settings
 
 
@@ -18,14 +26,16 @@ class ConversationCommand(Command):
   )
   def list_conversations(self, settings: Settings) -> str:
     """List all conversations"""
-    conversations = ChatHistory.list_files(settings.chat_history_directory)
+    conversations = Conversation.list_conversations(settings.chat_history_directory)
+    if not conversations:
+      return "No saved conversations found"
+
     output = []
-    for conversation in conversations:
-      chat_history = ChatHistory.load(conversation, settings.chat_history_directory)
-      line = f"{chat_history.unique_id}: {chat_history.title}"
+    for conv in conversations:
+      line = f"{conv['id']}: {conv['title']} ({conv['message_count']} messages)"
       print(line)
       output.append(line)
-    return "\n".join(output) if output else "No saved conversations found"
+    return "\n".join(output)
 
   @command(
     path=["load"],
@@ -44,10 +54,10 @@ class ConversationCommand(Command):
   )
   def load_conversation(self, settings: Settings, conversation_id: str) -> str:
     """Load a stored conversation"""
-    conversations = ChatHistory.list_files(settings.chat_history_directory)
-    if f"{conversation_id}.json" in conversations:
-      settings.active_chat = ChatHistory.load(f"{conversation_id}.json", settings.chat_history_directory)
-      message = f"Loaded conversation: {settings.active_chat.title}"
+    filepath = os.path.join(settings.chat_history_directory, f"{conversation_id}.json")
+    if os.path.exists(filepath):
+      settings.active_conversation = Conversation.load(filepath)
+      message = f"Loaded conversation: {settings.active_conversation.title}"
       print(message)
       return message
     else:
@@ -64,10 +74,16 @@ class ConversationCommand(Command):
     """Create a new conversation"""
     title = "New Conversation"
     # title = input("Enter a title for the new conversation: ")
-    new_chat = ChatHistory(settings.chat_history_directory, title, [])
-    new_chat.save()
-    settings.active_chat = new_chat
-    message = f"Created new conversation: {title} (ID: {new_chat.unique_id})"
+
+    # Create new conversation with system prompt if available
+    system_prompt = settings.active_prompt.prompt if settings.active_prompt else None
+    new_conversation = Conversation(title=title, system_prompt=system_prompt)
+
+    # Save the conversation
+    new_conversation.save(settings.chat_history_directory)
+    settings.active_conversation = new_conversation
+
+    message = f"Created new conversation: {title} (ID: {new_conversation.id})"
     print(message)
     print("This is now the active conversation.")
     return message
@@ -89,26 +105,27 @@ class ConversationCommand(Command):
   def print_conversation(self, settings: Settings, conversation_id: str = None) -> str:
     """Print the current conversation or a specific conversation"""
     if conversation_id:
-      conversations = ChatHistory.list_files(settings.chat_history_directory)
-      if f"{conversation_id}.json" in conversations:
-        chat_history = ChatHistory.load(f"{conversation_id}.json", settings.chat_history_directory)
+      filepath = os.path.join(settings.chat_history_directory, f"{conversation_id}.json")
+      if os.path.exists(filepath):
+        conversation = Conversation.load(filepath)
       else:
         message = f"Conversation with ID {conversation_id} not found"
         print(message)
         return message
-    elif settings.active_chat:
-      chat_history = settings.active_chat
+    elif settings.active_conversation:
+      conversation = settings.active_conversation
     else:
       message = "No active conversation selected"
       print(message)
       return message
 
-    print(f"\nConversation: {chat_history.title}")
-    output = [f"Conversation: {chat_history.title}"]
-    for message in chat_history.chat_history:
-      print(f"\n##### SOURCE: {message['role']}")
-      print(message['content'])
-      output.append(f"##### SOURCE: {message['role']}")
-      output.append(message['content'])
+    print(f"\nConversation: {conversation.title}")
+    output = [f"Conversation: {conversation.title}"]
+
+    for message in conversation.get_messages():
+      print(f"\n##### SOURCE: {message.role.value}")
+      print(message.content)
+      output.append(f"##### SOURCE: {message.role.value}")
+      output.append(message.content)
 
     return "\n".join(output)

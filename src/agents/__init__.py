@@ -330,12 +330,12 @@ if __name__ == "__main__":
   # Create a process queue
   process_queue = ProcessQueue()
 
-  # Create a conversation (mock for example)
-  class MockConversation:
-    def get_formatted_messages(self):
-      return [{"role": "user", "content": "Hello, how are you?"}]
+  # Import the Conversation class
+  from conversations import Conversation, MessageRole
 
-  conversation = MockConversation()
+  # Create a conversation
+  conversation = Conversation(title="Test Conversation")
+  conversation.add_message(MessageRole.USER, "Hello, how are you?")
 
   # Mock settings
   class MockSettings:

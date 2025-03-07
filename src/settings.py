@@ -13,7 +13,8 @@ import logging
 from typing import Dict, Any, List, Tuple, Optional
 
 # Internal dependencies
-from file import LLMPromptStore, ChatHistory
+from file import LLMPromptStore
+from conversations import Conversation, MessageRole
 
 
 
@@ -129,7 +130,7 @@ class Settings:
     prompt_store_directory (str): Directory to store LLM prompt stores.
     chat_history_directory (str): Directory to store chat histories.
     active_prompt (Optional[LLMPromptStore]): Currently active system prompt.
-    active_chat (Optional[ChatHistory]): Currently active chat history.
+    active_conversation (Optional[Conversation]): Currently active conversation.
     active_model (str): Currently active model name.
     log_level (str): Logging level.
     openrouter_api_token (str): API token for OpenRouter.
@@ -150,7 +151,7 @@ class Settings:
     self.loaded_local_models: Dict[str, Any] = {}
     self.prompt_store = []
     self.active_prompt = None
-    self.active_chat = None
+    self.active_conversation = None
     self.command_modules = []
     self.function_modules = []
 
@@ -170,7 +171,12 @@ class Settings:
     # Initialize after loading config
     self.load_all_prompts()
     self.active_prompt = self.get_prompt(self.default_prompt_name)
-    self.active_chat = ChatHistory(self.chat_history_directory, "New Conversation", [])
+
+    # Initialize with a new conversation
+    if self.active_prompt:
+      self.active_conversation = Conversation(title="New Conversation", system_prompt=self.active_prompt.prompt)
+    else:
+      self.active_conversation = Conversation(title="New Conversation")
 
   def _load_config(self):
     """
