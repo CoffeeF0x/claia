@@ -305,3 +305,85 @@ Here are the core pieces of Claia's code:
 - **Capability Enforcement**: Strict validation of model capabilities vs requests
 - **Deployment Fallbacks**: Automatic fallback to API mode if local deployment fails
 - **Queue Persistence**: Request queue survives restarts
+
+# Concept Draft
+
+## Process Overview
+- Processes from the queue are sent to their respective agents
+- The agent process will break down the request and create a list of processes (or sequentially create processes based on the result of a previous process)
+- These child processes will be added back into the queue for processing
+- To maintain the state, each process will have a conversation object, which will store all necessary metadata, including references to file objects
+- To execute the necessary process, the agent will send the conversation object to the specified model or process and use the result to determine the next step
+
+## Part Concepts
+
+### Artifacts
+- A file is created by the agent and attached to the conversation
+- A process can recursively update this file with suggestions from the model
+- See Claude prompt for more ideas (files/claude_artifact_prompt.xml)
+
+### Input/Output formats
+- Depending on the model type, this can be one of several types that may fall within model capabilities, or may be included in the process type
+- The formats include:
+  - Text
+  - Audio (voice, sound, music)
+  - Image (style?)
+  - Video
+
+### Conversation
+- Each conversation is a collection of user/agent request/response pairs
+- Each request/response is defined with a type
+- That type defines how each request/response is processed to send to models or display to userr
+- A conversation object will have a list of file object references
+- The file objects will be correspond with their file types (including processing methods)
+- The file objects will contain a path to the file, but won't keep the file loaded in memory
+- Text is stored directly in the conversation object/history file
+- Text may also be a file object in the case of artifacts so it may be edited between responses
+
+### Model Definitions
+- The agent manages it's processes and the sources (deployments) manage loading the hardware
+- The model definitions are the glue for both parts
+- Each part of the agent process uses a specific model and passes that along with the conversation object to the source
+- The model contains information:
+  - model details (max context length, model size, description)
+  - model capabilities (text to text, text to speech, text to image, etc.)
+  - model sources (which sources support which model, prices, limitations)
+  - model repositories (which repositories contain the model)
+
+### Deployment Strategies
+- Claia instances are used to deploy models
+- Claia uses grpc as a cross server communication protocol
+- Claia multi instance deployments are known as the "Hive"
+- Claia instance manager (or parent process) is known as the Hive's "Champion"
+- Deployment Types
+  - VM
+  - Container
+- Deployment Processing Units
+  - CPU
+  - GPU
+  - NPU
+  - ASIIC
+- Deployment Services
+  - MassedCompute (VMs)
+  - Runpod (Containers)
+  - Vast (Containers)
+  - Jarvis Labs?
+  - Lambda Cloud?
+  - DataCrunch?
+  - LeaderGPU?
+  - Amazon (Variety, pricey but higher availability?)
+  - Google (Variety? pricey but higher availability?)
+  - Azure?
+- [x] Phase 1: API support
+- [ ] Phase 2
+  - Based on the size of the model, deploy an appropriate sized Nvidia VM or Container
+  - Use the lowest price across MassedCompute or Runpod deploying either a VM or a Container respectively
+  - Test speed vs cost for throughput benefit analysis
+- [ ] Phase 3: Support local model loading
+- [ ] Phase 4: Support multiple model memory management (load multiple models on a single computer)
+- [ ] Phase 5: Auto scaling
+- [ ] Phase 6: Support cross network inference, "Hive" models (may need practical speed testing before full implimentation)
+- [ ] Phase ?
+  - Add Rocm support for AMD GPUs
+  - Investigate NPU support
+  - Investigate ASIIC support
