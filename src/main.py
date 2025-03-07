@@ -11,6 +11,8 @@
 # - if a command has an alias, or perhaps just if it's alias matches the root of that path the rest of the commands aren't displayed (in help or executable, test by adding list alias to mc list instances)
 
 import json
+import readline
+import atexit
 
 # Internal dependencies
 from commands import run as command
@@ -23,8 +25,27 @@ from tools import process_function_calls, add_function_calling_prompt_to_store
 
 
 ##################################################
+#                   CONSTANTS                    #
+##################################################
+HISTORY_FILE = ".claia_history"
+MAX_HISTORY_LEN = 1000
+
+
+
+##################################################
 #                   FUNCTIONS                    #
 ##################################################
+# Initialize readline for command history
+def setup_command_history() -> None:
+  # Try to load history from file
+  try:
+    readline.read_history_file(HISTORY_FILE)
+    readline.set_history_length(MAX_HISTORY_LEN)
+  except FileNotFoundError:
+    pass
+
+  atexit.register(readline.write_history_file, HISTORY_FILE)
+
 # Get and return user input using a standardized prompt symbol
 def getUserInput() -> str:
   return input(":")
@@ -92,6 +113,9 @@ def main() -> None:
   # Create application settings
   settings = Settings()
 
+  # Set up command history with arrow key navigation
+  setup_command_history()
+
   # Load function calling prompt into the prompt store
   add_function_calling_prompt_to_store(settings)
 
@@ -100,6 +124,11 @@ def main() -> None:
 
   while not result.is_exit():
     userInput = getUserInput()
+
+    # Only add non-empty inputs to history
+    if userInput.strip():
+      readline.add_history(userInput)
+
     result = processCommands(userInput, settings)
 
     if result.is_error():
