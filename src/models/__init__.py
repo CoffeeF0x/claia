@@ -1,3 +1,8 @@
+# Define the source (deployment) base object and processes
+
+# Manage source objects (list of sources?)
+# Handle source scaling if overloaded
+
 from models.base import APIModel, LocalModel
 from models.definitions import definitions, sources
 from settings import Settings

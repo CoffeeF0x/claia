@@ -1,9 +1,9 @@
-from models.openai import OpenAITextModel
-from models.runpod import RunpodTextModel
-from models.anthropic import AnthropicTextModel
+from models.api.openai import OpenAITextModel
+from models.api.runpod import RunpodTextModel
+from models.api.anthropic import AnthropicTextModel
 from models.local import MiniCPM3_4B_LocalModel, Qwen2p5_32B_InstructLocalModel
-from models.openrouter import OpenRouterTextModel
-from models.vllm import VLLMTextModel
+from models.api.openrouter import OpenRouterTextModel
+from models.remote.vllm import VLLMTextModel
 
 
 
