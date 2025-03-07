@@ -208,12 +208,28 @@ sources = {
           "context": 131072,
         }
       },
-      "qwq-32b": {
+      "qwq-32b-preview": {
         "model_id": "Qwen/QwQ-32B-Preview",
         "variants": [],
         "attributes": {
           "max_output": 512,
           "context": 32768,
+        }
+      },
+      "qwq-32b": {
+        "model_id": "Qwen/QwQ-32B",
+        "variants": [],
+        "attributes": {
+          "max_output": 4096,
+          "context": 131072,
+        }
+      },
+      "phi-4": {
+        "model_id": "microsoft/Phi-4",
+        "variants": [],
+        "attributes": {
+          "max_output": 4096,
+          "context": 128000,
         }
       }
     }
@@ -296,11 +312,23 @@ definitions = {
     "capabilities": ["ttt"],
     "training_data": "Up to 2023",
   },
-  "qwq-32b": {
+  "qwq-32b-preview": {
     "title": "QwQ-32B Preview",
     "description": "An experimental research model by the Qwen Team focused on advancing AI reasoning capabilities. Features enhanced analytical abilities while having specific limitations in language mixing, recursive reasoning, and safety considerations. Built on Qwen2.5-32B-Instruct base.",
     "capabilities": ["ttt"],
     "training_data": "Not specified",
+  },
+  "qwq-32b": {
+    "title": "QwQ-32B",
+    "description": "The official release of QwQ-32B, a reasoning-focused model from the Qwen team. Built on the Qwen2.5-32B-Instruct base, it features improved reasoning capabilities while maintaining strong performance across general tasks.",
+    "capabilities": ["ttt"],
+    "training_data": "Not specified",
+  },
+  "phi-4": {
+    "title": "Phi-4",
+    "description": "Microsoft's Phi-4 is a state-of-the-art small language model that delivers exceptional performance with high efficiency. It excels at reasoning, coding, and instruction following while maintaining a compact size compared to larger models.",
+    "capabilities": ["ttt"],
+    "training_data": "Up to 2024",
   }
 }
 
