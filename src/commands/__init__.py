@@ -7,7 +7,7 @@ import types
 from typing import Dict, Any, List, Tuple, Set
 
 # Internal dependencies
-from commands.characters import CharacterCommand
+from commands.prompts import PromptCommand
 from commands.conversations import ConversationCommand
 from commands.models import ModelCommand
 from commands.system import SystemCommand
@@ -48,11 +48,11 @@ COMMAND_MODULES: List[Tuple[Any, List[str], str, bool]] = [
     True
   ),
 
-  # Character commands
+  # Prompt commands
   (
-    CharacterCommand(),
-    ["character", "characters"],
-    "commands related to characters or system prompts",
+    PromptCommand(),
+    ["prompt", "prompts"],
+    "commands related to prompts or system prompts",
     True
   ),
 
