@@ -77,8 +77,11 @@ def create_conversation(settings: Settings, user_input: str = None) -> Conversat
   # If we have an active conversation in settings, use it
   if settings.active_conversation:
     conversation = settings.active_conversation
+    if settings.active_prompt:
+      conversation.update_system_prompt_if_empty(settings.active_prompt.prompt)
+
+  # Otherwise, create a new conversation
   else:
-    # Create a new conversation
     system_prompt = settings.active_prompt.prompt if settings.active_prompt else None
     conversation = Conversation(title="New Conversation", system_prompt=system_prompt)
     settings.active_conversation = conversation

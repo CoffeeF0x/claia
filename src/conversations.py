@@ -63,7 +63,6 @@ class Message:
       metadata=data.get("metadata", {})
     )
 
-
 class Conversation:
   """
   Represents a conversation between a user and an assistant.
@@ -95,6 +94,34 @@ class Conversation:
   def get_messages(self) -> List[Message]:
     """Get all messages in the conversation."""
     return self.messages
+
+  def update_system_prompt_if_empty(self, system_prompt: str) -> bool:
+    """
+    Update the system prompt for this conversation.
+
+    If the conversation has only a system message or is empty,
+    it will replace/add the system message.
+    If the conversation already has user or assistant messages,
+    it will return False to indicate the update was not performed.
+
+    Args:
+        system_prompt: The new system prompt to set
+
+    Returns:
+        bool: True if the system prompt was updated, False otherwise
+    """
+    # Check if conversation has only system messages or is empty
+    has_only_system = all(msg.role == MessageRole.SYSTEM for msg in self.messages)
+
+    if not self.messages or has_only_system:
+      # Remove any existing system messages
+      self.messages = [msg for msg in self.messages if msg.role != MessageRole.SYSTEM]
+
+      # Add the new system message
+      self.add_message(MessageRole.SYSTEM, system_prompt)
+      return True
+
+    return False
 
   def get_formatted_messages(self) -> List[Dict[str, Any]]:
     """Get messages formatted for LLM API consumption."""
