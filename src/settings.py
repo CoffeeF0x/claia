@@ -13,8 +13,8 @@ import logging
 from typing import Dict, Any, List, Tuple, Optional
 
 # Internal dependencies
-from file import LLMPromptStore
 from conversations import Conversation, MessageRole
+from conversations.prompts import LLMPromptStore
 
 
 

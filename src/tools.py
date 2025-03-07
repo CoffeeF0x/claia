@@ -11,8 +11,8 @@ import importlib
 from typing import Dict, Any, List, Callable, Optional
 
 # Internal dependencies
+from conversations.prompts import LLMPromptStore
 from commands import get_function_definitions, execute_command_by_name
-from file import LLMPromptStore
 from settings import Settings
 
 
