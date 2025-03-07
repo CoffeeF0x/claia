@@ -11,6 +11,10 @@ import os
 ##################################################
 #                  CONSTANTS                     #
 ##################################################
+VLLM_MODEL = "Qwen/QwQ-32B"
+VLLM_MAX_MODEL_LEN = 32768 # 131072
+VLLM_TENSOR_PARALLEL_SIZE = 2
+
 STARTUP_SCRIPTS = {
   "vllm": [
     # Add http and https to ufw
@@ -69,6 +73,16 @@ STARTUP_SCRIPTS = {
     'echo "      caServer: \\"https://acme-staging-v02.api.letsencrypt.org/directory\\"" >> ~/traefik/config/traefik.yml',
     'echo "      storage: \\"/acme/staging.json\\""                                      >> ~/traefik/config/traefik.yml',
     'echo "      tlsChallenge: {{}}"                                                     >> ~/traefik/config/traefik.yml',
+    'echo "  zerossl:"                                                                   >> ~/traefik/config/traefik.yml',
+    'echo "    acme:"                                                                    >> ~/traefik/config/traefik.yml',
+    'echo "      email: \\"{email}\\""                                                   >> ~/traefik/config/traefik.yml',
+    'echo "      caServer: \\"https://acme.zerossl.com/v2/DV90\\""                       >> ~/traefik/config/traefik.yml',
+    'echo "      storage: \\"/acme/zerossl.json\\""                                      >> ~/traefik/config/traefik.yml',
+    'echo "      httpChallenge:"                                                         >> ~/traefik/config/traefik.yml',
+    'echo "        entryPoint: web"                                                      >> ~/traefik/config/traefik.yml',
+    'echo "      eab:"                                                                   >> ~/traefik/config/traefik.yml',
+    'echo "        kid: \\"{eab_kid}\\""                                                 >> ~/traefik/config/traefik.yml',
+    'echo "        hmacEncoded: \\"{eab_hmac_encoded}\\""                                >> ~/traefik/config/traefik.yml',
 
     # Start VLLM container
     "sudo docker run -d --name vllm --network vllm-network --runtime nvidia --ipc=host --gpus all " +
@@ -79,7 +93,7 @@ STARTUP_SCRIPTS = {
     "-l 'traefik.http.routers.vllm.entrypoints=websecure' " +
     "-l 'traefik.http.routers.vllm.tls.certresolver=letsencrypt' " +
     "-l 'traefik.http.services.vllm.loadbalancer.server.port=8000' " +
-    "vllm/vllm-openai:latest --model Qwen/QwQ-32B-Preview --max-model-len 32768 --tensor-parallel-size 4",
+    f"vllm/vllm-openai:latest --model {VLLM_MODEL} --max-model-len {VLLM_MAX_MODEL_LEN} --tensor-parallel-size {VLLM_TENSOR_PARALLEL_SIZE}",
 
     # Start Traefik container
     "sudo docker run -d --name traefik --network vllm-network " +
@@ -128,8 +142,7 @@ class MassedComputeCommand(Command):
   @command(
     path=["list", "instances"],
     description="List running instances",
-    help_text="List all running instances",
-    aliases=[["list"]]
+    help_text="List all running instances"
   )
   def list_instances(self, settings: Settings) -> str:
     """List all running instances"""
@@ -1089,6 +1102,10 @@ def get_startup_script(script_name: str, settings: Optional[Settings] = None, ex
       params['zone'] = settings.vllm_zone
     if settings.has_cloudflare_api_token:
       params['cloudflare_token'] = settings.cloudflare_api_token
+    if settings.vllm_eab_kid:
+      params['eab_kid'] = settings.vllm_eab_kid
+    if settings.vllm_eab_hmac_encoded:
+      params['eab_hmac_encoded'] = settings.vllm_eab_hmac_encoded
 
   # Add any additional parameters
   if extra_params:

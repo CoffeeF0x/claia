@@ -91,13 +91,15 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
   ("modules_directory",                 "modules",                     True,  "Directory for modules"),
 
   # Model Settings
-  ("active_model",                      "gpt-4",                       True,  "Active model name"),
-  ("active_model_source",               "openai",                      True,  "Active model source"),
+  ("active_model",                      "qwq-32b",                     True,  "Active model name"),
+  ("active_model_source",               "",                            True,  "Active model source"),
 
   # VLLM Settings
   ("vllm_zone",                         "",                            True,  "VLLM Zone"),
   ("vllm_email",                        "",                            True,  "VLLM Email"),
   ("vllm_subdomain",                    "",                            True,  "VLLM Subdomain"),
+  ("vllm_eab_kid",                      "",                            True,  "VLLM EAB Kid"),
+  ("vllm_eab_hmac_encoded",             "",                            True,  "VLLM EAB HMAC Encoded"),
 
   # Prompt Settings
   ("default_prompt_name",               "default",                     True,  "Default prompt name to use"),
@@ -136,6 +138,8 @@ class Settings:
     vllm_zone (str): Zone for VLLM.
     vllm_email (str): Email for VLLM.
     vllm_subdomain (str): Subdomain for VLLM.
+    vllm_eab_kid (str): EAB Kid for ZeroSSL for VLLM.
+    vllm_eab_hmac_encoded (str): EAB HMAC Encoded for ZeroSSL for VLLM.
     min_function_calls (int): Minimum number of function calls to process.
     max_function_calls (int): Maximum number of function calls to process.
     default_prompt_name (str): Default prompt name to use.
