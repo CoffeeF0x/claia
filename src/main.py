@@ -1,7 +1,6 @@
 # TODO:
 # - create new characters or update existing (need to move characters to json files)
-# - add modes + add agent mode
-# - add openai streaming support
+# - add streaming support
 # - models should be chosen by the user via key, and passed to the ai via another key pair in its definition
 # - add ability to rename conversations, and perhaps have ai name conversations automatically
 # - create an option to enable a server that serves and updates md files, and sync conversations to md files
