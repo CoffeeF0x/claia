@@ -34,6 +34,23 @@ def command(
     aliases: List of alternative paths for the same command (e.g., [["c"], ["cls"]] for clear)
     top_level: Whether this command should be registered at the top level (without class prefix)
   """
+  # Validate no underscores in path
+  if path:
+    for part in path:
+      if '_' in part:
+        raise ValueError(f"Command path part '{part}' contains underscores, which are not allowed")
+
+  # Validate no underscores in aliases
+  if aliases:
+    for alias in aliases:
+      if isinstance(alias, str):
+        if '_' in alias:
+          raise ValueError(f"Command alias '{alias}' contains underscores, which are not allowed")
+      elif isinstance(alias, list):
+        for part in alias:
+          if '_' in part:
+            raise ValueError(f"Command alias part '{part}' contains underscores, which are not allowed")
+
   def decorator(func):
     # If path is None, use the function name as the path
     func._command_path = path or [func.__name__.lower()]
@@ -76,6 +93,11 @@ class Command(ABC):
         try:
           attr = getattr(self, attr_name)
           if callable(attr) and hasattr(attr, '_command_path'):
+            # Validate command path - no underscores allowed
+            for path_part in attr._command_path:
+              if '_' in path_part:
+                raise ValueError(f"Command path part '{path_part}' contains underscores, which are not allowed")
+
             # Method has command metadata from decorator
             self._register_command_path(attr._command_path, attr)
 
@@ -88,8 +110,14 @@ class Command(ABC):
               # Also register any string aliases as top-level commands
               for alias_path in attr._command_aliases:
                 if isinstance(alias_path, str):
+                  # Validate alias - no underscores allowed
+                  if '_' in alias_path:
+                    raise ValueError(f"Command alias '{alias_path}' contains underscores, which are not allowed")
                   self.top_level_commands[alias_path] = attr
                 elif isinstance(alias_path, list) and len(alias_path) == 1:
+                  # Validate alias - no underscores allowed
+                  if '_' in alias_path[0]:
+                    raise ValueError(f"Command alias '{alias_path[0]}' contains underscores, which are not allowed")
                   self.top_level_commands[alias_path[0]] = attr
 
             # Register any aliases in the function tree
@@ -97,6 +125,12 @@ class Command(ABC):
               # Convert string to list if needed
               if isinstance(alias_path, str):
                 alias_path = [alias_path]
+
+              # Validate alias path - no underscores allowed
+              for path_part in alias_path:
+                if '_' in path_part:
+                  raise ValueError(f"Command alias path part '{path_part}' contains underscores, which are not allowed")
+
               self._register_command_path(alias_path, attr)
         except Exception as e:
           print(f"Error processing attribute {attr_name}: {str(e)}")
@@ -112,15 +146,18 @@ class Command(ABC):
       return
 
     current = self.function_tree
+    path_so_far = []
 
     # Build the nested structure
     for part in path[:-1]:
+      path_so_far.append(part)
       if part not in current:
         current[part] = {}
       current = current[part]
 
     # Add the leaf function
     leaf_name = path[-1]
+    path_so_far.append(leaf_name)
     current[leaf_name] = {
       "function": func,
       "description": func._command_description,
@@ -240,28 +277,48 @@ class Command(ABC):
     """Get AI-callable function definitions for function calling"""
     definitions = []
 
-    def process_tree(tree, path_prefix):
+    # Get the command class name (without the "Command" suffix)
+    # For modules, use the module name instead
+    if hasattr(self, '_module_name'):
+      # This is a module command, use the module name
+      class_prefix = self._module_name
+    else:
+      # This is a core command, use the class name
+      class_prefix = self.__class__.__name__.replace("Command", "").lower()
+
+    # Helper function to recursively process the function tree
+    def process_tree(tree, path_parts):
       for name, node in tree.items():
-        if isinstance(node, dict) and "function" in node and node.get("ai_callable", False):
-          # Create path string for the function name
-          func_name = f"{path_prefix}_{name}" if path_prefix else name
+        current_path = path_parts + [name]
 
-          # Create function definition compatible with OpenAI format
-          definition = {
-            "name": func_name,
-            "description": node["description"],
-            "parameters": node["parameters"],
-            "returns": node["returns"]
-          }
+        if isinstance(node, dict):
+          if "function" in node and node.get("ai_callable", False):
+            # This is a leaf node with a function
+            # Create function name by joining class prefix and path parts with underscores
+            # Format: prefix_path_part1_path_part2_...
+            if len(path_parts) == 0:
+              # Top-level command
+              func_name = f"{class_prefix}_{name}"
+            else:
+              # Nested command
+              func_name = f"{class_prefix}_{'_'.join(current_path)}"
 
-          definitions.append(definition)
-        elif isinstance(node, dict) and "function" not in node:
-          # Process nested paths
-          new_prefix = f"{path_prefix}_{name}" if path_prefix else name
-          process_tree(node, new_prefix)
+            # Create function definition compatible with OpenAI format
+            definition = {
+              "name": func_name,
+              "description": node["description"],
+              "parameters": node["parameters"],
+              "returns": node["returns"]
+            }
+
+            definitions.append(definition)
+          else:
+            # This is a branch node, continue traversing
+            process_tree(node, current_path)
 
     try:
-      process_tree(self.function_tree, "")
+      # Start processing from the root with an empty path
+      process_tree(self.function_tree, [])
     except Exception as e:
       print(f"Error processing function tree: {str(e)}")
 

@@ -275,7 +275,7 @@ def execute_command_by_name(function_name: str, parameters: Dict[str, Any], sett
   Execute a command by its function name with the given parameters.
 
   Args:
-    function_name: The function name in format "path_to_command"
+    function_name: The function name in format "prefix_path_component1_component2_..."
     parameters: Dictionary of parameter values
     settings: Settings object
 
@@ -286,37 +286,68 @@ def execute_command_by_name(function_name: str, parameters: Dict[str, Any], sett
     return "Error: Settings object is required"
 
   try:
-    # Split the function name into parts (path_component1_component2_...)
+    # Split the function name into parts (prefix_path_component1_component2_...)
     parts = function_name.split('_')
+
+    if len(parts) < 2:
+      return f"Invalid function name format: {function_name}. Expected format: prefix_command_path"
+
+    # The first part is the prefix (class name or module name), the rest is the command path
+    prefix = parts[0]
+    command_path = parts[1:]
 
     # Try each enabled command instance
     for cmd_instance in get_enabled_command_instances():
-      if hasattr(cmd_instance, 'get_function_definitions'):
-        for func_def in cmd_instance.get_function_definitions():
-          if func_def["name"] == function_name:
-            # Found the function, now navigate the command tree to find the handler
-            current = cmd_instance.function_tree
-            for part in parts[:-1]:  # All but the last part
-              if part in current:
-                current = current[part]
-              else:
-                return f"Invalid command path: {function_name}"
+      # Determine the prefix for this command instance
+      if hasattr(cmd_instance, '_module_name'):
+        # This is a module command, use the module name
+        instance_prefix = cmd_instance._module_name
+      else:
+        # This is a core command, use the class name
+        instance_prefix = cmd_instance.__class__.__name__.replace("Command", "").lower()
 
-            # The last part should be the function
-            last_part = parts[-1]
-            if last_part in current and "function" in current[last_part]:
-              func = current[last_part]["function"]
-              try:
-                # Call the function with settings and parameters
-                result = func(settings, **parameters)
-                # Convert Result objects to string
-                if hasattr(result, 'message') and callable(getattr(result, 'message')):
-                  return result.message()
-                return str(result)
-              except Exception as e:
-                return f"Error executing command: {str(e)}"
-            else:
-              return f"Invalid command function: {function_name}"
+      # Skip if this is not the right command instance
+      if instance_prefix != prefix:
+        continue
+
+      if hasattr(cmd_instance, 'get_function_definitions'):
+        # Get all function definitions from this command instance
+        func_defs = cmd_instance.get_function_definitions()
+
+        # Check if our function name matches any of the definitions
+        for func_def in func_defs:
+          if func_def["name"] == function_name:
+            # Found the function, now execute it
+            try:
+              # Navigate the command tree to find the handler
+              current = cmd_instance.function_tree
+
+              for i, part in enumerate(command_path[:-1]):
+                if part in current:
+                  current = current[part]
+                else:
+                  return f"Invalid command path at part '{part}': {function_name}"
+
+              # The last part should be the function
+              last_part = command_path[-1]
+
+              if last_part in current and "function" in current[last_part]:
+                func = current[last_part]["function"]
+
+                try:
+                  # Call the function with settings and parameters
+                  result = func(settings, **parameters)
+
+                  # Convert Result objects to string
+                  if hasattr(result, 'message') and callable(getattr(result, 'message')):
+                    return result.message()
+                  return str(result)
+                except Exception as e:
+                  return f"Error executing command: {str(e)}"
+              else:
+                return f"Invalid command function at leaf '{last_part}': {function_name}"
+            except Exception as e:
+              return f"Error navigating command tree: {str(e)}"
   except Exception as e:
     return f"Error processing command: {str(e)}"
 

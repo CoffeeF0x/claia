@@ -54,7 +54,7 @@ class SystemCommand(Command):
     return Result.shutdown()
 
   @command(
-    path=["get", "log_level"],
+    path=["get", "log-level"],
     description="Display the current log level",
     help_text="Display the current log level",
     parameters={
@@ -72,7 +72,7 @@ class SystemCommand(Command):
     return f"Current log level: {settings.log_level}"
 
   @command(
-    path=["set", "log_level"],
+    path=["set", "log-level"],
     description="Set the log level",
     help_text="Set the log level (debug, info, warning, error, critical)",
     parameters={
