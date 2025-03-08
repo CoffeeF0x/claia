@@ -15,6 +15,7 @@ from typing import Dict, Any, List, Tuple, Optional
 # Internal dependencies
 from conversations import Conversation, MessageRole
 from conversations.prompts import Prompt
+from conversations.base import BaseFile
 
 
 
@@ -29,6 +30,19 @@ LOG_LEVELS = {
   "error":    logging.ERROR,
   "critical": logging.CRITICAL
 }
+
+# Function calling prompt template
+FUNCTION_CALLING_PROMPT = """
+You are an AI assistant capable of calling functions. Here are the available functions:
+
+{function_definitions}
+
+When you need to call a function, use the following format:
+{function_format}
+
+You can call multiple functions in a single response if needed. Each function call will be replaced with its result.
+Incorporate the function call(s) into your response where necessary.
+"""
 
 # Default prompts
 DEFAULT_PROMPTS = [
@@ -67,6 +81,12 @@ DEFAULT_PROMPTS = [
     "title": "Analyst",
     "prompt": "You are a data analyst with expertise in statistics and data visualization. You help interpret data, suggest analysis methods, and explain complex analytical concepts.",
     "description": "An assistant for data analysis and interpretation."
+  },
+  {
+    "name": "functions",
+    "title": "Function Calling Assistant",
+    "prompt": FUNCTION_CALLING_PROMPT,
+    "description": "An assistant capable of calling functions."
   }
 ]
 
@@ -157,6 +177,7 @@ class Settings:
     self.active_conversation = None
     self.command_modules = []
     self.function_modules = []
+    self.function_definitions = []
 
     # Boolean flags for API key availability
     self.has_openai_api_token = False
@@ -281,40 +302,47 @@ class Settings:
     return cli_value
 
   def load_all_prompts(self) -> list[Prompt]:
-    # Load default prompts
+    """
+    Load all prompts from the default prompts and the prompt store directory.
+
+    Returns:
+        list[Prompt]: A list of all loaded prompts
+    """
+
+    # Get list of existing prompt names
+    existing_prompt_names = Prompt.get_prompt_names(self.prompt_store_directory)
+
+    # Create any default prompts that don't exist yet
     for prompt_data in DEFAULT_PROMPTS:
-      if not self.prompt_exists(prompt_data['name']):
-        self.prompt_store.append(Prompt(
+      formatted_name = Prompt.validate_and_format_name(prompt_data['name'])
+      if formatted_name not in existing_prompt_names:
+        # Create and save the prompt
+        prompt = Prompt(
           self.prompt_store_directory,
           prompt_data['name'],
           prompt_data['title'],
           prompt_data['prompt'],
           prompt_data['description']
-        ))
-      else:
-        pass
-        # TODO: log error, prompt name already exists
+        )
+        prompt.save()
 
-    # Load prompts from the directory
-    files = Prompt.list_files(self.prompt_store_directory)
-    for filename in files:
-      full_path = os.path.join(self.prompt_store_directory, filename)
-      with open(full_path, 'r') as file:
-        data = json.load(file)
-        if not self.prompt_exists(data['name']):
-          self.prompt_store.append(Prompt.from_dict(data, self.prompt_store_directory))
-        else:
-          pass
-          # TODO: log error, prompt name already exists
+    # Load all prompts from the directory
+    self.prompt_store = Prompt.load_prompts_from_directory(self.prompt_store_directory)
 
     return self.prompt_store
 
-  def prompt_exists(self, name: str) -> bool:
-    formatted_name = Prompt.validate_and_format_name(name)
-    return any(prompt.name == formatted_name for prompt in self.prompt_store)
+  def get_prompt(self, name: str) -> Optional[Prompt]:
+    """
+    Get a prompt by name.
 
-  def get_prompt(self, name: str) -> Prompt:
-    return next((p for p in self.prompt_store if p.name == name), None)
+    Args:
+        name: The name of the prompt to get
+
+    Returns:
+        Optional[Prompt]: The prompt with the given name, or None if not found
+    """
+    formatted_name = Prompt.validate_and_format_name(name)
+    return next((p for p in self.prompt_store if p.name == formatted_name), None)
 
   def validate(self) -> bool:
     """
@@ -360,6 +388,27 @@ class Settings:
       bool: True if there are available function modules, False otherwise
     """
     return len(self.function_modules) > 0
+
+  def set_function_definitions(self, function_definitions: List[Dict[str, Any]]) -> None:
+    """
+    Set the function definitions for function calling.
+
+    Args:
+        function_definitions: List of function definitions
+    """
+    self.function_definitions = function_definitions
+
+  def apply_function_definitions_to_active_prompt(self) -> None:
+    """
+    Apply the current function definitions to the active prompt.
+    This should be called before using the active prompt to ensure it has the latest function definitions.
+    """
+    if self.active_prompt and self.active_prompt.name == "functions":
+      self.active_prompt.load_function_definitions(self.function_definitions)
+      print(f"Applied {len(self.function_definitions)} function definitions to active prompt")
+    elif self.active_prompt:
+      # For non-function prompts, we still load the definitions in case they're needed
+      self.active_prompt.load_function_definitions(self.function_definitions)
 
 # Usage example
 if __name__ == "__main__":

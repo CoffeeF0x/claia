@@ -11,46 +11,59 @@
 # - if a command has an alias, or perhaps just if it's alias matches the root of that path the rest of the commands aren't displayed (in help or executable, test by adding list alias to mc list instances)
 
 # External dependencies
-import readline, atexit, time, logging, queue
+import readline
+import atexit
+import time
+import logging
+import queue
+import os
 
 # Internal dependencies
-from commands import run as command
+from commands import get_function_definitions, run as command
 from errors import Result
 from settings import Settings
 from utilities import *
-from tools import process_function_calls, add_function_calling_prompt_to_store
+from tools import process_function_calls
 from agents import ProcessQueue, Process, Agent, AgentType, SourcePreference, ProcessStatus
 from conversations import Conversation, MessageRole
 
 
 
-##################################################
-#                   CONSTANTS                    #
-##################################################
+###########################################################################
+#                               CONSTANTS                                 #
+###########################################################################
 HISTORY_FILE = ".claia_history"
 MAX_HISTORY_LEN = 1000
 
 
 
-##################################################
-#                 INITIALIZATION                 #
-##################################################
+###########################################################################
+#                             INITIALIZATION                              #
+###########################################################################
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 
-##################################################
-#               UTILITY FUNCTIONS                #
-##################################################
+###########################################################################
+#                           UTILITY FUNCTIONS                             #
+###########################################################################
 def setup_command_history() -> None:
   """Initialize readline for command history with arrow key navigation."""
   try:
+    # Ensure the history file directory exists only if needed
+    history_dir = os.path.dirname(HISTORY_FILE)
+    if history_dir and not os.path.exists(history_dir):
+      os.makedirs(history_dir, exist_ok=True)
+
+    # Try to read the history file
     readline.read_history_file(HISTORY_FILE)
     readline.set_history_length(MAX_HISTORY_LEN)
   except FileNotFoundError:
     pass
+  except Exception as e:
+    logger.error(f"Error setting up command history: {e}")
 
   atexit.register(readline.write_history_file, HISTORY_FILE)
 
@@ -60,9 +73,9 @@ def get_user_input() -> str:
 
 
 
-##################################################
-#             CONVERSATION FUNCTIONS             #
-##################################################
+###########################################################################
+#                         CONVERSATION FUNCTIONS                          #
+###########################################################################
 def create_conversation(settings: Settings, user_input: str = None) -> Conversation:
   """
   Create a conversation object from settings and user input.
@@ -78,11 +91,12 @@ def create_conversation(settings: Settings, user_input: str = None) -> Conversat
   if settings.active_conversation:
     conversation = settings.active_conversation
     if settings.active_prompt:
-      conversation.update_system_prompt_if_empty(settings.active_prompt.prompt)
+      conversation.update_system_prompt_if_empty(settings.active_prompt.get_formatted_prompt())
 
   # Otherwise, create a new conversation
   else:
-    system_prompt = settings.active_prompt if settings.active_prompt else None
+    system_prompt = settings.active_prompt.get_formatted_prompt() if settings.active_prompt else None
+
     conversation = Conversation(
       conversation_directory=settings.conversation_directory,
       artifacts_directory=settings.artifacts_directory,
@@ -129,9 +143,9 @@ def save_conversation_response(conversation: Conversation, response: str, settin
 
 
 
-##################################################
-#                AGENT FUNCTIONS                 #
-##################################################
+###########################################################################
+#                            AGENT FUNCTIONS                              #
+###########################################################################
 def process_next_in_queue(settings: Settings, process_queue: ProcessQueue) -> None:
   """
   Process the next pending item in the queue.
@@ -231,9 +245,35 @@ def process_user_input(user_input: str, settings: Settings, process_queue: Proce
 
 
 
-##################################################
-#                 MAIN FUNCTION                  #
-##################################################
+###########################################################################
+#                           FUNCTION DEFINITIONS                          #
+###########################################################################
+def load_function_definitions(settings: Settings) -> None:
+  """
+  Load function definitions into the settings object.
+
+  Args:
+      settings: The application settings
+  """
+  try:
+    # Get function definitions from commands
+    function_definitions = get_function_definitions(settings)
+
+    # Set function definitions in settings
+    settings.set_function_definitions(function_definitions)
+
+    # Debug output
+    print(f"Loaded {len(function_definitions)} function definitions")
+  except Exception as e:
+    logger.error(f"Error loading function definitions: {e}")
+    # Initialize with empty list in case of error
+    settings.set_function_definitions([])
+
+
+
+###########################################################################
+#                              MAIN FUNCTION                              #
+###########################################################################
 def main() -> None:
   """Main application entry point."""
   # Create application settings
@@ -245,8 +285,8 @@ def main() -> None:
   # Set up command history with arrow key navigation
   setup_command_history()
 
-  # Load function calling prompt into the prompt store
-  add_function_calling_prompt_to_store(settings)
+  # Load function definitions into settings
+  load_function_definitions(settings)
 
   # Main application loop
   result = Result()
@@ -260,6 +300,9 @@ def main() -> None:
     # Only add non-empty inputs to history
     if user_input.strip():
       readline.add_history(user_input)
+
+    if settings.active_prompt:
+      settings.apply_function_definitions_to_active_prompt()
 
     # Process the user input
     result = process_user_input(user_input, settings, process_queue)

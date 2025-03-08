@@ -76,7 +76,7 @@ class ConversationCommand(Command):
     # title = input("Enter a title for the new conversation: ")
 
     # Create new conversation with system prompt if available
-    system_prompt = settings.active_prompt.prompt if settings.active_prompt else None
+    system_prompt = settings.active_prompt.get_formatted_prompt() if settings.active_prompt else None
     new_conversation = Conversation(title=title, system_prompt=system_prompt)
 
     # Save the conversation

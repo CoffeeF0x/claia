@@ -32,7 +32,7 @@ class PromptCommand(Command):
         output = [
           f"Name: {prompt.name}",
           f"Title: {prompt.title}",
-          f"Prompt: {prompt.prompt}"
+          f"Prompt: {prompt.get_formatted_prompt()}"
         ]
         if prompt.description:
           output.append(f"Description: {prompt.description}")

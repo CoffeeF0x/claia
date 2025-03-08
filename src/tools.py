@@ -12,38 +12,8 @@ from typing import Dict, Any, List, Callable, Optional
 
 # Internal dependencies
 from conversations.prompts import Prompt
-from commands import get_function_definitions, execute_command_by_name
+from commands import execute_command_by_name
 from settings import Settings
-
-
-
-##################################################
-#                   CONSTANTS                    #
-##################################################
-# Function calling format
-FUNCTION_FORMAT = """
-[FUNCTION_CALL]{
-"name": "function_name",
-"parameters": {
-  "param1": "value1",
-  "param2": "value2"
-}
-}[/FUNCTION_CALL]
-"""
-
-# Function calling prompt template
-FUNCTION_CALLING_PROMPT = """
-You are an AI assistant capable of calling functions. Here are the available functions:
-
-{function_definitions}
-
-When you need to call a function, use the following format:
-{function_format}
-
-You can call multiple functions in a single response if needed. Each function call will be replaced with its result.
-Incorporate the function call(s) into your response where necessary.
-"""
-
 
 
 ##################################################
@@ -180,86 +150,3 @@ def process_function_calls(response: str, settings=None) -> str:
         break
 
   return processed_response
-
-
-
-##################################################
-#                PROMPT GENERATION               #
-##################################################
-def get_function_calling_prompt(settings=None) -> str:
-  """
-  Get the function calling prompt with all available function definitions.
-
-  Args:
-    settings: Optional settings object
-
-  Returns:
-    str: The function calling prompt
-  """
-  try:
-    # Get function definitions from commands
-    function_definitions = get_function_definitions(settings)
-
-    # Debug output
-    print(f"Found {len(function_definitions)} function definitions")
-
-    # Convert to JSON with proper indentation
-    function_definitions_json = json.dumps(function_definitions, indent=2)
-
-    # Format the prompt
-    return FUNCTION_CALLING_PROMPT.format(
-      function_definitions=function_definitions_json,
-      function_format=FUNCTION_FORMAT
-    )
-  except Exception as e:
-    print(f"Error generating function calling prompt: {str(e)}")
-    # Return a basic prompt with no functions in case of error
-    return FUNCTION_CALLING_PROMPT.format(
-      function_definitions="[]",
-      function_format=FUNCTION_FORMAT
-    )
-
-def add_function_calling_prompt_to_store(settings) -> None:
-  """
-  Adds the function calling prompt to the prompt store in the settings object.
-
-  Args:
-    settings: The settings object containing the prompt store
-  """
-  if settings is None:
-    return
-
-  function_calling_prompt_name = "functions"
-
-  # Check if prompt already exists
-  if not settings.prompt_exists(function_calling_prompt_name):
-    try:
-      # Get the function calling prompt
-      function_calling_prompt = get_function_calling_prompt(settings)
-
-      # Add to prompt store
-      settings.prompt_store.append(
-        Prompt(
-          settings.prompt_store_directory,
-          function_calling_prompt_name,
-          "Function Calling Assistant",
-          function_calling_prompt,
-          "An assistant capable of calling functions."
-        )
-      )
-    except Exception as e:
-      print(f"Error adding function calling prompt to store: {str(e)}")
-
-
-##################################################
-#                    EXPORTS                     #
-##################################################
-__all__ = [
-  # Function execution
-  "execute_function",
-  "process_function_calls",
-
-  # Prompt generation
-  "get_function_calling_prompt",
-  "add_function_calling_prompt_to_store"
-]
