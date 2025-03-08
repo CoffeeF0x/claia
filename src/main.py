@@ -82,8 +82,14 @@ def create_conversation(settings: Settings, user_input: str = None) -> Conversat
 
   # Otherwise, create a new conversation
   else:
-    system_prompt = settings.active_prompt.prompt if settings.active_prompt else None
-    conversation = Conversation(title="New Conversation", system_prompt=system_prompt)
+    system_prompt = settings.active_prompt if settings.active_prompt else None
+    conversation = Conversation(
+      conversation_directory=settings.conversation_directory,
+      artifacts_directory=settings.artifacts_directory,
+      title="New Conversation",
+      system_prompt=system_prompt,
+      files_subdirectory=settings.conversation_files_directory
+    )
     settings.active_conversation = conversation
 
   # Add the user's message if not empty
@@ -117,10 +123,7 @@ def save_conversation_response(conversation: Conversation, response: str, settin
 
   # Add the assistant's response to the conversation
   conversation.add_message(MessageRole.ASSISTANT, final_response)
-
-  # Save the conversation
-  if hasattr(settings, 'chat_history_directory'):
-    conversation.save(settings.chat_history_directory)
+  conversation.save()
 
   return final_response
 

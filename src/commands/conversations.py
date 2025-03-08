@@ -26,7 +26,7 @@ class ConversationCommand(Command):
   )
   def list_conversations(self, settings: Settings) -> str:
     """List all conversations"""
-    conversations = Conversation.list_conversations(settings.chat_history_directory)
+    conversations = Conversation.list_conversations(settings.conversation_directory)
     if not conversations:
       return "No saved conversations found"
 
@@ -54,7 +54,7 @@ class ConversationCommand(Command):
   )
   def load_conversation(self, settings: Settings, conversation_id: str) -> str:
     """Load a stored conversation"""
-    filepath = os.path.join(settings.chat_history_directory, f"{conversation_id}.json")
+    filepath = os.path.join(settings.conversation_directory, f"{conversation_id}.json")
     if os.path.exists(filepath):
       settings.active_conversation = Conversation.load(filepath)
       message = f"Loaded conversation: {settings.active_conversation.title}"
@@ -80,7 +80,7 @@ class ConversationCommand(Command):
     new_conversation = Conversation(title=title, system_prompt=system_prompt)
 
     # Save the conversation
-    new_conversation.save(settings.chat_history_directory)
+    new_conversation.save(settings.conversation_directory)
     settings.active_conversation = new_conversation
 
     message = f"Created new conversation: {title} (ID: {new_conversation.id})"
@@ -105,7 +105,7 @@ class ConversationCommand(Command):
   def print_conversation(self, settings: Settings, conversation_id: str = None) -> str:
     """Print the current conversation or a specific conversation"""
     if conversation_id:
-      filepath = os.path.join(settings.chat_history_directory, f"{conversation_id}.json")
+      filepath = os.path.join(settings.conversation_directory, f"{conversation_id}.json")
       if os.path.exists(filepath):
         conversation = Conversation.load(filepath)
       else:

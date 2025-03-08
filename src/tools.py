@@ -11,7 +11,7 @@ import importlib
 from typing import Dict, Any, List, Callable, Optional
 
 # Internal dependencies
-from conversations.prompts import LLMPromptStore
+from conversations.prompts import Prompt
 from commands import get_function_definitions, execute_command_by_name
 from settings import Settings
 
@@ -239,7 +239,7 @@ def add_function_calling_prompt_to_store(settings) -> None:
 
       # Add to prompt store
       settings.prompt_store.append(
-        LLMPromptStore(
+        Prompt(
           settings.prompt_store_directory,
           function_calling_prompt_name,
           "Function Calling Assistant",

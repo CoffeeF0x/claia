@@ -14,7 +14,7 @@ from typing import Dict, Any, List, Tuple, Optional
 
 # Internal dependencies
 from conversations import Conversation, MessageRole
-from conversations.prompts import LLMPromptStore
+from conversations.prompts import Prompt
 
 
 
@@ -88,8 +88,11 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
   # Directories
   ("model_directory",                   "models",                      True,  "Directory for model files"),
   ("prompt_store_directory",            "prompts",                     True,  "Directory for prompt stores"),
-  ("chat_history_directory",            "history",                     True,  "Directory for chat histories"),
+  ("conversation_directory",            "conversations",               True,  "Directory for conversations"),
   ("modules_directory",                 "modules",                     True,  "Directory for modules"),
+  ("artifacts_directory",               "artifacts",                   True,  "Directory for persistent artifacts"),
+  ("conversation_files_directory",      "files",                       True,  "Directory for conversation files"),
+  ("temp_directory",                    "temp",                        True,  "Directory for temporary files"),
 
   # Model Settings
   ("active_model",                      "qwq-32b",                     True,  "Active model name"),
@@ -128,8 +131,8 @@ class Settings:
     local_llm_base_url (str): Base URL for local LLM.
     massed_compute_api_token (str): API token for Massed Compute.
     prompt_store_directory (str): Directory to store LLM prompt stores.
-    chat_history_directory (str): Directory to store chat histories.
-    active_prompt (Optional[LLMPromptStore]): Currently active system prompt.
+    conversation_directory (str): Directory to store conversation histories.
+    active_prompt (Optional[Prompt]): Currently active system prompt.
     active_conversation (Optional[Conversation]): Currently active conversation.
     active_model (str): Currently active model name.
     log_level (str): Logging level.
@@ -174,9 +177,20 @@ class Settings:
 
     # Initialize with a new conversation
     if self.active_prompt:
-      self.active_conversation = Conversation(title="New Conversation", system_prompt=self.active_prompt.prompt)
+      self.active_conversation = Conversation(
+        conversation_directory=self.conversation_directory,
+        artifacts_directory=self.artifacts_directory,
+        title="New Conversation",
+        system_prompt=self.active_prompt,
+        files_subdirectory=self.conversation_files_directory
+      )
     else:
-      self.active_conversation = Conversation(title="New Conversation")
+      self.active_conversation = Conversation(
+        conversation_directory=self.conversation_directory,
+        artifacts_directory=self.artifacts_directory,
+        title="New Conversation",
+        files_subdirectory=self.conversation_files_directory
+      )
 
   def _load_config(self):
     """
@@ -266,33 +280,40 @@ class Settings:
 
     return cli_value
 
-  def load_all_prompts(self) -> list[LLMPromptStore]:
+  def load_all_prompts(self) -> list[Prompt]:
     # Load default prompts
-    for prompt in DEFAULT_PROMPTS:
-      if not self.prompt_exists(prompt['name']):
-        self.prompt_store.append(LLMPromptStore(self.prompt_store_directory, prompt['name'], prompt['title'], prompt['prompt'], prompt['description']))
+    for prompt_data in DEFAULT_PROMPTS:
+      if not self.prompt_exists(prompt_data['name']):
+        self.prompt_store.append(Prompt(
+          self.prompt_store_directory,
+          prompt_data['name'],
+          prompt_data['title'],
+          prompt_data['prompt'],
+          prompt_data['description']
+        ))
       else:
         pass
         # TODO: log error, prompt name already exists
 
     # Load prompts from the directory
-    # TODO: Update to use the file get function, and maybe add a get all stores type function that returns a list of LLMPromptStore objects
-    files = LLMPromptStore.list_files(self.prompt_store_directory)
+    files = Prompt.list_files(self.prompt_store_directory)
     for filename in files:
       full_path = os.path.join(self.prompt_store_directory, filename)
       with open(full_path, 'r') as file:
         data = json.load(file)
         if not self.prompt_exists(data['name']):
-          self.prompt_store.append(LLMPromptStore(self.prompt_store_directory, data['name'], data['title'], data['prompt'], data['description']))
+          self.prompt_store.append(Prompt.from_dict(data, self.prompt_store_directory))
         else:
           pass
           # TODO: log error, prompt name already exists
 
+    return self.prompt_store
+
   def prompt_exists(self, name: str) -> bool:
-    formatted_name = LLMPromptStore.validate_and_format_name(name)
+    formatted_name = Prompt.validate_and_format_name(name)
     return any(prompt.name == formatted_name for prompt in self.prompt_store)
 
-  def get_prompt(self, name: str) -> LLMPromptStore:
+  def get_prompt(self, name: str) -> Prompt:
     return next((p for p in self.prompt_store if p.name == name), None)
 
   def validate(self) -> bool:

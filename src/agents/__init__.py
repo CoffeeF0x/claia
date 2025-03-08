@@ -334,12 +334,19 @@ if __name__ == "__main__":
   from conversations import Conversation, MessageRole
 
   # Create a conversation
-  conversation = Conversation(title="Test Conversation")
+  conversation = Conversation(
+    conversation_directory="conversations",
+    artifacts_directory="artifacts",
+    title="Test Conversation"
+  )
   conversation.add_message(MessageRole.USER, "Hello, how are you?")
 
   # Mock settings
   class MockSettings:
     active_model = "gpt-4"
+    conversation_directory = "conversations"
+    artifacts_directory = "artifacts"
+    conversation_files_directory = "files"
 
   settings = MockSettings()
 
