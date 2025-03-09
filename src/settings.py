@@ -11,6 +11,7 @@ import json
 import argparse
 import logging
 from typing import Dict, Any, List, Tuple, Optional
+import logging
 
 # Internal dependencies
 from conversations import Conversation, MessageRole
@@ -29,6 +30,13 @@ LOG_LEVELS = {
   "warning":  logging.WARNING,
   "error":    logging.ERROR,
   "critical": logging.CRITICAL
+}
+
+# Logging formats
+LOG_FORMATS = {
+  "simple": "%(levelname)s: %(message)s",
+  "standard": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+  "detailed": "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
 }
 
 # Function calling prompt template
@@ -129,7 +137,9 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
   ("default_prompt_name",               "default",                     True,  "Default prompt name to use"),
 
   # Application Settings
-  ("log_level",                         "error",                       True,  "Logging level"),
+  ("log_level",                         "warning",                     True,  "Logging level"),
+  ("log_format",                        "standard",                    True,  "Logging format (simple, standard, detailed)"),
+  ("log_file",                          "claia.log",                   True,  "Log file path (empty for console only)"),
   ("min_function_calls",                5,                             True,  "Minimum number of function calls to process"),
   ("max_function_calls",                10,                            True,  "Maximum number of function calls to process"),
 ]
@@ -256,6 +266,63 @@ class Settings:
 
     return cli_value
 
+  def configure_logging(self) -> None:
+    """
+    Configure the logging system based on the current settings.
+    This should be called early in the application startup.
+    """
+    # Validate log level
+    if self.log_level not in LOG_LEVELS:
+      print(f"Invalid log level: {self.log_level}. Using default: error")
+      self.log_level = "error"
+
+    # Validate log format
+    if self.log_format not in LOG_FORMATS:
+      print(f"Invalid log format: {self.log_format}. Using default: standard")
+      self.log_format = "standard"
+
+    # Get the numeric log level and format string
+    log_level = LOG_LEVELS[self.log_level]
+    log_format = LOG_FORMATS[self.log_format]
+
+    # Create a formatter
+    formatter = logging.Formatter(log_format)
+
+    # Configure the root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+
+    # Remove any existing handlers
+    for handler in root_logger.handlers[:]:
+      root_logger.removeHandler(handler)
+
+    # Always add a console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    console_handler.setLevel(log_level)
+    root_logger.addHandler(console_handler)
+
+    # Add a file handler if a log file is specified
+    if self.log_file:
+      try:
+        # Ensure the directory exists
+        log_dir = os.path.dirname(self.log_file)
+        if log_dir and not os.path.exists(log_dir):
+          os.makedirs(log_dir, exist_ok=True)
+
+        file_handler = logging.FileHandler(self.log_file)
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(log_level)
+        root_logger.addHandler(file_handler)
+
+        # Log that we've started logging to a file
+        root_logger.info(f"Logging to file: {self.log_file}")
+      except Exception as e:
+        root_logger.error(f"Failed to set up file logging to {self.log_file}: {e}")
+
+    # Log the configuration
+    root_logger.debug(f"Logging configured with level={self.log_level}, format={self.log_format}")
+
   def load_all_prompts(self) -> list[Prompt]:
     """
     Load all prompts from the default prompts and the prompt store directory.
@@ -310,6 +377,10 @@ class Settings:
       print(f"Invalid log level in environment variable. Using default: {self.log_level}")
       self.log_level = "error"
 
+    if self.log_format not in LOG_FORMATS:
+      print(f"Invalid log format in environment variable. Using default: {self.log_format}")
+      self.log_format = "standard"
+
     return True
 
   def has_command_modules(self) -> bool:
@@ -355,6 +426,7 @@ class Settings:
 if __name__ == "__main__":
   settings = Settings()
   if settings.validate():
+    settings.configure_logging()
     print("Settings loaded successfully")
   else:
     print("Error loading settings")
