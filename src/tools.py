@@ -12,11 +12,20 @@ from typing import Dict, Any
 # Internal dependencies
 from commands import execute_command_by_name
 from settings import Settings
+import logging
 
 
-##################################################
-#              FUNCTION EXECUTION                #
-##################################################
+
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                              FUNCTIONS                               #
+########################################################################
 def execute_function(function_name: str, function_call: Dict[str, Any], settings=None) -> str:
   """
   Execute a function by name with the given parameters.

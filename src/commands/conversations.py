@@ -3,8 +3,7 @@ This module contains commands for managing conversations.
 """
 
 # External dependencies
-import os
-import json
+import logging
 
 # Internal dependencies
 from commands.base import Command, command
@@ -14,9 +13,16 @@ from settings import Settings
 
 
 
-##################################################
-#                 COMMAND CLASS                  #
-##################################################
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                            COMMAND CLASS                             #
+########################################################################
 class ConversationCommand(Command):
 
   @command(

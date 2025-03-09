@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 import requests
+import logging
 
 # Internal dependencies
 from errors import Result
@@ -8,9 +9,16 @@ from settings import Settings
 
 
 
-##################################################
-#                  BASE CLASSES                  #
-##################################################
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                               CLASSES                                #
+########################################################################
 class BaseModel(ABC):
   def __init__(self, model_name: str):
     self.model_name = model_name

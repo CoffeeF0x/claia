@@ -13,13 +13,11 @@ from typing import Dict, Optional, List, Any
 # Internal dependencies
 from conversations.base import BaseFile
 
-# Setup logging
-logger = logging.getLogger(__name__)
 
 
-###########################################################################
-#                               CONSTANTS                                 #
-###########################################################################
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
 # Default function format placeholder
 DEFAULT_FUNCTION_FORMAT = """
 [FUNCTION_CALL]{
@@ -32,9 +30,17 @@ DEFAULT_FUNCTION_FORMAT = """
 """
 
 
-###########################################################################
-#                               PROMPT STORE                              #
-###########################################################################
+
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                             PROMPT STORE                             #
+########################################################################
 class Prompt(BaseFile):
   """
   Represents a reusable prompt template that can be used in conversations.

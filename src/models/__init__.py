@@ -3,6 +3,10 @@
 # Manage source objects (list of sources?)
 # Handle source scaling if overloaded
 
+# External dependencies
+import logging
+
+# Internal dependencies
 from models.base import APIModel, LocalModel
 from models.definitions import definitions, sources
 from settings import Settings
@@ -10,9 +14,16 @@ from errors import Result
 
 
 
-##################################################
-#                   FUNCTIONS                    #
-##################################################
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                              FUNCTIONS                               #
+########################################################################
 # Get the appropriate model based on the model name and source
 def get_model(model_name: str, settings: Settings = None) -> Result:
   result = Result()

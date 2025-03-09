@@ -15,13 +15,18 @@ from typing import Dict, List, Any, Optional
 from conversations.base import BaseFile
 from conversations.files import FileReference, FileHandler
 
-# Setup logging
+
+
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
 logger = logging.getLogger(__name__)
 
 
-###########################################################################
-#                                ARTIFACTS                                #
-###########################################################################
+
+########################################################################
+#                              ARTIFACTS                               #
+########################################################################
 class Artifact(BaseFile):
   """
   Represents a persistent file artifact that can be referenced across conversations.

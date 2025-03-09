@@ -1,13 +1,22 @@
+import logging
+
+# Internal Dependencies
 from commands.base import Command, command
-from errors import Result
 from settings import Settings
 from models.definitions import definitions, sources
 
 
 
-##################################################
-#                 COMMAND CLASS                  #
-##################################################
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                            COMMAND CLASS                             #
+########################################################################
 class ModelCommand(Command):
 
   @command(

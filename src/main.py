@@ -29,25 +29,24 @@ from conversations import Conversation, MessageRole
 
 
 
-###########################################################################
-#                               CONSTANTS                                 #
-###########################################################################
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
 HISTORY_FILE = ".claia_history"
 MAX_HISTORY_LEN = 1000
 
 
 
-###########################################################################
-#                             INITIALIZATION                              #
-###########################################################################
-# Initialize logger (will be properly configured after settings are loaded)
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
 logger = logging.getLogger(__name__)
 
 
 
-###########################################################################
-#                           UTILITY FUNCTIONS                             #
-###########################################################################
+########################################################################
+#                          UTILITY FUNCTIONS                           #
+########################################################################
 def setup_command_history() -> None:
   """Initialize readline for command history with arrow key navigation."""
   logger.debug("Setting up command history")
@@ -78,9 +77,9 @@ def get_user_input() -> str:
 
 
 
-###########################################################################
-#                         CONVERSATION FUNCTIONS                          #
-###########################################################################
+########################################################################
+#                        CONVERSATION FUNCTIONS                        #
+########################################################################
 def create_conversation(settings: Settings, user_input: str = None) -> Conversation:
   """
   Create a conversation object from settings and user input.
@@ -164,9 +163,9 @@ def save_conversation_response(conversation: Conversation, response: str, settin
 
 
 
-###########################################################################
-#                            AGENT FUNCTIONS                              #
-###########################################################################
+########################################################################
+#                           AGENT FUNCTIONS                            #
+########################################################################
 def process_next_in_queue(settings: Settings, process_queue: ProcessQueue) -> None:
   """
   Process the next pending item in the queue.
@@ -214,13 +213,11 @@ def process_next_in_queue(settings: Settings, process_queue: ProcessQueue) -> No
 
     elif updated_process.status == ProcessStatus.FAILED:
       logger.error(f"Process failed: {updated_process.error}")
-      print(f"Error: {updated_process.error}")
 
   except queue.Empty:
     logger.debug("Process queue is empty")
   except Exception as e:
     logger.exception(f"Error processing request: {str(e)}")
-    print(f"Error: {str(e)}")
 
 def process_user_input(user_input: str, settings: Settings, process_queue: ProcessQueue) -> Result:
   """
@@ -273,7 +270,6 @@ def process_user_input(user_input: str, settings: Settings, process_queue: Proce
       updated_process = process_queue.get_by_id(process.id)
       if not updated_process:
         logger.error("Error: Process not found")
-        print("Error: Process not found")
         break
 
       if updated_process.status in [ProcessStatus.COMPLETED, ProcessStatus.FAILED, ProcessStatus.CANCELLED]:
@@ -287,9 +283,9 @@ def process_user_input(user_input: str, settings: Settings, process_queue: Proce
 
 
 
-###########################################################################
-#                           FUNCTION DEFINITIONS                          #
-###########################################################################
+########################################################################
+#                         FUNCTION DEFINITIONS                         #
+########################################################################
 def load_function_definitions(settings: Settings) -> None:
   """
   Load function definitions into the settings object.
@@ -307,8 +303,6 @@ def load_function_definitions(settings: Settings) -> None:
     logger.debug(f"Setting {len(function_definitions)} function definitions in settings")
     settings.set_function_definitions(function_definitions)
 
-    # Debug output
-    print(f"Loaded {len(function_definitions)} function definitions")
   except Exception as e:
     logger.error(f"Error loading function definitions: {e}")
     # Initialize with empty list in case of error
@@ -317,14 +311,14 @@ def load_function_definitions(settings: Settings) -> None:
 
 
 
-###########################################################################
-#                              MAIN FUNCTION                              #
-###########################################################################
+########################################################################
+#                                 MAIN                                 #
+########################################################################
 def main() -> None:
   """Main application entry point."""
   try:
     # Create application settings
-    print("Initializing CLAIA application...")
+    logger.info("Initializing CLAIA application...")
     settings = Settings()
 
     # Configure logging using settings
@@ -355,7 +349,6 @@ def main() -> None:
     logger.debug(f"Active prompt: {settings.active_prompt.name if settings.active_prompt else 'None'}")
 
     logger.info("CLAIA initialization complete, entering main loop")
-    print("CLAIA initialized and ready.")
 
     # Main application loop
     result = Result()
@@ -381,17 +374,15 @@ def main() -> None:
       # Display any error messages
       if result.is_error():
         logger.warning(f"Error result: {result.get_message()}")
-        print(result.get_message())
 
     # Display exit message
     logger.info(f"CLAIA application exiting: {result.get_message()}")
-    print(result.get_message())
 
   except Exception as e:
     logger.critical(f"Unhandled exception in main: {str(e)}", exc_info=True)
-    print(f"Critical error: {str(e)}")
     sys.exit(1)
 
-# Call main function
+
+
 if __name__ == "__main__":
   main()

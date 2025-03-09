@@ -7,9 +7,9 @@ from models.remote.vllm import VLLMTextModel
 
 
 
-##################################################
-#              MODEL SOURCE MAPPING              #
-##################################################
+########################################################################
+#                         MODEL SOURCE MAPPING                         #
+########################################################################
 # Maps source identifiers to their implementation details
 # Structure:
 #   - class: Implementation class
@@ -238,9 +238,9 @@ sources = {
 
 
 
-##################################################
-#              MODEL DEFINITIONS                 #
-##################################################
+########################################################################
+#                          MODEL DEFINITIONS                           #
+########################################################################
 # General model information and metadata
 # Source-specific details are in the sources mapping
 # Each model entry contains:
@@ -334,9 +334,9 @@ definitions = {
 
 
 
-##################################################
-#            CAPABILITY ABBREVIATIONS            #
-##################################################
+########################################################################
+#                       CAPABILITY ABBREVIATIONS                       #
+########################################################################
 # Maps short codes to their full capability names
 abbreviations = {
   "ttt": "text-to-text",
@@ -351,9 +351,9 @@ abbreviations = {
 
 
 
-##################################################
-#               INPUT/OUTPUT TYPES               #
-##################################################
+########################################################################
+#                          INPUT/OUTPUT TYPES                          #
+########################################################################
 # Maps content types to their supported file extensions
 types = {
   "text": ["txt"],

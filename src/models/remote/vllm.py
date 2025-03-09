@@ -1,6 +1,21 @@
 from typing import Dict, Any
+import logging
+
+# Internal dependencies
 from models.base import APIModel
 
+
+
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                               CLASSES                                #
+########################################################################
 class VLLMTextModel(APIModel):
   def __init__(self, model_name: str, base_url: str = None):
     if not base_url:
@@ -13,14 +28,14 @@ class VLLMTextModel(APIModel):
     # for msg in messages:
     #   role = msg.get("role", "")
     #   content = msg.get("content", "")
-      
+
     #   if role == "system":
     #     prompt += f"{content}\n"
     #   elif role == "user":
     #     prompt += f"User: {content}\n"
     #   elif role == "assistant":
     #     prompt += f"Assistant: {content}\n"
-    
+
     # # Add final user prompt indicator if last message was from user
     # if messages[-1]["role"] == "user":
     #   prompt += "Assistant: "
@@ -34,6 +49,6 @@ class VLLMTextModel(APIModel):
       "stream": kwargs.get("stream", False),
       "stop": kwargs.get("stop", None),
     }
-    
+
     response = self.post("v1/chat/completions", data)
     return response.json()["choices"][0]["message"]["content"]

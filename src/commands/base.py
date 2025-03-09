@@ -1,16 +1,24 @@
 from abc import ABC
 from functools import wraps
 from typing import List, Dict, Any, Callable, Optional, Union
+import logging
 
-# Internal dependencies
+# Internal Dependencies
 from errors import Result
 from settings import Settings
 
 
 
-##################################################
-#                COMMAND DECORATOR               #
-##################################################
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                          COMMAND DECORATOR                           #
+########################################################################
 def command(
     path: List[str] = None,
     description: str = None,
@@ -70,9 +78,9 @@ def command(
 
 
 
-##################################################
-#                   BASE CLASS                   #
-##################################################
+########################################################################
+#                              BASE CLASS                              #
+########################################################################
 class Command(ABC):
   def __init__(self):
     """Initialize command and build the function tree from decorated methods"""

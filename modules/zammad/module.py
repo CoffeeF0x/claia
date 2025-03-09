@@ -10,6 +10,7 @@ import json
 import requests
 import urllib.parse
 import re
+import logging
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List, Optional, Callable, TypeVar, Tuple
 from tempfile import NamedTemporaryFile
@@ -31,9 +32,16 @@ except ImportError:
 
 
 
-##################################################
-#                  CONSTANTS                     #
-##################################################
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
 # Environment variable names
 ENV_ZAMMAD_API_TOKEN = "TOKEN_ZAMMAD"
 ENV_ZAMMAD_BASE_URL = "ZAMMAD_BASEURL"
@@ -148,9 +156,9 @@ Your response should ONLY contain the updated list in a clear, structured format
 
 
 
-##################################################
-#                   SETTINGS                     #
-##################################################
+########################################################################
+#                               SETTINGS                               #
+########################################################################
 class ZammadSettings:
   """
   Settings for the Zammad module.
@@ -198,9 +206,9 @@ def get_settings() -> ZammadSettings:
 
 
 
-##################################################
-#                  DECORATORS                    #
-##################################################
+########################################################################
+#                              DECORATORS                              #
+########################################################################
 # Type variable for generic function return type
 T = TypeVar('T')
 
@@ -233,9 +241,9 @@ def require_zammad_config(func: Callable[..., T]) -> Callable[..., T]:
 
 
 
-##################################################
-#                  ZAMMAD API                    #
-##################################################
+########################################################################
+#                              API CLASS                               #
+########################################################################
 class ZammadAPI:
   """Class for interacting with the Zammad API."""
   def __init__(self, base_url: str, api_token: str) -> None:
@@ -479,9 +487,9 @@ class ZammadAPI:
 
 
 
-##################################################
-#                 COMMAND CLASS                  #
-##################################################
+########################################################################
+#                            COMMAND CLASS                             #
+########################################################################
 class ModuleCommands(Command):
   """Command class for Zammad ticket management"""
 
@@ -841,9 +849,9 @@ class ModuleCommands(Command):
 
 
 
-##################################################
-#                   FUNCTIONS                    #
-##################################################
+########################################################################
+#                              FUNCTIONS                               #
+########################################################################
 def extract_tag_from_response(response: str) -> Tuple[str, bool]:
   """
   Extract tag from AI model response.

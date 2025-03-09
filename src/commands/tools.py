@@ -6,6 +6,7 @@ This module provides utility functions that can be called by the AI.
 
 # External dependencies
 import datetime
+import logging
 from typing import Dict, Any, Optional
 
 # Internal dependencies
@@ -14,9 +15,16 @@ from settings import Settings
 
 
 
-##################################################
-#                   COMMAND CLASS                #
-##################################################
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                            COMMAND CLASS                             #
+########################################################################
 class ToolsCommand(Command):
   """Command class for utility tool functions"""
 

@@ -1,6 +1,21 @@
 from typing import Dict, Any
+import logging
+
+# Internal dependencies
 from models.base import APIModel
 
+
+
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                               CLASSES                                #
+########################################################################
 class OpenAITextModel(APIModel):
   def __init__(self, model_name: str):
     super().__init__(model_name, base_url="https://api.openai.com/v1")

@@ -38,9 +38,16 @@ from settings import Settings
 
 
 
-##################################################
-#                   CONSTANTS                    #
-##################################################
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
 # Define command modules with their associated information
 # Format: (command_instance, primary_names, description, is_enabled)
 COMMAND_MODULES: List[Tuple[Any, List[str], str, bool]] = [
@@ -98,9 +105,9 @@ logger = logging.getLogger(__name__)
 
 
 
-##################################################
-#                MODULE LOADING                  #
-##################################################
+########################################################################
+#                            MODULE LOADING                            #
+########################################################################
 def load_modules() -> None:
   """
   Load all available modules from the modules directory.
@@ -189,9 +196,9 @@ def load_modules() -> None:
 
 
 
-##################################################
-#                   FUNCTIONS                    #
-##################################################
+########################################################################
+#                              FUNCTIONS                               #
+########################################################################
 # Remove extra spaces, verify there is a command and convert all commands to lowercase
 def cleanup_commands(commands: list[str], settings: Settings) -> Result:
   result: Result = Result()
@@ -355,9 +362,9 @@ def execute_command_by_name(function_name: str, parameters: Dict[str, Any], sett
 
 
 
-##################################################
-#          COMMAND REGISTRY DEFINITION           #
-##################################################
+########################################################################
+#                     COMMAND REGISTRY DEFINITION                      #
+########################################################################
 command_registry = initialize_command_registry()
 
 # Run the cleanup routine and execute the command
@@ -383,9 +390,9 @@ def run(input: str, settings: Settings) -> Result:
 
 
 
-##################################################
-#                 HELP FUNCTIONS                 #
-##################################################
+########################################################################
+#                            HELP FUNCTIONS                            #
+########################################################################
 # Display help for all commands
 def display_help() -> None:
   print("Here is a list of available commands:")

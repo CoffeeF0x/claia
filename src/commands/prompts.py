@@ -1,13 +1,23 @@
+import logging
+from typing import Dict
+
+# Internal Dependencies
 from commands.base import Command, command
 from errors import Result
 from settings import Settings
-from typing import Dict
 
 
 
-##################################################
-#                 COMMAND CLASS                  #
-##################################################
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                            COMMAND CLASS                             #
+########################################################################
 class PromptCommand(Command):
 
   @command(

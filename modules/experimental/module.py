@@ -8,6 +8,7 @@ This module provides experimental features and testing capabilities.
 import json
 import torch
 from typing import Dict, Any
+import logging
 
 # Internal dependencies
 from commands.base import Command, command
@@ -16,9 +17,16 @@ from settings import Settings
 
 
 
-##################################################
-#                 COMMAND CLASS                  #
-##################################################
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                            COMMAND CLASS                             #
+########################################################################
 class ModuleCommands(Command):
   """Command class for experimental features and testing."""
 

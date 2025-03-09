@@ -23,6 +23,18 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, logging as transfo
 from typing import List, Dict
 from models.base import LocalModel
 
+
+
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                               CLASSES                                #
+########################################################################
 class TransformersLocalModel(LocalModel):
     def __init__(self, model_name: str, model_path: str, defer_loading: bool = False, device="cpu", log_level: str = "info"):
         self.set_log_level(log_level)

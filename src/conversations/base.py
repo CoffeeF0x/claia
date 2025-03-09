@@ -10,16 +10,21 @@ import uuid
 import logging
 from typing import Dict, List, Any, Optional, Type, TypeVar, Generic
 
-# Setup logging
+
+
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
 logger = logging.getLogger(__name__)
 
 # Type variable for class methods that return the class instance
 T = TypeVar('T', bound='BaseFile')
 
 
-###########################################################################
-#                                BASE CLASS                               #
-###########################################################################
+
+########################################################################
+#                              BASE CLASS                              #
+########################################################################
 class BaseFile:
   """
   Base class for all file-related operations in CLAIA.
