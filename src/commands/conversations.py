@@ -54,9 +54,14 @@ class ConversationCommand(Command):
   )
   def load_conversation(self, settings: Settings, conversation_id: str) -> str:
     """Load a stored conversation"""
-    filepath = os.path.join(settings.conversation_directory, f"{conversation_id}.json")
-    if os.path.exists(filepath):
-      settings.active_conversation = Conversation.load(filepath)
+    settings.active_conversation = Conversation.load(
+      conversation_id=conversation_id,
+      conversation_directory=settings.conversation_directory,
+      artifacts_directory=settings.artifacts_directory,
+      files_subdirectory=settings.conversation_files_directory
+    )
+
+    if settings.active_conversation:
       message = f"Loaded conversation: {settings.active_conversation.title}"
       print(message)
       return message
@@ -77,10 +82,16 @@ class ConversationCommand(Command):
 
     # Create new conversation with system prompt if available
     system_prompt = settings.active_prompt.get_formatted_prompt() if settings.active_prompt else None
-    new_conversation = Conversation(title=title, system_prompt=system_prompt)
+    new_conversation = Conversation(
+      conversation_directory=settings.conversation_directory,
+      artifacts_directory=settings.artifacts_directory,
+      title=title,
+      system_prompt=system_prompt,
+      files_subdirectory=settings.conversation_files_directory
+    )
 
     # Save the conversation
-    new_conversation.save(settings.conversation_directory)
+    new_conversation.save()
     settings.active_conversation = new_conversation
 
     message = f"Created new conversation: {title} (ID: {new_conversation.id})"
@@ -105,10 +116,13 @@ class ConversationCommand(Command):
   def print_conversation(self, settings: Settings, conversation_id: str = None) -> str:
     """Print the current conversation or a specific conversation"""
     if conversation_id:
-      filepath = os.path.join(settings.conversation_directory, f"{conversation_id}.json")
-      if os.path.exists(filepath):
-        conversation = Conversation.load(filepath)
-      else:
+      conversation = Conversation.load(
+        conversation_id=conversation_id,
+        conversation_directory=settings.conversation_directory,
+        artifacts_directory=settings.artifacts_directory,
+        files_subdirectory=settings.conversation_files_directory
+      )
+      if not conversation:
         message = f"Conversation with ID {conversation_id} not found"
         print(message)
         return message

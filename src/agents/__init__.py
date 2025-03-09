@@ -337,7 +337,8 @@ if __name__ == "__main__":
   conversation = Conversation(
     conversation_directory="conversations",
     artifacts_directory="artifacts",
-    title="Test Conversation"
+    title="Test Conversation",
+    files_subdirectory="files"
   )
   conversation.add_message(MessageRole.USER, "Hello, how are you?")
 
