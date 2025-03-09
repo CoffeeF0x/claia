@@ -146,7 +146,7 @@ class MassedComputeCommand(Command):
   )
   def list_instances(self, settings: Settings) -> str:
     """List all running instances"""
-    if not settings.has_massed_compute_api_token:
+    if not settings.massed_compute_api_token:
       msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
       print(msg)
       return msg
@@ -184,7 +184,7 @@ class MassedComputeCommand(Command):
   )
   def list_gpus(self, settings: Settings, sort_by: str = None) -> str:
     """List available GPU configurations with optional sorting"""
-    if not settings.has_massed_compute_api_token:
+    if not settings.massed_compute_api_token:
       msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
       print(msg)
       return msg
@@ -299,8 +299,8 @@ class MassedComputeCommand(Command):
     help_text="List all available VM images that can be deployed"
   )
   def list_images(self, settings: Settings) -> str:
-    """Lists all available images that can be deployed"""
-    if not settings.has_massed_compute_api_token:
+    """List all available VM images"""
+    if not settings.massed_compute_api_token:
       msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
       print(msg)
       return msg
@@ -352,7 +352,7 @@ class MassedComputeCommand(Command):
   def deploy_cheapest_instance(self, settings: Settings, image_id: int, instance_name: str,
                               startup_script: str = None, ssh_keys: str = None) -> str:
     """Deploy the cheapest available GPU instance"""
-    if not settings.has_massed_compute_api_token:
+    if not settings.massed_compute_api_token:
       msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
       print(msg)
       return msg
@@ -436,8 +436,8 @@ class MassedComputeCommand(Command):
   )
   def deploy_specific_instance(self, settings: Settings, image_id: int, instance_name: str,
                               product_name: str, startup_script: str = None, ssh_keys: str = None) -> str:
-    """Deploy a specific GPU instance type"""
-    if not settings.has_massed_compute_api_token:
+    """Deploy a specific GPU instance"""
+    if not settings.massed_compute_api_token:
       msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
       print(msg)
       return msg
@@ -576,8 +576,8 @@ class MassedComputeCommand(Command):
     }
   )
   def terminate_instances(self, settings: Settings, identifiers: str) -> str:
-    """Terminates one or more instances by UUID or name"""
-    if not settings.has_massed_compute_api_token:
+    """Terminate one or more instances by UUID or name"""
+    if not settings.massed_compute_api_token:
       msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
       print(msg)
       return msg
@@ -675,8 +675,8 @@ class MassedComputeCommand(Command):
     }
   )
   def get_instance_details(self, settings: Settings, identifier: str) -> str:
-    """Gets detailed information about a specific instance"""
-    if not settings.has_massed_compute_api_token:
+    """Get detailed information about a specific instance"""
+    if not settings.massed_compute_api_token:
       msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
       print(msg)
       return msg
@@ -773,8 +773,8 @@ class MassedComputeCommand(Command):
     }
   )
   def ssh_to_instance(self, settings: Settings, identifier: str) -> str:
-    """Initiates an SSH session to the specified instance"""
-    if not settings.has_massed_compute_api_token:
+    """Connect to instance via SSH"""
+    if not settings.massed_compute_api_token:
       msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
       print(msg)
       return msg
@@ -885,8 +885,8 @@ class MassedComputeCommand(Command):
     }
   )
   def run_script(self, settings: Settings, identifier: str, script_name: str) -> str:
-    """Runs a predefined script on an existing instance using SSH"""
-    if not settings.has_massed_compute_api_token:
+    """Run a predefined script on an instance"""
+    if not settings.massed_compute_api_token:
       msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
       print(msg)
       return msg
@@ -1089,7 +1089,7 @@ def get_startup_script(script_name: str, settings: Optional[Settings] = None, ex
   params = {}
 
   # Add HuggingFace token if available
-  if settings and settings.has_huggingface_api_token:
+  if settings and settings.huggingface_api_token:
     params['hf_token'] = settings.huggingface_api_token
 
   # Add VLLM-specific parameters if available
@@ -1100,7 +1100,7 @@ def get_startup_script(script_name: str, settings: Optional[Settings] = None, ex
       params['email'] = settings.vllm_email
     if settings.vllm_zone:
       params['zone'] = settings.vllm_zone
-    if settings.has_cloudflare_api_token:
+    if settings.cloudflare_api_token:
       params['cloudflare_token'] = settings.cloudflare_api_token
     if settings.vllm_eab_kid:
       params['eab_kid'] = settings.vllm_eab_kid
@@ -1170,9 +1170,9 @@ def handle_ssh_keys(key_args: List[str]) -> List[str]:
 # This class is responsible for interacting with the MassedCompute API.
 class MassedComputeAPI:
   def __init__(self, settings: Settings):
-    """Initialize MassedCompute API client."""
-    if not settings.has_massed_compute_api_token:
-      raise ValueError("MassedCompute API token not found in settings")
+    """Initialize the MassedCompute API client"""
+    if not settings.massed_compute_api_token:
+      raise ValueError("MassedCompute API token not found.")
 
     self.api_token = settings.massed_compute_api_token
     self.base_url = "https://vm.massedcompute.com/api/v1"

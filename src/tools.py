@@ -7,11 +7,9 @@ It includes function calling prompt generation and execution.
 
 # External dependencies
 import json
-import importlib
-from typing import Dict, Any, List, Callable, Optional
+from typing import Dict, Any
 
 # Internal dependencies
-from conversations.prompts import Prompt
 from commands import execute_command_by_name
 from settings import Settings
 

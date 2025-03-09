@@ -141,32 +141,7 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
 ########################################################################
 class Settings:
   """
-  Stores and manages configuration settings for the CLAI application.
-
-  Attributes:
-    openai_api_token (str): API token for OpenAI.
-    anthropic_api_token (str): API token for Anthropic.
-    local_llm_api_token (str): API token for local LLM.
-    runpod_api_token (str): API token for RunPod.
-    local_llm_base_url (str): Base URL for local LLM.
-    massed_compute_api_token (str): API token for Massed Compute.
-    prompt_store_directory (str): Directory to store LLM prompt stores.
-    conversation_directory (str): Directory to store conversation histories.
-    active_prompt (Optional[Prompt]): Currently active system prompt.
-    active_conversation (Optional[Conversation]): Currently active conversation.
-    active_model (str): Currently active model name.
-    log_level (str): Logging level.
-    openrouter_api_token (str): API token for OpenRouter.
-    active_model_source (Optional[str]): Currently active model source (e.g. "anthropic", "openai", etc).
-    huggingface_api_token (str): API token for Hugging Face.
-    vllm_zone (str): Zone for VLLM.
-    vllm_email (str): Email for VLLM.
-    vllm_subdomain (str): Subdomain for VLLM.
-    vllm_eab_kid (str): EAB Kid for ZeroSSL for VLLM.
-    vllm_eab_hmac_encoded (str): EAB HMAC Encoded for ZeroSSL for VLLM.
-    min_function_calls (int): Minimum number of function calls to process.
-    max_function_calls (int): Maximum number of function calls to process.
-    default_prompt_name (str): Default prompt name to use.
+  Stores and manages configuration settings for the CLAIA application.
   """
 
   def __init__(self):
@@ -178,16 +153,6 @@ class Settings:
     self.command_modules = []
     self.function_modules = []
     self.function_definitions = []
-
-    # Boolean flags for API key availability
-    self.has_openai_api_token = False
-    self.has_anthropic_api_token = False
-    self.has_local_llm_api_token = False
-    self.has_runpod_api_token = False
-    self.has_massed_compute_api_token = False
-    self.has_openrouter_api_token = False
-    self.has_huggingface_api_token = False
-    self.has_cloudflare_api_token = False
 
     # Load configuration
     self._load_config()
@@ -218,7 +183,7 @@ class Settings:
     Load configuration from environment variables and command line arguments.
     Command line arguments take precedence over environment variables.
     """
-    parser = argparse.ArgumentParser(description='CLAI Settings')
+    parser = argparse.ArgumentParser(description='CLAIA Settings')
 
     # Add arguments based on CONFIG_VARS, but only for externally settable ones
     for var_name, default, externally_settable, help_text in CONFIG_VARS:
@@ -256,16 +221,6 @@ class Settings:
     # Set all configuration values as instance attributes
     for key, value in config_dict.items():
       setattr(self, key, value)
-
-    # Set API token flags
-    self.has_openai_api_token = bool(self.openai_api_token)
-    self.has_anthropic_api_token = bool(self.anthropic_api_token)
-    self.has_local_llm_api_token = bool(self.local_llm_api_token)
-    self.has_runpod_api_token = bool(self.runpod_api_token)
-    self.has_massed_compute_api_token = bool(self.massed_compute_api_token)
-    self.has_openrouter_api_token = bool(self.openrouter_api_token)
-    self.has_huggingface_api_token = bool(self.huggingface_api_token)
-    self.has_cloudflare_api_token = bool(self.cloudflare_api_token)
 
   def _get_config_value(self, var_name: str, default: Any, args: argparse.Namespace, externally_settable: bool) -> Any:
     """
@@ -349,27 +304,13 @@ class Settings:
     Validate the configuration settings.
 
     Returns:
-      bool: True if at least one API token is present, False otherwise.
+      bool: Always returns True as API token validation is handled elsewhere.
     """
     if self.log_level not in LOG_LEVELS:
       print(f"Invalid log level in environment variable. Using default: {self.log_level}")
       self.log_level = "error"
 
-    api_tokens_present = (
-      self.has_openai_api_token or
-      self.has_anthropic_api_token or
-      self.has_local_llm_api_token or
-      self.has_runpod_api_token or
-      self.has_massed_compute_api_token or
-      self.has_openrouter_api_token or
-      self.has_huggingface_api_token or
-      self.has_cloudflare_api_token
-    )
-
-    if not api_tokens_present:
-      print("No API tokens found. At least one API token is required.")
-
-    return api_tokens_present
+    return True
 
   def has_command_modules(self) -> bool:
     """
