@@ -34,13 +34,13 @@ services:
     volumes:
       - files:/app/files
     # - ./output:/app/files
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   claia-package:
     image: clai:package

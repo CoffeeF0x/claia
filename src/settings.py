@@ -163,6 +163,7 @@ class Settings:
     self.command_modules = []
     self.function_modules = []
     self.function_definitions = []
+    self.root_logger = None
 
     # Load configuration
     self._load_config()
@@ -289,18 +290,18 @@ class Settings:
     formatter = logging.Formatter(log_format)
 
     # Configure the root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
+    self.root_logger = logging.getLogger()
+    self.root_logger.setLevel(log_level)
 
     # Remove any existing handlers
-    for handler in root_logger.handlers[:]:
-      root_logger.removeHandler(handler)
+    for handler in self.root_logger.handlers[:]:
+      self.root_logger.removeHandler(handler)
 
     # Always add a console handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
     console_handler.setLevel(log_level)
-    root_logger.addHandler(console_handler)
+    self.root_logger.addHandler(console_handler)
 
     # Add a file handler if a log file is specified
     if self.log_file:
@@ -313,15 +314,15 @@ class Settings:
         file_handler = logging.FileHandler(self.log_file)
         file_handler.setFormatter(formatter)
         file_handler.setLevel(log_level)
-        root_logger.addHandler(file_handler)
+        self.root_logger.addHandler(file_handler)
 
         # Log that we've started logging to a file
-        root_logger.info(f"Logging to file: {self.log_file}")
+        self.root_logger.info(f"Logging to file: {self.log_file}")
       except Exception as e:
-        root_logger.error(f"Failed to set up file logging to {self.log_file}: {e}")
+        self.root_logger.error(f"Failed to set up file logging to {self.log_file}: {e}")
 
     # Log the configuration
-    root_logger.debug(f"Logging configured with level={self.log_level}, format={self.log_format}")
+    self.root_logger.debug(f"Logging configured with level={self.log_level}, format={self.log_format}")
 
   def load_all_prompts(self) -> list[Prompt]:
     """
@@ -417,7 +418,7 @@ class Settings:
     """
     if self.active_prompt and self.active_prompt.name == "functions":
       self.active_prompt.load_function_definitions(self.function_definitions)
-      print(f"Applied {len(self.function_definitions)} function definitions to active prompt")
+      self.root_logger.info(f"Applied {len(self.function_definitions)} function definitions to active prompt")
     elif self.active_prompt:
       # For non-function prompts, we still load the definitions in case they're needed
       self.active_prompt.load_function_definitions(self.function_definitions)
