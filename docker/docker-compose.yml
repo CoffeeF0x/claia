@@ -42,6 +42,23 @@ services:
               count: all
               capabilities: [gpu]
 
+  claia-run-tests:
+    image: clai:run-tests
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile.run-tests
+    env_file:
+      - ../.env
+    volumes:
+      - files:/app/files
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
   claia-package:
     image: clai:package
     build:
