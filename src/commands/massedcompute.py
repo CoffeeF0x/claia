@@ -126,6 +126,25 @@ STARTUP_SCRIPTS = {
   ],
   "test": [
     "echo 'foxes will rule the world!' > /home/Ubuntu/test.txt"
+  ],
+  "docker-remote": [
+    # Install dependencies
+    "sudo apt update",
+    "sudo apt install -y nano htop",
+
+    # Add SSH key
+    "echo \"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGfSWokLXy/QmagyiG6hjPG/wxFKmmgyOk65pLvfNizZ\" > ~/.ssh/authorized_keys",
+
+    # Add user to docker group
+    "sudo usermod -aG docker $USER",
+    "newgrp docker",
+  ],
+  "ddns": [
+    "docker run -d --name ddns-updater " +
+    "-e ZONE={zone} " +
+    "-e SUBDOMAIN={subdomain} " +
+    "-e API_KEY={cloudflare_token} " +
+    "oznu/cloudflare-ddns:latest",
   ]
 }
 
