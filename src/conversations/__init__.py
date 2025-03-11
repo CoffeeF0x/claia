@@ -47,7 +47,6 @@ class MessageRole(Enum):
   FILE = "file"
   IMAGE = "image"
   AUDIO = "audio"
-  ARTIFACT = "artifact"
 
 
 @dataclass
