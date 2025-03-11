@@ -41,7 +41,6 @@ class MessageRole(Enum):
   FILE = "file"
   IMAGE = "image"
   AUDIO = "audio"
-  MODEL_3D = "model-3d"
   ARTIFACT = "artifact"
 
 

@@ -138,8 +138,6 @@ class FileHandler(ABC):
       return AudioFileHandler()
     elif mime_type.startswith("text/"):
       return TextFileHandler()
-    elif mime_type.startswith("model/"):
-      return Model3DFileHandler()
     else:
       return GenericFileHandler()
 
@@ -279,46 +277,6 @@ class AudioFileHandler(FileHandler):
       return "[Audio not found]"
 
     return f"[Audio: {file_reference.file_name}]"
-
-
-class Model3DFileHandler(FileHandler):
-  def process(self, file_reference: FileReference) -> Dict[str, Any]:
-    """
-    Process a 3D model file and return extracted data.
-
-    Args:
-        file_reference: The file reference to process
-
-    Returns:
-        Dict[str, Any]: The extracted data
-    """
-    try:
-      if not file_reference.file_exists():
-        return {"error": "File does not exist"}
-
-      return {
-        "type": "3d_model",
-        "format": file_reference.file_path.split('.')[-1].lower(),
-        "size_bytes": file_reference.get_file_size()
-      }
-    except Exception as e:
-      logger.error(f"Failed to process 3D model file {file_reference.file_path}: {e}")
-      return {"error": str(e)}
-
-  def get_preview(self, file_reference: FileReference) -> str:
-    """
-    Get a text preview of the 3D model for display in conversations.
-
-    Args:
-        file_reference: The file reference to get a preview for
-
-    Returns:
-        str: A preview of the 3D model
-    """
-    if not file_reference.file_exists():
-      return "[3D Model not found]"
-
-    return f"[3D Model: {file_reference.file_name}]"
 
 
 class GenericFileHandler(FileHandler):
