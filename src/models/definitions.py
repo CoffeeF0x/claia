@@ -8,6 +8,28 @@ from models.remote.vllm import VLLMTextModel
 
 
 ########################################################################
+#                                ENUMS                                 #
+########################################################################
+class ModelCapability(Enum):
+  """Capabilities of a model."""
+  TTT = "text-to-text"
+  TTI = "text-to-image"
+  ITT = "image-to-text"
+  TTS = "text-to-speech"
+  STT = "speech-to-text"
+  TTA = "text-to-audio"
+  # LLM = "large-language-model"
+  # SLM = "small-language-model"
+
+class IOType(Enum):
+  """Input/output types of a model."""
+  TEXT  = ["txt"]
+  IMAGE = ["png", "jpg"]
+  AUDIO = ["mp3", "wav"]
+
+
+
+########################################################################
 #                         MODEL SOURCE MAPPING                         #
 ########################################################################
 # Maps source identifiers to their implementation details
@@ -19,8 +41,8 @@ from models.remote.vllm import VLLMTextModel
 sources = {
   "openai": {
     "class": OpenAITextModel,
-    "inputs": ["text"],
-    "outputs": ["text"],
+    "inputs": [IOType.TEXT],
+    "outputs": [IOType.TEXT],
     "models": {
       "gpt-3.5-turbo": {
         "model_id": "gpt-3.5-turbo-0125",
@@ -50,8 +72,8 @@ sources = {
   },
   "anthropic": {
     "class": AnthropicTextModel,
-    "inputs": ["text"],
-    "outputs": ["text"],
+    "inputs": [IOType.TEXT],
+    "outputs": [IOType.TEXT],
     "models": {
       "claude-3-5-sonnet-20240620": {
         "model_id": "claude-3-5-sonnet-20240620",
@@ -80,8 +102,8 @@ sources = {
   # },
   "local-minicpm3-4b": {
     "class": MiniCPM3_4B_LocalModel,
-    "inputs": ["text"],
-    "outputs": ["text"],
+    "inputs": [IOType.TEXT],
+    "outputs": [IOType.TEXT],
     "models": {
       "minicpm3-4b": {
         "model_id": "minicpm3-4b",
@@ -95,8 +117,8 @@ sources = {
   },
   "local-qwen2.5-32b-instruct": {
     "class": Qwen2p5_32B_InstructLocalModel,
-    "inputs": ["text"],
-    "outputs": ["text"],
+    "inputs": [IOType.TEXT],
+    "outputs": [IOType.TEXT],
     "models": {
       "qwen2.5-32b-instruct": {
         "model_id": "qwen2.5-32b-instruct",
@@ -110,8 +132,8 @@ sources = {
   },
   "openrouter": {
     "class": OpenRouterTextModel,
-    "inputs": ["text"],
-    "outputs": ["text"],
+    "inputs": [IOType.TEXT],
+    "outputs": [IOType.TEXT],
     "models": {
       "gpt-3.5-turbo": {
         "model_id": "openai/gpt-3.5-turbo",
@@ -157,8 +179,8 @@ sources = {
   },
   "vllm": {
     "class": VLLMTextModel,
-    "inputs": ["text"],
-    "outputs": ["text"],
+    "inputs": [IOType.TEXT],
+    "outputs": [IOType.TEXT],
     "models": {
       "mistral-7b": {
         "model_id": "mistralai/Mistral-7B-Instruct-v0.1",
@@ -255,108 +277,79 @@ definitions = {
   "gpt-3.5-turbo": {
     "title": "GPT 3.5 Turbo",
     "description": "The latest GPT-3.5 Turbo model with higher accuracy at responding in requested formats and a fix for a bug which caused a text encoding issue for non-English language function calls.",
-    "capabilities": ["ttt"],
+    "capabilities": [ModelCapability.TTT],
     "training_data": "Up to September 2021",
   },
   "gpt-4": {
     "title": "GPT 4",
     "description": "Snapshot of gpt-4 from June 13th 2023 with improved function calling support.",
-    "capabilities": ["ttt"],
+    "capabilities": [ModelCapability.TTT],
     "training_data": "Up to September 2021",
   },
   "gpt-4-turbo": {
     "title": "GPT 4 Turbo",
     "description": "The latest GPT-4 Turbo model with vision capabilities. Vision requests can now use JSON mode and function calling.",
-    "capabilities": ["ttt"],
+    "capabilities": [ModelCapability.TTT],
     "training_data": "Up to December 2023",
   },
   "claude-3-5-sonnet-20240620": {
     "title": "Claude 3.5 Sonnet",
     "description": "Claude 3.5 Sonnet sets new industry benchmarks for graduate-level reasoning (GPQA), undergraduate-level knowledge (MMLU), and coding proficiency (HumanEval). It shows marked improvement in grasping nuance, humor, and complex instructions, and is exceptional at writing high-quality content with a natural, relatable tone.",
-    "capabilities": ["ttt"],
+    "capabilities": [ModelCapability.TTT],
     "training_data": "Up to April 2024",
   },
   "minicpm3-4b": {
     "title": "MiniCPM3-4B",
     "description": "MiniCPM3-4B is the 3rd generation of MiniCPM series with a 32k context window.",
-    "capabilities": ["ttt"],
+    "capabilities": [ModelCapability.TTT],
     "training_data": "Not specified",
   },
   "qwen2.5-32b-instruct": {
     "title": "Qwen2.5-32B-Instruct",
     "description": "Qwen2.5 is the latest series of Qwen large language models. For Qwen2.5, we release a number of base language models and instruction-tuned language models ranging from 0.5 to 72 billion parameters.",
-    "capabilities": ["ttt"],
+    "capabilities": [ModelCapability.TTT],
     "training_data": "Not specified",
   },
   "qwen2.5-72b-instruct": {
     "title": "Qwen2.5-72B-Instruct",
     "description": "Qwen2.5's largest model with 72B parameters. Features improved capabilities in coding, mathematics, instruction following, and multilingual support for over 29 languages. Specialized in generating structured outputs and long-form content.",
-    "capabilities": ["ttt"],
+    "capabilities": [ModelCapability.TTT],
     "training_data": "Not specified",
   },
   "mistral-7b": {
     "title": "Mistral 7B Instruct",
     "description": "Mistral 7B is a 7-billion parameter language model demonstrating state-of-the-art performance among models of comparable size.",
-    "capabilities": ["ttt"],
+    "capabilities": [ModelCapability.TTT],
     "training_data": "Not specified",
   },
   "mixtral-8x7b": {
     "title": "Mixtral 8x7B Instruct",
     "description": "Mixtral 8x7B is a Mixture of Experts model with 8 experts of 7B parameters each. It outperforms Llama 2 70B on most benchmarks.",
-    "capabilities": ["ttt"],
+    "capabilities": [ModelCapability.TTT],
     "training_data": "Not specified",
   },
   "llama2-70b": {
     "title": "Llama 2 70B Chat",
     "description": "Meta's largest Llama 2 model fine-tuned for chat/instruct scenarios.",
-    "capabilities": ["ttt"],
+    "capabilities": [ModelCapability.TTT],
     "training_data": "Up to 2023",
   },
   "qwq-32b-preview": {
     "title": "QwQ-32B Preview",
     "description": "An experimental research model by the Qwen Team focused on advancing AI reasoning capabilities. Features enhanced analytical abilities while having specific limitations in language mixing, recursive reasoning, and safety considerations. Built on Qwen2.5-32B-Instruct base.",
-    "capabilities": ["ttt"],
+    "capabilities": [ModelCapability.TTT],
     "training_data": "Not specified",
   },
   "qwq-32b": {
     "title": "QwQ-32B",
     "description": "The official release of QwQ-32B, a reasoning-focused model from the Qwen team. Built on the Qwen2.5-32B-Instruct base, it features improved reasoning capabilities while maintaining strong performance across general tasks.",
-    "capabilities": ["ttt"],
+    "capabilities": [ModelCapability.TTT],
     "training_data": "Not specified",
   },
   "phi-4": {
     "title": "Phi-4",
     "description": "Microsoft's Phi-4 is a state-of-the-art small language model that delivers exceptional performance with high efficiency. It excels at reasoning, coding, and instruction following while maintaining a compact size compared to larger models.",
-    "capabilities": ["ttt"],
+    "capabilities": [ModelCapability.TTT],
     "training_data": "Up to 2024",
   }
-}
-
-
-
-########################################################################
-#                       CAPABILITY ABBREVIATIONS                       #
-########################################################################
-# Maps short codes to their full capability names
-abbreviations = {
-  "ttt": "text-to-text",
-  "tti": "text-to-image",
-  "itt": "image-to-text",
-  "tts": "text-to-speech",
-  "stt": "speech-to-text",
-  "tta": "text-to-audio",
-  "llm": "large-language-model",
-  "slm": "small-language-model"
-}
-
-
-
-########################################################################
-#                          INPUT/OUTPUT TYPES                          #
-########################################################################
-# Maps content types to their supported file extensions
-types = {
-  "text": ["txt"],
-  "text-vision": ["txt", "png", "jpg"],
-  "image": ["png", "jpg"],
 }

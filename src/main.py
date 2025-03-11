@@ -8,6 +8,7 @@
 # - function calling doesn't work on most functions (the function calling name is just the final leaf rather than a distinct function name, which is leading to collisions)
 # - run single commands from cli, for example: claia transcribe --file <audio-file>
 # - if a command has an alias, or perhaps just if it's alias matches the root of that path the rest of the commands aren't displayed (in help or executable, test by adding list alias to mc list instances)
+# - prompt no longer gets applied to the conversation (possibly just missed updating commands)
 
 # External dependencies
 import readline

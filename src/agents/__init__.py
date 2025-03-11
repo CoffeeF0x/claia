@@ -299,7 +299,7 @@ class SimpleAgent:
       from models import run as model_run
 
       # Run the model with the conversation
-      result = model_run(model_id, conversation.get_formatted_messages(), settings=settings)
+      result = model_run(model_id, conversation, settings=settings)
 
       if hasattr(result, 'is_error') and result.is_error():
         raise ValueError(f"Error running model: {result.get_message()}")

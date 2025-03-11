@@ -5,12 +5,20 @@
 
 # External dependencies
 import logging
+from typing import Any, Union, List, Dict, Optional
 
 # Internal dependencies
 from models.base import APIModel, LocalModel
-from models.definitions import definitions, sources
+from models.definitions import definitions, sources, ModelCapability
+from models.processors import (
+  TextToTextProcessor,
+  TextToImageProcessor,
+  TextToAudioProcessor,
+  ImageToTextProcessor
+)
 from settings import Settings
 from errors import Result
+from conversations import Conversation
 
 
 
@@ -107,15 +115,69 @@ def get_api_key_for_source(source: str, settings: Settings) -> str:
 
 #   return result
 
-# Run the model with the given messages and settings
-def run(model_name: str, messages: list, settings: Settings = None, reset_context: bool = False, **kwargs) -> Result:
+# Get the appropriate processor for a model based on capability
+def get_processor_for_model(model: Any, capability: ModelCapability) -> Result:
+  """
+  Factory function to get the appropriate processor for a model based on capability.
+
+  Args:
+      model: The model instance
+      capability: The capability to use
+
+  Returns:
+      Result containing the appropriate processor instance
+  """
+  # Mapping of capabilities to processor classes
+  processor_mapping = {
+    ModelCapability.TTT: TextToTextProcessor,
+    ModelCapability.TTI: TextToImageProcessor,
+    ModelCapability.TTS: TextToAudioProcessor,
+    ModelCapability.ITT: ImageToTextProcessor
+  }
+
+  try:
+    processor_class = processor_mapping.get(capability)
+    if not processor_class:
+      return Result.fail(f"Unsupported model capability: {capability}")
+
+    return Result(data=processor_class(model))
+  except Exception as e:
+    logger.error(f"Error creating processor for capability {capability}: {str(e)}")
+    return Result.fail(f"Failed to create processor: {str(e)}")
+
+# Run the model with the given conversation and settings
+def run(model_name: str, conversation: Conversation, settings: Settings = None) -> Result:
+  """
+  Run the model with the given conversation and settings.
+
+  Args:
+      model_name: The name of the model to use
+      conversation: The conversation to process
+      settings: Optional settings object
+
+  Returns:
+      Result object containing the model's response
+  """
+  # Get the model instance
   result = get_model(model_name, settings)
   if result.is_error():
     return result
 
   model = result.data
 
-  # if reset_context and hasattr(model, 'reset_context'):
-  #   model.reset_context()
+  # Determine the capability based on the model definition
+  capability = ModelCapability.TTT  # Default to text-to-text
+  if model_name in definitions:
+    model_def = definitions[model_name]
+    if "capabilities" in model_def and model_def["capabilities"]:
+      capability = model_def["capabilities"][0]  # Use the first capability
 
-  return Result(data=model.generate(messages, **kwargs))
+  # Get the appropriate processor for the model based on capability
+  processor_result = get_processor_for_model(model, capability)
+  if processor_result.is_error():
+    return processor_result
+
+  processor = processor_result.data
+
+  # Process the conversation
+  return processor.process(conversation, settings)
