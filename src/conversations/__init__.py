@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 # Internal dependencies
 from conversations.base import BaseFile
 from conversations.files import FileFactory, TextFile, ImageFile, AudioFile, VideoFile, DocumentFile, GenericFile
+from conversations.config import Config
+from conversations.prompts import Prompt
 
 
 

@@ -8,10 +8,20 @@ import os
 import json
 import uuid
 import logging
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List, Any, Type, TypeVar
 
 # Internal dependencies
-from conversations.base import BaseFile
+from conversations.config import Config
+
+
+
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+# Type variable for class methods that return the class instance
+T = TypeVar('T', bound='Prompt')
 
 
 
@@ -32,16 +42,9 @@ DEFAULT_FUNCTION_FORMAT = """
 
 
 ########################################################################
-#                            INITIALIZATION                            #
+#                             PROMPT CLASS                             #
 ########################################################################
-logger = logging.getLogger(__name__)
-
-
-
-########################################################################
-#                             PROMPT STORE                             #
-########################################################################
-class Prompt(BaseFile):
+class Prompt(Config):
   """
   Represents a reusable prompt template that can be used in conversations.
   """
@@ -52,22 +55,45 @@ class Prompt(BaseFile):
                title: str,
                prompt: str,
                description: Optional[str] = None,
-               prompt_id: Optional[str] = None):
-    super().__init__(base_directory)
-    self.prompt_id = prompt_id or str(uuid.uuid4())
-    self.name = self.validate_and_format_name(name)
-    self.title = title
-    self.prompt = prompt
-    self.description = description
-    self.created_at = __import__('time').time()
-    self.updated_at = self.created_at
-    self.tags = []
+               prompt_id: Optional[str] = None,
+               tags: Optional[List[str]] = None):
+    """
+    Initialize a Prompt object.
+
+    Args:
+        base_directory: Base directory for storing prompts
+        name: Unique name for the prompt (used as identifier)
+        title: Display title for the prompt
+        prompt: The prompt template text
+        description: Optional description of the prompt
+        prompt_id: Optional unique ID (generated if not provided)
+        tags: Optional list of tags for categorization
+    """
+    # Format the name to be used as an identifier
+    formatted_name = self.validate_and_format_name(name)
+
+    # Use the formatted name as the config_id if no prompt_id provided
+    prompt_id = prompt_id or formatted_name
+
+    # Initialize the config with prompt-specific properties
+    super().__init__(
+      config_id=prompt_id,
+      base_directory=base_directory,
+      config_type="prompts",
+      name=formatted_name,
+      title=title,
+      prompt=prompt,
+      description=description or "",
+      tags=tags or []
+    )
+
+    # Store function definitions separately (not persisted)
     self.function_definitions = []
 
   @staticmethod
   def validate_and_format_name(name: str) -> str:
     """
-    Validate and format a prompt name.
+    Validate and format a prompt name to be used as an identifier.
 
     Args:
         name: The prompt name to validate and format
@@ -77,48 +103,30 @@ class Prompt(BaseFile):
     """
     return name.lower().replace(' ', '-')
 
-  def to_dict(self) -> Dict[str, Any]:
-    """
-    Convert the prompt to a dictionary.
+  @property
+  def name(self) -> str:
+    """Get the prompt name."""
+    return self.get("name")
 
-    Returns:
-        Dict[str, Any]: The prompt as a dictionary
-    """
-    return {
-      "prompt_id": self.prompt_id,
-      "name": self.name,
-      "title": self.title,
-      "prompt": self.prompt,
-      "description": self.description,
-      "created_at": self.created_at,
-      "updated_at": self.updated_at,
-      "tags": self.tags
-    }
+  @property
+  def title(self) -> str:
+    """Get the prompt title."""
+    return self.get("title")
 
-  @classmethod
-  def from_dict(cls, data: Dict[str, Any], base_directory: str) -> 'Prompt':
-    """
-    Create a prompt from a dictionary.
+  @property
+  def prompt_text(self) -> str:
+    """Get the prompt template text."""
+    return self.get("prompt")
 
-    Args:
-        data: The dictionary containing the prompt data
-        base_directory: The base directory for file operations
+  @property
+  def description(self) -> str:
+    """Get the prompt description."""
+    return self.get("description", "")
 
-    Returns:
-        Prompt: The created prompt
-    """
-    instance = cls(
-      base_directory=base_directory,
-      name=data["name"],
-      title=data["title"],
-      prompt=data["prompt"],
-      description=data.get("description"),
-      prompt_id=data["prompt_id"]
-    )
-    instance.created_at = data.get("created_at", instance.created_at)
-    instance.updated_at = data.get("updated_at", instance.updated_at)
-    instance.tags = data.get("tags", [])
-    return instance
+  @property
+  def tags(self) -> List[str]:
+    """Get the prompt tags."""
+    return self.get("tags", [])
 
   def load_function_definitions(self, function_definitions: List[Dict[str, Any]]) -> None:
     """
@@ -142,7 +150,7 @@ class Prompt(BaseFile):
     Returns:
         str: The formatted prompt
     """
-    formatted_prompt = self.prompt
+    formatted_prompt = self.prompt_text
 
     # Check if the prompt contains function_definitions placeholder
     if "{function_definitions}" in formatted_prompt and "function_definitions" not in kwargs:
@@ -177,68 +185,34 @@ class Prompt(BaseFile):
     """
     return self.format(**kwargs)
 
-  def save(self) -> Optional[str]:
-    """
-    Save the prompt to a file.
-
-    Returns:
-        Optional[str]: The path to the saved file, or None if saving failed
-    """
-    filename = f"{self.name}.json"
-    return super().save(filename)
-
   @classmethod
-  def load(cls, name: str, base_directory: str) -> Optional['Prompt']:
+  def load(cls: Type[T], name: str, base_directory: str) -> Optional[T]:
     """
     Load a prompt by name.
 
     Args:
         name: The name of the prompt to load
-        base_directory: The base directory for file operations
+        base_directory: The base directory for prompt storage
 
     Returns:
-        Optional[Prompt]: The loaded prompt, or None if loading failed
+        Optional[T]: The loaded prompt, or None if loading failed
     """
-    filename = f"{name}.json"
-    return super().load(filename, base_directory)
+    # Format the name to match how it would be stored
+    formatted_name = cls.validate_and_format_name(name)
+    return super().load(formatted_name, base_directory, "prompts")
 
-  # @classmethod
-  # def list_prompts(cls, base_directory: str) -> List[Dict[str, Any]]:
-  #   """
-  #   List all prompts in the directory.
+  @classmethod
+  def list_prompts(cls, base_directory: str) -> List[Dict[str, Any]]:
+    """
+    List all prompts in the directory.
 
-  #   Args:
-  #       base_directory: The base directory for file operations
+    Args:
+        base_directory: The base directory for prompt storage
 
-  #   Returns:
-  #       List[Dict[str, Any]]: A list of prompt metadata
-  #   """
-  #   prompts = []
-
-  #   if not os.path.exists(base_directory):
-  #     logger.warning(f"Prompt directory {base_directory} does not exist")
-  #     return prompts
-
-  #   # List all JSON files in the directory
-  #   for filename in cls.list_files(base_directory):
-  #     filepath = os.path.join(base_directory, filename)
-  #     try:
-  #       with open(filepath, 'r') as f:
-  #         data = json.load(f)
-  #         prompts.append({
-  #           "prompt_id": data.get("prompt_id"),
-  #           "name": data.get("name"),
-  #           "title": data.get("title"),
-  #           "description": data.get("description"),
-  #           "tags": data.get("tags", []),
-  #           "updated_at": data.get("updated_at")
-  #         })
-  #     except Exception as e:
-  #       logger.error(f"Error loading prompt {filename}: {e}")
-
-  #   # Sort by updated_at (newest first)
-  #   prompts.sort(key=lambda x: x.get("updated_at", 0), reverse=True)
-  #   return prompts
+    Returns:
+        List[Dict[str, Any]]: A list of prompt metadata
+    """
+    return cls.list_configs(base_directory, "prompts")
 
   @classmethod
   def get_prompt_names(cls, base_directory: str) -> List[str]:
@@ -246,54 +220,10 @@ class Prompt(BaseFile):
     Get a list of all prompt names from the prompt files in the directory.
 
     Args:
-        base_directory: The base directory for the prompt store
+        base_directory: The base directory for prompt storage
 
     Returns:
         List[str]: A list of prompt names
     """
-    # Ensure the directory exists
-    cls.ensure_directory(base_directory)
-
-    prompt_names = []
-
-    # List all JSON files in the directory
-    for filename in cls.list_files(base_directory):
-      filepath = os.path.join(base_directory, filename)
-      try:
-        with open(filepath, 'r') as f:
-          data = json.load(f)
-          if "name" in data:
-            prompt_names.append(data["name"])
-      except Exception as e:
-        logger.error(f"Error reading prompt name from {filename}: {e}")
-
-    return prompt_names
-
-  @classmethod
-  def load_prompts_from_directory(cls, base_directory: str) -> List['Prompt']:
-    """
-    Load all prompts from the prompt store directory.
-
-    Args:
-        base_directory: The base directory for the prompt store
-
-    Returns:
-        List[Prompt]: A list of all loaded prompts from the directory
-    """
-    # Ensure the prompt store directory exists
-    cls.ensure_directory(base_directory)
-
-    prompt_store = []
-
-    # Load prompts from the directory
-    files = cls.list_files(base_directory)
-    for filename in files:
-      try:
-        full_path = os.path.join(base_directory, filename)
-        with open(full_path, 'r') as file:
-          data = json.load(file)
-          prompt_store.append(cls.from_dict(data, base_directory))
-      except Exception as e:
-        logger.error(f"Failed to load prompt {filename}: {e}")
-
-    return prompt_store
+    prompts = cls.list_prompts(base_directory)
+    return [prompt.get("name", "") for prompt in prompts if prompt.get("name")]

@@ -16,16 +16,6 @@ from enum import Enum
 
 
 ########################################################################
-#                            INITIALIZATION                            #
-########################################################################
-logger = logging.getLogger(__name__)
-
-# Type variable for class methods that return the class instance
-T = TypeVar('T', bound='BaseFile')
-
-
-
-########################################################################
 #                              CONSTANTS                               #
 ########################################################################
 FILE_TYPES = {
@@ -51,6 +41,19 @@ DEFAULT_SUBDIRECTORIES = {
   "ARCHIVE": "archives",
   "MISC": "misc"
 }
+
+# Manifest filename
+MANIFEST_FILENAME = "manifest.json"
+
+
+
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+logger = logging.getLogger(__name__)
+
+# Type variable for class methods that return the class instance
+T = TypeVar('T', bound='BaseFile')
 
 
 
@@ -202,24 +205,115 @@ class BaseFile:
       logger.error(f"Failed to copy file {self.file_path} to storage: {e}")
       return False
 
-  def save_metadata(self) -> Optional[str]:
+  @classmethod
+  def _get_manifest_path(cls, base_directory: str, subdirectory: str) -> str:
     """
-    Save the file metadata to a JSON file.
+    Get the path to the manifest file for a specific subdirectory.
+
+    Args:
+        base_directory: Base directory for file operations
+        subdirectory: Subdirectory name
 
     Returns:
-        Optional[str]: The full path to the saved metadata file, or None if saving failed
+        str: Path to the manifest file
+    """
+    return os.path.join(base_directory, subdirectory, MANIFEST_FILENAME)
+
+  @classmethod
+  def _load_manifest(cls, base_directory: str, subdirectory: str) -> Dict[str, Dict[str, Any]]:
+    """
+    Load the manifest file for a specific subdirectory.
+
+    Args:
+        base_directory: Base directory for file operations
+        subdirectory: Subdirectory name
+
+    Returns:
+        Dict[str, Dict[str, Any]]: The manifest data, keyed by file_id
+
+    Note:
+        This implementation does not use file locking, which could lead to race conditions
+        if multiple processes access the manifest simultaneously. This is a known limitation
+        for cross-platform compatibility (as fcntl is not available on Windows).
+    """
+    manifest_path = cls._get_manifest_path(base_directory, subdirectory)
+
+    if not os.path.exists(manifest_path):
+      return {}
+
+    try:
+      with open(manifest_path, 'r') as f:
+        # Note: No file locking for cross-platform compatibility
+        return json.load(f)
+    except Exception as e:
+      logger.error(f"Failed to load manifest from {manifest_path}: {e}")
+      return {}
+
+  @classmethod
+  def _save_manifest(cls, base_directory: str, subdirectory: str, manifest: Dict[str, Dict[str, Any]]) -> bool:
+    """
+    Save the manifest file for a specific subdirectory.
+
+    Args:
+        base_directory: Base directory for file operations
+        subdirectory: Subdirectory name
+        manifest: The manifest data to save
+
+    Returns:
+        bool: True if saving succeeded, False otherwise
+
+    Note:
+        This implementation does not use file locking, which could lead to race conditions
+        if multiple processes access the manifest simultaneously. This is a known limitation
+        for cross-platform compatibility (as fcntl is not available on Windows).
+    """
+    # Ensure the directory exists
+    directory = os.path.join(base_directory, subdirectory)
+    os.makedirs(directory, exist_ok=True)
+
+    manifest_path = cls._get_manifest_path(base_directory, subdirectory)
+
+    try:
+      # Create the file if it doesn't exist
+      if not os.path.exists(manifest_path):
+        with open(manifest_path, 'w') as f:
+          json.dump({}, f)
+
+      # Open the file for writing
+      with open(manifest_path, 'w') as f:
+        # Note: No file locking for cross-platform compatibility
+        json.dump(manifest, f, indent=2)
+      return True
+    except Exception as e:
+      logger.error(f"Failed to save manifest to {manifest_path}: {e}")
+      return False
+
+  def save_metadata(self) -> Optional[str]:
+    """
+    Save the file metadata to the manifest file.
+
+    Returns:
+        Optional[str]: The full path to the manifest file, or None if saving failed
     """
     try:
+      # Get the subdirectory for this file type
+      subdirectory = self.get_subdirectory()
+
       # Ensure the target directory exists
-      target_dir = os.path.join(self.base_directory, self.get_subdirectory())
+      target_dir = os.path.join(self.base_directory, subdirectory)
       os.makedirs(target_dir, exist_ok=True)
 
-      # Save the metadata to a JSON file
-      metadata_path = f"{self.get_full_path()}.json"
-      with open(metadata_path, 'w') as file:
-        json.dump(self.to_dict(), file, indent=2)
+      # Load the current manifest
+      manifest = self._load_manifest(self.base_directory, subdirectory)
 
-      return metadata_path
+      # Update the manifest with this file's metadata
+      manifest[self.file_id] = self.to_dict()
+
+      # Save the updated manifest
+      if self._save_manifest(self.base_directory, subdirectory, manifest):
+        return self._get_manifest_path(self.base_directory, subdirectory)
+
+      return None
     except Exception as e:
       logger.error(f"Failed to save metadata for {self.file_path}: {e}")
       return None
@@ -252,20 +346,56 @@ class BaseFile:
         Optional[T]: The loaded file, or None if loading failed
     """
     try:
-      # Try to find the metadata file in each subdirectory
+      # Try to find the file in each subdirectory's manifest
       for subdir in DEFAULT_SUBDIRECTORIES.values():
-        metadata_path = os.path.join(base_directory, subdir, f"{file_id}.json")
-        if os.path.exists(metadata_path):
-          with open(metadata_path, 'r') as file:
-            data = json.load(file)
+        manifest = cls._load_manifest(base_directory, subdir)
 
+        if file_id in manifest:
+          data = manifest[file_id]
           return cls.from_dict(data, base_directory)
 
-      logger.error(f"Metadata file for {file_id} not found")
+      logger.error(f"File {file_id} not found in any manifest")
       return None
     except Exception as e:
       logger.error(f"Failed to load file {file_id}: {e}")
       return None
+
+  @classmethod
+  def delete(cls, file_id: str, base_directory: str) -> bool:
+    """
+    Delete a file and its metadata.
+
+    Args:
+        file_id: The ID of the file to delete
+        base_directory: The base directory for file operations
+
+    Returns:
+        bool: True if deletion succeeded, False otherwise
+    """
+    try:
+      # Try to find the file in each subdirectory's manifest
+      for subdir in DEFAULT_SUBDIRECTORIES.values():
+        manifest = cls._load_manifest(base_directory, subdir)
+
+        if file_id in manifest:
+          # Get the file path
+          file_path = os.path.join(base_directory, subdir, file_id)
+
+          # Delete the file if it exists
+          if os.path.exists(file_path):
+            os.remove(file_path)
+
+          # Remove the file from the manifest
+          del manifest[file_id]
+
+          # Save the updated manifest
+          return cls._save_manifest(base_directory, subdir, manifest)
+
+      logger.warning(f"File {file_id} not found in any manifest")
+      return False
+    except Exception as e:
+      logger.error(f"Failed to delete file {file_id}: {e}")
+      return False
 
   def to_dict(self) -> Dict[str, Any]:
     """
@@ -305,26 +435,49 @@ class BaseFile:
       metadata=data.get("metadata", {})
     )
 
-  @staticmethod
-  def list_files(directory: str, extension: str = '.json') -> List[str]:
+  @classmethod
+  def list_files(cls, base_directory: str, subdirectory: str = None) -> List[Dict[str, Any]]:
     """
-    List all files in a directory with a specific extension.
+    List all files in a directory with metadata from the manifest.
 
     Args:
-        directory: The directory to list files from
-        extension: The file extension to filter by
+        base_directory: The base directory for file operations
+        subdirectory: Optional specific subdirectory to list files from
 
     Returns:
-        List[str]: A list of filenames
+        List[Dict[str, Any]]: A list of file metadata
     """
-    try:
-      if not os.path.exists(directory):
-        logger.warning(f"Directory {directory} does not exist")
-        return []
+    files = []
 
-      return [f for f in os.listdir(directory) if f.endswith(extension)]
+    try:
+      # If a specific subdirectory is provided, only check that one
+      subdirs = [subdirectory] if subdirectory else DEFAULT_SUBDIRECTORIES.values()
+
+      for subdir in subdirs:
+        subdir_path = os.path.join(base_directory, subdir)
+
+        if not os.path.exists(subdir_path):
+          continue
+
+        # Load the manifest for this subdirectory
+        manifest = cls._load_manifest(base_directory, subdir)
+
+        # Add each file's metadata to the list
+        for file_id, data in manifest.items():
+          files.append({
+            "file_id": file_id,
+            "file_name": data.get("file_name", ""),
+            "mime_type": data.get("mime_type", ""),
+            "timestamp": data.get("timestamp", 0),
+            "subdirectory": subdir
+          })
+
+      # Sort by timestamp, newest first
+      files.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+
+      return files
     except Exception as e:
-      logger.error(f"Failed to list files in {directory}: {e}")
+      logger.error(f"Failed to list files: {e}")
       return []
 
   @staticmethod
