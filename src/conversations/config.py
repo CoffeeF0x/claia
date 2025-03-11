@@ -50,12 +50,14 @@ class Config(BaseFile):
         config_type: Type of configuration (used for subdirectory)
         **kwargs: Additional configuration properties
     """
+    # Set config_type before calling super().__init__
+    self.config_type = config_type
+
     # Initialize with a path in the appropriate config subdirectory
     file_path = os.path.join(base_directory, config_type, f"{config_id}.json")
     super().__init__(file_path=file_path, base_directory=base_directory)
 
     self.config_id = config_id
-    self.config_type = config_type
     self.created_at = kwargs.pop('created_at', time.time())
     self.updated_at = kwargs.pop('updated_at', self.created_at)
 
@@ -150,7 +152,7 @@ class Config(BaseFile):
 
   def save(self) -> Optional[str]:
     """
-    Save the configuration to a file.
+    Save the configuration to a file and update the manifest.
 
     Returns:
         Optional[str]: Path to the saved file, or None if saving failed
@@ -164,6 +166,9 @@ class Config(BaseFile):
       file_path = os.path.join(config_dir, f"{self.config_id}.json")
       with open(file_path, 'w') as f:
         json.dump(self.to_dict(), f, indent=2)
+
+      # Update the manifest
+      self.save_metadata()
 
       return file_path
     except Exception as e:
@@ -217,7 +222,8 @@ class Config(BaseFile):
         logger.warning(f"Configuration directory {config_dir} does not exist")
         return []
 
-      config_files = [f for f in os.listdir(config_dir) if f.endswith('.json')]
+      # Get all JSON files except manifest.json
+      config_files = [f for f in os.listdir(config_dir) if f.endswith('.json') and f != "manifest.json"]
       configs = []
 
       for file_name in config_files:
@@ -242,3 +248,64 @@ class Config(BaseFile):
     except Exception as e:
       logger.error(f"Failed to list configurations: {e}")
       return []
+
+  def save_metadata(self) -> Optional[str]:
+    """
+    Save the configuration metadata to the manifest file.
+
+    Returns:
+        Optional[str]: The full path to the manifest file, or None if saving failed
+    """
+    try:
+      # Ensure the config directory exists
+      target_dir = os.path.join(self.base_directory, self.config_type)
+      os.makedirs(target_dir, exist_ok=True)
+
+      # Load the current manifest
+      manifest = self._load_manifest(self.base_directory, self.config_type)
+
+      # Update the manifest with this config's metadata
+      manifest[self.config_id] = self.to_dict()
+
+      # Save the updated manifest
+      if self._save_manifest(self.base_directory, self.config_type, manifest):
+        return self._get_manifest_path(self.base_directory, self.config_type)
+
+      return None
+    except Exception as e:
+      logger.error(f"Failed to save metadata for config {self.config_id}: {e}")
+      return None
+
+  @classmethod
+  def delete(cls, config_id: str, base_directory: str, config_type: str = "config") -> bool:
+    """
+    Delete a configuration and its metadata.
+
+    Args:
+        config_id: The ID of the configuration to delete
+        base_directory: The base directory for configurations
+        config_type: The type of configuration to delete
+
+    Returns:
+        bool: True if deletion succeeded, False otherwise
+    """
+    try:
+      # Get the file path
+      file_path = os.path.join(base_directory, config_type, f"{config_id}.json")
+
+      # Delete the file if it exists
+      if os.path.exists(file_path):
+        os.remove(file_path)
+
+      # Load the manifest
+      manifest = cls._load_manifest(base_directory, config_type)
+
+      # Remove the config from the manifest if it exists
+      if config_id in manifest:
+        del manifest[config_id]
+        cls._save_manifest(base_directory, config_type, manifest)
+
+      return True
+    except Exception as e:
+      logger.error(f"Failed to delete configuration {config_id}: {e}")
+      return False
