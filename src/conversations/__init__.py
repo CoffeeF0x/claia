@@ -1,23 +1,21 @@
 """
-This module contains the conversation model for CLAIA.
-It defines the structure and operations for managing conversations between users and agents.
+This module contains the conversation functionality for CLAIA.
+It defines classes for managing conversations with LLMs.
 """
 
 # External dependencies
-import uuid
-import json
 import os
 import time
+import uuid
+import json
 import logging
-from typing import List, Dict, Any, Optional, Union
-from dataclasses import dataclass, field
+from typing import Dict, List, Any, Optional, Union
 from enum import Enum
+from dataclasses import dataclass, field
 
 # Internal dependencies
 from conversations.base import BaseFile
-from conversations.files import FileReference, FileHandler
-from conversations.artifacts import Artifact
-from conversations.prompts import Prompt
+from conversations.files import FileFactory, TextFile, ImageFile, AudioFile, VideoFile, DocumentFile, GenericFile
 
 
 
@@ -29,7 +27,15 @@ logger = logging.getLogger(__name__)
 
 
 ########################################################################
-#                                ENUMS                                 #
+#                              CONSTANTS                               #
+########################################################################
+DEFAULT_SYSTEM_PROMPT = """You are CLAIA, a helpful AI assistant.
+Answer the user's questions to the best of your ability."""
+
+
+
+########################################################################
+#                           MESSAGE CLASSES                            #
 ########################################################################
 class MessageRole(Enum):
   """Roles for conversation messages."""
@@ -44,9 +50,6 @@ class MessageRole(Enum):
   ARTIFACT = "artifact"
 
 
-########################################################################
-#                               CLASSES                                #
-########################################################################
 @dataclass
 class Message:
   """
@@ -59,8 +62,7 @@ class Message:
   id: str = field(default_factory=lambda: str(uuid.uuid4()))
   timestamp: float = field(default_factory=lambda: time.time())
   metadata: Dict[str, Any] = field(default_factory=dict)
-  file_references: List[FileReference] = field(default_factory=list)
-  artifact_references: List[str] = field(default_factory=list)
+  file_ids: List[str] = field(default_factory=list)
 
   def to_dict(self) -> Dict[str, Any]:
     """
@@ -75,8 +77,7 @@ class Message:
       "content": self.content,
       "timestamp": self.timestamp,
       "metadata": self.metadata,
-      "file_references": [ref.to_dict() for ref in self.file_references],
-      "artifact_references": self.artifact_references
+      "file_ids": self.file_ids
     }
 
   @classmethod
@@ -90,93 +91,62 @@ class Message:
     Returns:
         Message: The created message
     """
-    message = cls(
+    return cls(
       id=data.get("id", str(uuid.uuid4())),
       role=MessageRole(data["role"]),
       content=data["content"],
       timestamp=data.get("timestamp", time.time()),
-      metadata=data.get("metadata", {})
+      metadata=data.get("metadata", {}),
+      file_ids=data.get("file_ids", [])
     )
 
-    # Add file references
-    for ref_data in data.get("file_references", []):
-      message.file_references.append(FileReference.from_dict(ref_data))
-
-    # Add artifact references
-    message.artifact_references = data.get("artifact_references", [])
-
-    return message
-
-  def add_file(self, file_path: str) -> FileReference:
-    """
-    Add a file to this message.
-
-    Args:
-        file_path: The path to the file to add
-
-    Returns:
-        FileReference: The created file reference
-    """
-    if not os.path.exists(file_path):
-      logger.warning(f"File {file_path} does not exist")
-
-    file_ref = FileReference(file_path=file_path)
-    self.file_references.append(file_ref)
-    return file_ref
-
-  def add_artifact_reference(self, artifact_id: str):
-    """
-    Add a reference to an artifact.
-
-    Args:
-        artifact_id: The ID of the artifact to reference
-    """
-    if artifact_id not in self.artifact_references:
-      self.artifact_references.append(artifact_id)
 
 
+########################################################################
+#                          CONVERSATION CLASS                          #
+########################################################################
 class Conversation(BaseFile):
   """
-  Represents a conversation between a user and an assistant.
+  Represents a conversation with an LLM.
 
-  A conversation is a sequence of messages with metadata about the conversation.
+  A conversation contains messages, system prompts, and file references.
   """
+
   def __init__(self,
-               conversation_directory: str,
-               artifacts_directory: str,
-               id: Optional[str] = None,
+               base_directory: str,
+               files_directory: str,
+               conversation_id: Optional[str] = None,
                title: str = "New Conversation",
-               system_prompt: Optional[Union[str, Prompt]] = None,
-               files_subdirectory: str = "files"):
-    super().__init__(conversation_directory)
-    self.id = id or str(uuid.uuid4())
+               system_prompt: Optional[str] = None):
+    """
+    Initialize a Conversation object.
+
+    Args:
+        base_directory: The base directory for conversation storage
+        files_directory: The directory for storing files
+        conversation_id: Optional ID for the conversation
+        title: Optional title for the conversation
+        system_prompt: Optional system prompt for the conversation
+    """
+    # Initialize with a dummy file path that will be set properly when saved
+    dummy_path = os.path.join(base_directory, "conversations", conversation_id or str(uuid.uuid4()))
+    super().__init__(file_path=dummy_path, base_directory=base_directory)
+
+    self.conversation_id = conversation_id or self.file_id
     self.title = title
+    self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+    self.files_directory = files_directory
     self.messages: List[Message] = []
-    self.metadata: Dict[str, Any] = {}
-    self.created_at = time.time()
-    self.updated_at = self.created_at
-    self.artifacts_directory = artifacts_directory
 
-    # Store directory paths
-    self.conversation_dir = os.path.join(conversation_directory, self.id)
-    self.files_directory = files_subdirectory
-    self.files_dir = os.path.join(self.conversation_dir, self.files_directory)
-
-    # Track prompt history
-    self.prompt_history: List[Dict[str, Any]] = []
-
-    # Add system prompt if provided
-    if system_prompt:
-      if isinstance(system_prompt, Prompt):
-        self.set_system_prompt(system_prompt)
-      else:
-        self.add_message(MessageRole.SYSTEM, system_prompt)
+    # Add the system message if provided
+    if self.system_prompt:
+      self.add_message(MessageRole.SYSTEM, self.system_prompt)
 
   def add_message(self,
                  role: MessageRole,
                  content: str,
-                 metadata: Dict[str, Any] = None,
-                 files: List[str] = None) -> Message:
+                 metadata: Optional[Dict[str, Any]] = None,
+                 file_paths: Optional[List[str]] = None) -> Message:
     """
     Add a message to the conversation.
 
@@ -184,241 +154,159 @@ class Conversation(BaseFile):
         role: The role of the message sender
         content: The content of the message
         metadata: Optional metadata for the message
-        files: Optional list of file paths to attach to the message
+        file_paths: Optional list of file paths to attach to the message
 
     Returns:
         Message: The created message
     """
-    message = Message(role=role, content=content, metadata=metadata or {})
+    message = Message(
+      role=role,
+      content=content,
+      metadata=metadata or {}
+    )
 
-    # Add any files
-    if files:
-      for file_path in files:
-        if os.path.exists(file_path):
-          message.add_file(file_path)
-        else:
-          logger.warning(f"File {file_path} does not exist")
+    # Add files if provided
+    if file_paths:
+      for file_path in file_paths:
+        file_id = self.add_file(file_path)
+        if file_id:
+          message.file_ids.append(file_id)
 
     self.messages.append(message)
-    self.updated_at = message.timestamp
     return message
+
+  def add_file(self, file_path: str) -> Optional[str]:
+    """
+    Add a file to the conversation.
+
+    Args:
+        file_path: The path to the file to add
+
+    Returns:
+        Optional[str]: The ID of the added file, or None if adding failed
+    """
+    try:
+      if not os.path.exists(file_path):
+        logger.warning(f"File {file_path} does not exist")
+        return None
+
+      # Create the appropriate file object based on the file type
+      file = FileFactory.create_file(file_path, self.files_directory)
+
+      # Process the file to extract metadata
+      file.process()
+
+      # Save the file to the files directory
+      if file.save():
+        return file.file_id
+
+      return None
+    except Exception as e:
+      logger.error(f"Failed to add file {file_path}: {e}")
+      return None
+
+  def get_file(self, file_id: str) -> Optional[Union[TextFile, ImageFile, AudioFile, VideoFile, DocumentFile, GenericFile]]:
+    """
+    Get a file from the conversation by its ID.
+
+    Args:
+        file_id: The ID of the file to get
+
+    Returns:
+        Optional[Union[TextFile, ImageFile, AudioFile, VideoFile, DocumentFile, GenericFile]]:
+            The file, or None if not found
+    """
+    return FileFactory.load_file(file_id, self.files_directory)
 
   def get_messages(self) -> List[Message]:
     """
     Get all messages in the conversation.
 
     Returns:
-        List[Message]: All messages in the conversation
+        List[Message]: The messages in the conversation
     """
     return self.messages
 
-  def set_system_prompt(self, prompt: Prompt):
-    """
-    Set or update the system prompt using a Prompt object.
-
-    Args:
-        prompt: The prompt to set as the system prompt
-    """
-    # Record in prompt history
-    self.prompt_history.append({
-      "prompt_id": prompt.prompt_id,
-      "timestamp": time.time(),
-      "name": prompt.name,
-      "title": prompt.title
-    })
-
-    # Check if there's an existing system message
-    system_messages = [i for i, msg in enumerate(self.messages)
-                      if msg.role == MessageRole.SYSTEM]
-
-    if system_messages:
-      # Replace the first system message
-      self.messages[system_messages[0]] = Message(
-        role=MessageRole.SYSTEM,
-        content=prompt.prompt,
-        metadata={"prompt_id": prompt.prompt_id}
-      )
-      # Remove any other system messages
-      self.messages = [msg for i, msg in enumerate(self.messages)
-                      if i == system_messages[0] or msg.role != MessageRole.SYSTEM]
-    else:
-      # Add a new system message at the beginning
-      self.messages.insert(0, Message(
-        role=MessageRole.SYSTEM,
-        content=prompt.prompt,
-        metadata={"prompt_id": prompt.prompt_id}
-      ))
-
-  def update_system_prompt_if_empty(self, system_prompt: str) -> bool:
-    """
-    Update the system prompt for this conversation.
-
-    If the conversation has only a system message or is empty,
-    it will replace/add the system message.
-    If the conversation already has user or assistant messages,
-    it will return False to indicate the update was not performed.
-
-    Args:
-        system_prompt: The new system prompt to set
-
-    Returns:
-        bool: True if the system prompt was updated, False otherwise
-    """
-    # Check if conversation has only system messages or is empty
-    has_only_system = all(msg.role == MessageRole.SYSTEM for msg in self.messages)
-
-    if not self.messages or has_only_system:
-      # Remove any existing system messages
-      self.messages = [msg for msg in self.messages if msg.role != MessageRole.SYSTEM]
-
-      # Add the new system message
-      self.add_message(MessageRole.SYSTEM, system_prompt)
-      return True
-
-    return False
-
   def get_formatted_messages(self) -> List[Dict[str, Any]]:
     """
-    Get messages formatted for LLM API consumption.
+    Get the messages in a format suitable for sending to an LLM.
 
     Returns:
-        List[Dict[str, Any]]: Messages formatted for LLM API consumption
+        List[Dict[str, Any]]: The formatted messages
     """
     formatted_messages = []
 
-    for msg in self.messages:
-      if msg.role in [MessageRole.SYSTEM, MessageRole.USER, MessageRole.ASSISTANT]:
-        message_dict = {"role": msg.role.value, "content": msg.content}
+    for message in self.messages:
+      formatted_message = {
+        "role": message.role.value,
+        "content": message.content
+      }
 
-        # Add file references if present
-        if msg.file_references:
-          file_contents = []
-          for file_ref in msg.file_references:
-            handler = FileHandler.get_handler_for_file(file_ref)
-            preview = handler.get_preview(file_ref)
-            file_contents.append(f"[File: {file_ref.file_name}]\n{preview}")
+      # Add file contents for supported file types
+      if message.file_ids:
+        file_contents = []
+        for file_id in message.file_ids:
+          file = self.get_file(file_id)
+          if file:
+            if isinstance(file, TextFile):
+              file_contents.append(f"File: {file.file_name}\n\n{file.get_preview()}")
+            elif isinstance(file, ImageFile):
+              # For images, we might include a base64 representation
+              # or just a placeholder depending on the LLM's capabilities
+              file_contents.append(f"[Image: {file.file_name}]")
+            else:
+              file_contents.append(file.get_preview())
 
-          # Append file contents to the message
-          if file_contents:
-            message_dict["content"] += "\n\n" + "\n\n".join(file_contents)
+        if file_contents:
+          formatted_message["content"] += "\n\n" + "\n\n".join(file_contents)
 
-        formatted_messages.append(message_dict)
+      formatted_messages.append(formatted_message)
 
     return formatted_messages
 
-  def add_file_to_message(self, message_id: str, file_path: str) -> Optional[FileReference]:
-    """
-    Add a file to a specific message.
-
-    Args:
-        message_id: The ID of the message to add the file to
-        file_path: The path to the file to add
-
-    Returns:
-        Optional[FileReference]: The created file reference, or None if the message was not found
-
-    Raises:
-        ValueError: If the message with the given ID was not found
-    """
-    if not os.path.exists(file_path):
-      logger.warning(f"File {file_path} does not exist")
-
-    for msg in self.messages:
-      if msg.id == message_id:
-        return msg.add_file(file_path)
-
-    raise ValueError(f"Message with ID {message_id} not found")
-
-  def add_artifact_to_message(self,
-                             message_id: str,
-                             artifact: Artifact) -> None:
-    """
-    Add an artifact reference to a specific message.
-
-    Args:
-        message_id: The ID of the message to add the artifact reference to
-        artifact: The artifact to reference
-
-    Raises:
-        ValueError: If the message with the given ID was not found
-    """
-    for msg in self.messages:
-      if msg.id == message_id:
-        msg.add_artifact_reference(artifact.artifact_id)
-        return
-
-    raise ValueError(f"Message with ID {message_id} not found")
-
-  def get_artifacts(self) -> List[Artifact]:
-    """
-    Get all artifacts referenced in this conversation.
-
-    Returns:
-        List[Artifact]: All artifacts referenced in this conversation
-    """
-    artifact_ids = set()
-    for msg in self.messages:
-      artifact_ids.update(msg.artifact_references)
-
-    artifacts = []
-    for artifact_id in artifact_ids:
-      try:
-        artifact = Artifact.load(artifact_id, self.artifacts_directory)
-        if artifact:
-          artifacts.append(artifact)
-      except Exception as e:
-        logger.error(f"Error loading artifact {artifact_id}: {e}")
-
-    return artifacts
-
   def to_dict(self) -> Dict[str, Any]:
     """
-    Convert the conversation to a dictionary representation.
+    Convert the conversation to a dictionary.
 
     Returns:
         Dict[str, Any]: The conversation as a dictionary
     """
     return {
-      "id": self.id,
+      "conversation_id": self.conversation_id,
       "title": self.title,
-      "messages": [msg.to_dict() for msg in self.messages],
-      "metadata": self.metadata,
-      "created_at": self.created_at,
-      "updated_at": self.updated_at,
-      "prompt_history": self.prompt_history
+      "system_prompt": self.system_prompt,
+      "files_directory": self.files_directory,
+      "messages": [message.to_dict() for message in self.messages],
+      "timestamp": self.timestamp
     }
 
   @classmethod
-  def from_dict(cls, data: Dict[str, Any], conversation_directory: str, artifacts_directory: str,
-                files_subdirectory: str = "files") -> 'Conversation':
+  def from_dict(cls, data: Dict[str, Any], base_directory: str, files_directory: str) -> 'Conversation':
     """
-    Create a conversation from a dictionary representation.
+    Create a conversation from a dictionary.
 
     Args:
         data: The dictionary containing the conversation data
-        conversation_directory: The directory for conversation storage
-        artifacts_directory: The directory for artifact storage
-        files_subdirectory: The subdirectory for file storage
+        base_directory: The base directory for conversation storage
+        files_directory: The directory for storing files
 
     Returns:
         Conversation: The created conversation
     """
     conversation = cls(
-      id=data.get("id"),
-      title=data.get("title", "New Conversation"),
-      conversation_directory=conversation_directory,
-      artifacts_directory=artifacts_directory,
-      files_subdirectory=files_subdirectory
+      base_directory=base_directory,
+      files_directory=files_directory,
+      conversation_id=data["conversation_id"],
+      title=data["title"],
+      system_prompt=data.get("system_prompt")
     )
 
-    conversation.metadata = data.get("metadata", {})
-    conversation.created_at = data.get("created_at", conversation.created_at)
-    conversation.updated_at = data.get("updated_at", conversation.updated_at)
-    conversation.prompt_history = data.get("prompt_history", [])
+    # Clear the default system message
+    conversation.messages = []
 
-    # Add messages
-    for msg_data in data.get("messages", []):
-      message = Message.from_dict(msg_data)
+    # Add all messages from the data
+    for message_data in data.get("messages", []):
+      message = Message.from_dict(message_data)
       conversation.messages.append(message)
 
     return conversation
@@ -430,84 +318,89 @@ class Conversation(BaseFile):
     Returns:
         Optional[str]: The path to the saved file, or None if saving failed
     """
-    # Ensure the conversation directory exists
-    self.ensure_directory(self.conversation_dir)
-
-    filepath = os.path.join(self.conversation_dir, "conversation.json")
-
     try:
-      with open(filepath, 'w') as f:
+      # Ensure the conversations directory exists
+      conversations_dir = os.path.join(self.base_directory, "conversations")
+      os.makedirs(conversations_dir, exist_ok=True)
+
+      # Save the conversation to a JSON file
+      file_path = os.path.join(conversations_dir, f"{self.conversation_id}.json")
+      with open(file_path, 'w') as f:
         json.dump(self.to_dict(), f, indent=2)
-      return filepath
+
+      return file_path
     except Exception as e:
-      logger.error(f"Failed to save conversation: {e}")
+      logger.error(f"Failed to save conversation {self.conversation_id}: {e}")
       return None
 
   @classmethod
-  def load(cls, conversation_id: str, conversation_directory: str, artifacts_directory: str,
-           files_subdirectory: str = "files") -> Optional['Conversation']:
+  def load(cls, conversation_id: str, base_directory: str, files_directory: str) -> Optional['Conversation']:
     """
-    Load a conversation by ID.
+    Load a conversation from a file.
 
     Args:
         conversation_id: The ID of the conversation to load
-        conversation_directory: The directory for conversation storage
-        artifacts_directory: The directory for artifact storage
-        files_subdirectory: The subdirectory for file storage
+        base_directory: The base directory for conversation storage
+        files_directory: The directory for storing files
 
     Returns:
         Optional[Conversation]: The loaded conversation, or None if loading failed
     """
-    filepath = os.path.join(conversation_directory, conversation_id, "conversation.json")
-
     try:
-      if not os.path.exists(filepath):
-        logger.error(f"Conversation file {filepath} does not exist")
+      file_path = os.path.join(base_directory, "conversations", f"{conversation_id}.json")
+
+      if not os.path.exists(file_path):
+        logger.error(f"Conversation file {file_path} does not exist")
         return None
 
-      with open(filepath, 'r') as f:
+      with open(file_path, 'r') as f:
         data = json.load(f)
 
-      return cls.from_dict(data, conversation_directory, artifacts_directory, files_subdirectory)
+      return cls.from_dict(data, base_directory, files_directory)
     except Exception as e:
       logger.error(f"Failed to load conversation {conversation_id}: {e}")
       return None
 
   @classmethod
-  def list_conversations(cls, conversation_directory: str) -> List[Dict[str, Any]]:
+  def list_conversations(cls, base_directory: str) -> List[Dict[str, Any]]:
     """
-    List all conversations in the directory.
+    List all conversations in the base directory.
 
     Args:
-        conversation_directory: The directory for conversation storage
+        base_directory: The base directory for conversation storage
 
     Returns:
         List[Dict[str, Any]]: A list of conversation metadata
     """
-    conversations = []
+    try:
+      conversations_dir = os.path.join(base_directory, "conversations")
 
-    if not os.path.exists(conversation_directory):
-      logger.warning(f"Conversation directory {conversation_directory} does not exist")
+      if not os.path.exists(conversations_dir):
+        logger.warning(f"Conversations directory {conversations_dir} does not exist")
+        return []
+
+      conversation_files = [f for f in os.listdir(conversations_dir) if f.endswith('.json')]
+      conversations = []
+
+      for file_name in conversation_files:
+        try:
+          file_path = os.path.join(conversations_dir, file_name)
+          with open(file_path, 'r') as f:
+            data = json.load(f)
+
+          conversations.append({
+            "conversation_id": data["conversation_id"],
+            "title": data["title"],
+            "timestamp": data.get("timestamp", 0),
+            "message_count": len(data.get("messages", []))
+          })
+        except Exception as e:
+          logger.error(f"Failed to read conversation file {file_name}: {e}")
+
+      # Sort by timestamp, newest first
+      conversations.sort(key=lambda x: x["timestamp"], reverse=True)
+
       return conversations
-
-    for item in os.listdir(conversation_directory):
-      item_path = os.path.join(conversation_directory, item)
-      if os.path.isdir(item_path):
-        conv_file = os.path.join(item_path, "conversation.json")
-        if os.path.exists(conv_file):
-          try:
-            with open(conv_file, 'r') as f:
-              data = json.load(f)
-              conversations.append({
-                "id": data.get("id"),
-                "title": data.get("title", "Untitled"),
-                "created_at": data.get("created_at"),
-                "updated_at": data.get("updated_at"),
-                "message_count": len(data.get("messages", []))
-              })
-          except Exception as e:
-            logger.error(f"Error loading conversation {item}: {e}")
-
-    # Sort by updated_at (newest first)
-    conversations.sort(key=lambda x: x.get("updated_at", 0), reverse=True)
-    return conversations
+    except Exception as e:
+      logger.error(f"Failed to list conversations: {e}")
+      return []
