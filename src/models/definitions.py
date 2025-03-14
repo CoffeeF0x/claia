@@ -1,3 +1,7 @@
+# External dependencies
+from enum import Enum
+
+# Internal dependencies
 from models.api.openai import OpenAITextModel
 from models.api.runpod import RunpodTextModel
 from models.api.anthropic import AnthropicTextModel
