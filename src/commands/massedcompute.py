@@ -133,7 +133,7 @@ STARTUP_SCRIPTS = {
     "sudo apt install -y nano htop",
 
     # Add SSH key
-    "echo ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGfSWokLXy/QmagyiG6hjPG/wxFKmmgyOk65pLvfNizZ > ~/.ssh/authorized_keys",
+    "echo ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA3URurOcAVdWz+RJcZJYgXKhIJdEg2D49M4D9LOpC0i > ~/.ssh/authorized_keys",
 
     # Add user to docker group
     "sudo usermod -aG docker $USER",
