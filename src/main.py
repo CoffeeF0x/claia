@@ -109,11 +109,10 @@ def create_conversation(settings: Settings, user_input: str = None) -> Conversat
     logger.debug(f"Using system prompt from: {settings.active_prompt.name if settings.active_prompt else 'None'}")
 
     conversation = Conversation(
-      conversation_directory=settings.conversation_directory,
-      artifacts_directory=settings.artifacts_directory,
+      base_directory=settings.conversation_directory,
+      files_directory=settings.conversation_files_directory,
       title="New Conversation",
-      system_prompt=system_prompt,
-      files_subdirectory=settings.conversation_files_directory
+      system_prompt=system_prompt
     )
     settings.active_conversation = conversation
     logger.debug("New conversation created and set as active")

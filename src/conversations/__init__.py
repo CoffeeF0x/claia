@@ -228,6 +228,27 @@ class Conversation(BaseFile):
     """
     return self.messages
 
+  def update_system_prompt_if_empty(self, system_prompt: str) -> None:
+    """
+    Update the system prompt if it's empty or not set.
+
+    This method will update the system prompt and add a system message
+    if there are no existing system messages in the conversation.
+
+    Args:
+        system_prompt: The system prompt to set
+    """
+    # Check if we have any system messages
+    has_system_message = any(message.role == MessageRole.SYSTEM for message in self.messages)
+
+    # If no system message exists, update the system prompt and add a system message
+    if not has_system_message:
+      self.system_prompt = system_prompt
+      # Add the system message at the beginning of the conversation
+      system_message = Message(role=MessageRole.SYSTEM, content=system_prompt)
+      self.messages.insert(0, system_message)
+      logger.debug(f"Added system message: {system_prompt[:50]}{'...' if len(system_prompt) > 50 else ''}")
+
   def get_formatted_messages(self) -> List[Dict[str, Any]]:
     """
     Get the messages in a format suitable for sending to an LLM.
