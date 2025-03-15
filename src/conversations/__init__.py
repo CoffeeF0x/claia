@@ -130,7 +130,7 @@ class Conversation(BaseFile):
         system_prompt: Optional system prompt for the conversation
     """
     # Initialize with a dummy file path that will be set properly when saved
-    dummy_path = os.path.join(base_directory, "conversations", conversation_id or str(uuid.uuid4()))
+    dummy_path = os.path.join(base_directory, conversation_id or str(uuid.uuid4()))
     super().__init__(file_path=dummy_path, base_directory=base_directory)
 
     self.conversation_id = conversation_id or self.file_id
@@ -342,11 +342,10 @@ class Conversation(BaseFile):
     """
     try:
       # Ensure the conversations directory exists
-      conversations_dir = os.path.join(self.base_directory, "conversations")
-      os.makedirs(conversations_dir, exist_ok=True)
+      os.makedirs(self.base_directory, exist_ok=True)
 
       # Save the conversation to a JSON file
-      file_path = os.path.join(conversations_dir, f"{self.conversation_id}.json")
+      file_path = os.path.join(self.base_directory, f"{self.conversation_id}.json")
       with open(file_path, 'w') as f:
         json.dump(self.to_dict(), f, indent=2)
 
@@ -369,7 +368,7 @@ class Conversation(BaseFile):
         Optional[Conversation]: The loaded conversation, or None if loading failed
     """
     try:
-      file_path = os.path.join(base_directory, "conversations", f"{conversation_id}.json")
+      file_path = os.path.join(base_directory, f"{conversation_id}.json")
 
       if not os.path.exists(file_path):
         logger.error(f"Conversation file {file_path} does not exist")
@@ -395,18 +394,16 @@ class Conversation(BaseFile):
         List[Dict[str, Any]]: A list of conversation metadata
     """
     try:
-      conversations_dir = os.path.join(base_directory, "conversations")
-
-      if not os.path.exists(conversations_dir):
-        logger.warning(f"Conversations directory {conversations_dir} does not exist")
+      if not os.path.exists(base_directory):
+        logger.warning(f"Conversations directory {base_directory} does not exist")
         return []
 
-      conversation_files = [f for f in os.listdir(conversations_dir) if f.endswith('.json')]
+      conversation_files = [f for f in os.listdir(base_directory) if f.endswith('.json')]
       conversations = []
 
       for file_name in conversation_files:
         try:
-          file_path = os.path.join(conversations_dir, file_name)
+          file_path = os.path.join(base_directory, file_name)
           with open(file_path, 'r') as f:
             data = json.load(f)
 
