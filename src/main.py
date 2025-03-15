@@ -10,6 +10,10 @@
 # - if a command has an alias, or perhaps just if it's alias matches the root of that path the rest of the commands aren't displayed (in help or executable, test by adding list alias to mc list instances)
 # - prompt no longer gets applied to the conversation (possibly just missed updating commands)
 # - since model layer doesn't process conversations, it needs to compare the capabilities against the sent request, if there's content that the model doesn't support throw a warning, maybe also trim the request to the model's capabilities
+# - each command should have a small object to define flags, this will allow us to seperate global flags from command flags
+# - create a command class to set parameters (these should be saved to a .env file for now)
+# - claia will load a .env file in addition to other settings load methods
+# - prefix all env vars with CLAIA_ (or use claia prefixed env to override non prefixed env vars)
 
 # External dependencies
 import readline
