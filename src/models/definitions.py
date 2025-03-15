@@ -194,52 +194,12 @@ sources = {
           "context": 8192,
         }
       },
-      "mixtral-8x7b": {
-        "model_id": "mistralai/Mixtral-8x7B-Instruct-v0.1",
-        "variants": [],
-        "attributes": {
-          "max_output": 4096,
-          "context": 32768,
-        }
-      },
-      "llama2-70b": {
-        "model_id": "meta-llama/Llama-2-70b-chat-hf",
-        "variants": [],
-        "attributes": {
-          "max_output": 4096,
-          "context": 4096,
-        }
-      },
       "minicpm3-4b": {
         "model_id": "openbmb/MiniCPM3-4B",
         "variants": [],
         "attributes": {
           "max_output": 1024,
           "context": 32000,
-        }
-      },
-      "qwen2.5-32b-instruct": {
-        "model_id": "Qwen/Qwen2.5-32B-Instruct",
-        "variants": [],
-        "attributes": {
-          "max_output": 8192,
-          "context": 131072,
-        }
-      },
-      "qwen2.5-72b-instruct": {
-        "model_id": "Qwen/Qwen2.5-72B-Instruct",
-        "variants": [],
-        "attributes": {
-          "max_output": 8192,
-          "context": 131072,
-        }
-      },
-      "qwq-32b-preview": {
-        "model_id": "Qwen/QwQ-32B-Preview",
-        "variants": [],
-        "attributes": {
-          "max_output": 512,
-          "context": 32768,
         }
       },
       "qwq-32b": {
@@ -308,42 +268,42 @@ definitions = {
     "capabilities": [ModelCapability.TTT],
     "training_data": "Not specified",
   },
-  "qwen2.5-32b-instruct": {
-    "title": "Qwen2.5-32B-Instruct",
-    "description": "Qwen2.5 is the latest series of Qwen large language models. For Qwen2.5, we release a number of base language models and instruction-tuned language models ranging from 0.5 to 72 billion parameters.",
-    "capabilities": [ModelCapability.TTT],
-    "training_data": "Not specified",
-  },
-  "qwen2.5-72b-instruct": {
-    "title": "Qwen2.5-72B-Instruct",
-    "description": "Qwen2.5's largest model with 72B parameters. Features improved capabilities in coding, mathematics, instruction following, and multilingual support for over 29 languages. Specialized in generating structured outputs and long-form content.",
-    "capabilities": [ModelCapability.TTT],
-    "training_data": "Not specified",
-  },
-  "mistral-7b": {
-    "title": "Mistral 7B Instruct",
-    "description": "Mistral 7B is a 7-billion parameter language model demonstrating state-of-the-art performance among models of comparable size.",
-    "capabilities": [ModelCapability.TTT],
-    "training_data": "Not specified",
-  },
-  "mixtral-8x7b": {
-    "title": "Mixtral 8x7B Instruct",
-    "description": "Mixtral 8x7B is a Mixture of Experts model with 8 experts of 7B parameters each. It outperforms Llama 2 70B on most benchmarks.",
-    "capabilities": [ModelCapability.TTT],
-    "training_data": "Not specified",
-  },
-  "llama2-70b": {
-    "title": "Llama 2 70B Chat",
-    "description": "Meta's largest Llama 2 model fine-tuned for chat/instruct scenarios.",
-    "capabilities": [ModelCapability.TTT],
-    "training_data": "Up to 2023",
-  },
-  "qwq-32b-preview": {
-    "title": "QwQ-32B Preview",
-    "description": "An experimental research model by the Qwen Team focused on advancing AI reasoning capabilities. Features enhanced analytical abilities while having specific limitations in language mixing, recursive reasoning, and safety considerations. Built on Qwen2.5-32B-Instruct base.",
-    "capabilities": [ModelCapability.TTT],
-    "training_data": "Not specified",
-  },
+  # "qwen2.5-32b-instruct": {
+  #   "title": "Qwen2.5-32B-Instruct",
+  #   "description": "Qwen2.5 is the latest series of Qwen large language models. For Qwen2.5, we release a number of base language models and instruction-tuned language models ranging from 0.5 to 72 billion parameters.",
+  #   "capabilities": [ModelCapability.TTT],
+  #   "training_data": "Not specified",
+  # },
+  # "qwen2.5-72b-instruct": {
+  #   "title": "Qwen2.5-72B-Instruct",
+  #   "description": "Qwen2.5's largest model with 72B parameters. Features improved capabilities in coding, mathematics, instruction following, and multilingual support for over 29 languages. Specialized in generating structured outputs and long-form content.",
+  #   "capabilities": [ModelCapability.TTT],
+  #   "training_data": "Not specified",
+  # },
+  # "mistral-7b": {
+  #   "title": "Mistral 7B Instruct",
+  #   "description": "Mistral 7B is a 7-billion parameter language model demonstrating state-of-the-art performance among models of comparable size.",
+  #   "capabilities": [ModelCapability.TTT],
+  #   "training_data": "Not specified",
+  # },
+  # "mixtral-8x7b": {
+  #   "title": "Mixtral 8x7B Instruct",
+  #   "description": "Mixtral 8x7B is a Mixture of Experts model with 8 experts of 7B parameters each. It outperforms Llama 2 70B on most benchmarks.",
+  #   "capabilities": [ModelCapability.TTT],
+  #   "training_data": "Not specified",
+  # },
+  # "llama2-70b": {
+  #   "title": "Llama 2 70B Chat",
+  #   "description": "Meta's largest Llama 2 model fine-tuned for chat/instruct scenarios.",
+  #   "capabilities": [ModelCapability.TTT],
+  #   "training_data": "Up to 2023",
+  # },
+  # "qwq-32b-preview": {
+  #   "title": "QwQ-32B Preview",
+  #   "description": "An experimental research model by the Qwen Team focused on advancing AI reasoning capabilities. Features enhanced analytical abilities while having specific limitations in language mixing, recursive reasoning, and safety considerations. Built on Qwen2.5-32B-Instruct base.",
+  #   "capabilities": [ModelCapability.TTT],
+  #   "training_data": "Not specified",
+  # },
   "qwq-32b": {
     "title": "QwQ-32B",
     "description": "The official release of QwQ-32B, a reasoning-focused model from the Qwen team. Built on the Qwen2.5-32B-Instruct base, it features improved reasoning capabilities while maintaining strong performance across general tasks.",
