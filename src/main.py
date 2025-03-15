@@ -27,6 +27,7 @@ from utilities import *
 from tools import process_function_calls
 from agents import ProcessQueue, Process, Agent, AgentType, SourcePreference, ProcessStatus
 from conversations import Conversation, MessageRole
+from models.definitions import definitions, ModelCapability
 
 
 
@@ -245,14 +246,40 @@ def process_user_input(user_input: str, settings: Settings, process_queue: Proce
     # Create a conversation with the user's input
     conversation = create_conversation(settings, user_input)
 
+    # Determine the appropriate agent type based on the model's capability
+    agent_type = AgentType.TEXT_TO_TEXT  # Default to text-to-text
+
+    # Get the model's capability if an active model is set
+    if settings.active_model:
+      if settings.active_model in definitions:
+        model_def = definitions[settings.active_model]
+        if "capabilities" in model_def and model_def["capabilities"]:
+          capability = model_def["capabilities"][0]  # Use the first capability
+
+          # Map capability to agent type
+          if capability == ModelCapability.TTT:
+            agent_type = AgentType.TEXT_TO_TEXT
+          elif capability == ModelCapability.TTI:
+            agent_type = AgentType.TEXT_TO_IMAGE
+          elif capability == ModelCapability.TTS:
+            agent_type = AgentType.TEXT_TO_AUDIO
+          elif capability == ModelCapability.ITT:
+            agent_type = AgentType.IMAGE_TO_TEXT
+          elif capability == ModelCapability.TTA:
+            agent_type = AgentType.TEXT_TO_AUDIO
+          elif capability == ModelCapability.STT:
+            # Speech-to-text not yet implemented as an agent type
+            agent_type = AgentType.TEXT_TO_TEXT
+
     # Create a process with all necessary information
-    logger.debug("Creating process for LLM query")
+    logger.debug(f"Creating process for query with agent type: {agent_type.value}")
     process = Process(
-      agent_type=AgentType.SIMPLE,
+      agent_type=agent_type,
       settings=settings,
       conversation=conversation,
       parameters={
-        "source_preference": SourcePreference.ANY
+        "source_preference": SourcePreference.ANY,
+        "model_id": settings.active_model
       }
     )
 

@@ -9,6 +9,10 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Any, Callable, Type
 
+# Internal dependencies
+from models import run as model_run
+from errors import Result
+
 
 
 ########################################################################
@@ -33,6 +37,10 @@ class AgentType(Enum):
   """Types of agents that can handle processes."""
   SIMPLE = "simple"  # Simple agent that directly calls a model
   SIMPLE_TOOL = "simple-tool"  # Simple agent that can use tools
+  TEXT_TO_TEXT = "text-to-text"  # Agent that processes text-to-text requests
+  TEXT_TO_IMAGE = "text-to-image"  # Agent that processes text-to-image requests
+  TEXT_TO_AUDIO = "text-to-audio"  # Agent that processes text-to-audio requests
+  IMAGE_TO_TEXT = "image-to-text"  # Agent that processes image-to-text requests
 
 class SourcePreference(Enum):
   """Enum for source preferences when deploying models."""
@@ -253,6 +261,14 @@ class Agent:
       elif process.agent_type == AgentType.SIMPLE_TOOL:
         # TODO: Implement SimpleToolAgent
         raise NotImplementedError(f"Agent type {process.agent_type} not implemented")
+      elif process.agent_type == AgentType.TEXT_TO_TEXT:
+        return TextToTextAgent.process(process)
+      elif process.agent_type == AgentType.TEXT_TO_IMAGE:
+        return TextToImageAgent.process(process)
+      elif process.agent_type == AgentType.TEXT_TO_AUDIO:
+        return TextToAudioAgent.process(process)
+      elif process.agent_type == AgentType.IMAGE_TO_TEXT:
+        return ImageToTextAgent.process(process)
       else:
         raise ValueError(f"Unknown agent type: {process.agent_type}")
     except Exception as e:
@@ -290,31 +306,277 @@ class SimpleAgent:
       if not settings:
         raise ValueError("Settings are required for SimpleAgent")
 
-      # Get the active model from settings
-      model_id = settings.active_model
+      # Get the model ID from settings or process parameters
+      model_id = process.parameters.get("model_id", settings.active_model)
       if not model_id:
         raise ValueError("No active model set in settings")
-
-      # Import here to avoid circular imports
-      from models import run as model_run
 
       # Run the model with the conversation
       result = model_run(model_id, conversation, settings=settings)
 
-      if hasattr(result, 'is_error') and result.is_error():
+      if result.is_error():
         raise ValueError(f"Error running model: {result.get_message()}")
-
-      response = result.data if hasattr(result, 'data') else result
 
       # Process the response
       logger.info(f"SimpleAgent processed request with model {model_id}")
       process.mark_completed({
-        "response": response,
+        "response": result.data,
         "model": model_id,
         "source": "actual"
       })
     except Exception as e:
       logger.exception(f"Error in SimpleAgent for {process.id}: {str(e)}")
+      process.mark_failed(str(e))
+
+    return process
+
+
+
+########################################################################
+#                         IO SPECIFIC AGENTS                           #
+########################################################################
+class TextToTextAgent:
+  """
+  Agent that processes text-to-text requests.
+
+  This agent handles conversations where both input and output are text.
+  """
+  @staticmethod
+  def process(process: Process) -> Process:
+    """
+    Process a text-to-text request.
+
+    Args:
+        process: The process to execute
+
+    Returns:
+        The updated process with results or error information
+    """
+    try:
+      # Get the conversation and settings from the process
+      conversation = process.conversation
+      settings = process.settings
+
+      if not conversation:
+        raise ValueError("Conversation is required for TextToTextAgent")
+
+      if not settings:
+        raise ValueError("Settings are required for TextToTextAgent")
+
+      # Get the model ID from settings or process parameters
+      model_id = process.parameters.get("model_id", settings.active_model)
+      if not model_id:
+        raise ValueError("No model specified for text-to-text processing")
+
+      # Run the model with the conversation
+      result = model_run(model_id, conversation, settings=settings)
+
+      if result.is_error():
+        raise ValueError(f"Error running model: {result.get_message()}")
+
+      # Process the response
+      logger.info(f"TextToTextAgent processed request with model {model_id}")
+      process.mark_completed({
+        "response": result.data,
+        "model": model_id,
+        "source": "text-to-text"
+      })
+    except Exception as e:
+      logger.exception(f"Error in TextToTextAgent for {process.id}: {str(e)}")
+      process.mark_failed(str(e))
+
+    return process
+
+class TextToImageAgent:
+  """
+  Agent that processes text-to-image requests.
+
+  This agent handles conversations where the input is text and the output is an image.
+  """
+  @staticmethod
+  def process(process: Process) -> Process:
+    """
+    Process a text-to-image request.
+
+    Args:
+        process: The process to execute
+
+    Returns:
+        The updated process with results or error information
+    """
+    try:
+      # Get the conversation and settings from the process
+      conversation = process.conversation
+      settings = process.settings
+
+      if not conversation:
+        raise ValueError("Conversation is required for TextToImageAgent")
+
+      if not settings:
+        raise ValueError("Settings are required for TextToImageAgent")
+
+      # Get the model ID from settings or process parameters
+      model_id = process.parameters.get("model_id", settings.active_model)
+      if not model_id:
+        raise ValueError("No model specified for text-to-image processing")
+
+      # Get formatted messages from the conversation
+      messages = conversation.get_formatted_messages()
+
+      # Extract the prompt from the last user message
+      prompt = None
+      for message in reversed(messages):
+        if message.get('role') == 'user':
+          prompt = message.get('content', '')
+          break
+
+      # Validate prompt
+      if not prompt or not isinstance(prompt, str):
+        raise ValueError("Text-to-image requires a non-empty prompt")
+
+      # TODO: Implement actual image generation
+      # For now, we'll just return a placeholder response
+      # In the future, this would call a specialized model method for image generation
+
+      # For now, return a placeholder response
+      process.mark_completed({
+        "response": "Text-to-image processing not yet implemented",
+        "model": model_id,
+        "source": "text-to-image"
+      })
+    except Exception as e:
+      logger.exception(f"Error in TextToImageAgent for {process.id}: {str(e)}")
+      process.mark_failed(str(e))
+
+    return process
+
+class TextToAudioAgent:
+  """
+  Agent that processes text-to-audio requests.
+
+  This agent handles conversations where the input is text and the output is audio.
+  """
+  @staticmethod
+  def process(process: Process) -> Process:
+    """
+    Process a text-to-audio request.
+
+    Args:
+        process: The process to execute
+
+    Returns:
+        The updated process with results or error information
+    """
+    try:
+      # Get the conversation and settings from the process
+      conversation = process.conversation
+      settings = process.settings
+
+      if not conversation:
+        raise ValueError("Conversation is required for TextToAudioAgent")
+
+      if not settings:
+        raise ValueError("Settings are required for TextToAudioAgent")
+
+      # Get the model ID from settings or process parameters
+      model_id = process.parameters.get("model_id", settings.active_model)
+      if not model_id:
+        raise ValueError("No model specified for text-to-audio processing")
+
+      # Get formatted messages from the conversation
+      messages = conversation.get_formatted_messages()
+
+      # Extract the text from the last user message
+      text = None
+      for message in reversed(messages):
+        if message.get('role') == 'user':
+          text = message.get('content', '')
+          break
+
+      # Validate text
+      if not text or not isinstance(text, str):
+        raise ValueError("Text-to-audio requires non-empty text")
+
+      # TODO: Implement actual audio generation
+      # For now, we'll just return a placeholder response
+      # In the future, this would call a specialized model method for audio generation
+
+      # For now, return a placeholder response
+      process.mark_completed({
+        "response": "Text-to-audio processing not yet implemented",
+        "model": model_id,
+        "source": "text-to-audio"
+      })
+    except Exception as e:
+      logger.exception(f"Error in TextToAudioAgent for {process.id}: {str(e)}")
+      process.mark_failed(str(e))
+
+    return process
+
+class ImageToTextAgent:
+  """
+  Agent that processes image-to-text requests.
+
+  This agent handles conversations where the input is an image and the output is text.
+  """
+  @staticmethod
+  def process(process: Process) -> Process:
+    """
+    Process an image-to-text request.
+
+    Args:
+        process: The process to execute
+
+    Returns:
+        The updated process with results or error information
+    """
+    try:
+      # Get the conversation and settings from the process
+      conversation = process.conversation
+      settings = process.settings
+
+      if not conversation:
+        raise ValueError("Conversation is required for ImageToTextAgent")
+
+      if not settings:
+        raise ValueError("Settings are required for ImageToTextAgent")
+
+      # Get the model ID from settings or process parameters
+      model_id = process.parameters.get("model_id", settings.active_model)
+      if not model_id:
+        raise ValueError("No model specified for image-to-text processing")
+
+      # Get formatted messages from the conversation
+      messages = conversation.get_formatted_messages()
+
+      # Find image data in the conversation
+      # This would typically be in the metadata or attached files
+      image_data = None
+      prompt = None
+
+      # Extract prompt from the last user message
+      for message in reversed(messages):
+        if message.get('role') == 'user':
+          prompt = message.get('content', '')
+          break
+
+      # In a real implementation, we would extract image data from the conversation
+      # For now, we'll just return an error
+      if not image_data:
+        raise ValueError("Image-to-text requires image data")
+
+      # TODO: Implement actual image-to-text processing
+      # For now, we'll just return a placeholder response
+      # In the future, this would call a specialized model method for image analysis
+
+      # For now, return a placeholder response
+      process.mark_completed({
+        "response": "Image-to-text processing not yet implemented",
+        "model": model_id,
+        "source": "image-to-text"
+      })
+    except Exception as e:
+      logger.exception(f"Error in ImageToTextAgent for {process.id}: {str(e)}")
       process.mark_failed(str(e))
 
     return process
