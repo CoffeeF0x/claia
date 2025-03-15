@@ -48,14 +48,14 @@ sources = {
     "inputs": [IOType.TEXT],
     "outputs": [IOType.TEXT],
     "models": {
-      "gpt-3.5-turbo": {
-        "model_id": "gpt-3.5-turbo-0125",
-        "variants": ["gpt-3.5-turbo-0125", "gpt-3.5-turbo-1106", "gpt-3.5-turbo-instruct"],
-        "attributes": {
-          "max_output": 4096,
-          "context": 16385,
-        }
-      },
+      # "gpt-3.5-turbo": {
+      #   "model_id": "gpt-3.5-turbo-0125",
+      #   "variants": ["gpt-3.5-turbo-0125", "gpt-3.5-turbo-1106", "gpt-3.5-turbo-instruct"],
+      #   "attributes": {
+      #     "max_output": 4096,
+      #     "context": 16385,
+      #   }
+      # },
       "gpt-4": {
         "model_id": "gpt-4-0613",
         "variants": ["gpt-4-0613", "gpt-4-0314"],
@@ -63,15 +63,15 @@ sources = {
           "max_output": 8192,
           "context": 8192,
         }
-      },
-      "gpt-4-turbo": {
-        "model_id": "gpt-4-turbo-preview",
-        "variants": ["gpt-4-turbo-2024-04-09", "gpt-4-turbo-preview", "gpt-4-0125-preview", "gpt-4-1106-preview"],
-        "attributes": {
-          "max_output": 4096,
-          "context": 128000,
-        }
       }
+      # "gpt-4-turbo": {
+      #   "model_id": "gpt-4-turbo-preview",
+      #   "variants": ["gpt-4-turbo-2024-04-09", "gpt-4-turbo-preview", "gpt-4-0125-preview", "gpt-4-1106-preview"],
+      #   "attributes": {
+      #     "max_output": 4096,
+      #     "context": 128000,
+      #   }
+      # }
     }
   },
   "anthropic": {
@@ -155,14 +155,14 @@ sources = {
           "context": 8192,
         }
       },
-      "gpt-4-turbo": {
-        "model_id": "openai/gpt-4-turbo-preview",
-        "variants": ["openai/gpt-4-turbo-preview"],
-        "attributes": {
-          "max_output": 4096,
-          "context": 128000,
-        }
-      },
+      # "gpt-4-turbo": {
+      #   "model_id": "openai/gpt-4-turbo-preview",
+      #   "variants": ["openai/gpt-4-turbo-preview"],
+      #   "attributes": {
+      #     "max_output": 4096,
+      #     "context": 128000,
+      #   }
+      # },
       "claude-3-5-sonnet-20240620": {
         "model_id": "anthropic/claude-3-sonnet-20240620",
         "variants": [],
@@ -237,36 +237,32 @@ sources = {
 #   - capabilities: List of supported operations
 #   - inputs/outputs: Supported formats
 #   - attributes: Technical specifications
+
 definitions = {
-  "gpt-3.5-turbo": {
-    "title": "GPT 3.5 Turbo",
-    "description": "The latest GPT-3.5 Turbo model with higher accuracy at responding in requested formats and a fix for a bug which caused a text encoding issue for non-English language function calls.",
-    "capabilities": [ModelCapability.TTT],
-    "training_data": "Up to September 2021",
-  },
+  # "gpt-3.5-turbo": {
+  #   "title": "GPT 3.5 Turbo",
+  #   "description": "The latest GPT-3.5 Turbo model with higher accuracy at responding in requested formats and a fix for a bug which caused a text encoding issue for non-English language function calls.",
+  #   "capabilities": [ModelCapability.TTT],
+  # },
   "gpt-4": {
     "title": "GPT 4",
     "description": "Snapshot of gpt-4 from June 13th 2023 with improved function calling support.",
     "capabilities": [ModelCapability.TTT],
-    "training_data": "Up to September 2021",
   },
-  "gpt-4-turbo": {
-    "title": "GPT 4 Turbo",
-    "description": "The latest GPT-4 Turbo model with vision capabilities. Vision requests can now use JSON mode and function calling.",
-    "capabilities": [ModelCapability.TTT],
-    "training_data": "Up to December 2023",
-  },
+  # "gpt-4-turbo": {
+  #   "title": "GPT 4 Turbo",
+  #   "description": "The latest GPT-4 Turbo model with vision capabilities. Vision requests can now use JSON mode and function calling.",
+  #   "capabilities": [ModelCapability.TTT],
+  # },
   "claude-3-5-sonnet-20240620": {
     "title": "Claude 3.5 Sonnet",
     "description": "Claude 3.5 Sonnet sets new industry benchmarks for graduate-level reasoning (GPQA), undergraduate-level knowledge (MMLU), and coding proficiency (HumanEval). It shows marked improvement in grasping nuance, humor, and complex instructions, and is exceptional at writing high-quality content with a natural, relatable tone.",
     "capabilities": [ModelCapability.TTT],
-    "training_data": "Up to April 2024",
   },
   "minicpm3-4b": {
     "title": "MiniCPM3-4B",
     "description": "MiniCPM3-4B is the 3rd generation of MiniCPM series with a 32k context window.",
     "capabilities": [ModelCapability.TTT],
-    "training_data": "Not specified",
   },
   # "qwen2.5-32b-instruct": {
   #   "title": "Qwen2.5-32B-Instruct",
@@ -308,12 +304,15 @@ definitions = {
     "title": "QwQ-32B",
     "description": "The official release of QwQ-32B, a reasoning-focused model from the Qwen team. Built on the Qwen2.5-32B-Instruct base, it features improved reasoning capabilities while maintaining strong performance across general tasks.",
     "capabilities": [ModelCapability.TTT],
-    "training_data": "Not specified",
   },
   "phi-4": {
     "title": "Phi-4",
     "description": "Microsoft's Phi-4 is a state-of-the-art small language model that delivers exceptional performance with high efficiency. It excels at reasoning, coding, and instruction following while maintaining a compact size compared to larger models.",
     "capabilities": [ModelCapability.TTT],
-    "training_data": "Up to 2024",
+  },
+  "stable-diffusion-v2": {
+    "title": "Stable Diffusion v2",
+    "description": "The latest version of Stable Diffusion, with improved text-to-image generation capabilities.",
+    "capabilities": [ModelCapability.TTI],
   }
 }
