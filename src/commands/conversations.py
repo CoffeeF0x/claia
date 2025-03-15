@@ -38,7 +38,7 @@ class ConversationCommand(Command):
 
     output = []
     for conv in conversations:
-      line = f"{conv['id']}: {conv['title']} ({conv['message_count']} messages)"
+      line = f"{conv['conversation_id']}: {conv['title']} ({conv['message_count']} messages)"
       print(line)
       output.append(line)
     return "\n".join(output)
