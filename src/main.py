@@ -1,5 +1,5 @@
 # TODO:
-# - create new characters or update existing (need to move characters to json files)
+# - create new prompts or update existing (need to move prompts to json files)
 # - add streaming support
 # - models should be chosen by the user via key, and passed to the ai via another key pair in its definition
 # - add ability to rename conversations, and perhaps have ai name conversations automatically
@@ -9,6 +9,7 @@
 # - run single commands from cli, for example: claia transcribe --file <audio-file>
 # - if a command has an alias, or perhaps just if it's alias matches the root of that path the rest of the commands aren't displayed (in help or executable, test by adding list alias to mc list instances)
 # - prompt no longer gets applied to the conversation (possibly just missed updating commands)
+# - since model layer doesn't process conversations, it needs to compare the capabilities against the sent request, if there's content that the model doesn't support throw a warning, maybe also trim the request to the model's capabilities
 
 # External dependencies
 import readline
