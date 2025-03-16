@@ -37,27 +37,22 @@ class Config(BaseFile):
   """
 
   def __init__(self,
-               config_id: str,
+               config_name: str,
                base_directory: str,
-               config_type: str = "config",
                **kwargs):
     """
     Initialize a Config object.
 
     Args:
-        config_id: Unique identifier for this configuration
+        config_name: Name for this configuration (used as identifier)
         base_directory: Base directory for storing configurations
-        config_type: Type of configuration (used for subdirectory)
         **kwargs: Additional configuration properties
     """
-    # Set config_type before calling super().__init__
-    self.config_type = config_type
-
-    # Initialize with a path in the appropriate config subdirectory
-    file_path = os.path.join(base_directory, config_type, f"{config_id}.json")
+    # Initialize with a path in the config directory
+    file_path = os.path.join(base_directory, f"{config_name}.json")
     super().__init__(file_path=file_path, base_directory=base_directory)
 
-    self.config_id = config_id
+    self.config_name = config_name
     self.created_at = kwargs.pop('created_at', time.time())
     self.updated_at = kwargs.pop('updated_at', self.created_at)
 
@@ -66,12 +61,12 @@ class Config(BaseFile):
 
   def get_subdirectory(self) -> str:
     """
-    Override the get_subdirectory method to use config_type.
+    Override the get_subdirectory method to use the default.
 
     Returns:
-        str: The subdirectory for this config type
+        str: The subdirectory for configs
     """
-    return self.config_type
+    return ""
 
   def get(self, key: str, default: Any = None) -> Any:
     """
@@ -115,8 +110,7 @@ class Config(BaseFile):
         Dict[str, Any]: The configuration as a dictionary
     """
     return {
-      "config_id": self.config_id,
-      "config_type": self.config_type,
+      "config_name": self.config_name,
       "created_at": self.created_at,
       "updated_at": self.updated_at,
       **self.properties
@@ -135,16 +129,14 @@ class Config(BaseFile):
         T: The created configuration object
     """
     # Extract the core properties
-    config_id = data.pop("config_id")
-    config_type = data.pop("config_type", "config")
+    config_name = data.pop("config_name")
     created_at = data.pop("created_at", time.time())
     updated_at = data.pop("updated_at", created_at)
 
     # Create the instance with remaining properties
     return cls(
-      config_id=config_id,
+      config_name=config_name,
       base_directory=base_directory,
-      config_type=config_type,
       created_at=created_at,
       updated_at=updated_at,
       **data
@@ -152,44 +144,39 @@ class Config(BaseFile):
 
   def save(self) -> Optional[str]:
     """
-    Save the configuration to a file and update the manifest.
+    Save the configuration to a file.
 
     Returns:
         Optional[str]: Path to the saved file, or None if saving failed
     """
     try:
       # Ensure the config directory exists
-      config_dir = os.path.join(self.base_directory, self.config_type)
-      os.makedirs(config_dir, exist_ok=True)
+      os.makedirs(self.base_directory, exist_ok=True)
 
       # Save to JSON file
-      file_path = os.path.join(config_dir, f"{self.config_id}.json")
+      file_path = os.path.join(self.base_directory, f"{self.config_name}.json")
       with open(file_path, 'w') as f:
         json.dump(self.to_dict(), f, indent=2)
 
-      # Update the manifest
-      self.save_metadata()
-
       return file_path
     except Exception as e:
-      logger.error(f"Failed to save configuration {self.config_id}: {e}")
+      logger.error(f"Failed to save configuration {self.config_name}: {e}")
       return None
 
   @classmethod
-  def load(cls: Type[T], config_id: str, base_directory: str, config_type: str = "config") -> Optional[T]:
+  def load(cls: Type[T], config_name: str, base_directory: str) -> Optional[T]:
     """
     Load a configuration from a file.
 
     Args:
-        config_id: ID of the configuration to load
+        config_name: Name of the configuration to load
         base_directory: Base directory for configurations
-        config_type: Type of configuration (subdirectory)
 
     Returns:
         Optional[T]: The loaded configuration, or None if loading failed
     """
     try:
-      file_path = os.path.join(base_directory, config_type, f"{config_id}.json")
+      file_path = os.path.join(base_directory, f"{config_name}.json")
 
       if not os.path.exists(file_path):
         logger.error(f"Configuration file {file_path} does not exist")
@@ -200,42 +187,38 @@ class Config(BaseFile):
 
       return cls.from_dict(data, base_directory)
     except Exception as e:
-      logger.error(f"Failed to load configuration {config_id}: {e}")
+      logger.error(f"Failed to load configuration {config_name}: {e}")
       return None
 
   @classmethod
-  def list_configs(cls, base_directory: str, config_type: str = "config") -> List[Dict[str, Any]]:
+  def list_configs(cls, base_directory: str) -> List[Dict[str, Any]]:
     """
-    List all configurations of a specific type.
+    List all configurations.
 
     Args:
         base_directory: Base directory for configurations
-        config_type: Type of configuration to list
 
     Returns:
         List[Dict[str, Any]]: List of configuration metadata
     """
     try:
-      config_dir = os.path.join(base_directory, config_type)
-
-      if not os.path.exists(config_dir):
-        logger.warning(f"Configuration directory {config_dir} does not exist")
+      if not os.path.exists(base_directory):
+        logger.warning(f"Configuration directory {base_directory} does not exist")
         return []
 
-      # Get all JSON files except manifest.json
-      config_files = [f for f in os.listdir(config_dir) if f.endswith('.json') and f != "manifest.json"]
+      # Get all JSON files
+      config_files = [f for f in os.listdir(base_directory) if f.endswith('.json')]
       configs = []
 
       for file_name in config_files:
         try:
-          file_path = os.path.join(config_dir, file_name)
+          file_path = os.path.join(base_directory, file_name)
           with open(file_path, 'r') as f:
             data = json.load(f)
 
           # Extract basic metadata
           configs.append({
-            "config_id": data.get("config_id"),
-            "config_type": data.get("config_type", config_type),
+            "config_name": data.get("config_name"),
             "updated_at": data.get("updated_at", 0)
           })
         except Exception as e:
@@ -249,63 +232,29 @@ class Config(BaseFile):
       logger.error(f"Failed to list configurations: {e}")
       return []
 
-  def save_metadata(self) -> Optional[str]:
-    """
-    Save the configuration metadata to the manifest file.
-
-    Returns:
-        Optional[str]: The full path to the manifest file, or None if saving failed
-    """
-    try:
-      # Ensure the config directory exists
-      target_dir = os.path.join(self.base_directory, self.config_type)
-      os.makedirs(target_dir, exist_ok=True)
-
-      # Load the current manifest
-      manifest = self._load_manifest(self.base_directory, self.config_type)
-
-      # Update the manifest with this config's metadata
-      manifest[self.config_id] = self.to_dict()
-
-      # Save the updated manifest
-      if self._save_manifest(self.base_directory, self.config_type, manifest):
-        return self._get_manifest_path(self.base_directory, self.config_type)
-
-      return None
-    except Exception as e:
-      logger.error(f"Failed to save metadata for config {self.config_id}: {e}")
-      return None
-
   @classmethod
-  def delete(cls, config_id: str, base_directory: str, config_type: str = "config") -> bool:
+  def delete(cls, config_name: str, base_directory: str) -> bool:
     """
-    Delete a configuration and its metadata.
+    Delete a configuration.
 
     Args:
-        config_id: The ID of the configuration to delete
+        config_name: The name of the configuration to delete
         base_directory: The base directory for configurations
-        config_type: The type of configuration to delete
 
     Returns:
         bool: True if deletion succeeded, False otherwise
     """
     try:
       # Get the file path
-      file_path = os.path.join(base_directory, config_type, f"{config_id}.json")
+      file_path = os.path.join(base_directory, f"{config_name}.json")
 
       # Delete the file if it exists
       if os.path.exists(file_path):
         os.remove(file_path)
-
-      # Load the manifest
-      manifest = cls._load_manifest(base_directory, config_type)
-
-      # Remove the config from the manifest if it exists
-      if config_id in manifest:
-        del manifest[config_id]
-        cls._save_manifest(base_directory, config_type, manifest)
-
-      return True
+        return True
+      else:
+        logger.warning(f"Configuration file {file_path} does not exist")
+        return False
     except Exception as e:
-      logger.error(f"Failed to delete configuration {config_id}: {e}")
+      logger.error(f"Failed to delete configuration {config_name}: {e}")
       return False

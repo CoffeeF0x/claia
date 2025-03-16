@@ -72,14 +72,13 @@ class Prompt(Config):
     # Format the name to be used as an identifier
     formatted_name = self.validate_and_format_name(name)
 
-    # Use the formatted name as the config_id if no prompt_id provided
-    prompt_id = prompt_id or formatted_name
+    # Use the formatted name as the config_name if no prompt_id provided
+    config_name = prompt_id or formatted_name
 
     # Initialize the config with prompt-specific properties
     super().__init__(
-      config_id=prompt_id,
+      config_name=config_name,
       base_directory=base_directory,
-      config_type="prompts",
       name=formatted_name,
       title=title,
       prompt=prompt,
@@ -199,7 +198,7 @@ class Prompt(Config):
     """
     # Format the name to match how it would be stored
     formatted_name = cls.validate_and_format_name(name)
-    return super().load(formatted_name, base_directory, "prompts")
+    return super().load(formatted_name, base_directory)
 
   @classmethod
   def list_prompts(cls, base_directory: str) -> List[Dict[str, Any]]:
@@ -212,7 +211,7 @@ class Prompt(Config):
     Returns:
         List[Dict[str, Any]]: A list of prompt metadata
     """
-    return cls.list_configs(base_directory, "prompts")
+    return cls.list_configs(base_directory)
 
   @classmethod
   def get_prompt_names(cls, base_directory: str) -> List[str]:
