@@ -115,7 +115,7 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
 
   # Directories
   ("model_directory",                   "models",                      True,  "Directory for model files"),
-  ("prompt_store_directory",            "prompts",                     True,  "Directory for prompt stores"),
+  ("prompt_directory",                  "prompts",                     True,  "Directory for prompt stores"),
   ("conversation_directory",            "conversations",               True,  "Directory for conversations"),
   ("modules_directory",                 "modules",                     True,  "Directory for modules"),
   ("artifacts_directory",               "artifacts",                   True,  "Directory for persistent artifacts"),
@@ -330,10 +330,10 @@ class Settings:
         list[Prompt]: A list of all loaded prompts
     """
     # Ensure the prompt store directory exists
-    BaseFile.ensure_directory(os.path.join(self.prompt_store_directory, "prompts"))
+    BaseFile.ensure_directory(os.path.join(self.prompt_directory))
 
     # Get list of existing prompt names
-    existing_prompt_names = Prompt.get_prompt_names(self.prompt_store_directory)
+    existing_prompt_names = Prompt.get_prompt_names(self.prompt_directory)
 
     # Create any default prompts that don't exist yet
     for prompt_data in DEFAULT_PROMPTS:
@@ -341,7 +341,7 @@ class Settings:
       if formatted_name not in existing_prompt_names:
         # Create and save the prompt
         prompt = Prompt(
-          base_directory=self.prompt_store_directory,
+          base_directory=self.prompt_directory,
           name=prompt_data['name'],
           title=prompt_data['title'],
           prompt=prompt_data['prompt'],
@@ -351,9 +351,9 @@ class Settings:
 
     # Load all prompts from the directory
     self.prompt_store = []
-    prompt_names = Prompt.get_prompt_names(self.prompt_store_directory)
+    prompt_names = Prompt.get_prompt_names(self.prompt_directory)
     for name in prompt_names:
-      prompt = Prompt.load(name, self.prompt_store_directory)
+      prompt = Prompt.load(name, self.prompt_directory)
       if prompt:
         self.prompt_store.append(prompt)
 
