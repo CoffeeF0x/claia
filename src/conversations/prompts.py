@@ -56,7 +56,9 @@ class Prompt(Config):
                prompt: str,
                description: Optional[str] = None,
                prompt_id: Optional[str] = None,
-               tags: Optional[List[str]] = None):
+               tags: Optional[List[str]] = None,
+               created_at: Optional[float] = None,
+               updated_at: Optional[float] = None):
     """
     Initialize a Prompt object.
 
@@ -68,22 +70,22 @@ class Prompt(Config):
         description: Optional description of the prompt
         prompt_id: Optional unique ID (generated if not provided)
         tags: Optional list of tags for categorization
+        created_at: Optional timestamp for creation time
+        updated_at: Optional timestamp for last update time
     """
     # Format the name to be used as an identifier
     formatted_name = self.validate_and_format_name(name)
 
-    # Use the formatted name as the config_name if no prompt_id provided
-    config_name = prompt_id or formatted_name
-
     # Initialize the config with prompt-specific properties
     super().__init__(
-      config_name=config_name,
       base_directory=base_directory,
-      name=formatted_name,
+      name=prompt_id or formatted_name,
       title=title,
       prompt=prompt,
       description=description or "",
-      tags=tags or []
+      tags=tags or [],
+      created_at=created_at,
+      updated_at=updated_at
     )
 
     # Store function definitions separately (not persisted)
@@ -102,8 +104,7 @@ class Prompt(Config):
     """
     return name.lower().replace(' ', '-')
 
-  @property
-  def name(self) -> str:
+  def get_name(self) -> str:
     """Get the prompt name."""
     return self.get("name")
 
@@ -136,7 +137,7 @@ class Prompt(Config):
         function_definitions: List of function definitions to load
     """
     self.function_definitions = function_definitions
-    logger.debug(f"Loaded {len(function_definitions)} function definitions into prompt {self.name}")
+    logger.debug(f"Loaded {len(function_definitions)} function definitions into prompt {self.get_name()}")
 
   def format(self, **kwargs) -> str:
     """

@@ -37,22 +37,22 @@ class Config(BaseFile):
   """
 
   def __init__(self,
-               config_name: str,
+               name: str,
                base_directory: str,
                **kwargs):
     """
     Initialize a Config object.
 
     Args:
-        config_name: Name for this configuration (used as identifier)
+        name: Name for this configuration (used as identifier)
         base_directory: Base directory for storing configurations
         **kwargs: Additional configuration properties
     """
     # Initialize with a path in the config directory
-    file_path = os.path.join(base_directory, f"{config_name}.json")
+    file_path = os.path.join(base_directory, f"{name}.json")
     super().__init__(file_path=file_path, base_directory=base_directory)
 
-    self.config_name = config_name
+    self.name = name
     self.created_at = kwargs.pop('created_at', time.time())
     self.updated_at = kwargs.pop('updated_at', self.created_at)
 
@@ -110,7 +110,7 @@ class Config(BaseFile):
         Dict[str, Any]: The configuration as a dictionary
     """
     return {
-      "config_name": self.config_name,
+      "name": self.name,
       "created_at": self.created_at,
       "updated_at": self.updated_at,
       **self.properties
@@ -129,13 +129,13 @@ class Config(BaseFile):
         T: The created configuration object
     """
     # Extract the core properties
-    config_name = data.pop("config_name")
+    name = data.pop("name")
     created_at = data.pop("created_at", time.time())
     updated_at = data.pop("updated_at", created_at)
 
     # Create the instance with remaining properties
     return cls(
-      config_name=config_name,
+      name=name,
       base_directory=base_directory,
       created_at=created_at,
       updated_at=updated_at,
@@ -154,29 +154,29 @@ class Config(BaseFile):
       os.makedirs(self.base_directory, exist_ok=True)
 
       # Save to JSON file
-      file_path = os.path.join(self.base_directory, f"{self.config_name}.json")
+      file_path = os.path.join(self.base_directory, f"{self.name}.json")
       with open(file_path, 'w') as f:
         json.dump(self.to_dict(), f, indent=2)
 
       return file_path
     except Exception as e:
-      logger.error(f"Failed to save configuration {self.config_name}: {e}")
+      logger.error(f"Failed to save configuration {self.name}: {e}")
       return None
 
   @classmethod
-  def load(cls: Type[T], config_name: str, base_directory: str) -> Optional[T]:
+  def load(cls: Type[T], name: str, base_directory: str) -> Optional[T]:
     """
     Load a configuration from a file.
 
     Args:
-        config_name: Name of the configuration to load
+        name: Name of the configuration to load
         base_directory: Base directory for configurations
 
     Returns:
         Optional[T]: The loaded configuration, or None if loading failed
     """
     try:
-      file_path = os.path.join(base_directory, f"{config_name}.json")
+      file_path = os.path.join(base_directory, f"{name}.json")
 
       if not os.path.exists(file_path):
         logger.error(f"Configuration file {file_path} does not exist")
@@ -187,7 +187,7 @@ class Config(BaseFile):
 
       return cls.from_dict(data, base_directory)
     except Exception as e:
-      logger.error(f"Failed to load configuration {config_name}: {e}")
+      logger.error(f"Failed to load configuration {name}: {e}")
       return None
 
   @classmethod
@@ -218,14 +218,16 @@ class Config(BaseFile):
 
           # Extract basic metadata
           configs.append({
-            "config_name": data.get("config_name"),
+            "name": data.get("name"),
             "updated_at": data.get("updated_at", 0)
           })
         except Exception as e:
           logger.error(f"Failed to read configuration file {file_name}: {e}")
 
       # Sort by updated_at, newest first
-      configs.sort(key=lambda x: x.get("updated_at", 0), reverse=True)
+      # Use 0 as a fallback value for None to avoid comparison errors
+      # TODO: Check what was causing the nonetype error
+      configs.sort(key=lambda x: x.get("updated_at", 0) or 0, reverse=True)
 
       return configs
     except Exception as e:
@@ -233,12 +235,12 @@ class Config(BaseFile):
       return []
 
   @classmethod
-  def delete(cls, config_name: str, base_directory: str) -> bool:
+  def delete(cls, name: str, base_directory: str) -> bool:
     """
     Delete a configuration.
 
     Args:
-        config_name: The name of the configuration to delete
+        name: The name of the configuration to delete
         base_directory: The base directory for configurations
 
     Returns:
@@ -246,7 +248,7 @@ class Config(BaseFile):
     """
     try:
       # Get the file path
-      file_path = os.path.join(base_directory, f"{config_name}.json")
+      file_path = os.path.join(base_directory, f"{name}.json")
 
       # Delete the file if it exists
       if os.path.exists(file_path):
@@ -256,5 +258,5 @@ class Config(BaseFile):
         logger.warning(f"Configuration file {file_path} does not exist")
         return False
     except Exception as e:
-      logger.error(f"Failed to delete configuration {config_name}: {e}")
+      logger.error(f"Failed to delete configuration {name}: {e}")
       return False

@@ -168,6 +168,9 @@ class Settings:
     # Load configuration
     self._load_config()
 
+    # Ensure all required directories exist
+    self._ensure_directories_exist()
+
     # Initialize after loading config
     self.load_all_prompts()
     self.active_prompt = self.get_prompt(self.default_prompt_name)
@@ -427,6 +430,24 @@ class Settings:
     elif self.active_prompt:
       # For non-function prompts, we still load the definitions in case they're needed
       self.active_prompt.load_function_definitions(self.function_definitions)
+
+  def _ensure_directories_exist(self):
+    """Ensure all required directories exist."""
+    directories = [
+      self.model_directory,
+      self.prompt_directory,
+      self.conversation_directory,
+      self.modules_directory,
+      self.artifacts_directory,
+      self.conversation_files_directory,
+      self.temp_directory
+    ]
+
+    for directory in directories:
+      if directory and not os.path.exists(directory):
+        os.makedirs(directory, exist_ok=True)
+        if self.root_logger:
+          self.root_logger.debug(f"Created directory: {directory}")
 
 # Usage example
 if __name__ == "__main__":
