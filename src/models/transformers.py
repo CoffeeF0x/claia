@@ -132,13 +132,13 @@ class TransformersLocalModel(LocalModel):
 
 
 ########################################################################
-#                       TRANSFORMERS TEXT MODEL                        #
+#                       TRANSFORMERS MODEL                        #
 ########################################################################
-class TransformersTextModel(LocalModel):
+class TransformersModel(LocalModel):
   """
   A class-based implementation of the transformers source.
 
-  This class follows the pattern of other model source classes like OpenAITextModel,
+  This class follows the pattern of other model source classes like OpenAIModel,
   but creates local transformer models based on HuggingFace model IDs.
   """
 

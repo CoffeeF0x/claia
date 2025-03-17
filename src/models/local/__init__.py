@@ -17,5 +17,5 @@
 
 # This file now serves as a placeholder for local model imports
 # The actual implementation is in the transformers.py module
-# Local transformer models use the TransformersTextModel class
+# Local transformer models use the TransformersModel class
 # which handles model instantiation based on model definitions

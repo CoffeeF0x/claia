@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                               CLASSES                                #
 ########################################################################
-class VLLMTextModel(APIModel):
+class VLLMModel(APIModel):
   def __init__(self, model_name: str, base_url: str = None):
     if not base_url:
       raise ValueError("VLLM requires a base URL to be specified")
