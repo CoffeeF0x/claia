@@ -9,7 +9,8 @@ from typing import Any, Union, List, Dict, Optional
 
 # Internal dependencies
 from models.base import APIModel, LocalModel
-from models.definitions import definitions, sources
+from models.definitions import definitions
+from models.sources import sources
 from settings import Settings
 from errors import Result
 from conversations import Conversation
