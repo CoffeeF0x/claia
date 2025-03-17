@@ -6,6 +6,7 @@ from models.api.runpod import RunpodModel
 from models.api.anthropic import AnthropicModel
 from models.api.openrouter import OpenRouterModel
 from models.transformers import TransformersModel
+from models.transformers_gemma3 import Gemma3Model
 from models.remote.vllm import VLLMModel
 
 
@@ -20,4 +21,18 @@ sources = {
   "transformers": TransformersModel,
   "openrouter": OpenRouterModel,
   "vllm": VLLMModel
+}
+
+
+########################################################################
+#                    TRANSFORMERS MODEL MAPPING                        #
+########################################################################
+# Maps model families to their specialized implementation classes
+# Used instead of class_map_overrides in model definitions
+transformers_models = {
+  # Model family prefix : implementation class
+  "gemma-3": Gemma3Model,
+  # Add more specialized transformer model implementations here
+  # "llama-3": Llama3Model,
+  # "phi-3": Phi3Model,
 }

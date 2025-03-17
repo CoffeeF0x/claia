@@ -1,6 +1,6 @@
 torch
 diffusers
-transformers
+git+https://github.com/huggingface/transformers@v4.49.0-Gemma-3
 accelerate
 scipy
 safetensors

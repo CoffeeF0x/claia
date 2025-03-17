@@ -21,6 +21,7 @@ DEFAULT_SETTINGS = {
 ########################################################################
 class ModelCapability(Enum):
   """Capabilities of a model."""
+  ANY = "any-capability"  # Default/fallback capability
   TTT = "text-to-text"
   TTI = "text-to-image"
   ITT = "image-to-text"
@@ -124,42 +125,72 @@ definitions = {
     "settings": {
       "max_new_tokens": 4096,
       "temperature": 0.7
+    },
+    "class_overrides": {
+      "transformers": {
+        ModelCapability.ANY: "gemma-3",
+        ModelCapability.TTT: "gemma-3"
+      }
     }
   },
   "gemma-3-4b": {
     "title": "Gemma 3 4B",
     "description": "Gemma 3 4B is a multimodal model from Google's Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages.",
-    "capabilities": [ModelCapability.TTT, ModelCapability.ITT, ModelCapability.TAI, ModelCapability.TTI],
+    "capabilities": [ModelCapability.TTT, ModelCapability.ITT, ModelCapability.TAI],
     "sources": {
       "transformers": ["google/gemma-3-4b-it", "google/gemma-3-4b-pt"]
     },
     "settings": {
       "max_new_tokens": 4096,
       "temperature": 0.7
+    },
+    "class_overrides": {
+      "transformers": {
+        ModelCapability.ANY: "gemma-3",
+        ModelCapability.TTT: "gemma-3",
+        ModelCapability.ITT: "gemma-3",
+        ModelCapability.TAI: "gemma-3"
+      }
     }
   },
   "gemma-3-12b": {
     "title": "Gemma 3 12B",
     "description": "Gemma 3 12B is a multimodal model from Google's Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages.",
-    "capabilities": [ModelCapability.TTT, ModelCapability.ITT, ModelCapability.TAI, ModelCapability.TTI],
+    "capabilities": [ModelCapability.TTT, ModelCapability.ITT, ModelCapability.TAI],
     "sources": {
       "transformers": ["google/gemma-3-12b-it", "google/gemma-3-12b-pt"]
     },
     "settings": {
       "max_new_tokens": 4096,
       "temperature": 0.7
+    },
+    "class_overrides": {
+      "transformers": {
+        ModelCapability.ANY: "gemma-3",
+        ModelCapability.TTT: "gemma-3",
+        ModelCapability.ITT: "gemma-3",
+        ModelCapability.TAI: "gemma-3"
+      }
     }
   },
   "gemma-3-27b": {
     "title": "Gemma 3 27B",
     "description": "Gemma 3 27B is Google's largest multimodal model in the Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages. It offers performance comparable to much larger models.",
-    "capabilities": [ModelCapability.TTT, ModelCapability.ITT, ModelCapability.TAI, ModelCapability.TTI],
+    "capabilities": [ModelCapability.TTT, ModelCapability.ITT, ModelCapability.TAI],
     "sources": {
       "transformers": ["google/gemma-3-27b-it", "google/gemma-3-27b-pt"]
     },
     "settings": {
       "max_new_tokens": 4096,
       "temperature": 0.7
+    },
+    "class_overrides": {
+      "transformers": {
+        ModelCapability.ANY: "gemma-3",
+        ModelCapability.TTT: "gemma-3",
+        ModelCapability.ITT: "gemma-3",
+        ModelCapability.TAI: "gemma-3"
+      }
     }
   },
   "stable-diffusion-v2": {
