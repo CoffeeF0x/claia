@@ -22,6 +22,8 @@ class ModelCapability(Enum):
   TTS = "text-to-speech"
   STT = "speech-to-text"
   TTA = "text-to-audio"
+  TAA = "text-and-audio"
+  TAI = "text-and-image"
   # LLM = "large-language-model"
   # SLM = "small-language-model"
 
@@ -36,190 +38,14 @@ class IOType(Enum):
 ########################################################################
 #                         MODEL SOURCE MAPPING                         #
 ########################################################################
-# Maps source identifiers to their implementation details
-# Structure:
-#   - class: Implementation class
-#   - models: Dictionary of supported models
-#     - model_id: Internal model name used by the source
-#     - attributes: Source-specific model capabilities
+# Maps source identifiers to their implementation classes
 sources = {
-  "openai": {
-    "class": OpenAITextModel,
-    "inputs": [IOType.TEXT],
-    "outputs": [IOType.TEXT],
-    "models": {
-      # "gpt-3.5-turbo": {
-      #   "model_id": "gpt-3.5-turbo-0125",
-      #   "variants": ["gpt-3.5-turbo-0125", "gpt-3.5-turbo-1106", "gpt-3.5-turbo-instruct"],
-      #   "attributes": {
-      #     "max_output": 4096,
-      #     "context": 16385,
-      #   }
-      # },
-      "gpt-4": {
-        "model_id": "gpt-4-0613",
-        "variants": ["gpt-4-0613", "gpt-4-0314"],
-        "attributes": {
-          "max_output": 8192,
-          "context": 8192,
-        }
-      }
-      # "gpt-4-turbo": {
-      #   "model_id": "gpt-4-turbo-preview",
-      #   "variants": ["gpt-4-turbo-2024-04-09", "gpt-4-turbo-preview", "gpt-4-0125-preview", "gpt-4-1106-preview"],
-      #   "attributes": {
-      #     "max_output": 4096,
-      #     "context": 128000,
-      #   }
-      # }
-    }
-  },
-  "anthropic": {
-    "class": AnthropicTextModel,
-    "inputs": [IOType.TEXT],
-    "outputs": [IOType.TEXT],
-    "models": {
-      "claude-3-5-sonnet-20240620": {
-        "model_id": "claude-3-5-sonnet-20240620",
-        "variants": [],
-        "attributes": {
-          "max_output": 8192,
-          "context": 200000,
-        }
-      }
-    }
-  },
-  # "runpod": {
-  #   "class": RunpodTextModel,
-  #   "inputs": ["text"],
-  #   "outputs": ["text"],
-  #   "models": {
-  #     "qwen2.5-72b-instruct": {
-  #       "model_id": "qwen2.5-72b-instruct",
-  #       "variants": [],
-  #       "attributes": {
-  #         "max_output": 8192,
-  #         "context": 131072,
-  #       }
-  #     }
-  #   }
-  # },
-  "local-minicpm3-4b": {
-    "class": MiniCPM3_4B_LocalModel,
-    "inputs": [IOType.TEXT],
-    "outputs": [IOType.TEXT],
-    "models": {
-      "minicpm3-4b": {
-        "model_id": "minicpm3-4b",
-        "variants": [],
-        "attributes": {
-          "max_output": 1024,
-          "context": 32000,
-        }
-      }
-    }
-  },
-  "local-qwen2.5-32b-instruct": {
-    "class": Qwen2p5_32B_InstructLocalModel,
-    "inputs": [IOType.TEXT],
-    "outputs": [IOType.TEXT],
-    "models": {
-      "qwen2.5-32b-instruct": {
-        "model_id": "qwen2.5-32b-instruct",
-        "variants": [],
-        "attributes": {
-          "max_output": 8192,
-          "context": 131072,
-        }
-      }
-    }
-  },
-  "openrouter": {
-    "class": OpenRouterTextModel,
-    "inputs": [IOType.TEXT],
-    "outputs": [IOType.TEXT],
-    "models": {
-      "gpt-3.5-turbo": {
-        "model_id": "openai/gpt-3.5-turbo",
-        "variants": ["openai/gpt-3.5-turbo-0125", "openai/gpt-3.5-turbo-1106"],
-        "attributes": {
-          "max_output": 4096,
-          "context": 16385,
-        }
-      },
-      "gpt-4": {
-        "model_id": "openai/gpt-4",
-        "variants": ["openai/gpt-4-0613", "openai/gpt-4-0314"],
-        "attributes": {
-          "max_output": 8192,
-          "context": 8192,
-        }
-      },
-      # "gpt-4-turbo": {
-      #   "model_id": "openai/gpt-4-turbo-preview",
-      #   "variants": ["openai/gpt-4-turbo-preview"],
-      #   "attributes": {
-      #     "max_output": 4096,
-      #     "context": 128000,
-      #   }
-      # },
-      "claude-3-5-sonnet-20240620": {
-        "model_id": "anthropic/claude-3-sonnet-20240620",
-        "variants": [],
-        "attributes": {
-          "max_output": 8192,
-          "context": 200000,
-        }
-      },
-      "qwen2.5-72b-instruct": {
-        "model_id": "qwen/qwen1.5-72b-chat",
-        "variants": [],
-        "attributes": {
-          "max_output": 8192,
-          "context": 131072,
-        }
-      }
-    }
-  },
-  "vllm": {
-    "class": VLLMTextModel,
-    "inputs": [IOType.TEXT],
-    "outputs": [IOType.TEXT],
-    "models": {
-      "mistral-7b": {
-        "model_id": "mistralai/Mistral-7B-Instruct-v0.1",
-        "variants": [],
-        "attributes": {
-          "max_output": 4096,
-          "context": 8192,
-        }
-      },
-      "minicpm3-4b": {
-        "model_id": "openbmb/MiniCPM3-4B",
-        "variants": [],
-        "attributes": {
-          "max_output": 1024,
-          "context": 32000,
-        }
-      },
-      "qwq-32b": {
-        "model_id": "Qwen/QwQ-32B",
-        "variants": [],
-        "attributes": {
-          "max_output": 4096,
-          "context": 131072,
-        }
-      },
-      "phi-4": {
-        "model_id": "microsoft/Phi-4",
-        "variants": [],
-        "attributes": {
-          "max_output": 4096,
-          "context": 128000,
-        }
-      }
-    }
-  }
+  "openai": OpenAITextModel,
+  "anthropic": AnthropicTextModel,
+  "local-minicpm3-4b": MiniCPM3_4B_LocalModel,
+  "local-qwen2.5-32b-instruct": Qwen2p5_32B_InstructLocalModel,
+  "openrouter": OpenRouterTextModel,
+  "vllm": VLLMTextModel
 }
 
 
@@ -248,6 +74,10 @@ definitions = {
     "title": "GPT 4",
     "description": "Snapshot of gpt-4 from June 13th 2023 with improved function calling support.",
     "capabilities": [ModelCapability.TTT],
+    "sources": {
+      "openai": ["gpt-4-0613", "gpt-4"],
+      "openrouter": ["openai/gpt-4"]
+    }
   },
   # "gpt-4-turbo": {
   #   "title": "GPT 4 Turbo",
@@ -258,11 +88,19 @@ definitions = {
     "title": "Claude 3.5 Sonnet",
     "description": "Claude 3.5 Sonnet sets new industry benchmarks for graduate-level reasoning (GPQA), undergraduate-level knowledge (MMLU), and coding proficiency (HumanEval). It shows marked improvement in grasping nuance, humor, and complex instructions, and is exceptional at writing high-quality content with a natural, relatable tone.",
     "capabilities": [ModelCapability.TTT],
+    "sources": {
+      "anthropic": ["claude-3-5-sonnet-20240620"],
+      "openrouter": ["anthropic/claude-3-sonnet-20240620"]
+    }
   },
   "minicpm3-4b": {
     "title": "MiniCPM3-4B",
     "description": "MiniCPM3-4B is the 3rd generation of MiniCPM series with a 32k context window.",
     "capabilities": [ModelCapability.TTT],
+    "sources": {
+      "local-minicpm3-4b": ["minicpm3-4b"],
+      "vllm": ["openbmb/MiniCPM3-4B"]
+    }
   },
   # "qwen2.5-32b-instruct": {
   #   "title": "Qwen2.5-32B-Instruct",
@@ -304,15 +142,22 @@ definitions = {
     "title": "QwQ-32B",
     "description": "The official release of QwQ-32B, a reasoning-focused model from the Qwen team. Built on the Qwen2.5-32B-Instruct base, it features improved reasoning capabilities while maintaining strong performance across general tasks.",
     "capabilities": [ModelCapability.TTT],
+    "sources": {
+      "vllm": ["Qwen/QwQ-32B"]
+    }
   },
   "phi-4": {
     "title": "Phi-4",
     "description": "Microsoft's Phi-4 is a state-of-the-art small language model that delivers exceptional performance with high efficiency. It excels at reasoning, coding, and instruction following while maintaining a compact size compared to larger models.",
     "capabilities": [ModelCapability.TTT],
+    "sources": {
+      "vllm": ["microsoft/Phi-4"]
+    }
   },
   "stable-diffusion-v2": {
     "title": "Stable Diffusion v2",
     "description": "The latest version of Stable Diffusion, with improved text-to-image generation capabilities.",
     "capabilities": [ModelCapability.TTI],
+    "sources": {}
   }
 }

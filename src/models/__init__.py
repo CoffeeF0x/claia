@@ -9,7 +9,7 @@ from typing import Any, Union, List, Dict, Optional
 
 # Internal dependencies
 from models.base import APIModel, LocalModel
-from models.definitions import definitions, sources, ModelCapability
+from models.definitions import definitions, sources
 from settings import Settings
 from errors import Result
 from conversations import Conversation
@@ -34,7 +34,10 @@ def get_model(model_name: str, settings: Settings = None) -> Result:
     return Result.fail(f"Model {model_name} not found in definitions.")
 
   # Find available sources for this model
-  available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
+  available_sources = []
+  for s in sources.keys():
+    if s in definitions.get(model_name, {}).get('sources', []):
+      available_sources.append(s)
   if not available_sources:
     return Result.fail(f"No sources available for model {model_name}.")
 
@@ -44,17 +47,24 @@ def get_model(model_name: str, settings: Settings = None) -> Result:
   else:
     chosen_source = available_sources[0]
 
-  source_config = sources[chosen_source]
-  model_class = source_config["class"]
-  model_config = source_config["models"][model_name]
+  # Get the model class directly from the sources dictionary
+  model_class = sources[chosen_source]
+
+  # Get model-specific configuration from the definitions
+  model_config = definitions.get(model_name, {})
+
+  # Get the model ID - if it's a list, use the first one
+  model_ids = model_config.get('sources', {}).get(chosen_source, [model_name])
+  if isinstance(model_ids, list):
+    model_id = model_ids[0]  # Use the first model ID in the list
 
   if issubclass(model_class, APIModel):
     if chosen_source == "vllm":
       if not settings or not (settings.vllm_zone and settings.vllm_subdomain):
         return Result.fail("VLLM requires zone and subdomain to be specified in settings.")
-      model = model_class(model_config["model_id"], base_url=f"https://{settings.vllm_subdomain}.{settings.vllm_zone}")
+      model = model_class(model_id, base_url=f"https://{settings.vllm_subdomain}.{settings.vllm_zone}")
     else:
-      model = model_class(model_config["model_id"])
+      model = model_class(model_id)
 
     api_key = get_api_key_for_source(chosen_source, settings)
     if api_key:
@@ -66,7 +76,7 @@ def get_model(model_name: str, settings: Settings = None) -> Result:
       model = settings.loaded_local_models[model_name]
     else:
       try:
-        model = model_class(model_config["model_id"])
+        model = model_class(model_id)
         if settings:
           settings.loaded_local_models[model_name] = model
       except Exception as e:

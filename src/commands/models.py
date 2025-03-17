@@ -1,4 +1,8 @@
+# External dependencies
+import os
+import json
 import logging
+from typing import List, Dict, Any, Optional
 
 # Internal Dependencies
 from commands.base import Command, command
@@ -21,14 +25,14 @@ class ModelCommand(Command):
 
   @command(
     path=["list"],
-    description="List all available models or get details about a specific model",
-    help_text="List all available models",
+    description="List available models",
+    help_text="List all available models or details about a specific model",
     parameters={
       "type": "object",
       "properties": {
         "model_name": {
           "type": "string",
-          "description": "Optional model name to get details for"
+          "description": "Name of the model to get details for (optional)"
         }
       }
     },
@@ -44,7 +48,10 @@ class ModelCommand(Command):
 
     if model_name:
       # Get available sources for this model
-      available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
+      available_sources = []
+      for s in sources.keys():
+        if s in definitions.get(model_name, {}).get('sources', []):
+          available_sources.append(s)
 
       if model_name in definitions and available_sources:
         model_info = definitions[model_name]
@@ -56,14 +63,15 @@ class ModelCommand(Command):
         if "training_data" in model_info:
           result.append(f"Training Data: {model_info['training_data']}")
         if "capabilities" in model_info:
-          result.append(f"Capabilities: {', '.join(model_info['capabilities'])}")
+          capabilities = [c.value for c in model_info['capabilities']]
+          result.append(f"Capabilities: {', '.join(capabilities)}")
       else:
         result.append(f"Model with name {model_name} not found or has no available sources")
     else:
       # Filter models to only those with available sources
       available_models = {
         name: model for name, model in definitions.items()
-        if any(name in sources[s]["models"] for s in sources.keys())
+        if any(s in model.get('sources', []) for s in sources.keys())
       }
 
       if not available_models:
@@ -75,7 +83,10 @@ class ModelCommand(Command):
 
       for model_name in available_models.keys():
         # Get available sources for this model
-        available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
+        available_sources = []
+        for s in sources.keys():
+          if s in definitions.get(model_name, {}).get('sources', []):
+            available_sources.append(s)
         sources_str = f" ({', '.join(available_sources)})"
 
         # Add model name padded to align sources
@@ -113,7 +124,10 @@ class ModelCommand(Command):
   def set_model(self, settings: Settings, model_name: str, source: str = None) -> str:
     """Set the selected model"""
     # Get available sources for this model
-    available_sources = [s for s in sources.keys() if model_name in sources[s]["models"]]
+    available_sources = []
+    for s in sources.keys():
+      if s in definitions.get(model_name, {}).get('sources', []):
+        available_sources.append(s)
 
     if model_name not in definitions or not available_sources:
       msg = f"Model '{model_name}' not found or has no available sources"
@@ -131,38 +145,11 @@ class ModelCommand(Command):
 
     settings.active_model = model_name
     settings.active_model_source = chosen_source
-    source_str = f" using source '{chosen_source}'"
-    msg = f"Selected model: {model_name}{source_str}"
+    settings.save()
+
+    msg = f"Model set to {model_name} using source {chosen_source}"
     print(msg)
     return msg
-
-  @command(
-    path=["select"],
-    description="Alias for 'set' - select a model to use for generation",
-    help_text="Select a model to use for generation (alias for 'set')",
-    parameters={
-      "type": "object",
-      "properties": {
-        "model_name": {
-          "type": "string",
-          "description": "Name of the model to use"
-        },
-        "source": {
-          "type": "string",
-          "description": "Source to use for the model (optional)"
-        }
-      },
-      "required": ["model_name"]
-    },
-    returns={
-      "type": "string",
-      "description": "Confirmation message"
-    },
-    ai_callable=True
-  )
-  def select_model(self, settings: Settings, model_name: str, source: str = None) -> str:
-    """Alias for set_model"""
-    return self.set_model(settings, model_name, source)
 
   @command(
     path=["current"],
