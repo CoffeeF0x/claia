@@ -20,6 +20,7 @@ from functools import wraps
 from commands.base import Command, command
 from errors import Result
 from settings import Settings
+from conversations import Conversation, MessageRole
 
 # Try to import AIA, but make it optional
 try:
@@ -152,6 +153,12 @@ Based on the ticket information, update the current list of accounts that need w
 - Source ticket ID
 
 Your response should ONLY contain the updated list in a clear, structured format. Do not include any explanations or additional text.
+"""
+
+VERIFICATION_PROMPT = f"""
+You are an expert data auditor. Your task is to compare two versions of a list and verify that no important data has been lost.
+The updated list should contain all the relevant information from the previous list, plus any new additions.
+If you find that data has been lost, clearly identify what's missing. If everything looks good, confirm that all data has been preserved.
 """
 
 
@@ -781,6 +788,7 @@ class ModuleCommands(Command):
     """
     # Import here to avoid circular imports
     from models import run as model_run
+    from conversations.files import FileFactory, TextFile
 
     # Get tickets matching the account management query
     tickets = zammad.list_tickets("account-management", limit=limit)
@@ -788,64 +796,162 @@ class ModuleCommands(Command):
     if not tickets:
       return "No account management tickets found."
 
-    # Initialize account list
-    account_list = ""
+    # Create or load a conversation
+    conversation = Conversation(
+      base_directory=settings.conversation_directory,
+      files_directory=settings.conversation_files_directory,
+      title="Account Management Processing"
+    )
 
-    # Read existing account list if file exists
+    # Display initial status
+    print(f"\n{'='*50}")
+    print(f"Starting to process {len(tickets)} account management tickets")
+    print(f"{'='*50}\n")
+
+    # Initialize or load the account list file
+    file_id = None
+    current_account_list = ""
+
     if os.path.exists(output_file):
-      try:
-        with open(output_file, "r") as f:
-          account_list = f.read()
-      except Exception as e:
-        print(f"Error reading existing account list: {str(e)}")
+      print(f"Loading existing account list from {output_file}")
+      file_id = conversation.add_file(output_file)
+      account_file = conversation.get_file(file_id)
+      if account_file and isinstance(account_file, TextFile):
+        current_account_list = account_file.get_preview()
+    else:
+      print(f"Creating new account list file: {output_file}")
+      # Create an empty file
+      with open(output_file, "w") as f:
+        f.write("")
+      file_id = conversation.add_file(output_file)
 
     # Process each ticket
     processed_count = 0
+    successful_count = 0
     remaining_tickets = tickets.copy()
+    retry_count = {}  # Track how many times each ticket has been retried
 
-    for ticket_id in tickets:
-      # Remove current ticket from remaining list
-      remaining_tickets.remove(ticket_id)
+    while remaining_tickets:
+      # Get the next ticket
+      ticket_id = remaining_tickets.pop(0)
+
+      # Track retry attempts
+      if ticket_id not in retry_count:
+        retry_count[ticket_id] = 0
+
+      # Limit maximum retries per ticket to prevent infinite loops
+      max_retries = 3
+      if retry_count[ticket_id] >= max_retries:
+        print(f"⚠️ Ticket {ticket_id} exceeded maximum retry attempts ({max_retries}). Skipping.")
+        continue
+
+      retry_count[ticket_id] += 1
+
+      # Display attempt information
+      attempt_info = f" (Retry #{retry_count[ticket_id]})" if retry_count[ticket_id] > 1 else ""
+      print(f"\n{'-'*50}")
+      print(f"Processing ticket ID: {ticket_id}{attempt_info} ({processed_count+1}/{len(tickets)})")
 
       # Get ticket details
       ticket_details = zammad.get_ticket_details(ticket_id)
 
-      # Prepare messages for the AI model
+      # Prepare optimized messages for the LLM
+      # For retry attempts, use a stronger prompt about preserving data
+      is_retry = retry_count[ticket_id] > 1
+      retry_instruction = "\n\nIMPORTANT: Previous processing of this ticket resulted in data loss. Make sure to preserve ALL existing information while adding new data from this ticket." if is_retry else ""
+
       account_messages = [
-        {"role": "system", "content": ACCOUNT_MANAGEMENT_PROMPT},
-        {"role": "user", "content": f"Current account list:\n{account_list}\n\n\nNew ticket to process:\n{ticket_details}"}
+        {"role": "system", "content": ACCOUNT_MANAGEMENT_PROMPT + retry_instruction},
+        {"role": "user", "content": f"Current account list:\n{current_account_list}\n\n\nNew ticket to process:\n{ticket_details}"}
       ]
 
-      print("-" * 50)
-      print(f"Processing ticket ID: {ticket_id}")
-
       # Run the AI model to update the account list
+      print(f"Sending ticket to LLM for processing...")
       result = model_run(settings.active_model, account_messages, settings=settings)
 
       if result.is_error():
-        print(f"Error processing ticket {ticket_id}: {result.get_message()}")
+        print(f"❌ Error processing ticket {ticket_id}: {result.get_message()}")
+        # Add ticket back to the end of the queue for retry
+        if retry_count[ticket_id] < max_retries:
+          remaining_tickets.append(ticket_id)
+          print(f"Added ticket {ticket_id} back to queue for retry later")
         continue
 
       # Update account list with model's response
       if result.data:
-        account_list = result.data.strip()
+        print("✓ Successfully processed ticket")
+        previous_account_list = current_account_list
+        current_account_list = result.data.strip()
 
-        # Save updated list to file
-        try:
+        # Verify no data has been lost in the update
+        if previous_account_list:
+          print("Verifying that no data has been lost...")
+          verification_messages = [
+            {"role": "system", "content": VERIFICATION_PROMPT},
+            {"role": "user", "content": f"Previous list:\n{previous_account_list}\n\nUpdated list:\n{current_account_list}\n\nHas any data been lost? Respond with YES or NO followed by details."}
+          ]
+
+          verification_result = model_run(settings.active_model, verification_messages, settings=settings)
+
+          if verification_result.is_error():
+            print(f"⚠️ Error during verification: {verification_result.get_message()}")
+            # Add ticket back to the end of the queue for retry
+            if retry_count[ticket_id] < max_retries:
+              remaining_tickets.append(ticket_id)
+              print(f"Added ticket {ticket_id} back to queue for retry later (verification error)")
+            continue
+
+          verification_response = verification_result.data.strip()
+          if verification_response.startswith("YES"):
+            print("⚠️ WARNING: Possible data loss detected!")
+            print(f"Details: {verification_response}")
+            print("Reverting to previous account list...")
+            current_account_list = previous_account_list
+
+            # Add ticket back to the end of the queue for retry
+            if retry_count[ticket_id] < max_retries:
+              remaining_tickets.append(ticket_id)
+              print(f"Added ticket {ticket_id} back to queue for retry later (data loss detected)")
+            continue
+          else:
+            print("✅ Verification passed: No data has been lost")
+            # Ticket processed successfully
+
+        # Get the file object and update its content
+        account_file = conversation.get_file(file_id)
+        if account_file and isinstance(account_file, TextFile):
+          # Save the updated content using BaseFile methods
           with open(output_file, "w") as f:
-            f.write(account_list)
-        except Exception as e:
-          print(f"Error saving account list: {str(e)}")
+            f.write(current_account_list)
+
+          # Update the file in the conversation
+          file_id = conversation.add_file(output_file)
+
+          # Add a message to the conversation about the update
+          conversation.add_message(
+            role=MessageRole.SYSTEM,
+            content=f"Updated account list after processing ticket {ticket_id}"
+          )
+
+          successful_count += 1
 
       processed_count += 1
 
       # Print status information
-      print(f"Ticket just processed: {ticket_id}")
-      print(f"Remaining ticket IDs: {remaining_tickets}")
-      print(f"Current list contents:\n{account_list}")
-      print("-" * 50)
+      print(f"Processed ticket: {ticket_id}")
+      print(f"Remaining tickets: {len(remaining_tickets)}")
+      print(f"Current list size: {len(current_account_list)} characters")
+      print(f"{'-'*50}\n")
 
-    return f"Processed {processed_count} tickets. Account list saved to {output_file}"
+      # Save the conversation state
+      conversation.save()
+
+    print(f"\n{'='*50}")
+    print(f"Processing complete! Successfully processed {successful_count}/{len(tickets)} tickets.")
+    print(f"Account list saved to {output_file}")
+    print(f"{'='*50}\n")
+
+    return f"Processed {successful_count} tickets. Account list saved to {output_file}"
 
 
 
