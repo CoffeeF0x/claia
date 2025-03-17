@@ -114,6 +114,54 @@ definitions = {
       "vllm": ["microsoft/Phi-4"]
     },
   },
+  "gemma-3-1b": {
+    "title": "Gemma 3 1B",
+    "description": "Gemma 3 1B is Google's smallest text-only model in the Gemma 3 family. It features a 32K context window and supports English language only.",
+    "capabilities": [ModelCapability.TTT],
+    "sources": {
+      "transformers": ["google/gemma-3-1b-it", "google/gemma-3-1b-pt"]
+    },
+    "settings": {
+      "max_new_tokens": 4096,
+      "temperature": 0.7
+    }
+  },
+  "gemma-3-4b": {
+    "title": "Gemma 3 4B",
+    "description": "Gemma 3 4B is a multimodal model from Google's Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages.",
+    "capabilities": [ModelCapability.TTT, ModelCapability.ITT, ModelCapability.TAI, ModelCapability.TTI],
+    "sources": {
+      "transformers": ["google/gemma-3-4b-it", "google/gemma-3-4b-pt"]
+    },
+    "settings": {
+      "max_new_tokens": 4096,
+      "temperature": 0.7
+    }
+  },
+  "gemma-3-12b": {
+    "title": "Gemma 3 12B",
+    "description": "Gemma 3 12B is a multimodal model from Google's Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages.",
+    "capabilities": [ModelCapability.TTT, ModelCapability.ITT, ModelCapability.TAI, ModelCapability.TTI],
+    "sources": {
+      "transformers": ["google/gemma-3-12b-it", "google/gemma-3-12b-pt"]
+    },
+    "settings": {
+      "max_new_tokens": 4096,
+      "temperature": 0.7
+    }
+  },
+  "gemma-3-27b": {
+    "title": "Gemma 3 27B",
+    "description": "Gemma 3 27B is Google's largest multimodal model in the Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages. It offers performance comparable to much larger models.",
+    "capabilities": [ModelCapability.TTT, ModelCapability.ITT, ModelCapability.TAI, ModelCapability.TTI],
+    "sources": {
+      "transformers": ["google/gemma-3-27b-it", "google/gemma-3-27b-pt"]
+    },
+    "settings": {
+      "max_new_tokens": 4096,
+      "temperature": 0.7
+    }
+  },
   "stable-diffusion-v2": {
     "title": "Stable Diffusion v2",
     "description": "The latest version of Stable Diffusion, with improved text-to-image generation capabilities.",

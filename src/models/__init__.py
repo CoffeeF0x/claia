@@ -99,7 +99,24 @@ def get_model(model_name: str, settings: Settings = None) -> Result:
     else:
       try:
         logger.debug(f"Loading new local model: {model_name}")
-        model = model_class(model_id)
+        if chosen_source == "transformers":
+          # Get the Hugging Face API key
+          api_key = get_api_key_for_source("transformers", settings)
+          if api_key:
+            logger.debug("Passing Hugging Face API key to model constructor")
+            model = model_class(
+              model_id,
+              model_path=settings.model_directory if settings else "models",
+              api_key=api_key
+            )
+          else:
+            logger.warning("No Hugging Face API key found, model may have limited access")
+            model = model_class(
+              model_id,
+              model_path=settings.model_directory if settings else "models"
+            )
+        else:
+          model = model_class(model_id)
         if settings:
           settings.loaded_local_models[model_name] = model
           logger.debug(f"Cached local model {model_name} in settings")
@@ -130,9 +147,13 @@ def get_api_key_for_source(source: str, settings: Settings) -> str:
     api_key = settings.runpod_api_token
   elif source == "openrouter":
     api_key = settings.openrouter_api_token
+  elif source == "transformers":
+    api_key = settings.huggingface_api_token
 
   if api_key:
     logger.debug(f"Found API key for {source}")
+    masked_key = f"{api_key[:5]}{'*' * (len(api_key) - 5)}" if len(api_key) > 5 else "***"
+    logger.debug(f"API key provided ({masked_key})")
   else:
     logger.warning(f"No API key found for {source}")
 

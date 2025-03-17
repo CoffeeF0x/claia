@@ -5,9 +5,11 @@ from torch.cuda import empty_cache
 import logging
 from transformers import AutoModelForCausalLM, AutoTokenizer, logging as transformers_logging
 from typing import List, Dict, Optional, Union, Any, Callable
+from huggingface_hub import login
 
 # Internal dependencies
 from models.base import LocalModel, APIModel
+from settings import Settings
 
 
 
@@ -40,26 +42,60 @@ class TransformersLocalModel(LocalModel):
                model_path: str,
                defer_loading: bool = False,
                device: str = "cpu",
-               model_params: Optional[Dict[str, Any]] = None):
+               model_params: Optional[Dict[str, Any]] = None,
+               api_key: Optional[str] = None):
     self.model_params = model_params or {}
+    self.api_key = api_key
     folder_name = model_name.split("/")[-1]
     full_model_path = os.path.join(model_path, folder_name)
+    logger.debug(f"Initializing TransformersLocalModel for {model_name} with path {full_model_path}")
+    if api_key:
+      masked_key = f"{api_key[:5]}{'*' * (len(api_key) - 5)}" if len(api_key) > 5 else "***"
+      logger.debug(f"API key provided (first 5 chars: {api_key[:5]})")
+    else:
+      logger.debug("No API key provided")
     super().__init__(model_name, full_model_path, defer_loading, device)
 
-  def load(self) -> None:
-    if not os.path.exists(self.model_path):
-      self.download(self.model_path)
+  def _authenticate_huggingface(self) -> None:
+    """Authenticate with Hugging Face using the API token."""
+    if self.api_key:
+      logger.info("Authenticating with Hugging Face")
+      logger.debug(f"Using API key (first 5 chars: {self.api_key[:5]})")
+      login(token=self.api_key)
+      logger.info("Successfully authenticated with Hugging Face")
+    else:
+      logger.warning("No Hugging Face API token provided. Some models may not be accessible.")
 
-    logging.info(f"Loading model from {self.model_path}")
-    self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
-    self.model = AutoModelForCausalLM.from_pretrained(
-      self.model_path,
-      torch_dtype=bfloat16,
-      device_map=self.device,
-      trust_remote_code=True
-    )
-    self.loaded = True
-    logging.info("Model loaded successfully")
+  def set_api_key(self, api_key: str) -> None:
+    """Set the API key for Hugging Face authentication."""
+    logger.debug(f"Setting API key (first 5 chars: {api_key[:5]})")
+    self.api_key = api_key
+
+  def load(self) -> None:
+    logger.debug(f"Loading model {self.model_name}")
+    if not os.path.exists(self.model_path):
+      logger.debug(f"Model path {self.model_path} does not exist, downloading model")
+      self._authenticate_huggingface()
+      self.download(self.model_path)
+    else:
+      logger.debug(f"Model path {self.model_path} exists, loading from disk")
+
+    logger.info(f"Loading model from {self.model_path}")
+    try:
+      logger.debug("Loading tokenizer")
+      self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
+      logger.debug("Loading model")
+      self.model = AutoModelForCausalLM.from_pretrained(
+        self.model_path,
+        torch_dtype=bfloat16,
+        device_map=self.device,
+        trust_remote_code=True
+      )
+      self.loaded = True
+      logger.info("Model loaded successfully")
+    except Exception as e:
+      logger.error(f"Error loading model: {str(e)}")
+      raise
 
   def reset_context(self) -> None:
     # Implementation for context reset if needed
@@ -109,25 +145,36 @@ class TransformersLocalModel(LocalModel):
     return response
 
   def download(self, model_path: str) -> None:
-    logging.info(f"Downloading {self.model_name} model to {model_path}")
+    logger.info(f"Downloading {self.model_name} model to {model_path}")
     os.makedirs(model_path, exist_ok=True)
 
-    # Download and save model
-    AutoModelForCausalLM.from_pretrained(
-      self.model_name,
-      torch_dtype=bfloat16,
-      trust_remote_code=True,
-      **self.model_params.get('model', {})
-    ).save_pretrained(model_path)
+    # Ensure we're authenticated with Hugging Face
+    self._authenticate_huggingface()
 
-    # Download and save tokenizer
-    AutoTokenizer.from_pretrained(
-      self.model_name,
-      trust_remote_code=True,
-      **self.model_params.get('tokenizer', {})
-    ).save_pretrained(model_path)
+    try:
+      # Download and save model
+      logger.debug(f"Downloading model weights for {self.model_name}")
+      AutoModelForCausalLM.from_pretrained(
+        self.model_name,
+        torch_dtype=bfloat16,
+        trust_remote_code=True,
+        **self.model_params.get('model', {})
+      ).save_pretrained(model_path)
+      logger.debug("Model weights downloaded successfully")
 
-    logging.info("Model downloaded successfully")
+      # Download and save tokenizer
+      logger.debug(f"Downloading tokenizer for {self.model_name}")
+      AutoTokenizer.from_pretrained(
+        self.model_name,
+        trust_remote_code=True,
+        **self.model_params.get('tokenizer', {})
+      ).save_pretrained(model_path)
+      logger.debug("Tokenizer downloaded successfully")
+
+      logger.info("Model downloaded successfully")
+    except Exception as e:
+      logger.error(f"Error downloading model: {str(e)}")
+      raise
 
 
 
@@ -142,7 +189,7 @@ class TransformersModel(LocalModel):
   but creates local transformer models based on HuggingFace model IDs.
   """
 
-  def __init__(self, model_id: str, model_path: str = "models", defer_loading: bool = False, device: str = "cpu"):
+  def __init__(self, model_id: str, model_path: str = "models", defer_loading: bool = False, device: str = "cpu", api_key: Optional[str] = None):
     """
     Initialize a transformers text model.
 
@@ -151,6 +198,7 @@ class TransformersModel(LocalModel):
         model_path: Base path where models are stored
         defer_loading: Whether to defer loading the model
         device: Device to load the model on
+        api_key: Hugging Face API key for authentication
     """
     # Initialize essential attributes first to avoid reference errors
     self.model_instance = None
@@ -158,6 +206,13 @@ class TransformersModel(LocalModel):
     self.defer_loading = defer_loading
     self.device = device
     self.loaded = False
+    self.api_key = api_key
+
+    logger.debug(f"Initializing TransformersModel for {model_id}")
+    if api_key:
+      logger.debug(f"API key provided (first 5 chars: {api_key[:5]})")
+    else:
+      logger.debug("No API key provided")
 
     # Set model parameters with default settings
     self.model_params = {
@@ -165,6 +220,7 @@ class TransformersModel(LocalModel):
       'tokenizer': {},
       'generation': DEFAULT_SETTINGS.copy()
     }
+    logger.debug(f"Model parameters: {self.model_params}")
 
     # Call super to initialize the base class
     super().__init__(model_name=model_id, model_path=model_path, defer_loading=defer_loading, device=device)
@@ -172,33 +228,52 @@ class TransformersModel(LocalModel):
     # Create the actual model instance for delegation
     folder_name = self.model_name.split("/")[-1]
     self.full_model_path = os.path.join(model_path, folder_name)
+    logger.debug(f"Full model path: {self.full_model_path}")
 
     # Only create the instance if not deferring loading
     if not defer_loading:
+      logger.debug("Not deferring loading, creating model instance")
       self._create_model_instance()
+    else:
+      logger.debug("Deferring loading, model instance will be created later")
+
+  def set_api_key(self, api_key: str) -> None:
+    """Set the API key for Hugging Face authentication."""
+    logger.debug(f"Setting API key in TransformersModel (first 5 chars: {api_key[:5]})")
+    self.api_key = api_key
+    if hasattr(self, 'model_instance') and self.model_instance is not None:
+      logger.debug("Propagating API key to model instance")
+      self.model_instance.set_api_key(api_key)
+    else:
+      logger.debug("No model instance to propagate API key to")
 
   def _create_model_instance(self) -> None:
     """Create the underlying model instance."""
     try:
-      logging.info(f"Creating TransformersLocalModel instance for {self.model_name}")
+      logger.info(f"Creating TransformersLocalModel instance for {self.model_name}")
       self.model_instance = TransformersLocalModel(
         model_name=self.model_name,
         model_path=self.model_path,
         defer_loading=self.defer_loading,
         device=self.device,
-        model_params=self.model_params
+        model_params=self.model_params,
+        api_key=self.api_key
       )
-      logging.info(f"Successfully created model instance for {self.model_name}")
+      logger.info(f"Successfully created model instance for {self.model_name}")
     except Exception as e:
-      logging.error(f"Error creating model instance for {self.model_name}: {str(e)}")
+      logger.error(f"Error creating model instance for {self.model_name}: {str(e)}")
       raise ValueError(f"Failed to create model instance: {str(e)}")
 
   def load(self) -> None:
     """Load the model."""
+    logger.debug(f"Loading model {self.model_name}")
     if not hasattr(self, 'model_instance') or self.model_instance is None:
+      logger.debug("No model instance, creating one")
       self._create_model_instance()
+    logger.debug("Loading model instance")
     self.model_instance.load()
     self.loaded = True
+    logger.debug("Model loaded successfully")
 
   def is_loaded(self) -> bool:
     """Check if the model is loaded."""
