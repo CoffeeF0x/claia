@@ -19,19 +19,30 @@ logger = logging.getLogger(__name__)
 
 
 ########################################################################
+#                          DEFAULT SETTINGS                            #
+########################################################################
+# Default generation settings for models
+# Individual models can override specific settings as needed
+DEFAULT_SETTINGS = {
+  "max_new_tokens": 4096,
+  "top_p": 0.7,
+  "temperature": 0.7
+}
+
+
+
+########################################################################
 #                               CLASSES                                #
 ########################################################################
 class TransformersLocalModel(LocalModel):
   def __init__(self,
                model_name: str,
                model_path: str,
-               hf_repo_id: str,
                defer_loading: bool = False,
                device: str = "cpu",
                model_params: Optional[Dict[str, Any]] = None):
-    self.hf_repo_id = hf_repo_id
     self.model_params = model_params or {}
-    folder_name = self.hf_repo_id.split("/")[-1]
+    folder_name = model_name.split("/")[-1]
     full_model_path = os.path.join(model_path, folder_name)
     super().__init__(model_name, full_model_path, defer_loading, device)
 
@@ -98,12 +109,12 @@ class TransformersLocalModel(LocalModel):
     return response
 
   def download(self, model_path: str) -> None:
-    logging.info(f"Downloading {self.hf_repo_id} model to {model_path}")
+    logging.info(f"Downloading {self.model_name} model to {model_path}")
     os.makedirs(model_path, exist_ok=True)
 
     # Download and save model
     AutoModelForCausalLM.from_pretrained(
-      self.hf_repo_id,
+      self.model_name,
       torch_dtype=bfloat16,
       trust_remote_code=True,
       **self.model_params.get('model', {})
@@ -111,7 +122,7 @@ class TransformersLocalModel(LocalModel):
 
     # Download and save tokenizer
     AutoTokenizer.from_pretrained(
-      self.hf_repo_id,
+      self.model_name,
       trust_remote_code=True,
       **self.model_params.get('tokenizer', {})
     ).save_pretrained(model_path)
@@ -128,8 +139,7 @@ class TransformersTextModel(LocalModel):
   A class-based implementation of the transformers source.
 
   This class follows the pattern of other model source classes like OpenAITextModel,
-  but creates local transformer models based on the model's configuration in the
-  definitions file.
+  but creates local transformer models based on HuggingFace model IDs.
   """
 
   def __init__(self, model_id: str, model_path: str = "models", defer_loading: bool = False, device: str = "cpu"):
@@ -137,116 +147,96 @@ class TransformersTextModel(LocalModel):
     Initialize a transformers text model.
 
     Args:
-        model_id: The model identifier from definitions
+        model_id: The model identifier (also used as HF repo ID)
         model_path: Base path where models are stored
         defer_loading: Whether to defer loading the model
         device: Device to load the model on
     """
-    # Import here to avoid circular imports
-    from models.definitions import definitions, DEFAULT_SETTINGS
+    # Initialize essential attributes first to avoid reference errors
+    self.model_instance = None
+    self.model_path = model_path
+    self.defer_loading = defer_loading
+    self.device = device
+    self.loaded = False
 
-    # We need to use model_id directly from the definitions since LocalModel expects model_name
-    super().__init__(model_name=model_id, model_path=model_path, defer_loading=defer_loading, device=device)
-
-    # Get the model configuration
-    self.model_config = definitions.get(model_id, {})
-    if not self.model_config:
-      raise ValueError(f"Model {model_id} not found in definitions")
-
-    # Get the HuggingFace repo ID
-    self.hf_repo_id = self._get_hf_repo_id()
-
-    # Get model settings, applying defaults and overrides
-    model_specific_settings = self.model_config.get('settings', {})
-    merged_settings = DEFAULT_SETTINGS.copy()
-    merged_settings.update(model_specific_settings)
-
-    # Set model parameters
+    # Set model parameters with default settings
     self.model_params = {
       'model': {},
       'tokenizer': {},
-      'generation': merged_settings
+      'generation': DEFAULT_SETTINGS.copy()
     }
 
+    # Call super to initialize the base class
+    super().__init__(model_name=model_id, model_path=model_path, defer_loading=defer_loading, device=device)
+
     # Create the actual model instance for delegation
-    folder_name = self.hf_repo_id.split("/")[-1]
+    folder_name = self.model_name.split("/")[-1]
     self.full_model_path = os.path.join(model_path, folder_name)
-    self.model_instance = None
 
     # Only create the instance if not deferring loading
     if not defer_loading:
       self._create_model_instance()
 
-  def _get_hf_repo_id(self) -> str:
-    """Get the HuggingFace repo ID from the model configuration."""
-    # Check if there's a direct transformers source in the config
-    transformers_source = self.model_config.get('sources', {}).get('transformers')
-    if transformers_source:
-      if isinstance(transformers_source, list) and transformers_source:
-        return transformers_source[0]
-      return transformers_source
-
-    # Fall back to looking for a vllm source, which typically contains HF repo IDs
-    vllm_source = self.model_config.get('sources', {}).get('vllm')
-    if vllm_source and isinstance(vllm_source, list) and vllm_source:
-      return vllm_source[0]
-
-    raise ValueError(f"Could not determine HF repo ID for model {self.model_name}")
-
   def _create_model_instance(self) -> None:
     """Create the underlying model instance."""
-    if not self.model_instance:
+    try:
+      logging.info(f"Creating TransformersLocalModel instance for {self.model_name}")
       self.model_instance = TransformersLocalModel(
         model_name=self.model_name,
         model_path=self.model_path,
-        hf_repo_id=self.hf_repo_id,
         defer_loading=self.defer_loading,
         device=self.device,
         model_params=self.model_params
       )
+      logging.info(f"Successfully created model instance for {self.model_name}")
+    except Exception as e:
+      logging.error(f"Error creating model instance for {self.model_name}: {str(e)}")
+      raise ValueError(f"Failed to create model instance: {str(e)}")
 
   def load(self) -> None:
     """Load the model."""
-    if not self.model_instance:
+    if not hasattr(self, 'model_instance') or self.model_instance is None:
       self._create_model_instance()
     self.model_instance.load()
     self.loaded = True
 
   def is_loaded(self) -> bool:
     """Check if the model is loaded."""
-    return self.model_instance and self.model_instance.is_loaded() if self.model_instance else False
+    if not hasattr(self, 'model_instance') or self.model_instance is None:
+      return False
+    return self.model_instance.is_loaded()
 
   def unload(self) -> None:
     """Unload the model."""
-    if self.model_instance:
+    if hasattr(self, 'model_instance') and self.model_instance is not None:
       self.model_instance.unload()
     self.loaded = False
 
   def reset_context(self) -> None:
     """Reset the model context."""
-    if self.model_instance:
+    if hasattr(self, 'model_instance') and self.model_instance is not None:
       self.model_instance.reset_context()
 
   def generate(self, messages: list, **kwargs) -> str:
     """Generate a response to the given messages."""
-    if not self.model_instance:
+    if not hasattr(self, 'model_instance') or self.model_instance is None:
       self._create_model_instance()
     return self.model_instance.generate(messages, **kwargs)
 
   def download(self, model_path: str) -> None:
     """Download the model."""
-    if not self.model_instance:
+    if not hasattr(self, 'model_instance') or self.model_instance is None:
       self._create_model_instance()
     self.model_instance.download(model_path)
 
   def tokenize(self, text: str) -> List[int]:
     """Tokenize the text."""
-    if not self.model_instance:
+    if not hasattr(self, 'model_instance') or self.model_instance is None:
       self._create_model_instance()
     return self.model_instance.tokenize(text)
 
   def detokenize(self, tokens: List[int]) -> str:
     """Detokenize the tokens."""
-    if not self.model_instance:
+    if not hasattr(self, 'model_instance') or self.model_instance is None:
       self._create_model_instance()
     return self.model_instance.detokenize(tokens)
