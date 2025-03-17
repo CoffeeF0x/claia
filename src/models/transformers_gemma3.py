@@ -47,7 +47,14 @@ class Gemma3LocalModel(TransformersLocalModel):
         multimodal: Whether to load multimodal capabilities
     """
     self.multimodal = multimodal
-    super().__init__(model_name, model_path, defer_loading, device, model_params, api_key)
+
+    # Explicitly call parent init with defer_loading=True to prevent auto-loading
+    # We'll handle the loading ourselves in this class
+    super().__init__(model_name, model_path, True, device, model_params, api_key)
+
+    # If we're not deferring loading, explicitly call load now
+    if not defer_loading:
+      self.load()
 
   def load(self) -> None:
     """Load the appropriate Gemma 3 model class based on multimodal setting."""
@@ -239,8 +246,8 @@ class Gemma3Model(TransformersModel):
       'generation': DEFAULT_SETTINGS.copy()
     }
 
-    # Call super to initialize the base class (LocalModel)
-    super(TransformersModel, self).__init__(model_name=model_id, model_path=model_path, defer_loading=defer_loading, device=device)
+    # Call super to initialize the base class
+    super().__init__(model_id=model_id, model_path=model_path, defer_loading=True, device=device, api_key=api_key)
 
     # Create the actual model instance for delegation
     folder_name = self.model_name.split("/")[-1]
@@ -261,6 +268,35 @@ class Gemma3Model(TransformersModel):
     if hasattr(self, 'model_instance') and self.model_instance is not None:
       logger.debug("Propagating API key to model instance")
       self.model_instance.set_api_key(api_key)
+
+  def load(self) -> None:
+    """Load the model if not already loaded."""
+    if self.is_loaded():
+      logger.debug(f"Model {self.model_name} is already loaded, skipping")
+      return
+
+    logger.debug(f"Loading model {self.model_name}")
+    if not hasattr(self, 'model_instance') or self.model_instance is None:
+      logger.debug("No model instance, creating one")
+      self._create_model_instance()
+    else:
+      logger.debug("Model instance exists, loading it")
+      self.model_instance.load()
+
+    self.loaded = True
+    logger.debug("Model loaded successfully")
+
+  def is_loaded(self) -> bool:
+    """Check if the model is loaded."""
+    # First check our own loaded flag
+    if self.loaded:
+      return True
+
+    # Then check if we have a model instance and if it's loaded
+    if hasattr(self, 'model_instance') and self.model_instance is not None:
+      return self.model_instance.is_loaded()
+
+    return False
 
   def _create_model_instance(self) -> None:
     """Create the underlying model instance."""
