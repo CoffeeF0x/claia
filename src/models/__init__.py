@@ -27,6 +27,60 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                              FUNCTIONS                               #
 ########################################################################
+def get_best_available_device() -> str:
+  """
+  Detect and return the best available device for model execution.
+  Prefers GPU > NPU > CPU in order of availability.
+
+  Returns:
+      Device identifier string compatible with PyTorch/Transformers
+  """
+  try:
+    import torch
+
+    # Check for CUDA (NVIDIA GPUs)
+    if torch.cuda.is_available():
+      device_count = torch.cuda.device_count()
+      logger.info(f"Found {device_count} CUDA GPU device(s)")
+      return "cuda"
+
+    # Check for MPS (Apple Silicon)
+    if hasattr(torch, 'mps') and torch.backends.mps.is_available():
+      logger.info("Found Apple Silicon MPS")
+      return "mps"
+
+    # Check for other specialized devices (NPUs, etc)
+    # xPU (Intel)
+    if hasattr(torch, 'xpu') and torch.xpu.is_available():
+      logger.info("Found Intel XPU device")
+      return "xpu"
+
+    # Note: NPU support depends on the specific hardware/framework
+    # Different NPUs have different APIs in PyTorch
+
+    # Some NPUs might be detected via torch.device availability
+    try:
+      for device_type in ["npu", "hpu", "ipu"]:  # Various NPU types
+        device = torch.device(device_type)
+        if device.type == device_type:
+          logger.info(f"Found {device_type.upper()} device")
+          return device_type
+    except:
+      # Failed to detect specialized NPUs
+      pass
+
+    # Default to CPU
+    logger.info("No specialized hardware detected, using CPU")
+    return "cpu"
+
+  except ImportError:
+    logger.warning("PyTorch not available, defaulting to CPU")
+    return "cpu"
+  except Exception as e:
+    logger.warning(f"Error detecting hardware, defaulting to CPU: {str(e)}")
+    return "cpu"
+
+
 def find_available_sources(model_name: str) -> List[str]:
   """Find available sources for a given model name."""
   available_sources = []
@@ -193,9 +247,16 @@ def create_transformers_model(model_class: Any, model_id: str, settings: Optiona
   api_key = get_api_key_for_source("transformers", settings)
   model_path = settings.model_directory if settings else "models"
 
+  # Determine the best device to use
+  device = getattr(settings, 'device', None)
+  if not device:
+    device = get_best_available_device()
+    logger.debug(f"Automatically selected device: {device}")
+
   # Additional parameters for model constructor
   kwargs = {
-    'model_path': model_path
+    'model_path': model_path,
+    'device': device
   }
 
   if api_key:
@@ -211,7 +272,7 @@ def create_transformers_model(model_class: Any, model_id: str, settings: Optiona
 
 
 # Get the appropriate model based on the model name and source
-def get_model(model_name: str, settings: Settings = None, process_type: Optional[Any] = None) -> Result:
+def get_model(model_name: str, settings: Settings = None, process_type: Optional[Any] = None, device: Optional[str] = None) -> Result:
   """
   Get the appropriate model based on the model name, source, and optional process type.
 
@@ -219,6 +280,7 @@ def get_model(model_name: str, settings: Settings = None, process_type: Optional
       model_name: The name of the model to use
       settings: Optional settings for API keys and preferences
       process_type: Optional specific capability to match (for specialized processing)
+      device: Optional device to use (cuda, mps, cpu, etc). If None, uses settings.device or auto-detects.
 
   Returns:
       Result object with the model instance as data
@@ -227,6 +289,15 @@ def get_model(model_name: str, settings: Settings = None, process_type: Optional
   logger.debug(f"Getting model: {model_name}")
   if process_type:
     logger.debug(f"Using process type: {process_type.value}")
+
+  # Set device in settings if provided
+  if device and settings:
+    logger.debug(f"Using specified device: {device}")
+    settings.device = device
+  elif device:
+    settings = Settings()
+    settings.device = device
+    logger.debug(f"Created new settings with device: {device}")
 
   if model_name not in definitions:
     logger.error(f"Model {model_name} not found in definitions")
@@ -302,7 +373,7 @@ def get_api_key_for_source(source: str, settings: Settings) -> str:
 
 # Run the model with the given conversation and settings
 def run(model_name: str, conversation: Conversation, settings: Settings = None,
-         process_type: Optional[Any] = None) -> Result:
+         process_type: Optional[Any] = None, device: Optional[str] = None) -> Result:
   """
   Run the model with the given conversation and settings.
   This function provides a simple interface for model execution.
@@ -312,6 +383,7 @@ def run(model_name: str, conversation: Conversation, settings: Settings = None,
       conversation: The conversation to process
       settings: Optional settings object
       process_type: Optional specific capability to match (for specialized processing)
+      device: Optional device to use (cuda, mps, cpu, etc). If None, uses settings.device or auto-detects.
 
   Returns:
       Result object containing the model's response
@@ -319,9 +391,11 @@ def run(model_name: str, conversation: Conversation, settings: Settings = None,
   logger.debug(f"Running model {model_name} with conversation ID: {conversation.conversation_id}")
   if process_type:
     logger.debug(f"Using process type: {process_type.value}")
+  if device:
+    logger.debug(f"Using specified device: {device}")
 
   # Get the model instance
-  result = get_model(model_name, settings, process_type)
+  result = get_model(model_name, settings, process_type, device)
   if result.is_error():
     logger.error(f"Failed to get model {model_name}: {result.message}")
     return result
