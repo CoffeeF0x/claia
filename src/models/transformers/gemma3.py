@@ -6,7 +6,7 @@ from torch.cuda import empty_cache
 from typing import List, Dict, Optional, Union, Any
 
 # Internal dependencies
-from models.transformers import TransformersModel, TransformersLocalModel, DEFAULT_SETTINGS
+from models.transformers.base import TransformersModel, TransformersLocalModel, DEFAULT_SETTINGS
 
 
 
@@ -206,7 +206,7 @@ class Gemma3LocalModel(TransformersLocalModel):
 
 
 ########################################################################
-#                         GEMMA 3 MODEL                           #
+#                         GEMMA 3 MODEL                                #
 ########################################################################
 class Gemma3Model(TransformersModel):
   """

@@ -5,8 +5,7 @@ from models.api.openai import OpenAIModel
 from models.api.runpod import RunpodModel
 from models.api.anthropic import AnthropicModel
 from models.api.openrouter import OpenRouterModel
-from models.transformers import TransformersModel
-from models.transformers_gemma3 import Gemma3Model
+from models.transformers import TransformersModel, Gemma3Model
 from models.remote.vllm import VLLMModel
 
 

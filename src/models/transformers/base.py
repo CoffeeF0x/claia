@@ -179,7 +179,7 @@ class TransformersLocalModel(LocalModel):
 
 
 ########################################################################
-#                       TRANSFORMERS MODEL                        #
+#                       TRANSFORMERS MODEL                             #
 ########################################################################
 class TransformersModel(LocalModel):
   """
