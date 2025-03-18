@@ -21,7 +21,7 @@ DEFAULT_SETTINGS = {
 ########################################################################
 class ModelCapability(Enum):
   """Capabilities of a model."""
-  ANY = "any-capability"  # Default/fallback capability
+  DEFAULT = "default"  # Default/fallback capability
   TTT = "text-to-text"
   TTI = "text-to-image"
   ITT = "image-to-text"
@@ -128,7 +128,7 @@ definitions = {
     },
     "class_overrides": {
       "transformers": {
-        ModelCapability.ANY: "gemma-3",
+        ModelCapability.DEFAULT: "gemma-3",
         ModelCapability.TTT: "gemma-3"
       }
     }
@@ -146,9 +146,7 @@ definitions = {
     },
     "class_overrides": {
       "transformers": {
-        ModelCapability.ANY: "gemma-3",
-        ModelCapability.TTT: "gemma-3",
-        ModelCapability.ITT: "gemma-3",
+        ModelCapability.DEFAULT: "gemma-3",
         ModelCapability.TAI: "gemma-3"
       }
     }
@@ -166,9 +164,7 @@ definitions = {
     },
     "class_overrides": {
       "transformers": {
-        ModelCapability.ANY: "gemma-3",
-        ModelCapability.TTT: "gemma-3",
-        ModelCapability.ITT: "gemma-3",
+        ModelCapability.DEFAULT: "gemma-3",
         ModelCapability.TAI: "gemma-3"
       }
     }
@@ -186,9 +182,7 @@ definitions = {
     },
     "class_overrides": {
       "transformers": {
-        ModelCapability.ANY: "gemma-3",
-        ModelCapability.TTT: "gemma-3",
-        ModelCapability.ITT: "gemma-3",
+        ModelCapability.DEFAULT: "gemma-3",
         ModelCapability.TAI: "gemma-3"
       }
     }

@@ -136,10 +136,10 @@ def get_model_class(model_name: str, chosen_source: str, process_type: Optional[
           impl_key = class_overrides[process_type]
           logger.debug(f"Found implementation key for {process_type.value}: {impl_key}")
 
-      # If no specific implementation for process_type, check for ANY capability
-      if not impl_key and ModelCapability.ANY in class_overrides:
-        impl_key = class_overrides[ModelCapability.ANY]
-        logger.debug(f"Using default implementation key (ANY): {impl_key}")
+      # If no specific implementation for process_type, check for DEFAULT capability
+      if not impl_key and ModelCapability.DEFAULT in class_overrides:
+        impl_key = class_overrides[ModelCapability.DEFAULT]
+        logger.debug(f"Using default implementation key (DEFAULT): {impl_key}")
 
       # If still no implementation key, get all unique implementation keys
       if not impl_key:
