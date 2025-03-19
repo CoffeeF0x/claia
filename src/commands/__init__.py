@@ -24,15 +24,16 @@ import os
 import sys
 import logging
 import types
-from typing import Dict, Any, List, Tuple, Set
+from typing import Dict, Any, List, Tuple, Set, Union, Callable, Optional
 
 # Internal dependencies
-from commands.prompts import PromptCommand
+from commands.prompts       import PromptCommand
 from commands.conversations import ConversationCommand
-from commands.models import ModelCommand
-from commands.system import SystemCommand
-from commands.tools import ToolsCommand
+from commands.models        import ModelCommand
+from commands.system        import SystemCommand
+from commands.tools         import ToolsCommand
 from commands.massedcompute import MassedComputeCommand
+from commands.agents        import AgentCommand
 from errors import Result
 from settings import Settings
 
@@ -96,6 +97,14 @@ COMMAND_MODULES: List[Tuple[Any, List[str], str, bool]] = [
     MassedComputeCommand(),
     ["massedcompute", "mc"],
     "commands related to deploying and managing GPU instances",
+    True
+  ),
+
+  # Agent commands
+  (
+    AgentCommand(),
+    ["agent", "agents"],
+    "commands related to agent selection and management",
     True
   )
 ]
