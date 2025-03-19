@@ -191,6 +191,40 @@ definitions = {
     "title": "Stable Diffusion v2",
     "description": "The latest version of Stable Diffusion, with improved text-to-image generation capabilities.",
     "capabilities": [ModelCapability.TTI],
-    "sources": {}
+    "sources": {
+      "transformers": ["stabilityai/stable-diffusion-2"]
+    },
+    "settings": {
+      "height": 768,
+      "width": 768,
+      "num_inference_steps": 30,
+      "guidance_scale": 7.5
+    },
+    "class_overrides": {
+      "transformers": {
+        ModelCapability.DEFAULT: "stable-diffusion",
+        ModelCapability.TTI: "stable-diffusion"
+      }
+    }
+  },
+  "stable-diffusion-v1-5": {
+    "title": "Stable Diffusion v1.5",
+    "description": "A smaller version of Stable Diffusion that requires less VRAM, good for testing or on systems with limited resources.",
+    "capabilities": [ModelCapability.TTI],
+    "sources": {
+      "transformers": ["runwayml/stable-diffusion-v1-5"]
+    },
+    "settings": {
+      "height": 512,
+      "width": 512,
+      "num_inference_steps": 30,
+      "guidance_scale": 7.5
+    },
+    "class_overrides": {
+      "transformers": {
+        ModelCapability.DEFAULT: "stable-diffusion",
+        ModelCapability.TTI: "stable-diffusion"
+      }
+    }
   }
 }

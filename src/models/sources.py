@@ -5,7 +5,7 @@ from models.api.openai import OpenAIModel
 from models.api.runpod import RunpodModel
 from models.api.anthropic import AnthropicModel
 from models.api.openrouter import OpenRouterModel
-from models.transformers import TransformersModel, Gemma3Model
+from models.transformers import TransformersModel, Gemma3Model, DiffusionModel
 from models.remote.vllm import VLLMModel
 
 
@@ -31,6 +31,7 @@ sources = {
 transformers_models = {
   # Model family prefix : implementation class
   "gemma-3": Gemma3Model,
+  "stable-diffusion": DiffusionModel,
   # Add more specialized transformer model implementations here
   # "llama-3": Llama3Model,
   # "phi-3": Phi3Model,
