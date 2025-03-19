@@ -5,7 +5,7 @@
 
 # External dependencies
 import logging
-from typing import Any, Union, List, Dict, Optional, Tuple
+from typing import Any, List, Dict, Optional, Tuple
 
 # Internal dependencies
 from models.base import APIModel, LocalModel
@@ -13,7 +13,6 @@ from models.definitions import definitions, ModelCapability
 from models.sources import sources, transformers_models
 from settings import Settings
 from errors import Result
-from conversations import Conversation
 
 
 
@@ -371,16 +370,17 @@ def get_api_key_for_source(source: str, settings: Settings) -> str:
   return api_key
 
 
-# Run the model with the given conversation and settings
-def run(model_name: str, conversation: Conversation, settings: Settings = None,
-         process_type: Optional[Any] = None, device: Optional[str] = None) -> Result:
+# Run the model with the given messages and settings
+def run(model_name: str, messages: List[Dict[str, Any]],
+         settings: Settings = None, process_type: Optional[Any] = None,
+         device: Optional[str] = None) -> Result:
   """
-  Run the model with the given conversation and settings.
+  Run the model with the given messages and settings.
   This function provides a simple interface for model execution.
 
   Args:
       model_name: The name of the model to use
-      conversation: The conversation to process
+      messages: A pre-processed list of message dictionaries ready for the model
       settings: Optional settings object
       process_type: Optional specific capability to match (for specialized processing)
       device: Optional device to use (cuda, mps, cpu, etc). If None, uses settings.device or auto-detects.
@@ -388,7 +388,8 @@ def run(model_name: str, conversation: Conversation, settings: Settings = None,
   Returns:
       Result object containing the model's response
   """
-  logger.debug(f"Running model {model_name} with conversation ID: {conversation.conversation_id}")
+  logger.debug(f"Running model {model_name} with {len(messages)} messages")
+
   if process_type:
     logger.debug(f"Using process type: {process_type.value}")
   if device:
@@ -404,10 +405,6 @@ def run(model_name: str, conversation: Conversation, settings: Settings = None,
   logger.debug(f"Successfully retrieved model instance for {model_name}")
 
   try:
-    # Get formatted messages from the conversation
-    messages = conversation.get_formatted_messages()
-    logger.debug(f"Got {len(messages)} formatted messages from conversation")
-
     # Validate messages
     if not messages or not isinstance(messages, list):
       logger.error("Invalid messages format: expected non-empty list")
