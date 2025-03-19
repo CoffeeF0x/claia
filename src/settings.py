@@ -126,6 +126,9 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
   ("active_model",                      "qwq-32b",                     True,  "Active model name"),
   ("active_model_source",               "",                            True,  "Active model source"),
 
+  # Agent Settings
+  ("active_agent",                      "simple",                      True,  "Active agent type"),
+
   # VLLM Settings
   ("vllm_zone",                         "",                            True,  "VLLM Zone"),
   ("vllm_email",                        "",                            True,  "VLLM Email"),

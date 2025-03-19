@@ -249,6 +249,35 @@ class Conversation(BaseFile):
       self.messages.insert(0, system_message)
       logger.debug(f"Added system message: {system_prompt[:50]}{'...' if len(system_prompt) > 50 else ''}")
 
+  def update_system_prompt(self, system_prompt: str) -> None:
+    """
+    Update the system prompt and any existing system messages.
+
+    This method will update the system prompt and either update an existing
+    system message or add a new one if none exists.
+
+    Args:
+        system_prompt: The system prompt to set
+    """
+    # Update the system prompt property
+    self.system_prompt = system_prompt
+
+    # Check if we have any system messages
+    system_message_found = False
+
+    # Update any existing system messages
+    for message in self.messages:
+      if message.role == MessageRole.SYSTEM:
+        message.content = system_prompt
+        system_message_found = True
+        logger.debug(f"Updated system message: {system_prompt[:50]}{'...' if len(system_prompt) > 50 else ''}")
+
+    # If no system message exists, add one at the beginning
+    if not system_message_found:
+      system_message = Message(role=MessageRole.SYSTEM, content=system_prompt)
+      self.messages.insert(0, system_message)
+      logger.debug(f"Added system message: {system_prompt[:50]}{'...' if len(system_prompt) > 50 else ''}")
+
   def get_formatted_messages(self) -> List[Dict[str, Any]]:
     """
     Get the messages in a format suitable for sending to an LLM.

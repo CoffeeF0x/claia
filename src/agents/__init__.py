@@ -4,14 +4,16 @@ Agents process requests and manage the conversation flow.
 """
 
 # External dependencies
-import logging, uuid, time, queue, threading
+import logging, uuid, time, queue, threading, os
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Any, Callable, Type
 
 # Internal dependencies
-from models import run as model_run
+from models import run as model_run, ModelCapability
+from models.definitions import definitions
 from errors import Result
+from conversations import MessageRole
 
 
 
@@ -19,6 +21,20 @@ from errors import Result
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
+
+
+
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
+# Bob Agent's system prompt
+BOB_SYSTEM_PROMPT = """
+You are Bob, a straightforward and no-nonsense assistant.
+Bob speaks in the third person and keeps responses brief.
+Bob doesn't use flowery language.
+Bob is direct and sometimes sarcastic.
+Bob always tries to be helpful despite his gruff demeanor.
+"""
 
 
 
@@ -36,11 +52,7 @@ class ProcessStatus(Enum):
 class AgentType(Enum):
   """Types of agents that can handle processes."""
   SIMPLE = "simple"  # Simple agent that directly calls a model
-  SIMPLE_TOOL = "simple-tool"  # Simple agent that can use tools
-  TEXT_TO_TEXT = "text-to-text"  # Agent that processes text-to-text requests
-  TEXT_TO_IMAGE = "text-to-image"  # Agent that processes text-to-image requests
-  TEXT_TO_AUDIO = "text-to-audio"  # Agent that processes text-to-audio requests
-  IMAGE_TO_TEXT = "image-to-text"  # Agent that processes image-to-text requests
+  BOB = "bob"  # Bob agent that uses a specific system prompt
 
 class SourcePreference(Enum):
   """Enum for source preferences when deploying models."""
@@ -230,24 +242,150 @@ class ProcessQueue:
 
 
 ########################################################################
-#                            AGENTS CLASSES                            #
+#                       CONVERSATION PROCESSING                        #
 ########################################################################
-class Agent:
+def process_conversation_for_capability(capability: ModelCapability, conversation, parameters=None):
   """
-  Agent class that processes requests.
+  Process a conversation based on the specified model capability.
 
-  This class provides a static method to process a request based on its agent type.
+  Args:
+      capability: The model capability to process for
+      conversation: The conversation object to process
+      parameters: Additional parameters for processing
+
+  Returns:
+      A list of formatted messages ready to be passed to model_run
   """
-  @staticmethod
-  def process(process: Process) -> Process:
+  if not conversation:
+    raise ValueError("Conversation is required for processing")
+
+  parameters = parameters or {}
+
+  # Get formatted messages from the conversation
+  messages = conversation.get_formatted_messages()
+
+  # Process based on capability
+  if capability == ModelCapability.TTT:
+    # Text-to-text processing - return messages as is
+    return messages
+
+  elif capability == ModelCapability.TTI:
+    # Text-to-image processing
+    # Extract prompt from last user message
+    prompt = None
+    for message in reversed(messages):
+      if message.get('role') == 'user':
+        prompt = message.get('content', '')
+        break
+
+    if not prompt:
+      raise ValueError("Text-to-image requires a text prompt")
+
+    # Apply any generation parameters from the request
+    generation_params = parameters.get("generation_params", {})
+
+    # Return prompt message for TTI processing
+    return [{"role": "user", "content": prompt, "generation_params": generation_params}]
+
+  elif capability == ModelCapability.ITT:
+    # Image-to-text processing
+    image_data = None
+    prompt = None
+
+    # Extract prompt and image from the last user message
+    for message in reversed(messages):
+      if message.get('role') == 'user':
+        prompt = message.get('content', '')
+        # Look for image data in the message
+        if 'images' in message:
+          image_data = message.get('images', [])[0]
+        break
+
+    if not image_data:
+      raise ValueError("Image-to-text requires image data")
+
+    # Return message with image for ITT processing
+    return [{"role": "user", "content": prompt, "image": image_data}]
+
+  elif capability == ModelCapability.TTA:
+    # Text-to-audio processing
+    text = None
+    for message in reversed(messages):
+      if message.get('role') == 'user':
+        text = message.get('content', '')
+        break
+
+    if not text or not isinstance(text, str):
+      raise ValueError("Text-to-audio requires non-empty text")
+
+    # Return text message for audio generation
+    return [{"role": "user", "content": text}]
+
+  elif capability == ModelCapability.TAI:
+    # Text and image capability
+    # Return messages as is, they should already contain text and images
+    return messages
+
+  else:
+    # Default processing - return formatted messages
+    return messages
+
+
+
+########################################################################
+#                           AGENT REGISTRY                             #
+########################################################################
+# Registry to store agent implementations
+AGENT_REGISTRY = {}
+
+def register_agent(agent_type: AgentType, agent_class: Type):
+  """
+  Register an agent implementation for a specific agent type.
+
+  Args:
+      agent_type: The type of agent to register
+      agent_class: The agent class implementation
+  """
+  AGENT_REGISTRY[agent_type] = agent_class
+  logger.debug(f"Registered agent {agent_class.__name__} for type {agent_type.value}")
+
+def get_agent_for_type(agent_type: AgentType):
+  """
+  Get the agent implementation for a specific agent type.
+
+  Args:
+      agent_type: The type of agent to get
+
+  Returns:
+      The agent class for the specified type, or SimpleAgent if not found
+  """
+  agent_class = AGENT_REGISTRY.get(agent_type)
+  if not agent_class:
+    logger.warning(f"No agent registered for type {agent_type.value}, using SimpleAgent")
+    return SimpleAgent
+  return agent_class
+
+
+
+########################################################################
+#                          BASE AGENT CLASS                            #
+########################################################################
+class BaseAgent:
+  """
+  Base agent class that provides a common interface for all agents.
+
+  Agents are responsible for processing requests using different strategies.
+  Specific agent implementations should inherit from this class and implement
+  the process_request method.
+  """
+
+  @classmethod
+  def process(cls, process: Process) -> Process:
     """
-    Process the given process and return the updated process.
-
-    This method will create the appropriate agent based on the process's agent_type
-    and use it to process the request.
+    Process a request and update the process with the result.
 
     Args:
-        process: The process to be executed
+        process: The process to execute
 
     Returns:
         The updated process with results or error information
@@ -255,36 +393,61 @@ class Agent:
     process.mark_started()
 
     try:
-      # Determine which agent type to use
-      if process.agent_type == AgentType.SIMPLE:
-        return SimpleAgent.process(process)
-      elif process.agent_type == AgentType.SIMPLE_TOOL:
-        # TODO: Implement SimpleToolAgent
-        raise NotImplementedError(f"Agent type {process.agent_type} not implemented")
-      elif process.agent_type == AgentType.TEXT_TO_TEXT:
-        return TextToTextAgent.process(process)
-      elif process.agent_type == AgentType.TEXT_TO_IMAGE:
-        return TextToImageAgent.process(process)
-      elif process.agent_type == AgentType.TEXT_TO_AUDIO:
-        return TextToAudioAgent.process(process)
-      elif process.agent_type == AgentType.IMAGE_TO_TEXT:
-        return ImageToTextAgent.process(process)
-      else:
-        raise ValueError(f"Unknown agent type: {process.agent_type}")
+      return cls.process_request(process)
     except Exception as e:
       logger.exception(f"Error processing {process.id}: {str(e)}")
       process.mark_failed(str(e))
       return process
 
-class SimpleAgent:
+  @classmethod
+  def process_request(cls, process: Process) -> Process:
+    """
+    Implement the actual processing logic for this agent type.
+    This method should be overridden by specific agent implementations.
+
+    Args:
+        process: The process to execute
+
+    Returns:
+        The updated process with results
+    """
+    raise NotImplementedError("Agent implementations must override process_request")
+
+  @classmethod
+  def get_description(cls) -> str:
+    """
+    Get a description of this agent type.
+
+    Returns:
+        A string description of the agent
+    """
+    return cls.__doc__ or "No description available"
+
+  @classmethod
+  def get_capabilities(cls) -> List[str]:
+    """
+    Get a list of this agent's capabilities.
+
+    Returns:
+        A list of capability strings
+    """
+    return ["process"]
+
+
+
+########################################################################
+#                           AGENT CLASSES                              #
+########################################################################
+class SimpleAgent(BaseAgent):
   """
   A simple agent that directly calls a model for inference.
 
-  This agent is the most basic implementation that maintains existing
-  program functionality by directly calling a specified model.
+  This agent serves as the central gateway for all direct model interactions,
+  translating between agent requests and model capabilities.
   """
-  @staticmethod
-  def process(process: Process) -> Process:
+
+  @classmethod
+  def process_request(cls, process: Process) -> Process:
     """
     Process a model inference request.
 
@@ -298,7 +461,6 @@ class SimpleAgent:
       # Get the conversation and settings from the process
       conversation = process.conversation
       settings = process.settings
-      source_preference = process.parameters.get("source_preference", SourcePreference.ANY)
 
       if not conversation:
         raise ValueError("Conversation is required for SimpleAgent")
@@ -311,275 +473,244 @@ class SimpleAgent:
       if not model_id:
         raise ValueError("No active model set in settings")
 
-      # Run the model with the conversation
-      result = model_run(model_id, conversation, settings=settings)
+      # Determine the capability based on the process parameters or model definition
+      capability = process.parameters.get("capability")
+
+      # If capability not specified, get it from the model definition
+      if not capability and model_id in definitions:
+        model_def = definitions[model_id]
+        if "capabilities" in model_def and model_def["capabilities"]:
+          capability = model_def["capabilities"][0]  # Use the first capability
+          logger.debug(f"Using capability {capability} from model definition")
+
+      # Default to text-to-text if still not determined
+      if not capability:
+        capability = ModelCapability.TTT
+        logger.debug("No capability specified, defaulting to text-to-text")
+
+      # Process the conversation based on the capability
+      processed_messages = process_conversation_for_capability(
+        capability,
+        conversation,
+        process.parameters
+      )
+
+      # Run the model with the processed messages
+      result = model_run(model_id, processed_messages, settings=settings, process_type=capability)
 
       if result.is_error():
         raise ValueError(f"Error running model: {result.get_message()}")
 
-      # Process the response
-      logger.info(f"SimpleAgent processed request with model {model_id}")
-      process.mark_completed({
-        "response": result.data,
-        "model": model_id,
-        "source": "actual"
-      })
+      # Handle the result based on capability
+      if capability == ModelCapability.TTI:
+        # Handle image result
+        image = result.data
+
+        # Save the generated image
+        image_path = os.path.join(settings.artifacts_directory, f"{uuid.uuid4()}.png")
+        os.makedirs(os.path.dirname(image_path), exist_ok=True)
+        image.save(image_path)
+
+        # Add the image to the conversation
+        file_id = conversation.add_file(image_path)
+
+        # Add assistant message with the image
+        if file_id:
+          conversation.add_message(
+            MessageRole.ASSISTANT,
+            "Here's the generated image:",
+            file_paths=[image_path]
+          )
+
+          process.mark_completed({
+            "response": "Image generated successfully",
+            "model": model_id,
+            "source": "text-to-image",
+            "image_path": image_path,
+            "file_id": file_id
+          })
+        else:
+          raise ValueError("Failed to add image to conversation")
+      elif capability == ModelCapability.TTA:
+        # Handle audio result (placeholder for now)
+        process.mark_completed({
+          "response": "Audio generation not yet fully implemented",
+          "model": model_id,
+          "source": "text-to-audio"
+        })
+      else:
+        # Default text response handling
+        process.mark_completed({
+          "response": result.data,
+          "model": model_id,
+          "source": capability.value
+        })
+
     except Exception as e:
       logger.exception(f"Error in SimpleAgent for {process.id}: {str(e)}")
       process.mark_failed(str(e))
 
     return process
 
+  @classmethod
+  def get_capabilities(cls) -> List[str]:
+    """
+    Get a list of SimpleAgent's capabilities.
+
+    Returns:
+        A list of capability strings
+    """
+    return ["text", "image", "audio"]
+
+class BobAgent(BaseAgent):
+  """
+  Bob is a gruff, straightforward, no-nonsense assistant with a unique personality.
+
+  Bob only works with text-to-text models and has his own system prompt.
+  """
+
+  @classmethod
+  def process_request(cls, process: Process) -> Process:
+    """
+    Process a request using Bob's unique style.
+
+    Args:
+        process: The process to execute
+
+    Returns:
+        The updated process with results
+    """
+    try:
+      # Get the conversation and settings from the process
+      conversation = process.conversation
+      settings = process.settings
+
+      if not conversation:
+        raise ValueError("Bob needs a conversation to work with")
+
+      if not settings:
+        raise ValueError("Bob needs settings to function")
+
+      # Get the model ID from settings or process parameters
+      model_id = process.parameters.get("model_id", settings.active_model)
+      if not model_id:
+        raise ValueError("Bob needs a model to use")
+
+      # Check if the model has text-to-text capability
+      if model_id in definitions:
+        model_def = definitions[model_id]
+        capabilities = model_def.get("capabilities", [])
+
+        if ModelCapability.TTT not in capabilities:
+          raise ValueError("Bob only works with text-to-text models")
+      else:
+        raise ValueError(f"Bob doesn't recognize the model: {model_id}")
+
+      # Set or update the system prompt to Bob's prompt
+      original_system_prompt = None
+      if conversation.system_prompt:
+        # Save the original system prompt to restore later
+        original_system_prompt = conversation.system_prompt
+
+      # Set Bob's system prompt
+      conversation.update_system_prompt(BOB_SYSTEM_PROMPT)
+
+      try:
+        # Process the conversation for text-to-text capability
+        processed_messages = process_conversation_for_capability(
+          ModelCapability.TTT,
+          conversation,
+          process.parameters
+        )
+
+        # Run the model with the processed messages
+        result = model_run(model_id, processed_messages, settings=settings, process_type=ModelCapability.TTT)
+
+        if result.is_error():
+          raise ValueError(f"Bob ran into a problem: {result.get_message()}")
+
+        # Complete the process with the result
+        process.mark_completed({
+          "response": result.data,
+          "model": model_id,
+          "source": "bob"
+        })
+
+      finally:
+        # Restore the original system prompt if there was one
+        if original_system_prompt:
+          conversation.update_system_prompt(original_system_prompt)
+
+    except Exception as e:
+      logger.exception(f"Bob encountered an error for {process.id}: {str(e)}")
+      process.mark_failed(str(e))
+
+    return process
+
+  @classmethod
+  def get_capabilities(cls) -> List[str]:
+    """
+    Get a list of Bob's capabilities.
+
+    Returns:
+        A list of capability strings
+    """
+    return ["text"]
+
 
 
 ########################################################################
-#                         IO SPECIFIC AGENTS                           #
+#                            AGENT CLASS                               #
 ########################################################################
-class TextToTextAgent:
+class Agent:
   """
-  Agent that processes text-to-text requests.
+  Agent class that serves as the entry point for processing requests.
 
-  This agent handles conversations where both input and output are text.
+  This class dispatches process requests to the appropriate agent implementation
+  based on the process's agent_type.
   """
+
+  @staticmethod
+  def get_agent_types() -> List[Dict[str, Any]]:
+    """
+    Get a list of all available agent types with descriptions.
+
+    Returns:
+        A list of agent type information dictionaries
+    """
+    agent_types = []
+    for agent_type in AgentType:
+      agent_class = get_agent_for_type(agent_type)
+      agent_types.append({
+        "type": agent_type.value,
+        "name": agent_type.name,
+        "description": agent_class.get_description(),
+        "capabilities": agent_class.get_capabilities()
+      })
+    return agent_types
+
   @staticmethod
   def process(process: Process) -> Process:
     """
-    Process a text-to-text request.
+    Process the given process by dispatching to the appropriate agent implementation.
 
     Args:
-        process: The process to execute
+        process: The process to be executed
 
     Returns:
         The updated process with results or error information
     """
-    try:
-      # Get the conversation and settings from the process
-      conversation = process.conversation
-      settings = process.settings
+    agent_class = get_agent_for_type(process.agent_type)
+    return agent_class.process(process)
 
-      if not conversation:
-        raise ValueError("Conversation is required for TextToTextAgent")
 
-      if not settings:
-        raise ValueError("Settings are required for TextToTextAgent")
 
-      # Get the model ID from settings or process parameters
-      model_id = process.parameters.get("model_id", settings.active_model)
-      if not model_id:
-        raise ValueError("No model specified for text-to-text processing")
-
-      # Run the model with the conversation
-      result = model_run(model_id, conversation, settings=settings)
-
-      if result.is_error():
-        raise ValueError(f"Error running model: {result.get_message()}")
-
-      # Process the response
-      logger.info(f"TextToTextAgent processed request with model {model_id}")
-      process.mark_completed({
-        "response": result.data,
-        "model": model_id,
-        "source": "text-to-text"
-      })
-    except Exception as e:
-      logger.exception(f"Error in TextToTextAgent for {process.id}: {str(e)}")
-      process.mark_failed(str(e))
-
-    return process
-
-class TextToImageAgent:
-  """
-  Agent that processes text-to-image requests.
-
-  This agent handles conversations where the input is text and the output is an image.
-  """
-  @staticmethod
-  def process(process: Process) -> Process:
-    """
-    Process a text-to-image request.
-
-    Args:
-        process: The process to execute
-
-    Returns:
-        The updated process with results or error information
-    """
-    try:
-      # Get the conversation and settings from the process
-      conversation = process.conversation
-      settings = process.settings
-
-      if not conversation:
-        raise ValueError("Conversation is required for TextToImageAgent")
-
-      if not settings:
-        raise ValueError("Settings are required for TextToImageAgent")
-
-      # Get the model ID from settings or process parameters
-      model_id = process.parameters.get("model_id", settings.active_model)
-      if not model_id:
-        raise ValueError("No model specified for text-to-image processing")
-
-      # Get formatted messages from the conversation
-      messages = conversation.get_formatted_messages()
-
-      # Extract the prompt from the last user message
-      prompt = None
-      for message in reversed(messages):
-        if message.get('role') == 'user':
-          prompt = message.get('content', '')
-          break
-
-      # Validate prompt
-      if not prompt or not isinstance(prompt, str):
-        raise ValueError("Text-to-image requires a non-empty prompt")
-
-      # TODO: Implement actual image generation
-      # For now, we'll just return a placeholder response
-      # In the future, this would call a specialized model method for image generation
-
-      # For now, return a placeholder response
-      process.mark_completed({
-        "response": "Text-to-image processing not yet implemented",
-        "model": model_id,
-        "source": "text-to-image"
-      })
-    except Exception as e:
-      logger.exception(f"Error in TextToImageAgent for {process.id}: {str(e)}")
-      process.mark_failed(str(e))
-
-    return process
-
-class TextToAudioAgent:
-  """
-  Agent that processes text-to-audio requests.
-
-  This agent handles conversations where the input is text and the output is audio.
-  """
-  @staticmethod
-  def process(process: Process) -> Process:
-    """
-    Process a text-to-audio request.
-
-    Args:
-        process: The process to execute
-
-    Returns:
-        The updated process with results or error information
-    """
-    try:
-      # Get the conversation and settings from the process
-      conversation = process.conversation
-      settings = process.settings
-
-      if not conversation:
-        raise ValueError("Conversation is required for TextToAudioAgent")
-
-      if not settings:
-        raise ValueError("Settings are required for TextToAudioAgent")
-
-      # Get the model ID from settings or process parameters
-      model_id = process.parameters.get("model_id", settings.active_model)
-      if not model_id:
-        raise ValueError("No model specified for text-to-audio processing")
-
-      # Get formatted messages from the conversation
-      messages = conversation.get_formatted_messages()
-
-      # Extract the text from the last user message
-      text = None
-      for message in reversed(messages):
-        if message.get('role') == 'user':
-          text = message.get('content', '')
-          break
-
-      # Validate text
-      if not text or not isinstance(text, str):
-        raise ValueError("Text-to-audio requires non-empty text")
-
-      # TODO: Implement actual audio generation
-      # For now, we'll just return a placeholder response
-      # In the future, this would call a specialized model method for audio generation
-
-      # For now, return a placeholder response
-      process.mark_completed({
-        "response": "Text-to-audio processing not yet implemented",
-        "model": model_id,
-        "source": "text-to-audio"
-      })
-    except Exception as e:
-      logger.exception(f"Error in TextToAudioAgent for {process.id}: {str(e)}")
-      process.mark_failed(str(e))
-
-    return process
-
-class ImageToTextAgent:
-  """
-  Agent that processes image-to-text requests.
-
-  This agent handles conversations where the input is an image and the output is text.
-  """
-  @staticmethod
-  def process(process: Process) -> Process:
-    """
-    Process an image-to-text request.
-
-    Args:
-        process: The process to execute
-
-    Returns:
-        The updated process with results or error information
-    """
-    try:
-      # Get the conversation and settings from the process
-      conversation = process.conversation
-      settings = process.settings
-
-      if not conversation:
-        raise ValueError("Conversation is required for ImageToTextAgent")
-
-      if not settings:
-        raise ValueError("Settings are required for ImageToTextAgent")
-
-      # Get the model ID from settings or process parameters
-      model_id = process.parameters.get("model_id", settings.active_model)
-      if not model_id:
-        raise ValueError("No model specified for image-to-text processing")
-
-      # Get formatted messages from the conversation
-      messages = conversation.get_formatted_messages()
-
-      # Find image data in the conversation
-      # This would typically be in the metadata or attached files
-      image_data = None
-      prompt = None
-
-      # Extract prompt from the last user message
-      for message in reversed(messages):
-        if message.get('role') == 'user':
-          prompt = message.get('content', '')
-          break
-
-      # In a real implementation, we would extract image data from the conversation
-      # For now, we'll just return an error
-      if not image_data:
-        raise ValueError("Image-to-text requires image data")
-
-      # TODO: Implement actual image-to-text processing
-      # For now, we'll just return a placeholder response
-      # In the future, this would call a specialized model method for image analysis
-
-      # For now, return a placeholder response
-      process.mark_completed({
-        "response": "Image-to-text processing not yet implemented",
-        "model": model_id,
-        "source": "image-to-text"
-      })
-    except Exception as e:
-      logger.exception(f"Error in ImageToTextAgent for {process.id}: {str(e)}")
-      process.mark_failed(str(e))
-
-    return process
+########################################################################
+#                        REGISTER DEFAULT AGENTS                       #
+########################################################################
+# Register the default agent implementations
+register_agent(AgentType.SIMPLE, SimpleAgent)
+register_agent(AgentType.BOB, BobAgent)
 
 
 

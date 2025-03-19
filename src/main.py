@@ -251,30 +251,18 @@ def process_user_input(user_input: str, settings: Settings, process_queue: Proce
     # Create a conversation with the user's input
     conversation = create_conversation(settings, user_input)
 
-    # Determine the appropriate agent type based on the model's capability
-    agent_type = AgentType.TEXT_TO_TEXT  # Default to text-to-text
+    # Get the agent type from settings
+    agent_type_value = settings.active_agent
+    agent_type = AgentType.SIMPLE  # Default to simple agent
 
-    # Get the model's capability if an active model is set
-    if settings.active_model:
-      if settings.active_model in definitions:
-        model_def = definitions[settings.active_model]
-        if "capabilities" in model_def and model_def["capabilities"]:
-          capability = model_def["capabilities"][0]  # Use the first capability
+    # Convert string to enum if needed
+    if isinstance(agent_type_value, str):
+      for a_type in AgentType:
+        if a_type.value == agent_type_value:
+          agent_type = a_type
+          break
 
-          # Map capability to agent type
-          if capability == ModelCapability.TTT:
-            agent_type = AgentType.TEXT_TO_TEXT
-          elif capability == ModelCapability.TTI:
-            agent_type = AgentType.TEXT_TO_IMAGE
-          elif capability == ModelCapability.TTS:
-            agent_type = AgentType.TEXT_TO_AUDIO
-          elif capability == ModelCapability.ITT:
-            agent_type = AgentType.IMAGE_TO_TEXT
-          elif capability == ModelCapability.TTA:
-            agent_type = AgentType.TEXT_TO_AUDIO
-          elif capability == ModelCapability.STT:
-            # Speech-to-text not yet implemented as an agent type
-            agent_type = AgentType.TEXT_TO_TEXT
+    logger.debug(f"Using agent type: {agent_type.value}")
 
     # Create a process with all necessary information
     logger.debug(f"Creating process for query with agent type: {agent_type.value}")
@@ -376,8 +364,9 @@ def main() -> None:
     # Load function definitions into settings
     load_function_definitions(settings)
 
-    # Log active model and prompt information
+    # Log active model, agent, and prompt information
     logger.debug(f"Active model: {settings.active_model}")
+    logger.debug(f"Active agent: {settings.active_agent}")
     logger.debug(f"Active prompt: {settings.active_prompt.name if settings.active_prompt else 'None'}")
 
     logger.info("CLAIA initialization complete, entering main loop")
