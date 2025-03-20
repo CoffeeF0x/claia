@@ -1,5 +1,5 @@
-# External dependencies
-from enum import Enum
+# Internal dependencies
+from enums import ModelCapability, IOType
 
 
 
@@ -13,31 +13,6 @@ DEFAULT_SETTINGS = {
   "top_p": 0.7,
   "temperature": 0.7
 }
-
-
-
-########################################################################
-#                                ENUMS                                 #
-########################################################################
-class ModelCapability(Enum):
-  """Capabilities of a model."""
-  DEFAULT = "default"  # Default/fallback capability
-  TTT = "text-to-text"
-  TTI = "text-to-image"
-  ITT = "image-to-text"
-  TTS = "text-to-speech"
-  STT = "speech-to-text"
-  TTA = "text-to-audio"
-  TAA = "text-and-audio"
-  TAI = "text-and-image"
-  # LLM = "large-language-model"
-  # SLM = "small-language-model"
-
-class IOType(Enum):
-  """Input/output types of a model."""
-  TEXT  = ["txt"]
-  IMAGE = ["png", "jpg"]
-  AUDIO = ["mp3", "wav"]
 
 
 

@@ -8,8 +8,9 @@ import logging
 # Internal dependencies
 from commands.base import Command, command
 from errors import Result
-from agents import Agent, AgentType
 from settings import Settings
+from agents import Agent
+from enums import AgentType
 
 
 

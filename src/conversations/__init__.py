@@ -10,7 +10,6 @@ import uuid
 import json
 import logging
 from typing import Dict, List, Any, Optional, Union
-from enum import Enum
 from dataclasses import dataclass, field
 
 # Internal dependencies
@@ -18,6 +17,7 @@ from conversations.base import BaseFile
 from conversations.files import FileFactory, TextFile, ImageFile, AudioFile, VideoFile, DocumentFile, GenericFile
 from conversations.config import Config
 from conversations.prompts import Prompt
+from enums import MessageRole
 
 
 
@@ -39,18 +39,6 @@ Answer the user's questions to the best of your ability."""
 ########################################################################
 #                           MESSAGE CLASSES                            #
 ########################################################################
-class MessageRole(Enum):
-  """Roles for conversation messages."""
-  SYSTEM = "system"
-  USER = "user"
-  ASSISTANT = "assistant"
-  TOOL = "tool"
-  TOOL_CALL = "tool-call"
-  FILE = "file"
-  IMAGE = "image"
-  AUDIO = "audio"
-
-
 @dataclass
 class Message:
   """

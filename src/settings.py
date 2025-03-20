@@ -14,9 +14,10 @@ from typing import Dict, Any, List, Tuple, Optional
 import logging
 
 # Internal dependencies
-from conversations import Conversation, MessageRole
+from conversations import Conversation
 from conversations.prompts import Prompt
 from conversations.base import BaseFile
+from enums import MessageRole
 
 
 

@@ -5,7 +5,6 @@ Agents process requests and manage the conversation flow.
 
 # External dependencies
 import logging, uuid, time, queue, threading, os
-from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Any, Callable, Type
 
@@ -14,6 +13,7 @@ from models import run as model_run, ModelCapability
 from models.definitions import definitions
 from errors import Result
 from conversations import MessageRole
+from enums import ProcessStatus, AgentType, SourcePreference
 
 
 
@@ -35,31 +35,6 @@ Bob doesn't use flowery language.
 Bob is direct and sometimes sarcastic.
 Bob always tries to be helpful despite his gruff demeanor.
 """
-
-
-
-########################################################################
-#                                ENUMS                                 #
-########################################################################
-class ProcessStatus(Enum):
-  """Status of a process."""
-  PENDING = "pending"
-  PROCESSING = "processing"
-  COMPLETED = "completed"
-  FAILED = "failed"
-  CANCELLED = "cancelled"
-
-class AgentType(Enum):
-  """Types of agents that can handle processes."""
-  SIMPLE = "simple"  # Simple agent that directly calls a model
-  BOB = "bob"  # Bob agent that uses a specific system prompt
-
-class SourcePreference(Enum):
-  """Enum for source preferences when deploying models."""
-  ANY = "any"  # Use any available source
-  API = "api"  # Prefer API sources
-  LOCAL = "local"  # Prefer local deployment
-  REMOTE = "remote"  # Prefer remote deployment
 
 
 

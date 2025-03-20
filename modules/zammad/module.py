@@ -20,7 +20,8 @@ from functools import wraps
 from commands.base import Command, command
 from errors import Result
 from settings import Settings
-from conversations import Conversation, MessageRole
+from conversations import Conversation
+from enums import MessageRole
 
 # Try to import AIA, but make it optional
 try:

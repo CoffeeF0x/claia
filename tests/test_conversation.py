@@ -13,9 +13,9 @@ from typing import Optional
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
 # Internal dependencies
-from conversations import Conversation, MessageRole
+from conversations import Conversation
 from conversations.files import FileFactory, TextFile, ImageFile
-
+from enums import MessageRole
 
 
 ########################################################################

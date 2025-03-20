@@ -9,10 +9,11 @@ from typing import Any, List, Dict, Optional, Tuple
 
 # Internal dependencies
 from models.base import APIModel, LocalModel
-from models.definitions import definitions, ModelCapability
+from models.definitions import definitions
 from models.sources import sources, transformers_models
 from settings import Settings
 from errors import Result
+from enums import ModelCapability
 
 
 

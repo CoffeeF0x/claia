@@ -30,9 +30,9 @@ from errors import Result
 from settings import Settings
 from utilities import *
 from tools import process_function_calls
-from agents import ProcessQueue, Process, Agent, AgentType, SourcePreference, ProcessStatus
-from conversations import Conversation, MessageRole
-from models.definitions import definitions, ModelCapability
+from agents import ProcessQueue, Process, Agent
+from enums import MessageRole, AgentType, SourcePreference, ProcessStatus, ModelCapability
+from conversations import Conversation
 
 
 
