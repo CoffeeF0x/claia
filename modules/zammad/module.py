@@ -255,6 +255,7 @@ def require_zammad_config(func: Callable[..., T]) -> Callable[..., T]:
 class ZammadAPI:
   """Class for interacting with the Zammad API."""
   def __init__(self, base_url: str, api_token: str) -> None:
+    logger.debug("Initializing ZammadAPI with base_url: %s", base_url)
     self.base_url = base_url
     self.api_token = api_token
     self.headers = {
@@ -262,42 +263,53 @@ class ZammadAPI:
       "Content-Type": "application/json"
     }
     self.session = AIASession()
+    logger.debug("ZammadAPI initialization complete")
 
   def _make_request(self, method: str, endpoint: str, data=None):
     """Make a request to the Zammad API with proper certificate handling."""
     url = f"{self.base_url}{endpoint}"
+    logger.debug("Making %s request to endpoint: %s", method, endpoint)
     cadata = self.session.cadata_from_url(url)
 
     with NamedTemporaryFile("w") as pem_file:
       pem_file.write(cadata)
       pem_file.flush()
+      logger.debug("Created temporary PEM file for certificate")
 
       try:
         if method.lower() == 'get':
+          logger.debug("Sending GET request")
           response = requests.get(url, headers=self.headers, verify=pem_file.name)
         elif method.lower() == 'post':
+          logger.debug("Sending POST request with data: %s", data)
           response = requests.post(url, headers=self.headers, json=data, verify=pem_file.name)
         elif method.lower() == 'delete':
+          logger.debug("Sending DELETE request with data: %s", data)
           response = requests.delete(url, headers=self.headers, json=data, verify=pem_file.name)
         else:
+          logger.error("Unsupported HTTP method: %s", method)
           raise ValueError(f"Unsupported HTTP method: {method}")
 
         response.raise_for_status()
+        logger.debug("Request successful with status code: %d", response.status_code)
         return response.json() if response.content else None
       except Exception as e:
-        print(f"API request error ({method} {endpoint}): {str(e)}")
+        logger.error("API request error (%s %s): %s", method, endpoint, str(e))
         raise
 
   def get(self, endpoint: str):
     """Make a GET request to the Zammad API."""
+    logger.debug("Making GET request to endpoint: %s", endpoint)
     return self._make_request('get', endpoint)
 
   def post(self, endpoint: str, data: dict):
     """Make a POST request to the Zammad API."""
+    logger.debug("Making POST request to endpoint: %s with data: %s", endpoint, data)
     return self._make_request('post', endpoint, data)
 
   def delete(self, endpoint: str, data: dict):
     """Make a DELETE request to the Zammad API."""
+    logger.debug("Making DELETE request to endpoint: %s with data: %s", endpoint, data)
     return self._make_request('delete', endpoint, data)
 
   def add_tag(self, ticket_id: int, tag: str) -> bool:
@@ -311,6 +323,7 @@ class ZammadAPI:
     Returns:
       bool: True if successful, False otherwise
     """
+    logger.debug("Adding tag '%s' to ticket %d", tag, ticket_id)
     data = {
       "item": tag,
       "object": "Ticket",
@@ -319,10 +332,10 @@ class ZammadAPI:
 
     try:
       self.post("tags/add", data)
-      print(f"Successfully added tag '{tag}' to ticket {ticket_id}")
+      logger.info("Successfully added tag '%s' to ticket %d", tag, ticket_id)
       return True
     except Exception as e:
-      print(f"Error adding tag '{tag}' to ticket {ticket_id}: {str(e)}")
+      logger.error("Error adding tag '%s' to ticket %d: %s", tag, ticket_id, str(e))
       return False
 
   def list_tickets(self, query_name: str = "open-tickets", limit: int = 100, full_response: bool = True):
@@ -337,9 +350,11 @@ class ZammadAPI:
     Returns:
       List of ticket IDs or None if an error occurred
     """
+    logger.debug("Listing tickets with query: %s, limit: %d, full_response: %s", query_name, limit, full_response)
     # Get the query string from predefined queries or use the input as a custom query
     query = TICKET_QUERIES.get(query_name, query_name)
     encoded_query = urllib.parse.quote(query)
+    logger.debug("Using encoded query: %s", encoded_query)
 
     try:
       # Get the first page of results
@@ -347,23 +362,25 @@ class ZammadAPI:
       response = self.get(f"tickets/search?query={encoded_query}&page={page}&per_page={limit}&sort_by=updated_at&order_by=asc")
       tickets = response["tickets"]
       ticket_count = response["tickets_count"]
-      print(f"tickets: {ticket_count}")
+      logger.debug("Initial page retrieved with %d tickets", ticket_count)
 
       # If full_response is True, fetch all pages
       while full_response and response["tickets_count"] > 0:
-        print(f"total tickets: {ticket_count}")
+        logger.debug("Fetching page %d, total tickets so far: %d", page + 1, ticket_count)
         page += 1
         response = self.get(f"tickets/search?query={encoded_query}&page={page}&per_page={limit}&sort_by=updated_at&order_by=asc")
         tickets.extend(response["tickets"])
         ticket_count += response["tickets_count"]
 
+      logger.info("Retrieved total of %d tickets", len(tickets))
       return tickets
     except Exception as e:
-      print(f"Error listing tickets: {str(e)}")
+      logger.error("Error listing tickets: %s", str(e))
       return None
 
   def _clean_html_content(self, text: str) -> str:
     """Clean HTML content from ticket articles."""
+    logger.debug("Cleaning HTML content of length: %d", len(text) if text else 0)
     if not text:
       return ""
 
@@ -373,11 +390,13 @@ class ZammadAPI:
 
     # Remove extra whitespace and normalize newlines
     clean_text = re.sub(r'\n\s*\n', '\n\n', clean_text.strip())
+    logger.debug("Cleaned text length: %d", len(clean_text))
 
     return clean_text
 
   def _extract_unique_content(self, articles: List[dict]) -> List[dict]:
     """Extract unique content from ticket articles to avoid duplication."""
+    logger.debug("Extracting unique content from %d articles", len(articles))
     seen_content = set()
     unique_articles = []
 
@@ -388,6 +407,7 @@ class ZammadAPI:
       # Split into paragraphs and process each
       paragraphs = clean_body.split('\n\n')
       unique_paragraphs = []
+      logger.debug("Processing %d paragraphs from article %s", len(paragraphs), article.get('id', 'unknown'))
 
       for para in paragraphs:
         # Normalize the paragraph to help with matching
@@ -403,6 +423,7 @@ class ZammadAPI:
         new_article['body'] = '\n\n'.join(unique_paragraphs)
         unique_articles.append(new_article)
 
+    logger.debug("Extracted %d unique articles from %d original articles", len(unique_articles), len(articles))
     return unique_articles
 
   def get_ticket_details(self, ticket_id: str) -> str:
@@ -415,13 +436,16 @@ class ZammadAPI:
     Returns:
       str: Formatted ticket details
     """
+    logger.debug("Getting details for ticket ID: %s", ticket_id)
     try:
       # Get ticket and article data
       ticket = self.get(f"tickets/{ticket_id}")
       articles = self.get(f"ticket_articles/by_ticket/{ticket_id}")
+      logger.debug("Retrieved ticket data and %d articles", len(articles))
 
       # Process articles to remove duplicates
       unique_articles = self._extract_unique_content(articles)
+      logger.debug("Processed %d unique articles", len(unique_articles))
 
       # Format the response
       response = []
@@ -447,8 +471,10 @@ class ZammadAPI:
         response.append(f"Body:\n{article['body']}")
         response.append("-" * 50)
 
+      logger.debug("Successfully formatted ticket details")
       return "\n".join(response)
     except Exception as e:
+      logger.error("Error getting ticket details: %s", str(e))
       return f"Error getting ticket details: {str(e)}"
 
   def list_tags(self, ticket_id: int) -> list:
@@ -461,11 +487,14 @@ class ZammadAPI:
     Returns:
       list: List of tags
     """
+    logger.debug("Listing tags for ticket ID: %d", ticket_id)
     try:
       response = self.get(f"tags?object=Ticket&o_id={ticket_id}")
-      return response.get("tags", [])
+      tags = response.get("tags", [])
+      logger.debug("Retrieved %d tags for ticket %d", len(tags), ticket_id)
+      return tags
     except Exception as e:
-      print(f"Error listing tags for ticket {ticket_id}: {str(e)}")
+      logger.error("Error listing tags for ticket %d: %s", ticket_id, str(e))
       return []
 
   def remove_tag(self, ticket_id: int, tag: str) -> bool:
@@ -479,6 +508,7 @@ class ZammadAPI:
     Returns:
       bool: True if successful, False otherwise
     """
+    logger.debug("Removing tag '%s' from ticket %d", tag, ticket_id)
     data = {
       "item": tag,
       "object": "Ticket",
@@ -487,10 +517,10 @@ class ZammadAPI:
 
     try:
       self.delete("tags/remove", data)
-      print(f"Successfully removed tag '{tag}' from ticket {ticket_id}")
+      logger.info("Successfully removed tag '%s' from ticket %d", tag, ticket_id)
       return True
     except Exception as e:
-      print(f"Error removing tag '{tag}' from ticket {ticket_id}: {str(e)}")
+      logger.error("Error removing tag '%s' from ticket %d: %s", tag, ticket_id, str(e))
       return False
 
 
@@ -534,13 +564,16 @@ class ModuleCommands(Command):
     Returns:
       str: List of tickets
     """
+    logger.debug("Listing tickets with query: %s", query)
     # Get tickets
     tickets = zammad.list_tickets(query)
 
     # Format the response
     if not tickets:
+      logger.info("No tickets found for query: %s", query)
       return "No tickets found."
 
+    logger.info("Found %d tickets for query: %s", len(tickets), query)
     response = f"Found {len(tickets)} tickets:\n\n"
     for ticket_id in tickets:
       response += f"- Ticket ID: {ticket_id}\n"
@@ -580,6 +613,7 @@ class ModuleCommands(Command):
     Returns:
       str: Ticket details
     """
+    logger.debug("Getting details for ticket ID: %s", ticket_id)
     return zammad.get_ticket_details(ticket_id)
 
   @command(
@@ -620,11 +654,14 @@ class ModuleCommands(Command):
     Returns:
       str: Result message
     """
+    logger.debug("Adding tag '%s' to ticket %s", tag, ticket_id)
     result = zammad.add_tag(ticket_id, tag)
 
     if result:
+      logger.info("Successfully added tag '%s' to ticket %s", tag, ticket_id)
       return f"Successfully added tag '{tag}' to ticket {ticket_id}."
     else:
+      logger.error("Failed to add tag '%s' to ticket %s", tag, ticket_id)
       return f"Failed to add tag '{tag}' to ticket {ticket_id}."
 
   @command(
@@ -665,11 +702,14 @@ class ModuleCommands(Command):
     Returns:
       str: Result message
     """
+    logger.debug("Removing tag '%s' from ticket %s", tag, ticket_id)
     result = zammad.remove_tag(ticket_id, tag)
 
     if result:
+      logger.info("Successfully removed tag '%s' from ticket %s", tag, ticket_id)
       return f"Successfully removed tag '{tag}' from ticket {ticket_id}."
     else:
+      logger.error("Failed to remove tag '%s' from ticket %s", tag, ticket_id)
       return f"Failed to remove tag '{tag}' from ticket {ticket_id}."
 
   @command(
@@ -698,8 +738,10 @@ class ModuleCommands(Command):
     Returns:
       str: Processing result
     """
+    logger.debug("Starting ticket processing command")
     # Process tickets
     result = zammad_run_process(settings, zammad)
+    logger.info("Ticket processing completed")
     return "Ticket processing completed."
 
   @command(
@@ -728,24 +770,30 @@ class ModuleCommands(Command):
     Returns:
       str: Untagging result
     """
+    logger.debug("Starting untag process for all tagged tickets")
     # Get tagged tickets
     tickets = zammad.list_tickets("tagged-tickets")
 
     if not tickets:
+      logger.info("No tagged tickets found")
       return "No tagged tickets found"
 
     removed_count = 0
+    logger.debug("Found %d tagged tickets to process", len(tickets))
 
     # Remove AI tags from each ticket
     for ticket_id in tickets:
+      logger.debug("Processing ticket %s", ticket_id)
       tags = zammad.list_tags(ticket_id)
       ai_tags = [tag for tag in tags if tag.startswith("AI-")]
+      logger.debug("Found %d AI tags for ticket %s", len(ai_tags), ticket_id)
 
       if ai_tags:
         for tag in ai_tags:
           if zammad.remove_tag(ticket_id, tag):
             removed_count += 1
 
+    logger.info("Removed %d AI tags from %d tickets", removed_count, len(tickets))
     return f"Completed! Removed {removed_count} AI tags from {len(tickets)} tickets"
 
   @command(
@@ -969,7 +1017,9 @@ def extract_tag_from_response(response: str) -> Tuple[str, bool]:
   Returns:
     Tuple containing the extracted tag and a success flag
   """
+  logger.debug("Extracting tag from response of length: %d", len(response) if response else 0)
   if not response:
+    logger.debug("Empty response received")
     return "Blank", False
 
   # Remove any escape characters
@@ -981,16 +1031,20 @@ def extract_tag_from_response(response: str) -> Tuple[str, bool]:
       start = cleaned_response.index("[TAG]") + len("[TAG]")
       end = cleaned_response.index("[/TAG]")
       tag = cleaned_response[start:end].strip()
+      logger.debug("Found tag: %s", tag)
 
       # Validate tag is in our list
       if tag in TAG_LIST:
+        logger.debug("Tag '%s' is valid", tag)
         return tag, True
       else:
+        logger.warning("Tag '%s' not in valid tag list", tag)
         return "Unknown", False
     else:
+      logger.debug("No tag markers found in response")
       return "Blank", False
   except Exception as e:
-    print(f"Error extracting tag: {e}")
+    logger.error("Error extracting tag: %s", str(e))
     return "Error", False
 
 def zammad_run_process(settings: Settings, zammad: ZammadAPI) -> Result:
@@ -1004,17 +1058,21 @@ def zammad_run_process(settings: Settings, zammad: ZammadAPI) -> Result:
   Returns:
     Result object
   """
+  logger.debug("Starting Zammad ticket processing")
   # Import here to avoid circular imports
   from models import run as model_run
 
   result = Result()
   tickets = zammad.list_tickets("untagged-tickets")
+  logger.info("Found %d untagged tickets", len(tickets))
 
   # For testing, limit to a subset of tickets
   temp_tickets = tickets[11:] if len(tickets) > 11 else tickets
+  logger.debug("Processing subset of %d tickets", len(temp_tickets))
 
   processed_count = 0
   for ticket_id in temp_tickets:
+    logger.debug("Processing ticket ID: %s", ticket_id)
     # Get ticket details
     ticket_details = zammad.get_ticket_details(ticket_id)
 
@@ -1024,32 +1082,34 @@ def zammad_run_process(settings: Settings, zammad: ZammadAPI) -> Result:
       {"role": "user", "content": ticket_details}
     ]
 
-    print("-" * 50)
-    print(f"Processing ticket ID: {ticket_id}")
-
+    logger.debug("Running AI model for ticket %s", ticket_id)
     # Run the AI model to get tag
     tagging_result = model_run(settings.active_model, tagging_messages, settings=settings)
 
     if tagging_result.is_error():
-      print(f"Error running tagging model: {tagging_result.get_message()}")
+      logger.error("Error running tagging model for ticket %s: %s", ticket_id, tagging_result.get_message())
       continue
 
-    print(f"Tagging Result:\n{tagging_result.data}")
-    print("-" * 50)
+    logger.debug("AI model response for ticket %s: %s", ticket_id, tagging_result.data)
 
     # Extract and apply tag
     if tagging_result.data:
       tag, success = extract_tag_from_response(tagging_result.data)
+      logger.debug("Extracted tag '%s' with success: %s", tag, success)
 
       # Add the appropriate tag
       if success:
+        logger.debug("Adding AI tag '%s' to ticket %s", tag, ticket_id)
         zammad.add_tag(ticket_id, f"AI-{tag}")
       else:
+        logger.warning("Adding fallback tag '%s' to ticket %s", tag, ticket_id)
         zammad.add_tag(ticket_id, f"AI-{tag}")
 
       # Mark as processed
+      logger.debug("Marking ticket %s as processed", ticket_id)
       zammad.add_tag(ticket_id, "AI-Tagged")
       processed_count += 1
 
+  logger.info("Completed processing %d tickets", processed_count)
   result.data = f"Processed {processed_count} tickets"
   return result
