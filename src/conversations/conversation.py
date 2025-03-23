@@ -13,9 +13,9 @@ from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass, field
 
 # Internal dependencies
-from conversations.base import BaseFile
-from conversations.files import FileFactory, TextFile, ImageFile, AudioFile, VideoFile, DocumentFile, GenericFile
-from enums import MessageRole, ActionType
+from .base import BaseFile
+from .files import FileFactory, TextFile, ImageFile, AudioFile, VideoFile, DocumentFile, GenericFile
+from ..enums import MessageRole, ActionType
 
 
 

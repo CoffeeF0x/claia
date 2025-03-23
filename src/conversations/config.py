@@ -11,7 +11,7 @@ import time
 from typing import Dict, Any, Optional, List, Type, TypeVar, Generic
 
 # Internal dependencies
-from conversations.base import BaseFile
+from .base import BaseFile
 
 
 

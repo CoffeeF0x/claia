@@ -11,7 +11,7 @@ import logging
 from typing import Dict, Optional, List, Any, Type, TypeVar
 
 # Internal dependencies
-from conversations.config import Config
+from .config import Config
 
 
 

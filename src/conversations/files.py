@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional, List, BinaryIO, Type, TypeVar
 from abc import ABC, abstractmethod
 
 # Internal dependencies
-from conversations.base import BaseFile
+from .base import BaseFile
 
 
 

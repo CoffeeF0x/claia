@@ -27,13 +27,13 @@ import types
 from typing import Dict, Any, List, Tuple, Set, Union, Callable, Optional
 
 # Internal dependencies
-from commands.prompts       import PromptCommand
-from commands.conversations import ConversationCommand
-from commands.models        import ModelCommand
-from commands.system        import SystemCommand
-from commands.tools         import ToolsCommand
-from commands.massedcompute import MassedComputeCommand
-from commands.agents        import AgentCommand
+from .prompts       import PromptCommand
+from .conversations import ConversationCommand
+from .models        import ModelCommand
+from .system        import SystemCommand
+from .tools         import ToolsCommand
+from .massedcompute import MassedComputeCommand
+from .agents        import AgentCommand
 from errors import Result
 from settings import Settings
 

@@ -1,13 +1,13 @@
-from conversations.conversation import Message, Conversation
-from conversations.base import BaseFile
-from conversations.config import Config
-from conversations.files import *
-from conversations.prompts import Prompt
+from .conversation import Message, Conversation
+from .base         import BaseFile
+from .config       import Config
+from .files        import *
+from .prompts      import Prompt
 
-__all__ = [
-  'Message',
-  'Conversation',
-  'BaseFile',
-  'Config',
-  'Prompt'
-]
+# __all__ = [
+#   'Message',
+#   'Conversation',
+#   'BaseFile',
+#   'Config',
+#   'Prompt'
+# ]
