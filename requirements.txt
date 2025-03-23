@@ -16,3 +16,6 @@ beautifulsoup4
 pyinstaller
 
 runpod
+
+pytest
+pytest-mock

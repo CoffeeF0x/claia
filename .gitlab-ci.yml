@@ -5,8 +5,10 @@ variables:
   ARTIFACT_PATH: "dist"
   B2_PATH: "" # path inside the bucket to upload to, leave empty for root bucket path
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+  PYTHONPATH: "$CI_PROJECT_DIR"
 
 stages:
+  - test
   - build_and_upload
 
 .setup_dependencies:
@@ -70,6 +72,20 @@ stages:
     key: ${CI_COMMIT_REF_SLUG}
     paths:
       - .pip-cache/
+
+test:
+  <<: *common_job_config
+  stage: test
+  before_script:
+    - pip install -r requirements.txt
+  script:
+    - pytest -v --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+    expire_in: 1 week
+  coverage: '/(?i)total.*? (100(?:\.0+)?|[1-9]?\d(?:\.\d+)?)%/'
 
 main_build_and_upload:
   <<: *common_job_config
