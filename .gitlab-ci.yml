@@ -76,9 +76,8 @@ stages:
 test:
   <<: *common_job_config
   stage: test
-  before_script:
-    - pip install -r requirements.txt
   script:
+    - pip install -r requirements.txt
     - pytest -v --junitxml=report.xml
   artifacts:
     when: always
