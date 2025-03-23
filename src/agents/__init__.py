@@ -12,8 +12,7 @@ from typing import Optional, Dict, List, Any, Callable, Type
 from models import run as model_run, ModelCapability
 from models.definitions import definitions
 from errors import Result
-from conversations import MessageRole
-from enums import ProcessStatus, AgentType, SourcePreference
+from enums import ProcessStatus, AgentType, SourcePreference, MessageRole
 
 
 
