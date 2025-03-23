@@ -10,8 +10,8 @@ import uuid
 import time
 import mimetypes
 import logging
+import shutil
 from typing import Dict, List, Any, Optional, Type, TypeVar, Generic, Union
-from enum import Enum
 
 
 
@@ -74,38 +74,36 @@ class BaseFile:
   """
 
   def __init__(self,
-               file_path: str,
                base_directory: str,
-               file_id: Optional[str] = None,
                file_name: Optional[str] = None,
-               mime_type: Optional[str] = None,
-               timestamp: Optional[float] = None,
-               metadata: Optional[Dict[str, Any]] = None):
+               mime_type: Optional[str] = None):
     """
     Initialize a BaseFile object.
 
     Args:
-        file_path: The path to the file
-        base_directory: The base directory for file operations
-        file_id: Optional unique identifier for the file
-        file_name: Optional name for the file
-        mime_type: Optional MIME type for the file
-        timestamp: Optional timestamp for the file
-        metadata: Optional metadata for the file
+        base_directory: The base directory for file
+        file_name: Optional, specify the name for the file
+        mime_type: Optional, specify MIME type for the file
     """
     self.base_directory = base_directory
-    self.file_id = file_id or str(uuid.uuid4())
-    self.file_path = file_path
-    self.file_name = file_name or os.path.basename(file_path)
-    self.mime_type = mime_type or mimetypes.guess_type(file_path)[0] or "application/octet-stream"
-    self.timestamp = timestamp or time.time()
-    self.metadata = metadata or {}
+    self.file_id = str(uuid.uuid4())
+    self.file_name = file_name or self.file_id
+    self.file_path = os.path.join(self.base_directory, self.file_name)
+    self.mime_type = mime_type or mimetypes.guess_type(self.file_path)[0] or "application/octet-stream"
+    self.timestamp = time.time()
+    self.metadata = {}
+
+    logger.debug(f"Initializing new file ({self.file_id})")
+    logger.debug(f"base directory ({self.file_id}): {self.base_directory}")
+    logger.debug(f"file name ({self.file_id}): {self.file_name}")
+    logger.debug(f"file path ({self.file_id}): {self.file_path}")
+    logger.debug(f"mime type ({self.file_id}): {self.mime_type}")
 
     # Validate that the file exists
-    if not os.path.exists(file_path) and os.path.exists(self.get_full_path()):
+    if not os.path.exists(self.file_path) and os.path.exists(self.get_full_path()):
       self.file_path = self.get_full_path()
-    elif not os.path.exists(file_path):
-      logger.warning(f"File {file_path} does not exist")
+    elif not os.path.exists(self.file_path):
+      logger.warning(f"File {self.file_path} does not exist")
 
   def get_file_type(self) -> str:
     """
@@ -130,16 +128,26 @@ class BaseFile:
 
   def ensure_directory_exists(self) -> bool:
     """
-    Ensure that the base directory exists.
+    Ensure that the base directory and subdirectory exist.
 
     Returns:
-        bool: True if the directory exists or was created, False otherwise
+        bool: True if the directories exist or were created, False otherwise
     """
     try:
-      os.makedirs(self.base_directory, exist_ok=True)
+      # Create base directory if it doesn't exist
+      if not os.path.exists(self.base_directory):
+        logger.debug(f"Base directory doesn't exist, creating directory (file: {self.file_id})")
+        os.makedirs(self.base_directory, exist_ok=True)
+
+      # Create subdirectory if it doesn't exist
+      subdir_path = os.path.join(self.base_directory, self.get_subdirectory())
+      if not os.path.exists(subdir_path):
+        logger.debug(f"Subdirectory doesn't exist, creating directory (file: {self.file_id})")
+        os.makedirs(subdir_path, exist_ok=True)
+
       return True
     except Exception as e:
-      logger.error(f"Failed to create directory {self.base_directory}: {e}")
+      logger.error(f"Failed to create directories {self.base_directory}: {e}")
       return False
 
   def get_full_path(self) -> str:
@@ -190,12 +198,11 @@ class BaseFile:
         return False
 
       # Ensure the target directory exists
-      target_dir = os.path.join(self.base_directory, self.get_subdirectory())
-      os.makedirs(target_dir, exist_ok=True)
+      if not self.ensure_directory_exists():
+        return False
 
       # Copy the file to the target directory with the file_id as the filename
       target_path = self.get_full_path()
-      import shutil
       shutil.copy2(self.file_path, target_path)
 
       # Update the file path to the new location
@@ -300,8 +307,8 @@ class BaseFile:
       subdirectory = self.get_subdirectory()
 
       # Ensure the target directory exists
-      target_dir = os.path.join(self.base_directory, subdirectory)
-      os.makedirs(target_dir, exist_ok=True)
+      if not self.ensure_directory_exists():
+        return None
 
       # Load the current manifest
       manifest = self._load_manifest(self.base_directory, subdirectory)
@@ -325,10 +332,16 @@ class BaseFile:
     Returns:
         Optional[str]: The full path to the saved file, or None if saving failed
     """
+    # Ensure the directory exists before saving
+    if not self.ensure_directory_exists():
+      return None
+
     if not self.copy_to_storage():
+      logger.debug(f"Failed to save file {self.file_id}")
       return None
 
     if not self.save_metadata():
+      logger.debug(f"Failed to save metadata for file {self.file_id}")
       return None
 
     return self.get_full_path()
@@ -382,8 +395,12 @@ class BaseFile:
           file_path = os.path.join(base_directory, subdir, file_id)
 
           # Delete the file if it exists
-          if os.path.exists(file_path):
-            os.remove(file_path)
+          try:
+            if os.path.exists(file_path):
+              os.remove(file_path)
+          except Exception as e:
+            logger.error(f"Failed to delete file {file_path}: {e}")
+            return False
 
           # Remove the file from the manifest
           del manifest[file_id]
@@ -479,40 +496,3 @@ class BaseFile:
     except Exception as e:
       logger.error(f"Failed to list files: {e}")
       return []
-
-  @staticmethod
-  def ensure_directory(directory: str) -> bool:
-    """
-    Static method to ensure a directory exists.
-
-    Args:
-        directory: The directory to ensure exists
-
-    Returns:
-        bool: True if the directory exists or was created, False otherwise
-    """
-    try:
-      os.makedirs(directory, exist_ok=True)
-      return True
-    except Exception as e:
-      logger.error(f"Failed to create directory {directory}: {e}")
-      return False
-
-  @staticmethod
-  def safe_delete_file(filepath: str) -> bool:
-    """
-    Safely delete a file if it exists.
-
-    Args:
-        filepath: The path to the file to delete
-
-    Returns:
-        bool: True if the file was deleted or didn't exist, False if deletion failed
-    """
-    try:
-      if os.path.exists(filepath):
-        os.remove(filepath)
-      return True
-    except Exception as e:
-      logger.error(f"Failed to delete file {filepath}: {e}")
-      return False
