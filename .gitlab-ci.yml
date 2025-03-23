@@ -13,7 +13,7 @@ stages:
 
 .setup_dependencies:
   before_script:
-    - apt-get update && apt-get install -y build-essential curl jq zip
+    - apt-get update && apt-get install -y build-essential curl jq zip git
 
 # YAML anchors for reusable script blocks
 .b2_auth: &b2_auth
