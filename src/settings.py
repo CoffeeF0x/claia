@@ -336,9 +336,6 @@ class Settings:
     Returns:
         list[Prompt]: A list of all loaded prompts
     """
-    # Ensure the prompt store directory exists
-    BaseFile.ensure_directory(os.path.join(self.prompt_directory))
-
     # Get list of existing prompt names
     existing_prompt_names = Prompt.get_prompt_names(self.prompt_directory)
 
