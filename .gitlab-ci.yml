@@ -78,7 +78,7 @@ test:
   stage: test
   script:
     - pip install -r requirements.txt
-    - pytest -v --junitxml=report.xml
+    - pytest
   artifacts:
     when: always
     reports:
