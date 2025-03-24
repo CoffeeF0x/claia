@@ -8,8 +8,7 @@ from datetime import datetime
 #####################
 # INTERNAL IMPORTS #
 #####################
-from src.conversations.conversation import Conversation
-from src.conversations.message import Message
+from conversations import Conversation, Message
 
 
 #####################

@@ -7,7 +7,7 @@ import pytest
 #####################
 # INTERNAL IMPORTS #
 #####################
-from src.conversations.message import Message
+from conversations import Message
 
 
 #####################
