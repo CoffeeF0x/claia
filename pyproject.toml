@@ -7,7 +7,7 @@ testpaths = ["src/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --import-mode=importlib"
+addopts = "-v --import-mode=importlib --junitxml=report.xml"
 pythonpath = ["src"]
 
 [tool.coverage.run]
