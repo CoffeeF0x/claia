@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 # Internal dependencies
 from .base import BaseFile
 from .files import FileFactory, TextFile, ImageFile, AudioFile, VideoFile, DocumentFile, GenericFile
-from ..enums import MessageRole, ActionType
+from enums import MessageRole, ActionType
 
 
 
