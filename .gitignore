@@ -9,8 +9,9 @@ scratch.txt
 report.xml
 .pytest_cache/
 
-files/
-conversations/
-models/
-prompts/
-temp/
+/files/
+/conversations/
+/models/
+/prompts/
+/temp/
+/artifacts/
