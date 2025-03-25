@@ -1,6 +1,7 @@
 from .agent        import ProcessStatus, AgentType, SourcePreference
 from .model        import ModelCapability, IOType
 from .conversation import MessageRole, ActionType
+from .file         import FileSubdirectory, FileStatus
 
 # __all__ = [
 #   'ProcessStatus',
@@ -9,5 +10,7 @@ from .conversation import MessageRole, ActionType
 #   'ModelCapability',
 #   'IOType',
 #   'MessageRole',
-#   'ActionType'
+#   'ActionType',
+#   'FileSubdirectory', 
+#   'FileStatus'
 # ]
