@@ -18,4 +18,6 @@ Claia's roadmap also includes plans to integrate with ScriptOS. ScriptOS is a pa
 
 If Claia needs to advance beyond json files for storage, a SQLite database will be used. There are currently no plans to add support for other databases as more robust storage solutions should not be needed for the usecases claia is intended for.
 
-## Environment Variables
+## More Info
+
+See the docs folder for more detailed and technical information
