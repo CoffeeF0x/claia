@@ -18,7 +18,7 @@ src_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(src_dir))
 
 # Internal dependencies
-from files import BaseFile, ImageFile, FileManifest
+from files import BaseFile, ImageFile, FileManifest, TextFile
 from enums import FileStatus
 
 
@@ -50,11 +50,29 @@ def setup_demo():
   except ImportError:
     print("Created sample text file (PIL not available for image creation)")
   
+  # Create a markdown file for text file demo
+  markdown_file = os.path.join(base_dir, "sample.md")
+  with open(markdown_file, "w") as f:
+    f.write("# Sample Markdown Document\n\n")
+    f.write("This is a sample document with multiple lines.\n")
+    f.write("It demonstrates the TextFile class functionality.\n\n")
+    f.write("## Features\n\n")
+    f.write("- Line counting\n")
+    f.write("- Word counting\n")
+    f.write("- Character counting\n")
+    f.write("- Text searching\n")
+    f.write("- Content preview\n\n")
+    f.write("## Code Example\n\n")
+    f.write("```python\n")
+    f.write("def sample_function():\n")
+    f.write("    print('Hello, CLAIA!')\n")
+    f.write("```\n")
+  
   # Create export directory
   export_dir = os.path.join(base_dir, "exports")
   os.makedirs(export_dir, exist_ok=True)
   
-  return base_dir, text_file, image_file, export_dir
+  return base_dir, text_file, image_file, markdown_file, export_dir
 
 
 
@@ -204,12 +222,71 @@ def demo_image_files(base_dir, sample_image, export_dir):
 
 
 ########################################################################
+#                            TEXT FILES                                #
+########################################################################
+def demo_text_files(base_dir, markdown_file, export_dir):
+  """Demonstrate operations with specialized text files."""
+  print("\n" + "-" * 70)
+  print("TEXT FILE OPERATIONS")
+  print("-" * 70)
+  
+  # Create a text file from markdown
+  print("\n1. Creating and processing a text file")
+  text_file = TextFile.from_path(markdown_file, base_dir)
+  text_file.save()
+  print(f"   - Text file ID: {text_file.file_id}")
+  print(f"   - MIME type: {text_file.mime_type}")
+  
+  # Get text statistics
+  print("\n2. Analyzing text content")
+  stats = text_file.get_stats()
+  print(f"   - Line count: {stats['line_count']}")
+  print(f"   - Word count: {stats['word_count']}")
+  print(f"   - Character count: {stats['char_count']}")
+  
+  # Get a content preview
+  print("\n3. Generating content preview")
+  preview = text_file.get_preview(max_lines=5)
+  print(f"   - Preview (first 5 lines):")
+  for line in preview.splitlines()[:5]:
+    print(f"     | {line}")
+  
+  # Search for content
+  print("\n4. Searching text content")
+  search_results = text_file.search("sample", case_sensitive=False)
+  print(f"   - Found {len(search_results)} matches for 'sample':")
+  for i, (line_num, line_content) in enumerate(search_results[:3], 1):
+    preview = line_content[:40] + "..." if len(line_content) > 40 else line_content
+    print(f"     {i}. Line {line_num}: {preview}")
+  
+  if len(search_results) > 3:
+    print(f"     ... and {len(search_results) - 3} more matches")
+  
+  # Extract specific lines
+  print("\n5. Extracting specific content")
+  code_lines = text_file.get_lines(start=13, end=16)  # Sample code section
+  print(f"   - Code section (lines 13-16):")
+  for line in code_lines:
+    print(f"     | {line}")
+  
+  # Export the text file
+  print("\n6. Exporting the text file")
+  export_path = os.path.join(export_dir, "exported_markdown.md")
+  result = text_file.export(export_path)
+  print(f"   - Exported to: {export_path}")
+  print(f"   - Export successful: {result}")
+  
+  return text_file.file_id
+
+
+
+########################################################################
 #                               MAIN                                   #
 ########################################################################
 def main():
   """Run the demo."""
   # Set up the demo
-  base_dir, sample_file, sample_image, export_dir = setup_demo()
+  base_dir, sample_file, sample_image, markdown_file, export_dir = setup_demo()
   
   try:
     # Demonstrate regular file operations
@@ -217,6 +294,9 @@ def main():
     
     # Demonstrate image file operations
     image_id = demo_image_files(base_dir, sample_image, export_dir)
+    
+    # Demonstrate text file operations
+    text_id = demo_text_files(base_dir, markdown_file, export_dir)
     
     # Show final file manifest state
     print("\n" + "-" * 70)

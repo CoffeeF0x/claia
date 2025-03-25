@@ -12,6 +12,7 @@ jsonschema
 aia
 
 beautifulsoup4
+chardet
 
 pyinstaller
 

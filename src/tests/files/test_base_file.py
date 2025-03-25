@@ -69,7 +69,7 @@ def test_get_file_type_and_subdirectory(base_file):
     assert base_file.get_file_type() == FileSubdirectory.IMAGE
     assert base_file.get_subdirectory() == "images"
   
-  with patch.object(base_file, 'mime_type', "audio/mp3"):
+  with patch.object(base_file, 'mime_type', "audio/mpeg"):
     assert base_file.get_file_type() == FileSubdirectory.AUDIO
     assert base_file.get_subdirectory() == "audio"
 
