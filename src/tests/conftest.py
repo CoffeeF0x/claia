@@ -82,7 +82,7 @@ def image_file(temp_dir, test_image_path):
   img = ImageFile(
     base_directory=temp_dir,
     file_name="test_image.png",
-    external_path=test_image_path,
+    source_path=test_image_path,
     is_reference=True  # Use as reference to ensure file exists
   )
   return img
@@ -105,7 +105,7 @@ def base_file(temp_dir, test_file):
   file = BaseFile(
     base_directory=temp_dir,
     file_name="test.txt",
-    external_path=test_file,
+    source_path=test_file,
     is_reference=False
   )
   return file

@@ -312,9 +312,13 @@ def demo_text_files(base_dir, markdown_file, export_dir):
   # Create a text file from markdown
   print("\n1. Creating and processing a text file from path")
   text_file = TextFile.from_source(markdown_file, base_dir)
-  text_file.save()
-  print(f"   - Text file ID: {text_file.file_id}")
-  print(f"   - MIME type: {text_file.mime_type}")
+  if text_file:
+    text_file.save()
+    print(f"   - Text file ID: {text_file.file_id}")
+    print(f"   - MIME type: {text_file.mime_type}")
+  else:
+    print(f"   - Failed to create text file from source {markdown_file}")
+    return None
   
   # Create a text file from string content
   print("\n2. Creating a text file from string content")
@@ -341,9 +345,12 @@ text = TextFile.from_string(content, base_dir, "memory_text.txt")
   print("\n3. Creating a text file without a file name")
   auto_named_content = "This text file was created without specifying a file name.\nThe file_name defaults to the file_id."
   auto_named_text = TextFile.from_string(auto_named_content, base_dir)
-  print(f"   - Auto-named text file ID: {auto_named_text.file_id}")
-  print(f"   - File name: {auto_named_text.file_name}")
-  print(f"   - File exists: {auto_named_text.file_exists()}")
+  if auto_named_text:
+    print(f"   - Auto-named text file ID: {auto_named_text.file_id}")
+    print(f"   - File name: {auto_named_text.file_name}")
+    print(f"   - File exists: {auto_named_text.file_exists()}")
+  else:
+    print("   - Failed to create auto-named text file")
   
   # Get text statistics for the memory file
   stats = memory_text.get_stats()

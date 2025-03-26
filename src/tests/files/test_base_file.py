@@ -31,20 +31,20 @@ def test_initialization(temp_dir, test_file):
   
   assert base_file.base_directory == temp_dir
   assert base_file.file_name == "test.txt"
-  assert base_file.external_path is None
+  assert base_file.get_source_path() is None
   assert base_file.is_reference is False
   assert base_file.mime_type == "text/plain"
   assert isinstance(base_file.file_id, str)
   
-  # With external path
+  # With source path
   base_file_with_external = BaseFile(
     base_directory=temp_dir,
     file_name="external_test.png",
-    external_path=test_file,
+    source_path=test_file,
     is_reference=True
   )
   
-  assert base_file_with_external.file_path == test_file
+  assert base_file_with_external.path == test_file
   assert base_file_with_external.is_reference is True
   assert base_file_with_external.status == FileStatus.EXTERNAL
   
@@ -94,7 +94,7 @@ def test_get_full_path(base_file):
     base_file.get_subdirectory(),
     base_file.file_id
   )
-  assert base_file.get_full_path() == expected_path
+  assert base_file.get_internal_path() == expected_path
 
 
 def test_file_exists(base_file, test_file):
@@ -104,17 +104,15 @@ def test_file_exists(base_file, test_file):
     return path == test_file
     
   with patch('os.path.exists', side_effect=exists_side_effect):
-    # Set the correct external path to make file_exists work
-    base_file.file_path = "non_existent_path"
-    base_file.external_path = test_file
-    base_file.is_reference = True
+    # Set the correct path to make file_exists work
+    base_file.path = "non_existent_path"
     
-    # Should return True when external_path exists
-    assert base_file.file_exists() is True
-    
-    # Should return False when neither exists
-    base_file.external_path = "non_existent_path"
+    # Should return False when path doesn't exist
     assert base_file.file_exists() is False
+    
+    # Set path to test_file
+    base_file.path = test_file
+    assert base_file.file_exists() is True
 
 
 def test_get_file_size(base_file, test_file):
@@ -142,17 +140,20 @@ def test_copy_to_storage(base_file, test_file):
   with patch('files.base.shutil.copy2') as mock_copy, \
        patch('os.path.exists', lambda path: path == test_file):
     
+    # Set source path
+    base_file.metadata["source_path"] = test_file
+    
     # Call copy_to_storage
     result = base_file.copy_to_storage()
     
     # Should return True
     assert result is True
     
-    # Should call copy2 with external path as source
-    mock_copy.assert_called_once_with(test_file, base_file.get_full_path())
+    # Should call copy2 with source path as source
+    mock_copy.assert_called_once_with(test_file, base_file.get_internal_path())
     
-    # File path should be updated to storage path
-    assert base_file.file_path == base_file.get_full_path()
+    # Path should be updated to storage path
+    assert base_file.path == base_file.get_internal_path()
   
   # Test is_reference=True (should not copy)
   with patch.object(base_file, 'is_reference', True), \
@@ -163,8 +164,8 @@ def test_copy_to_storage(base_file, test_file):
     assert not mock_copy.called  # Should not call copy2
   
   # Test when file doesn't exist
-  with patch.object(base_file, 'external_path', None), \
-       patch.object(base_file, 'file_path', "nonexistent.txt"), \
+  with patch.object(base_file, 'get_source_path', return_value=None), \
+       patch.object(base_file, 'path', "nonexistent.txt"), \
        patch('os.path.exists', lambda path: False), \
        patch('shutil.copy2') as mock_copy:
     
@@ -181,8 +182,7 @@ def test_to_dict(base_file):
   # Check required fields
   assert file_dict["file_id"] == base_file.file_id
   assert file_dict["file_name"] == base_file.file_name
-  assert file_dict["file_path"] == base_file.file_path
-  assert file_dict["external_path"] == base_file.external_path
+  assert file_dict["path"] == base_file.path
   assert file_dict["is_reference"] == base_file.is_reference
   assert file_dict["mime_type"] == base_file.mime_type
   assert file_dict["timestamp"] == base_file.timestamp
@@ -229,7 +229,7 @@ def test_save(base_file, monkeypatch, temp_dir):
   assert mock_save_metadata.call_count == 1
   
   # Result should be the file path
-  assert result == base_file.file_path
+  assert result == base_file.path
   
   # Test when ensure_directory_exists fails
   mock_ensure_dir.reset_mock()
@@ -270,9 +270,9 @@ def test_save(base_file, monkeypatch, temp_dir):
   
   # Verify file was created with content
   assert result is not None
-  assert os.path.exists(content_file.file_path)
+  assert os.path.exists(content_file.path)
   
-  with open(content_file.file_path, 'r') as f:
+  with open(content_file.path, 'r') as f:
     assert f.read() == test_content
   
   # Test binary content
@@ -286,9 +286,9 @@ def test_save(base_file, monkeypatch, temp_dir):
   result = binary_file.save(content=binary_content)
   
   assert result is not None
-  assert os.path.exists(binary_file.file_path)
+  assert os.path.exists(binary_file.path)
   
-  with open(binary_file.file_path, 'rb') as f:
+  with open(binary_file.path, 'rb') as f:
     assert f.read() == binary_content
 
 
@@ -361,8 +361,7 @@ def test_from_path(temp_dir, test_file):
   assert file is not None
   assert file.base_directory == temp_dir
   assert file.file_name == os.path.basename(test_file)
-  assert file.external_path == test_file
-  assert file.is_reference is False
+  assert file.get_source_path() == test_file
   
   # Reference only
   ref_file = BaseFile.from_source(test_file, temp_dir, is_reference=True)
@@ -375,7 +374,7 @@ def test_from_path(temp_dir, test_file):
 
 def test_from_url(temp_dir):
   """Test creating a file from URL."""
-  url = "https://lloydbower.com/favicon.png"
+  url = "https://example.com/image.jpg"
   
   # Create file from URL
   file = BaseFile.from_source(url, temp_dir)
@@ -383,9 +382,9 @@ def test_from_url(temp_dir):
   # Verify file was created with correct data
   assert file is not None
   assert file.base_directory == temp_dir
-  assert file.file_name == "favicon.png"
-  assert file.external_path == url
-  assert file.is_reference is True
+  assert file.file_name == "image.jpg"
+  assert file.get_source_path() == url
+  assert file.is_reference is True  # Default for URLs
   
   # Mock _fetch_url_content for the non-reference URL test
   mock_content = b"Mock image data"
@@ -396,7 +395,7 @@ def test_from_url(temp_dir):
     # Verify the result
     assert non_ref is not None
     assert non_ref.is_reference is False
-    assert non_ref.file_name == "favicon.png"
+    assert non_ref.file_name == "image.jpg"
 
 
 def test_export(base_file, test_file, temp_dir):
@@ -406,7 +405,7 @@ def test_export(base_file, test_file, temp_dir):
   
   # Mock file_exists to return True
   with patch.object(base_file, 'file_exists', return_value=True), \
-       patch.object(base_file, 'file_path', test_file), \
+       patch.object(base_file, 'path', test_file), \
        patch('shutil.copy2') as mock_copy:
     
     # Test successful export
@@ -425,7 +424,7 @@ def test_export(base_file, test_file, temp_dir):
     with patch('shutil.copy2') as mock_copy:
       result = base_file.export(export_path, force_overwrite=True)
       assert result is True
-      mock_copy.assert_called_once_with(base_file.file_path, export_path)
+      mock_copy.assert_called_once_with(base_file.path, export_path)
   
   # Test when source file doesn't exist
   with patch.object(base_file, 'file_exists', return_value=False):
@@ -448,7 +447,7 @@ def test_from_content(temp_dir):
   assert string_file.file_exists() is True
   
   # Verify content was written correctly
-  with open(string_file.file_path, 'r') as f:
+  with open(string_file.path, 'r') as f:
     assert f.read() == string_content
   
   # Test with binary content
@@ -465,7 +464,7 @@ def test_from_content(temp_dir):
   assert binary_file.file_exists() is True
   
   # Verify binary content was written correctly
-  with open(binary_file.file_path, 'rb') as f:
+  with open(binary_file.path, 'rb') as f:
     assert f.read() == binary_content
   
   # Test with encoding for string content
@@ -481,7 +480,7 @@ def test_from_content(temp_dir):
   assert encoded_file.file_exists() is True
   
   # Verify encoded content was written correctly
-  with open(encoded_file.file_path, 'r', encoding='utf-8') as f:
+  with open(encoded_file.path, 'r', encoding='utf-8') as f:
     assert f.read() == encoded_content
 
 

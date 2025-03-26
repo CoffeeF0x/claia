@@ -24,13 +24,23 @@ def test_initialization(temp_dir, test_image_path):
   img_file = ImageFile(
     base_directory=temp_dir,
     file_name="image.png",
-    external_path=test_image_path
+    source_path=test_image_path
   )
   
-  assert img_file.base_directory == temp_dir
   assert img_file.file_name == "image.png"
-  assert img_file.external_path == test_image_path
+  assert img_file.get_source_path() == test_image_path
   assert img_file.mime_type == "image/png"
+  
+  # Test with reference file
+  ref_img = ImageFile(
+    base_directory=temp_dir,
+    file_name="ref_image.png",
+    source_path=test_image_path,
+    is_reference=True
+  )
+  
+  assert ref_img.is_reference is True
+  assert ref_img.path == test_image_path
   
   # Should initialize image-specific attributes
   assert img_file.width == 0  # Not processed yet
@@ -134,7 +144,7 @@ def test_resize(image_file, temp_dir):
       result = image_file.resize(100, 100, keep_aspect_ratio=True)
       
       # Verify PIL.Image.open was called
-      mock_open.assert_called_once_with(image_file.file_path)
+      mock_open.assert_called_once_with(image_file.path)
       
       # Should calculate new dimensions respecting aspect ratio
       # Original is 200x100, target is 100x100, so should become 100x50

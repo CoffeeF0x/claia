@@ -91,7 +91,11 @@ class TextFile(BaseFile):
       Optional[T]: A new TextFile instance, or None if creation failed
     """
     try:
-      # Create a new TextFile instance
+      # Set mime_type to text/plain if not specified
+      if 'mime_type' not in kwargs:
+        kwargs['mime_type'] = "text/plain"
+      
+      # Create a new TextFile instance - the file_id will be auto-generated in BaseFile
       text_file = cls(
         base_directory=base_directory,
         file_name=file_name,
@@ -132,7 +136,7 @@ class TextFile(BaseFile):
     if not self.file_exists():
       return self.encoding
     
-    with open(self.get_full_path(), "rb") as f:
+    with open(self.get_internal_path(), "rb") as f:
       raw_data = f.read()
       
     result = chardet.detect(raw_data)
@@ -239,12 +243,12 @@ class TextFile(BaseFile):
       return ""
       
     try:
-      with open(self.get_full_path(), 'r', encoding=self.encoding) as f:
+      with open(self.get_internal_path(), 'r', encoding=self.encoding) as f:
         return f.read()
     except UnicodeDecodeError:
       # Try to detect encoding and read again
       self.detect_encoding()
-      with open(self.get_full_path(), 'r', encoding=self.encoding) as f:
+      with open(self.get_internal_path(), 'r', encoding=self.encoding) as f:
         return f.read()
   
   def get_lines(self, start=None, end=None):

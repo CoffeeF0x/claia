@@ -144,7 +144,7 @@ class ImageFile(BaseFile):
       # Try to get image dimensions using PIL if available
       try:
         from PIL import Image
-        with Image.open(self.file_path) as img:
+        with Image.open(self.path) as img:
           self.width, self.height = img.size
           self.format = img.format.lower() if img.format else self.format
       except ImportError:
@@ -182,7 +182,7 @@ class ImageFile(BaseFile):
       return None
     
     try:
-      with open(self.file_path, 'rb') as f:
+      with open(self.path, 'rb') as f:
         image_data = f.read()
       
       return base64.b64encode(image_data).decode('utf-8')
@@ -217,7 +217,7 @@ class ImageFile(BaseFile):
       temp_output = tempfile.mktemp(suffix=f".{target_format}")
       
       # Open and convert the image
-      with Image.open(self.file_path) as img:
+      with Image.open(self.path) as img:
         # Convert image to RGB if saving as JPEG and it's not already RGB
         if target_format.lower() in ['jpg', 'jpeg'] and img.mode != 'RGB':
           img = img.convert('RGB')
@@ -230,7 +230,7 @@ class ImageFile(BaseFile):
         base_directory=self.base_directory,
         file_name=new_file_name,
         file_id=new_file_id,
-        external_path=temp_output,  # Use the temp file as the external path
+        source_path=temp_output,  # Use the temp file as the source path
         mime_type=f"image/{target_format.lower()}",
         metadata={
           "width": self.width,
@@ -277,49 +277,51 @@ class ImageFile(BaseFile):
     try:
       from PIL import Image
       
-      # Create a new file ID for the resized image
-      new_file_id = f"{self.file_id}_resized_{width}x{height}"
-      new_file_name = f"{os.path.splitext(self.file_name)[0]}_{width}x{height}{os.path.splitext(self.file_name)[1]}"
-      
-      # Create output path to a temporary location first
-      import tempfile
-      temp_output = tempfile.mktemp(suffix=os.path.splitext(self.file_name)[1])
-      
-      # Open and resize the image
-      with Image.open(self.file_path) as img:
+      # Open the image
+      with Image.open(self.path) as img:
         # Calculate dimensions if keeping aspect ratio
         if keep_aspect_ratio:
           orig_width, orig_height = img.size
-          ratio = min(width / orig_width, height / orig_height)
-          new_width = int(orig_width * ratio)
-          new_height = int(orig_height * ratio)
-        else:
-          new_width, new_height = width, height
+          aspect = orig_width / orig_height
+          
+          if width / height > aspect:
+            # Width would be too big
+            width = int(height * aspect)
+          else:
+            # Height would be too big
+            height = int(width / aspect)
         
         # Resize the image
-        resized_img = img.resize((new_width, new_height), Image.LANCZOS)
+        resized_img = img.resize((width, height))
         
-        # Save with the same format to the temporary location
-        format_name = self.format.upper() if self.format else 'PNG'
-        resized_img.save(temp_output, format=format_name)
-      
-      # Create a new ImageFile for the resized image
-      resized = ImageFile(
-        base_directory=self.base_directory,
-        file_name=new_file_name,
-        file_id=new_file_id,
-        external_path=temp_output,  # Use the temp file as the external path
-        mime_type=self.mime_type,
-        metadata={
-          "width": new_width,
-          "height": new_height,
-          "format": self.format,
-          "original_file_id": self.file_id
-        }
-      )
+        # Create a temporary file for the resized image
+        import tempfile
+        ext = os.path.splitext(self.file_name)[1] or ".png"
+        temp_output = tempfile.mktemp(suffix=ext)
+        
+        # Save the resized image
+        resized_img.save(temp_output)
+        
+        # Create a new file name based on dimensions
+        new_file_name = f"{os.path.splitext(self.file_name)[0]}_{width}x{height}{ext}"
+        
+        # Create a new ImageFile for the resized image
+        resized_file = ImageFile(
+          base_directory=self.base_directory,
+          file_name=new_file_name,
+          source_path=temp_output,  # Use the temp file as the source path
+          mime_type=self.mime_type,
+          metadata={
+            "width": width,
+            "height": height,
+            "format": self.format,
+            "original_file_id": self.file_id,
+            "resized_from": self.path
+          }
+        )
       
       # Save the file to storage
-      resized.save()
+      resized_file.save()
       
       # Clean up the temporary file
       try:
@@ -327,7 +329,7 @@ class ImageFile(BaseFile):
       except:
         pass
       
-      return resized
+      return resized_file
     except ImportError:
       logger.error("PIL not available, cannot resize image")
       return None

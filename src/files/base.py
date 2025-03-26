@@ -49,7 +49,7 @@ class BaseFile:
   def __init__(self,
                base_directory: str,
                file_name: Optional[str] = None,
-               external_path: Optional[str] = None,
+               source_path: Optional[str] = None,
                is_reference: bool = False,
                file_id: Optional[str] = None,
                mime_type: Optional[str] = None,
@@ -61,7 +61,7 @@ class BaseFile:
     Args:
       base_directory: Base directory for file storage
       file_name: Optional name for the file
-      external_path: Optional path or URL to an external file
+      source_path: Optional original path or URL to the file
       is_reference: Whether to store only a reference to the file
       file_id: Optional ID for the file (generated if not provided)
       mime_type: Optional MIME type (detected if not provided)
@@ -71,7 +71,6 @@ class BaseFile:
     self.base_directory = base_directory
     self.file_id = file_id or str(uuid.uuid4())
     self.file_name = file_name or self.file_id
-    self.external_path = external_path
     self.is_reference = is_reference
     self.timestamp = timestamp or time.time()
     self.metadata = metadata or {}
@@ -79,17 +78,21 @@ class BaseFile:
     # Determine MIME type
     if mime_type:
       self.mime_type = mime_type
-    elif external_path:
-      self.mime_type = mimetypes.guess_type(external_path)[0] or "application/octet-stream"
+    elif source_path:
+      self.mime_type = mimetypes.guess_type(source_path)[0] or "application/octet-stream"
     else:
       self.mime_type = mimetypes.guess_type(self.file_name)[0] or "application/octet-stream"
     
-    # Set file path based on source (external or internal)
-    if external_path and os.path.exists(external_path) and is_reference:
-      self.file_path = external_path
+    # Store original source path in metadata
+    if source_path:
+      self.metadata["source_path"] = source_path
+    
+    # Set file path based on reference mode
+    if is_reference and source_path and os.path.exists(source_path):
+      self.path = source_path
       self.status = FileStatus.EXTERNAL
     else:
-      self.file_path = self.get_full_path()
+      self.path = self.get_internal_path()
       self.status = FileStatus.ACTIVE
     
     # Initialize manifest
@@ -127,24 +130,29 @@ class BaseFile:
       logger.error(f"Failed to create directories for {self.file_id}: {e}")
       return False
   
-  def get_full_path(self) -> str:
-    """Get the full path for the file."""
+  def get_internal_path(self) -> str:
+    """Get the full path for the file in internal storage."""
     return os.path.join(self.base_directory, self.get_subdirectory(), self.file_id)
+  
+  def get_source_path(self) -> Optional[str]:
+    """Get the original source path of the file."""
+    return self.metadata.get("source_path")
   
   def file_exists(self) -> bool:
     """Check if the file exists."""
-    if self.is_reference and self.external_path:
-      return os.path.exists(self.external_path)
-    return os.path.exists(self.file_path)
+    # Special handling for URL references
+    if self.is_reference and self._is_url(self.path):
+      return True  # URLs are considered to exist for file operations
+    return os.path.exists(self.path)
   
   def get_file_size(self) -> int:
     """Get the size of the file in bytes."""
     try:
       if self.file_exists():
-        return os.path.getsize(self.file_path)
+        return os.path.getsize(self.path)
       return 0
     except Exception as e:
-      logger.error(f"Failed to get file size for {self.file_path}: {e}")
+      logger.error(f"Failed to get file size for {self.path}: {e}")
       return 0
   
   def copy_to_storage(self) -> bool:
@@ -159,11 +167,12 @@ class BaseFile:
       return True
         
     try:
-      # If external path exists, copy from there
-      if self.external_path and os.path.exists(self.external_path):
-        source_path = self.external_path
-      elif os.path.exists(self.file_path):
-        source_path = self.file_path
+      # Get source path (either original source or current path)
+      source_path = self.get_source_path()
+      if source_path and os.path.exists(source_path):
+        source = source_path
+      elif os.path.exists(self.path):
+        source = self.path
       else:
         logger.error(f"No source file found for {self.file_id}")
         return False
@@ -173,11 +182,11 @@ class BaseFile:
         return False
       
       # Copy the file with the file_id as the filename
-      target_path = self.get_full_path()
-      shutil.copy2(source_path, target_path)
+      target_path = self.get_internal_path()
+      shutil.copy2(source, target_path)
       
       # Update the file path to the new location
-      self.file_path = target_path
+      self.path = target_path
       return True
     except Exception as e:
       logger.error(f"Failed to copy file {self.file_id} to storage: {e}")
@@ -188,8 +197,7 @@ class BaseFile:
     return {
       "file_id": self.file_id,
       "file_name": self.file_name,
-      "file_path": self.file_path,
-      "external_path": self.external_path,
+      "path": self.path,
       "is_reference": self.is_reference,
       "mime_type": self.mime_type,
       "timestamp": self.timestamp,
@@ -263,12 +271,12 @@ class BaseFile:
     
     # If content is provided, write it directly
     if content is not None:
-      full_path = self.get_full_path()
+      full_path = self.path
       if not self._write_content_to_file(full_path, content, encoding):
         return None
       
       # Update the file path
-      self.file_path = full_path
+      self.path = full_path
     # Otherwise, if not a reference, copy external file to storage
     elif not self.is_reference and not self.copy_to_storage():
       logger.error(f"Failed to save file {self.file_id}")
@@ -282,7 +290,7 @@ class BaseFile:
     # Handle file-specific post-save operations
     self._post_save_hook()
     
-    return self.file_path
+    return self.path
   
   def _post_save_hook(self):
     """
@@ -349,13 +357,13 @@ class BaseFile:
       logger.error(f"Target path already exists and force_overwrite is False: {target_path}")
       return False
     
-    # Handle URL references differently than regular files
-    if self.is_reference and self._is_url(self.external_path):
+    # Handle URL references as a special case first
+    if self.is_reference and self._is_url(self.path):
       try:
         # Download the content
-        content = self._fetch_url_content(self.external_path)
+        content = self._fetch_url_content(self.path)
         if content is None:
-          logger.error(f"Failed to download content from URL for export: {self.external_path}")
+          logger.error(f"Failed to download content from URL for export: {self.path}")
           return False
         
         # Create target directory if it doesn't exist
@@ -373,7 +381,7 @@ class BaseFile:
         logger.error(f"Failed to export URL reference {self.file_id} to {target_path}: {e}")
         return False
     
-    # For regular files and local references, use the existing code path
+    # For regular files and local references, check if file exists
     if not self.file_exists():
       logger.error(f"Cannot export non-existent file: {self.file_id}")
       return False
@@ -385,7 +393,7 @@ class BaseFile:
         os.makedirs(target_dir, exist_ok=True)
       
       # Copy the file to the target path
-      source_path = self.file_path
+      source_path = self.path
       shutil.copy2(source_path, target_path)
       
       logger.debug(f"Exported file {self.file_id} to {target_path}")
@@ -418,7 +426,7 @@ class BaseFile:
       return cls(
         base_directory=base_directory,
         file_name=metadata.get("file_name"),
-        external_path=metadata.get("external_path"),
+        source_path=metadata.get("source_path"),
         is_reference=metadata.get("is_reference", False),
         file_id=file_id,
         mime_type=metadata.get("mime_type"),
@@ -532,7 +540,7 @@ class BaseFile:
       file_obj = cls(
         base_directory=base_directory,
         file_name=file_name,
-        external_path=source,
+        source_path=source,
         is_reference=is_reference,
         **kwargs
       )
@@ -675,33 +683,37 @@ class BaseFile:
     
     # Get content based on reference type
     content = None
-    if self._is_url(self.external_path):
+    source_path = self.path  # Current path (external)
+    
+    if self._is_url(source_path):
       # Download URL content
-      content = self._fetch_url_content(self.external_path)
+      content = self._fetch_url_content(source_path)
       if content is None:
-        logger.error(f"Failed to download content from URL: {self.external_path}")
+        logger.error(f"Failed to download content from URL: {source_path}")
         return False
     else:
-      # For local file references, read the content
-      if not os.path.exists(self.external_path):
-        logger.error(f"Referenced file does not exist: {self.external_path}")
+      # For local file references, check if file exists
+      if not os.path.exists(source_path):
+        logger.error(f"Referenced file does not exist: {source_path}")
         return False
+      
+      # Read the content
       try:
-        with open(self.external_path, 'rb') as f:
+        with open(source_path, 'rb') as f:
           content = f.read()
       except Exception as e:
-        logger.error(f"Failed to read content from reference file {self.external_path}: {e}")
+        logger.error(f"Failed to read content from reference file {source_path}: {e}")
         return False
     
     # Write content to storage
-    full_path = self.get_full_path()
-    if not self._write_content_to_file(full_path, content):
+    internal_path = self.get_internal_path()
+    if not self._write_content_to_file(internal_path, content):
       return False
     
     # Update file properties
-    old_external_path = self.external_path
+    old_path = self.path
     self.is_reference = False
-    self.file_path = full_path
+    self.path = internal_path
     self.status = FileStatus.ACTIVE
     
     # Save updated metadata
@@ -709,5 +721,5 @@ class BaseFile:
       logger.error(f"Failed to save metadata after converting reference to local: {self.file_id}")
       return False
     
-    logger.info(f"Converted reference file {self.file_id} from {old_external_path} to local storage")
+    logger.info(f"Converted reference file {self.file_id} from {old_path} to local storage")
     return True

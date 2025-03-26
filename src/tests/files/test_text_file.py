@@ -48,6 +48,16 @@ def test_initialization(temp_dir):
   assert text_file.line_count == 0
   assert text_file.word_count == 0
   assert text_file.char_count == 0
+  
+  # With source path
+  text_file_with_path = TextFile(
+    base_directory=temp_dir,
+    file_name="external.txt",
+    source_path=os.path.join(temp_dir, "some_file.txt"),
+    is_reference=True
+  )
+  
+  assert text_file_with_path.is_reference is True
 
 
 def test_detect_encoding(temp_dir):
