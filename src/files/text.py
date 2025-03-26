@@ -39,24 +39,28 @@ class TextFile(BaseFile):
   - Content preview generation
   """
   
-  def __init__(self, base_directory, file_name, **kwargs):
+  def __init__(self, base_directory: str, **kwargs):
     """
     Initialize a text file with text-specific attributes.
     
     Args:
       base_directory (str): Base directory for the file
-      file_name (str): Name of the file
       **kwargs: Additional arguments to pass to the parent class
+                (file_name, external_path, is_reference, file_id, 
+                 mime_type, timestamp, metadata, encoding, etc.)
     """
-    super().__init__(base_directory, file_name, **kwargs)
+    # Extract text-specific kwargs that shouldn't be passed to parent
+    encoding = kwargs.pop("encoding", "utf-8") if "encoding" in kwargs else "utf-8"
+    
+    super().__init__(base_directory=base_directory, **kwargs)
     
     # Set MIME type based on file extension
     self.mime_type = kwargs.get("mime_type") or FileMimeType.get_mime_type(
-      file_name, default="text/plain"
+      self.file_name, default="text/plain"
     )
     
     # Text-specific attributes
-    self.encoding = kwargs.get("encoding", "utf-8")
+    self.encoding = encoding
     self.line_count = kwargs.get("line_count", 0)
     self.word_count = kwargs.get("word_count", 0)
     self.char_count = kwargs.get("char_count", 0)
@@ -69,6 +73,51 @@ class TextFile(BaseFile):
         "word_count": self.word_count,
         "char_count": self.char_count
       })
+  
+  @classmethod
+  def from_string(cls: Type[T], content: str, base_directory: str, file_name: str = None, 
+                  encoding: str = "utf-8", **kwargs) -> Optional[T]:
+    """
+    Create a TextFile from a string content.
+    
+    Args:
+      content (str): The text content to save to the file
+      base_directory (str): Base directory for the file
+      file_name (str, optional): Name of the file, generated if not provided
+      encoding (str): Encoding to use when writing the content
+      **kwargs: Additional arguments to pass to the constructor
+      
+    Returns:
+      Optional[T]: A new TextFile instance, or None if creation failed
+    """
+    try:
+      # Create a new TextFile instance
+      text_file = cls(
+        base_directory=base_directory,
+        file_name=file_name,
+        encoding=encoding,  # This will be extracted in __init__
+        **kwargs
+      )
+      
+      # Save the file with the provided content
+      if text_file.save(content=content, encoding=encoding) is None:
+        logger.error(f"Failed to save content to file: {text_file.file_name}")
+        return None
+      
+      return text_file
+    except Exception as e:
+      logger.error(f"Failed to create TextFile from string: {e}")
+      return None
+  
+  def _post_save_hook(self):
+    """
+    Update text statistics after saving.
+    
+    This is called automatically after save() or when using save() with content.
+    """
+    # Only update statistics if the file exists
+    if self.file_exists():
+      self.get_stats()
   
   def detect_encoding(self, min_confidence=0.7):
     """

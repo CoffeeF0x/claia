@@ -231,28 +231,63 @@ def demo_text_files(base_dir, markdown_file, export_dir):
   print("-" * 70)
   
   # Create a text file from markdown
-  print("\n1. Creating and processing a text file")
+  print("\n1. Creating and processing a text file from path")
   text_file = TextFile.from_path(markdown_file, base_dir)
   text_file.save()
   print(f"   - Text file ID: {text_file.file_id}")
   print(f"   - MIME type: {text_file.mime_type}")
   
+  # Create a text file from string content
+  print("\n2. Creating a text file from string content")
+  content = """# In-Memory Text Content
+  
+This text file was created directly from a string in memory.
+No temporary files or manual file operations needed!
+
+## Features
+- Easy creation from strings
+- Automatic statistics calculation
+- Full text processing support
+
+## Example Code
+```python
+text = TextFile.from_string(content, base_dir, "memory_text.txt")
+```
+"""
+  memory_text = TextFile.from_string(content, base_dir, "memory_text.txt")
+  print(f"   - Memory text file ID: {memory_text.file_id}")
+  print(f"   - File exists: {memory_text.file_exists()}")
+  
+  # Create a text file without specifying a filename
+  print("\n3. Creating a text file without a file name")
+  auto_named_content = "This text file was created without specifying a file name.\nThe file_name defaults to the file_id."
+  auto_named_text = TextFile.from_string(auto_named_content, base_dir)
+  print(f"   - Auto-named text file ID: {auto_named_text.file_id}")
+  print(f"   - File name: {auto_named_text.file_name}")
+  print(f"   - File exists: {auto_named_text.file_exists()}")
+  
+  # Get text statistics for the memory file
+  stats = memory_text.get_stats()
+  print(f"   - Line count: {stats['line_count']}")
+  print(f"   - Word count: {stats['word_count']}")
+  print(f"   - Character count: {stats['char_count']}")
+  
   # Get text statistics
-  print("\n2. Analyzing text content")
+  print("\n4. Analyzing text content")
   stats = text_file.get_stats()
   print(f"   - Line count: {stats['line_count']}")
   print(f"   - Word count: {stats['word_count']}")
   print(f"   - Character count: {stats['char_count']}")
   
   # Get a content preview
-  print("\n3. Generating content preview")
+  print("\n5. Generating content preview")
   preview = text_file.get_preview(max_lines=5)
   print(f"   - Preview (first 5 lines):")
   for line in preview.splitlines()[:5]:
     print(f"     | {line}")
   
   # Search for content
-  print("\n4. Searching text content")
+  print("\n6. Searching text content")
   search_results = text_file.search("sample", case_sensitive=False)
   print(f"   - Found {len(search_results)} matches for 'sample':")
   for i, (line_num, line_content) in enumerate(search_results[:3], 1):
@@ -263,17 +298,32 @@ def demo_text_files(base_dir, markdown_file, export_dir):
     print(f"     ... and {len(search_results) - 3} more matches")
   
   # Extract specific lines
-  print("\n5. Extracting specific content")
+  print("\n7. Extracting specific content")
   code_lines = text_file.get_lines(start=13, end=16)  # Sample code section
   print(f"   - Code section (lines 13-16):")
   for line in code_lines:
     print(f"     | {line}")
   
+  # Update the memory file with new content
+  print("\n8. Modifying text file content")
+  original_stats = memory_text.get_stats()
+  new_content = memory_text.get_content() + "\n\nThis line was added dynamically!"
+  memory_text.save(content=new_content)
+  new_stats = memory_text.get_stats()
+  print(f"   - Original line count: {original_stats['line_count']}")
+  print(f"   - New line count: {new_stats['line_count']}")
+  print(f"   - Content updated successfully")
+  
   # Export the text file
-  print("\n6. Exporting the text file")
+  print("\n9. Exporting the text files")
   export_path = os.path.join(export_dir, "exported_markdown.md")
   result = text_file.export(export_path)
-  print(f"   - Exported to: {export_path}")
+  print(f"   - Exported file to: {export_path}")
+  print(f"   - Export successful: {result}")
+  
+  memory_export_path = os.path.join(export_dir, "exported_memory_text.md")
+  result = memory_text.export(memory_export_path)
+  print(f"   - Exported memory file to: {memory_export_path}")
   print(f"   - Export successful: {result}")
   
   return text_file.file_id

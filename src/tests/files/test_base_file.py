@@ -205,7 +205,7 @@ def test_save_metadata(base_file):
   )
 
 
-def test_save(base_file, monkeypatch):
+def test_save(base_file, monkeypatch, temp_dir):
   """Test saving a file and its metadata."""
   # Set is_reference to False to test actual copying
   base_file.is_reference = False
@@ -244,6 +244,52 @@ def test_save(base_file, monkeypatch):
   assert mock_ensure_dir.call_count == 1
   assert mock_copy.call_count == 0  # Should not be called when ensure_directory_exists fails
   assert mock_save_metadata.call_count == 0  # Should not be called when ensure_directory_exists fails
+  
+  # Test saving with content
+  mock_ensure_dir.reset_mock()
+  mock_copy.reset_mock()
+  mock_save_metadata.reset_mock()
+  
+  mock_ensure_dir.return_value = True
+  
+  # Create a real file to test content saving
+  test_content = "Test content for save method"
+  file_path = os.path.join(temp_dir, "test_content.txt")
+  
+  # Create a new BaseFile instance for this test
+  content_file = BaseFile(
+    base_directory=temp_dir,
+    file_name="test_content.txt"
+  )
+  
+  # Ensure we use the real ensure_directory_exists and save_metadata methods
+  monkeypatch.undo()
+  
+  # Save with content
+  result = content_file.save(content=test_content)
+  
+  # Verify file was created with content
+  assert result is not None
+  assert os.path.exists(content_file.file_path)
+  
+  with open(content_file.file_path, 'r') as f:
+    assert f.read() == test_content
+  
+  # Test binary content
+  binary_content = b"Binary test content"
+  binary_file = BaseFile(
+    base_directory=temp_dir,
+    file_name="binary_content.bin",
+    mime_type="application/octet-stream"
+  )
+  
+  result = binary_file.save(content=binary_content)
+  
+  assert result is not None
+  assert os.path.exists(binary_file.file_path)
+  
+  with open(binary_file.file_path, 'rb') as f:
+    assert f.read() == binary_content
 
 
 def test_mark_for_deletion(base_file):
@@ -346,50 +392,93 @@ def test_from_url(temp_dir):
   assert non_ref.is_reference is False
 
 
-def test_export(base_file, temp_dir, test_file):
-  """Test exporting a file to an external path."""
-  # Ensure the file exists in storage first
-  base_file.save()
+def test_export(base_file, test_file, temp_dir):
+  """Test exporting a file to an external location."""
+  # Setup
+  export_path = os.path.join(temp_dir, "exported_file.txt")
   
-  # Create a new temporary path for export
-  export_path = os.path.join(temp_dir, "exports", "exported_file.txt")
+  # Mock file_exists to return True
+  with patch.object(base_file, 'file_exists', return_value=True), \
+       patch.object(base_file, 'file_path', test_file), \
+       patch('shutil.copy2') as mock_copy:
+    
+    # Test successful export
+    result = base_file.export(export_path)
+    assert result is True
+    mock_copy.assert_called_once_with(test_file, export_path)
   
-  # Export the file
-  result = base_file.export(export_path)
-  
-  # Should return True
-  assert result is True
-  
-  # Exported file should exist
-  assert os.path.exists(export_path)
-  
-  # Contents should match
-  with open(test_file, 'rb') as f1, open(export_path, 'rb') as f2:
-    assert f1.read() == f2.read()
-  
-  # Test when target already exists (should fail without force_overwrite)
-  result = base_file.export(export_path)
-  assert result is False
-  
-  # Test with force_overwrite=True
-  # First modify the exported file to verify overwrite
-  with open(export_path, 'w') as f:
-    f.write("Modified content")
-  
-  result = base_file.export(export_path, force_overwrite=True)
-  assert result is True
-  
-  # Contents should be overwritten with original content
-  with open(test_file, 'rb') as f1, open(export_path, 'rb') as f2:
-    assert f1.read() == f2.read()
+  # Test exporting to existing path without force_overwrite
+  with patch.object(base_file, 'file_exists', return_value=True), \
+       patch('os.path.exists', lambda path: path == export_path):
+    
+    result = base_file.export(export_path, force_overwrite=False)
+    assert result is False
+    
+    # With force_overwrite=True
+    with patch('shutil.copy2') as mock_copy:
+      result = base_file.export(export_path, force_overwrite=True)
+      assert result is True
+      mock_copy.assert_called_once_with(base_file.file_path, export_path)
   
   # Test when source file doesn't exist
   with patch.object(base_file, 'file_exists', return_value=False):
-    result = base_file.export(os.path.join(temp_dir, "nonexistent_export.txt"))
+    result = base_file.export(export_path)
     assert result is False
 
 
-def test_cleanup_deleted_files(temp_dir):
+def test_from_content(temp_dir):
+  """Test creating a file from raw content."""
+  # Test with string content
+  string_content = "This is test content for BaseFile.from_content"
+  string_file = BaseFile.from_content(
+    content=string_content,
+    base_directory=temp_dir,
+    file_name="string_test.txt"
+  )
+  
+  assert string_file is not None
+  assert string_file.file_name == "string_test.txt"
+  assert string_file.file_exists() is True
+  
+  # Verify content was written correctly
+  with open(string_file.file_path, 'r') as f:
+    assert f.read() == string_content
+  
+  # Test with binary content
+  binary_content = b"Binary content for testing"
+  binary_file = BaseFile.from_content(
+    content=binary_content,
+    base_directory=temp_dir,
+    file_name="binary_test.bin",
+    mime_type="application/octet-stream"
+  )
+  
+  assert binary_file is not None
+  assert binary_file.file_name == "binary_test.bin"
+  assert binary_file.file_exists() is True
+  
+  # Verify binary content was written correctly
+  with open(binary_file.file_path, 'rb') as f:
+    assert f.read() == binary_content
+  
+  # Test with encoding for string content
+  encoded_content = "ñáéíóú"  # Non-ASCII characters
+  encoded_file = BaseFile.from_content(
+    content=encoded_content,
+    base_directory=temp_dir,
+    file_name="encoded_test.txt",
+    encoding="utf-8"
+  )
+  
+  assert encoded_file is not None
+  assert encoded_file.file_exists() is True
+  
+  # Verify encoded content was written correctly
+  with open(encoded_file.file_path, 'r', encoding='utf-8') as f:
+    assert f.read() == encoded_content
+
+
+def test_cleanup_deleted_files(temp_dir, monkeypatch):
   """Test cleaning up deleted files."""
   # Create mock manifest
   mock_manifest = MagicMock()

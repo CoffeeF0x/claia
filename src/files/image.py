@@ -37,38 +37,22 @@ class ImageFile(BaseFile):
   - Generating base64 encoded versions for display
   """
   
-  def __init__(self, 
-               base_directory: str,
-               file_name: Optional[str] = None,
-               external_path: Optional[str] = None,
-               is_reference: bool = False,
-               file_id: Optional[str] = None,
-               mime_type: Optional[str] = None,
-               timestamp: Optional[float] = None,
-               metadata: Optional[Dict[str, Any]] = None):
+  def __init__(self, base_directory: str, **kwargs):
     """
     Initialize an ImageFile object.
     
     Args:
       base_directory: Base directory for file storage
-      file_name: Optional name for the file
-      external_path: Optional path or URL to an external file
-      is_reference: Whether to store only a reference to the file
-      file_id: Optional ID for the file (generated if not provided)
-      mime_type: Optional MIME type (detected if not provided)
-      timestamp: Optional timestamp (current time if not provided)
-      metadata: Optional additional metadata for the file
+      **kwargs: Additional arguments to pass to the parent class
+                (file_name, external_path, is_reference, file_id,
+                 mime_type, timestamp, metadata, etc.)
     """
-    super().__init__(
-      base_directory=base_directory,
-      file_name=file_name,
-      external_path=external_path,
-      is_reference=is_reference,
-      file_id=file_id,
-      mime_type=mime_type,
-      timestamp=timestamp,
-      metadata=metadata or {}
-    )
+    # Ensure metadata is initialized if not provided
+    if 'metadata' in kwargs:
+      kwargs['metadata'] = kwargs['metadata'] or {}
+    
+    # Pass all arguments to the parent class
+    super().__init__(base_directory=base_directory, **kwargs)
     
     # Image-specific attributes
     self.width = self.metadata.get("width", 0)
@@ -102,13 +86,6 @@ class ImageFile(BaseFile):
       ImageFile: A new ImageFile instance
     """
     try:
-      import tempfile
-      
-      # Create a temporary file to store the image data
-      temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{format}")
-      temp_file.write(image_data)
-      temp_file.close()
-      
       # Get image dimensions if PIL is available
       width = 0
       height = 0
@@ -135,14 +112,18 @@ class ImageFile(BaseFile):
       if metadata:
         combined_metadata.update(metadata)
       
-      # Create the image file
-      image = cls(
+      # Use the base class implementation to handle file creation
+      image = super().from_content(
+        content=image_data,
         base_directory=base_directory,
         file_name=file_name,
-        external_path=temp_file.name,
         mime_type=mime_type,
         metadata=combined_metadata
       )
+      
+      if image:
+        # Process to update metadata
+        image.process()
       
       return image
     except Exception as e:
