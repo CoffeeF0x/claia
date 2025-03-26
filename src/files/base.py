@@ -88,7 +88,7 @@ class BaseFile:
       self.metadata["source_path"] = source_path
     
     # Set file path based on reference mode
-    if is_reference and source_path and os.path.exists(source_path):
+    if is_reference and source_path and (self._is_url(source_path) or os.path.exists(source_path)):
       self.path = source_path
       self.status = FileStatus.EXTERNAL
     else:
@@ -270,6 +270,9 @@ class BaseFile:
     This method can also be used to update the content of an existing file
     by passing the new content as a parameter.
     
+    When content is provided for a reference file, it will automatically
+    convert the file to a local file.
+    
     Args:
       content: Optional content to write to the file (string or bytes)
       encoding: Encoding to use when writing string content (default: utf-8)
@@ -283,12 +286,23 @@ class BaseFile:
     
     # If content is provided, write it directly
     if content is not None:
-      full_path = self.path
-      if not self._write_content_to_file(full_path, content, encoding):
-        return None
-      
-      # Update the file path
-      self.path = full_path
+      # For reference files, we need to update path and status
+      if self.is_reference:
+        # Get the internal path for storing content
+        target_path = self.get_internal_path()
+        
+        # Write content to the internal path
+        if not self._write_content_to_file(target_path, content, encoding):
+          return None
+        
+        # Update file properties to reflect it's now a local file
+        self.path = target_path
+        self.is_reference = False
+        self.status = FileStatus.ACTIVE
+      else:
+        # For non-reference files, use existing path
+        if not self._write_content_to_file(self.path, content, encoding):
+          return None
     # Otherwise, if not a reference, copy external file to storage
     elif not self.is_reference and not self.copy_to_storage():
       logger.error(f"Failed to save file {self.file_id}")
@@ -696,8 +710,10 @@ class BaseFile:
         if content is None:
           return False
         
-        self.save(content)
-        self.is_reference = False
+        # Use the save method which now handles conversion automatically
+        if self.save(content=content) is None:
+          return False
+        
         return True
       except Exception as e:
         logger.error(f"Failed to download URL content: {e}")
@@ -709,9 +725,10 @@ class BaseFile:
         with open(self.path, 'rb') as source_file:
           content = source_file.read()
         
-        # Save content to storage
-        self.save(content)
-        self.is_reference = False
+        # Use the save method which now handles conversion automatically
+        if self.save(content=content) is None:
+          return False
+        
         return True
       except Exception as e:
         logger.error(f"Failed to copy file: {e}")

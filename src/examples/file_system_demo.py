@@ -25,7 +25,7 @@ from enums import FileStatus
 ########################################################################
 #                              CONSTANTS                               #
 ########################################################################
-REFERENCE_URL = "https://example.com/sample.jpg"
+REFERENCE_URL = "https://www.google.com/favicon.ico"
 DOWNLOAD_URL = "https://lloydbower.com/favicon.png"
 
 
@@ -195,17 +195,24 @@ def demo_regular_files(base_dir, sample_file, export_dir):
   url_ref = BaseFile.from_source(REFERENCE_URL, base_dir)
   print(f"   - Created URL reference file with ID: {url_ref.file_id}")
   print(f"   - Is reference: {url_ref.is_reference}")
+  print(f"   - Path: {url_ref.path}")
+  print(f"   - Source path in metadata: {url_ref.get_source_path()}")
   
   # Now convert it to a local file
   conversion_result = url_ref.convert_to_local()
   print(f"   - Conversion successful: {conversion_result}")
   print(f"   - Is still reference: {url_ref.is_reference}")
+  print(f"   - New path after conversion: {url_ref.path}")
   
   # Try exporting both a URL reference and a converted file
   print("\n14. Exporting URL references and converted files")
   
   # Create another URL reference
   another_url_ref = BaseFile.from_source(DOWNLOAD_URL, base_dir)
+  print(f"   - Created URL reference with ID: {another_url_ref.file_id}")
+  print(f"   - Is reference: {another_url_ref.is_reference}")
+  print(f"   - Path: {another_url_ref.path}")
+  print(f"   - Source path in metadata: {another_url_ref.get_source_path()}")
   
   # Export directly (should download on-the-fly)
   direct_export_path = os.path.join(export_dir, "direct_url_export.png")
