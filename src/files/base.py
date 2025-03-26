@@ -429,6 +429,42 @@ class BaseFile:
       logger.error(f"Failed to download content from URL {url}: {e}")
       return None
   
+  @staticmethod
+  def _is_url(source: str) -> bool:
+    """
+    Check if a source string is a URL.
+    
+    Args:
+      source: Source string to check
+      
+    Returns:
+      bool: True if the source appears to be a URL
+    """
+    return source.startswith(('http://', 'https://', 'ftp://'))
+
+  @staticmethod
+  def _determine_reference_mode(source: str, is_reference: Optional[bool]) -> bool:
+    """
+    Determine whether a source should be treated as a reference.
+    
+    If is_reference is specified, uses that value.
+    Otherwise, URLs are treated as references by default.
+    
+    Args:
+      source: Source path or URL
+      is_reference: Explicitly specified reference mode or None
+      
+    Returns:
+      bool: The determined reference mode
+    """
+    # TODO: Add checks for file size, etc.
+
+    if is_reference is not None:
+      return is_reference
+    
+    # Default behavior: URLs are references unless specified otherwise
+    return BaseFile._is_url(source)
+
   @classmethod
   def from_source(cls: Type[T], 
                  source: str, 
@@ -454,12 +490,10 @@ class BaseFile:
     """
     try:
       # Detect if the source is a URL
-      is_url = source.startswith(('http://', 'https://', 'ftp://'))
+      is_url = cls._is_url(source)
       
       # Auto-determine if this is a reference based on source type
-      if is_reference is None:
-        # URLs are typically references by default
-        is_reference = is_url
+      is_reference = cls._determine_reference_mode(source, is_reference)
       
       # If non-reference and local file, check if it exists
       if not is_reference and not is_url and not os.path.exists(source):
