@@ -1,11 +1,11 @@
 .env
+*scratch*.txt
 history/
 __pycache__/
 data/
 pulseaudio/
 output.wav
 old/
-scratch.txt
 report.xml
 .pytest_cache/
 
