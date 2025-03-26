@@ -87,7 +87,7 @@ def demo_regular_files(base_dir, sample_file, export_dir):
   
   # Create a file object from a path
   print("\n1. Creating and saving a file")
-  file = BaseFile.from_path(sample_file, base_dir)
+  file = BaseFile.from_source(sample_file, base_dir)
   saved_path = file.save()
   print(f"   - Created file with ID: {file.file_id}")
   print(f"   - Saved to: {saved_path}")
@@ -164,7 +164,7 @@ def demo_image_files(base_dir, sample_image, export_dir):
   
   # Create an image file
   print("\n1. Creating and processing an image file")
-  image = ImageFile.from_path(sample_image, base_dir)
+  image = ImageFile.from_source(sample_image, base_dir)
   image.save()
   metadata = image.process()
   print(f"   - Image ID: {image.file_id}")
@@ -211,7 +211,7 @@ def demo_image_files(base_dir, sample_image, export_dir):
   
   # Create external reference
   print("\n6. Creating external reference to image")
-  ref_image = ImageFile.from_path(sample_image, base_dir, is_reference=True)
+  ref_image = ImageFile.from_source(sample_image, base_dir, is_reference=True)
   ref_image.save()
   print(f"   - Reference image ID: {ref_image.file_id}")
   print(f"   - Is reference: {ref_image.is_reference}")
@@ -232,7 +232,7 @@ def demo_text_files(base_dir, markdown_file, export_dir):
   
   # Create a text file from markdown
   print("\n1. Creating and processing a text file from path")
-  text_file = TextFile.from_path(markdown_file, base_dir)
+  text_file = TextFile.from_source(markdown_file, base_dir)
   text_file.save()
   print(f"   - Text file ID: {text_file.file_id}")
   print(f"   - MIME type: {text_file.mime_type}")

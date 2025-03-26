@@ -36,11 +36,11 @@ Specialized classes extend `BaseFile` to provide type-specific functionality:
 
 ```python
 # Create from a local file
-file = BaseFile.from_path("/path/to/file.txt", base_directory="./files")
+file = BaseFile.from_source("/path/to/file.txt", base_directory="./files")
 file.save()
 
 # Create from a URL (as reference by default)
-file = BaseFile.from_url("https://example.com/file.pdf", base_directory="./files")
+file = BaseFile.from_source("https://example.com/file.pdf", base_directory="./files")
 file.save()
 ```
 
@@ -85,7 +85,7 @@ deleted_count = BaseFile.cleanup_deleted_files("./files", older_than_days=30)
 
 ```python
 # Create an image file
-image = ImageFile.from_path("image.jpg", base_directory="./files")
+image = ImageFile.from_source("image.jpg", base_directory="./files")
 
 # Extract metadata
 metadata = image.process()
@@ -113,10 +113,10 @@ The file system supports two types of file storage:
 
 ```python
 # Store a copy of the file in the system
-file = BaseFile.from_path("/path/to/file.txt", base_directory="./files", is_reference=False)
+file = BaseFile.from_source("/path/to/file.txt", base_directory="./files", is_reference=False)
 
 # Store only a reference to the file
-file = BaseFile.from_path("/path/to/file.txt", base_directory="./files", is_reference=True)
+file = BaseFile.from_source("/path/to/file.txt", base_directory="./files", is_reference=True)
 ```
 
 ## Directory Structure

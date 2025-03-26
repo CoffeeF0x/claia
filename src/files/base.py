@@ -208,6 +208,41 @@ class BaseFile:
     """
     return self.manifest.update_file_metadata(self.file_id, self.to_dict())
   
+  def _write_content_to_file(self, full_path: str, content: Union[str, bytes], encoding: str = "utf-8") -> bool:
+    """
+    Write content to a file at the specified path.
+    
+    Args:
+      full_path: Path to write the content to
+      content: Content to write (string or bytes)
+      encoding: Encoding to use for string content
+      
+    Returns:
+      bool: True if writing was successful, False otherwise
+    """
+    try:
+      # Determine the write mode based on content type
+      mode = "wb" if isinstance(content, bytes) else "w"
+      
+      if mode == "wb":
+        with open(full_path, mode) as f:
+          f.write(content)
+      else:
+        with open(full_path, mode, encoding=encoding) as f:
+          f.write(content)
+      
+      # If this is a TextFile instance and we're writing string content, 
+      # update encoding if needed
+      if hasattr(self, 'encoding') and encoding and isinstance(content, str):
+        self.encoding = encoding
+        if 'encoding' in self.metadata:
+          self.metadata['encoding'] = encoding
+      
+      return True
+    except Exception as e:
+      logger.error(f"Failed to write content to file {self.file_id}: {e}")
+      return False
+  
   def save(self, content: Optional[Union[str, bytes]] = None, encoding: str = "utf-8") -> Optional[str]:
     """
     Save the file and its metadata.
@@ -228,31 +263,12 @@ class BaseFile:
     
     # If content is provided, write it directly
     if content is not None:
-      try:
-        # Determine the write mode based on content type
-        mode = "wb" if isinstance(content, bytes) else "w"
-        
-        full_path = self.get_full_path()
-        if mode == "wb":
-          with open(full_path, mode) as f:
-            f.write(content)
-        else:
-          with open(full_path, mode, encoding=encoding) as f:
-            f.write(content)
-        
-        # Update the file path
-        self.file_path = full_path
-        
-        # If this is a TextFile instance and we're writing string content, 
-        # update encoding if needed
-        if hasattr(self, 'encoding') and encoding and isinstance(content, str):
-          self.encoding = encoding
-          if 'encoding' in self.metadata:
-            self.metadata['encoding'] = encoding
-      
-      except Exception as e:
-        logger.error(f"Failed to write content to file {self.file_id}: {e}")
+      full_path = self.get_full_path()
+      if not self._write_content_to_file(full_path, content, encoding):
         return None
+      
+      # Update the file path
+      self.file_path = full_path
     # Otherwise, if not a reference, copy external file to storage
     elif not self.is_reference and not self.copy_to_storage():
       logger.error(f"Failed to save file {self.file_id}")
@@ -390,58 +406,44 @@ class BaseFile:
       return None
   
   @classmethod
-  def from_path(cls: Type[T], path: str, base_directory: str, 
-                is_reference: bool = False, file_name: Optional[str] = None) -> Optional[T]:
+  def from_source(cls: Type[T], 
+                 source: str, 
+                 base_directory: str,
+                 is_reference: Optional[bool] = None,
+                 file_name: Optional[str] = None,
+                 **kwargs) -> Optional[T]:
     """
-    Create a file object from a local file path.
+    Create a file object from a source path (local file or URL).
+    
+    This is a unified method that handles both local files and URLs
+    by intelligently determining the appropriate behavior.
     
     Args:
-      path: Path to the local file
+      source: Path to the source (local file path or URL)
       base_directory: Base directory for file operations
-      is_reference: Whether to store only a reference to the file (default: False)
-      file_name: Optional custom name for the file (defaults to basename of path)
+      is_reference: Whether to store only a reference (if None, auto-determined)
+      file_name: Optional custom name for the file
+      **kwargs: Additional arguments to pass to the constructor
         
     Returns:
       Optional[T]: The created file object, or None if creation failed
     """
-    if not os.path.exists(path):
-      logger.error(f"File {path} does not exist")
-      return None
-      
-    # Use the private helper method to handle common functionality
-    return cls._create_file_from_source(
-      source_path=path,
-      base_directory=base_directory,
-      is_reference=is_reference,
-      file_name=file_name
-    )
-  
-  @classmethod
-  def from_url(cls: Type[T], url: str, base_directory: str, 
-              is_reference: bool = True, file_name: Optional[str] = None) -> Optional[T]:
-    """
-    Create a file object from a URL.
+    # Auto-determine if this is a reference based on source type
+    if is_reference is None:
+      # URLs are typically references by default
+      is_reference = source.startswith(('http://', 'https://', 'ftp://'))
     
-    Args:
-      url: URL to the remote file
-      base_directory: Base directory for file operations
-      is_reference: Whether to store only a reference (default: True for URLs)
-      file_name: Optional custom name for the file (defaults to basename of URL)
-        
-    Returns:
-      Optional[T]: The created file object, or None if creation failed
-    """
-    # Use the private helper method to handle common functionality
     return cls._create_file_from_source(
-      source_path=url,
+      source=source,
       base_directory=base_directory,
       is_reference=is_reference,
-      file_name=file_name
+      file_name=file_name,
+      **kwargs
     )
   
   @classmethod
   def _create_file_from_source(cls: Type[T], 
-                              source_path: str, 
+                              source: str, 
                               base_directory: str,
                               is_reference: bool = False,
                               file_name: Optional[str] = None,
@@ -450,7 +452,7 @@ class BaseFile:
     Private helper method to create a file from a source path.
     
     Args:
-      source_path: Path to the source file (local path or URL)
+      source: Path to the source file (local path or URL)
       base_directory: Base directory for file operations
       is_reference: Whether to store only a reference to the file
       file_name: Optional custom name for the file
@@ -462,57 +464,47 @@ class BaseFile:
     try:
       # If file_name is not provided, use basename of source path
       if file_name is None:
-        file_name = os.path.basename(source_path) or "file"  # Default to "file" if basename is empty
+        file_name = os.path.basename(source) or "file"  # Default to "file" if basename is empty
       
+      # Create file object with appropriate parameters
+      file_obj = cls(
+        base_directory=base_directory,
+        file_name=file_name,
+        external_path=source,
+        is_reference=is_reference,
+        **kwargs
+      )
+      
+      # For reference files, just save metadata
       if is_reference:
-        # For reference files, just create the instance with the external path
-        file_obj = cls(
-          base_directory=base_directory,
-          file_name=file_name,
-          external_path=source_path,
-          is_reference=True,
-          **kwargs
-        )
-        
-        # Save metadata (but not the actual file)
-        file_obj.save_metadata()
-        return file_obj
-      else:
-        # For non-reference files, we need to copy the content into storage
-        # First, create the instance
-        file_obj = cls(
-          base_directory=base_directory,
-          file_name=file_name,
-          external_path=source_path,
-          is_reference=False,
-          **kwargs
-        )
-        
-        # If it's a local file, read the content and save it
-        if os.path.exists(source_path):
-          try:
-            # Determine if this is a binary or text file
-            # Use 'rb' mode to handle both cases
-            with open(source_path, 'rb') as f:
-              content = f.read()
-            
-            # Save the content to storage
-            if file_obj.save(content=content) is None:
-              logger.error(f"Failed to save content from {source_path}")
-              return None
-          except Exception as e:
-            logger.error(f"Failed to read content from {source_path}: {e}")
-            return None
-        else:
-          # For paths that don't exist locally (like URLs),
-          # just save metadata and let specialized handlers deal with content
-          if file_obj.save_metadata():
-            return file_obj
+        if not file_obj.save_metadata():
+          logger.error(f"Failed to save metadata for reference file: {source}")
           return None
-        
         return file_obj
+      
+      # For non-reference files that exist locally, read and save content
+      if os.path.exists(source):
+        try:
+          # Read file content in binary mode
+          with open(source, 'rb') as f:
+            content = f.read()
+          
+          # Save content (which will handle directory creation, writing, and metadata)
+          if file_obj.save(content=content) is None:
+            logger.error(f"Failed to save content from {source}")
+            return None
+        except Exception as e:
+          logger.error(f"Failed to read content from {source}: {e}")
+          return None
+      else:
+        # For non-local paths (like URLs), just save metadata
+        if not file_obj.save_metadata():
+          logger.error(f"Failed to save metadata for external file: {source}")
+          return None
+      
+      return file_obj
     except Exception as e:
-      logger.error(f"Failed to create file from source {source_path}: {e}")
+      logger.error(f"Failed to create file from source {source}: {e}")
       return None
   
   @classmethod
@@ -546,28 +538,10 @@ class BaseFile:
         **kwargs
       )
       
-      # Ensure the directory exists
-      if not file_obj.ensure_directory_exists():
-        logger.error(f"Failed to create directory for file: {file_name}")
+      # Save with content (which handles directory creation, writing, and metadata)
+      if file_obj.save(content=content, encoding=encoding) is None:
+        logger.error(f"Failed to save content to file: {file_name}")
         return None
-      
-      # Determine the write mode based on content type
-      mode = "wb" if isinstance(content, bytes) else "w"
-      
-      # Write the content directly to the file
-      full_path = file_obj.get_full_path()
-      if mode == "wb":
-        with open(full_path, mode) as f:
-          f.write(content)
-      else:
-        with open(full_path, mode, encoding=encoding) as f:
-          f.write(content)
-      
-      # Update the file_path
-      file_obj.file_path = full_path
-      
-      # Save metadata to manifest
-      file_obj.save_metadata()
       
       return file_obj
     except Exception as e:

@@ -58,7 +58,7 @@ def test_detect_encoding(temp_dir):
     f.write("This is UTF-8 text with special chars: àéêöüß")
   
   # Create a text file instance
-  text_file = TextFile.from_path(test_file_path, temp_dir)
+  text_file = TextFile.from_source(test_file_path, temp_dir)
   text_file.save()
   
   # Test encoding detection
@@ -86,7 +86,7 @@ def test_get_stats(temp_dir):
     f.write(content)
   
   # Create a text file instance
-  text_file = TextFile.from_path(test_file_path, temp_dir)
+  text_file = TextFile.from_source(test_file_path, temp_dir)
   text_file.save()
   
   # Get stats
@@ -115,7 +115,7 @@ def test_get_preview(temp_dir):
       f.write(f"Line {i+1}\n")
   
   # Create a text file instance
-  text_file = TextFile.from_path(test_file_path, temp_dir)
+  text_file = TextFile.from_source(test_file_path, temp_dir)
   text_file.save()
   
   # Get preview with default max_lines (10)
@@ -151,7 +151,7 @@ def test_search(temp_dir):
     f.write("Fifth line with APPLE uppercase\n")
   
   # Create a text file instance
-  text_file = TextFile.from_path(test_file_path, temp_dir)
+  text_file = TextFile.from_source(test_file_path, temp_dir)
   text_file.save()
   
   # Case-insensitive search
@@ -186,7 +186,7 @@ def test_get_content(temp_dir):
     f.write(content)
   
   # Create a text file instance
-  text_file = TextFile.from_path(test_file_path, temp_dir)
+  text_file = TextFile.from_source(test_file_path, temp_dir)
   text_file.save()
   
   # Get content
@@ -205,7 +205,7 @@ def test_get_lines(temp_dir):
       f.write(f"Line {i+1}\n")
   
   # Create a text file instance
-  text_file = TextFile.from_path(test_file_path, temp_dir)
+  text_file = TextFile.from_source(test_file_path, temp_dir)
   text_file.save()
   
   # Get all lines

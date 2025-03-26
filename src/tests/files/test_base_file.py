@@ -355,7 +355,7 @@ def test_load(temp_dir):
 def test_from_path(temp_dir, test_file):
   """Test creating a file from path."""
   # Create file from path
-  file = BaseFile.from_path(test_file, temp_dir)
+  file = BaseFile.from_source(test_file, temp_dir)
   
   # Verify file was created with correct data
   assert file is not None
@@ -365,11 +365,11 @@ def test_from_path(temp_dir, test_file):
   assert file.is_reference is False
   
   # Reference only
-  ref_file = BaseFile.from_path(test_file, temp_dir, is_reference=True)
+  ref_file = BaseFile.from_source(test_file, temp_dir, is_reference=True)
   assert ref_file.is_reference is True
   
   # Non-existent file
-  non_file = BaseFile.from_path("nonexistent.txt", temp_dir)
+  non_file = BaseFile.from_source("nonexistent.txt", temp_dir)
   assert non_file is None
 
 
@@ -378,7 +378,7 @@ def test_from_url(temp_dir):
   url = "https://example.com/image.jpg"
   
   # Create file from URL
-  file = BaseFile.from_url(url, temp_dir)
+  file = BaseFile.from_source(url, temp_dir)
   
   # Verify file was created with correct data
   assert file is not None
@@ -388,7 +388,7 @@ def test_from_url(temp_dir):
   assert file.is_reference is True  # Default for URLs
   
   # Non-reference (would trigger download)
-  non_ref = BaseFile.from_url(url, temp_dir, is_reference=False)
+  non_ref = BaseFile.from_source(url, temp_dir, is_reference=False)
   assert non_ref.is_reference is False
 
 
