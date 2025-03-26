@@ -196,6 +196,34 @@ def demo_regular_files(base_dir, sample_file, export_dir):
   except ImportError:
     print("\n11. Skipping URL download demo (requests library not available)")
   
+  # In the regular_files demo function, add this section after the existing code
+  print("\n13. Converting URL reference to local file")
+  # Create a new reference to the same URL for demonstration
+  url_ref = BaseFile.from_source(REFERENCE_URL, base_dir)
+  print(f"   - Created URL reference file with ID: {url_ref.file_id}")
+  print(f"   - Is reference: {url_ref.is_reference}")
+  
+  # Now convert it to a local file
+  conversion_result = url_ref.convert_to_local()
+  print(f"   - Conversion successful: {conversion_result}")
+  print(f"   - Is still reference: {url_ref.is_reference}")
+  
+  # Try exporting both a URL reference and a converted file
+  print("\n14. Exporting URL references and converted files")
+  
+  # Create another URL reference
+  another_url_ref = BaseFile.from_source(DOWNLOAD_URL, base_dir)
+  
+  # Export directly (should download on-the-fly)
+  direct_export_path = os.path.join(export_dir, "direct_url_export.png")
+  direct_result = another_url_ref.export(direct_export_path)
+  print(f"   - Direct URL export successful: {direct_result}")
+  
+  # Export the converted file (should use local copy)
+  converted_export_path = os.path.join(export_dir, "converted_reference.jpg")
+  converted_result = url_ref.export(converted_export_path)
+  print(f"   - Converted file export successful: {converted_result}")
+  
   return file.file_id
 
 

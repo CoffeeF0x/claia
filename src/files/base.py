@@ -335,7 +335,7 @@ class BaseFile:
     
     This method allows exporting a stored file to a path outside the
     file system. For reference files, it will export the referenced file
-    if it exists.
+    if it exists. For URL references, it will download and export the content.
     
     Args:
       target_path: Path where the file should be exported
@@ -344,14 +344,38 @@ class BaseFile:
     Returns:
       bool: True if the file was exported successfully, False otherwise
     """
-    # Check if the file exists in our system
-    if not self.file_exists():
-      logger.error(f"Cannot export non-existent file: {self.file_id}")
-      return False
-    
     # Check if target already exists
     if os.path.exists(target_path) and not force_overwrite:
       logger.error(f"Target path already exists and force_overwrite is False: {target_path}")
+      return False
+    
+    # Handle URL references differently than regular files
+    if self.is_reference and self._is_url(self.external_path):
+      try:
+        # Download the content
+        content = self._fetch_url_content(self.external_path)
+        if content is None:
+          logger.error(f"Failed to download content from URL for export: {self.external_path}")
+          return False
+        
+        # Create target directory if it doesn't exist
+        target_dir = os.path.dirname(target_path)
+        if target_dir and not os.path.exists(target_dir):
+          os.makedirs(target_dir, exist_ok=True)
+        
+        # Write content to the target path
+        with open(target_path, 'wb') as f:
+          f.write(content)
+        
+        logger.debug(f"Exported URL reference {self.file_id} to {target_path}")
+        return True
+      except Exception as e:
+        logger.error(f"Failed to export URL reference {self.file_id} to {target_path}: {e}")
+        return False
+    
+    # For regular files and local references, use the existing code path
+    if not self.file_exists():
+      logger.error(f"Cannot export non-existent file: {self.file_id}")
       return False
     
     try:
@@ -628,3 +652,62 @@ class BaseFile:
       manifest.remove_file_metadata(file_id)
     
     return deleted_count
+
+  def convert_to_local(self) -> bool:
+    """
+    Convert a reference file to a local (non-reference) file.
+    
+    This method downloads content for URL references or copies
+    local files for file references, storing them in the internal
+    file system.
+    
+    Returns:
+      bool: True if the conversion was successful, False otherwise
+    """
+    # If this is already a non-reference file, nothing to do
+    if not self.is_reference:
+      logger.debug(f"File {self.file_id} is already a non-reference file")
+      return True
+    
+    # Ensure target directory exists
+    if not self.ensure_directory_exists():
+      return False
+    
+    # Get content based on reference type
+    content = None
+    if self._is_url(self.external_path):
+      # Download URL content
+      content = self._fetch_url_content(self.external_path)
+      if content is None:
+        logger.error(f"Failed to download content from URL: {self.external_path}")
+        return False
+    else:
+      # For local file references, read the content
+      if not os.path.exists(self.external_path):
+        logger.error(f"Referenced file does not exist: {self.external_path}")
+        return False
+      try:
+        with open(self.external_path, 'rb') as f:
+          content = f.read()
+      except Exception as e:
+        logger.error(f"Failed to read content from reference file {self.external_path}: {e}")
+        return False
+    
+    # Write content to storage
+    full_path = self.get_full_path()
+    if not self._write_content_to_file(full_path, content):
+      return False
+    
+    # Update file properties
+    old_external_path = self.external_path
+    self.is_reference = False
+    self.file_path = full_path
+    self.status = FileStatus.ACTIVE
+    
+    # Save updated metadata
+    if not self.save_metadata():
+      logger.error(f"Failed to save metadata after converting reference to local: {self.file_id}")
+      return False
+    
+    logger.info(f"Converted reference file {self.file_id} from {old_external_path} to local storage")
+    return True
