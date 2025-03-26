@@ -22,6 +22,13 @@ from files import BaseFile, ImageFile, FileManifest, TextFile
 from enums import FileStatus
 
 
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
+REFERENCE_URL = "https://example.com/sample.jpg"
+DOWNLOAD_URL = "https://lloydbower.com/favicon.png"
+
+
 
 ########################################################################
 #                             SETUP DEMO                               #
@@ -144,6 +151,50 @@ def demo_regular_files(base_dir, sample_file, export_dir):
   print("\n8. Cleaning up deleted files")
   deleted_count = BaseFile.cleanup_deleted_files(base_dir, older_than_days=0)
   print(f"   - Deleted files: {deleted_count}")
+  
+  # In the regular_files demo function, add this section after the existing code
+  print("\n9. Creating a file from URL (reference)")
+  url_file = BaseFile.from_source(REFERENCE_URL, base_dir)
+  print(f"   - Created URL reference file with ID: {url_file.file_id}")
+  print(f"   - Is reference: {url_file.is_reference}")
+  print(f"   - File name: {url_file.file_name}")
+  
+  # Demo the unified from_source method with custom filename
+  print("\n10. Unified from_source method with custom filename")
+  custom_name_file = BaseFile.from_source(
+    source=sample_file,
+    base_directory=base_dir,
+    file_name="custom_named_file.txt"
+  )
+  print(f"   - Created file with custom name: {custom_name_file.file_name}")
+  print(f"   - Original file basename: {os.path.basename(sample_file)}")
+  
+  # Try to download a real URL (conditionally)
+  try:
+    import requests
+    print("\n11. Downloading content from URL (non-reference)")
+    try:
+      download_file = BaseFile.from_source(
+        source=DOWNLOAD_URL,
+        base_directory=base_dir,
+        is_reference=False  # Force download instead of reference
+      )
+      if download_file:
+        print(f"   - Downloaded file with ID: {download_file.file_id}")
+        print(f"   - File size: {download_file.get_file_size()} bytes")
+        
+        # Export the downloaded image
+        print("\n12. Exporting downloaded image")
+        export_path = os.path.join(export_dir, "downloaded_image.png")
+        export_result = download_file.export(export_path)
+        print(f"   - Exported to: {export_path}")
+        print(f"   - Export successful: {export_result}")
+      else:
+        print("   - Download failed - see logs for details")
+    except Exception as e:
+      print(f"   - Download error: {e}")
+  except ImportError:
+    print("\n11. Skipping URL download demo (requests library not available)")
   
   return file.file_id
 

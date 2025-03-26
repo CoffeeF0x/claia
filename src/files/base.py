@@ -406,6 +406,30 @@ class BaseFile:
       return None
   
   @classmethod
+  def _fetch_url_content(cls, url: str, timeout: int = 30) -> Optional[bytes]:
+    """
+    Fetch content from a URL.
+    
+    Args:
+      url: URL to fetch content from
+      timeout: Request timeout in seconds
+      
+    Returns:
+      Optional[bytes]: Content as bytes if successful, None otherwise
+    """
+    try:
+      import requests
+      response = requests.get(url, timeout=timeout)
+      response.raise_for_status()  # Raise exception for HTTP errors
+      return response.content
+    except ImportError:
+      logger.error("Requests library is required to download from URLs")
+      return None
+    except Exception as e:
+      logger.error(f"Failed to download content from URL {url}: {e}")
+      return None
+  
+  @classmethod
   def from_source(cls: Type[T], 
                  source: str, 
                  base_directory: str,
@@ -428,40 +452,20 @@ class BaseFile:
     Returns:
       Optional[T]: The created file object, or None if creation failed
     """
-    # Auto-determine if this is a reference based on source type
-    if is_reference is None:
-      # URLs are typically references by default
-      is_reference = source.startswith(('http://', 'https://', 'ftp://'))
-    
-    return cls._create_file_from_source(
-      source=source,
-      base_directory=base_directory,
-      is_reference=is_reference,
-      file_name=file_name,
-      **kwargs
-    )
-  
-  @classmethod
-  def _create_file_from_source(cls: Type[T], 
-                              source: str, 
-                              base_directory: str,
-                              is_reference: bool = False,
-                              file_name: Optional[str] = None,
-                              **kwargs) -> Optional[T]:
-    """
-    Private helper method to create a file from a source path.
-    
-    Args:
-      source: Path to the source file (local path or URL)
-      base_directory: Base directory for file operations
-      is_reference: Whether to store only a reference to the file
-      file_name: Optional custom name for the file
-      **kwargs: Additional arguments to pass to the constructor
-        
-    Returns:
-      Optional[T]: The created file object, or None if creation failed
-    """
     try:
+      # Detect if the source is a URL
+      is_url = source.startswith(('http://', 'https://', 'ftp://'))
+      
+      # Auto-determine if this is a reference based on source type
+      if is_reference is None:
+        # URLs are typically references by default
+        is_reference = is_url
+      
+      # If non-reference and local file, check if it exists
+      if not is_reference and not is_url and not os.path.exists(source):
+        logger.error(f"File {source} does not exist")
+        return None
+      
       # If file_name is not provided, use basename of source path
       if file_name is None:
         file_name = os.path.basename(source) or "file"  # Default to "file" if basename is empty
@@ -482,25 +486,29 @@ class BaseFile:
           return None
         return file_obj
       
-      # For non-reference files that exist locally, read and save content
-      if os.path.exists(source):
+      # For non-reference files, we need to get the content
+      content = None
+      
+      # Get content based on source type
+      if is_url:
+        content = cls._fetch_url_content(source)
+      else:  # Local file
         try:
-          # Read file content in binary mode
           with open(source, 'rb') as f:
             content = f.read()
-          
-          # Save content (which will handle directory creation, writing, and metadata)
-          if file_obj.save(content=content) is None:
-            logger.error(f"Failed to save content from {source}")
-            return None
         except Exception as e:
           logger.error(f"Failed to read content from {source}: {e}")
           return None
-      else:
-        # For non-local paths (like URLs), just save metadata
-        if not file_obj.save_metadata():
-          logger.error(f"Failed to save metadata for external file: {source}")
+      
+      # Save the content to storage
+      if content is not None:
+        if file_obj.save(content=content) is None:
+          logger.error(f"Failed to save content from {source}")
           return None
+      else:
+        # This should only happen if there was an error retrieving content
+        logger.error(f"No content retrieved from {source}")
+        return None
       
       return file_obj
     except Exception as e:

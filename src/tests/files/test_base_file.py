@@ -375,7 +375,7 @@ def test_from_path(temp_dir, test_file):
 
 def test_from_url(temp_dir):
   """Test creating a file from URL."""
-  url = "https://example.com/image.jpg"
+  url = "https://lloydbower.com/favicon.png"
   
   # Create file from URL
   file = BaseFile.from_source(url, temp_dir)
@@ -383,13 +383,20 @@ def test_from_url(temp_dir):
   # Verify file was created with correct data
   assert file is not None
   assert file.base_directory == temp_dir
-  assert file.file_name == "image.jpg"
+  assert file.file_name == "favicon.png"
   assert file.external_path == url
-  assert file.is_reference is True  # Default for URLs
+  assert file.is_reference is True
   
-  # Non-reference (would trigger download)
-  non_ref = BaseFile.from_source(url, temp_dir, is_reference=False)
-  assert non_ref.is_reference is False
+  # Mock _fetch_url_content for the non-reference URL test
+  mock_content = b"Mock image data"
+  with patch.object(BaseFile, '_fetch_url_content', return_value=mock_content):
+    # Non-reference (would trigger download)
+    non_ref = BaseFile.from_source(url, temp_dir, is_reference=False)
+    
+    # Verify the result
+    assert non_ref is not None
+    assert non_ref.is_reference is False
+    assert non_ref.file_name == "favicon.png"
 
 
 def test_export(base_file, test_file, temp_dir):
