@@ -97,22 +97,22 @@ def test_get_full_path(base_file):
   assert base_file.get_internal_path() == expected_path
 
 
-def test_file_exists(base_file, test_file):
+def test_exists(base_file, test_file):
   """Test checking if a file exists."""
   # Use MagicMock with side_effect to control behavior based on path
   def exists_side_effect(path):
     return path == test_file
     
   with patch('os.path.exists', side_effect=exists_side_effect):
-    # Set the correct path to make file_exists work
+    # Set the correct path to make exists work
     base_file.path = "non_existent_path"
     
     # Should return False when path doesn't exist
-    assert base_file.file_exists() is False
+    assert base_file.exists() is False
     
     # Set path to test_file
     base_file.path = test_file
-    assert base_file.file_exists() is True
+    assert base_file.exists() is True
 
 
 def test_get_file_size(base_file, test_file):
@@ -126,7 +126,7 @@ def test_get_file_size(base_file, test_file):
     assert base_file.get_file_size() == expected_size
   
   # Test when file doesn't exist
-  with patch.object(base_file, 'file_exists', return_value=False):
+  with patch.object(base_file, 'exists', return_value=False):
     assert base_file.get_file_size() == 0
 
 
@@ -402,24 +402,24 @@ def test_export(base_file, test_file, temp_dir):
   """Test exporting a file to an external location."""
   # Setup
   export_path = os.path.join(temp_dir, "exported_file.txt")
-  
-  # Mock file_exists to return True
-  with patch.object(base_file, 'file_exists', return_value=True), \
+
+  # Mock exists to return True
+  with patch.object(base_file, 'exists', return_value=True), \
        patch.object(base_file, 'path', test_file), \
        patch('shutil.copy2') as mock_copy:
-    
+
     # Test successful export
     result = base_file.export(export_path)
     assert result is True
     mock_copy.assert_called_once_with(test_file, export_path)
-  
+
   # Test exporting to existing path without force_overwrite
-  with patch.object(base_file, 'file_exists', return_value=True), \
+  with patch.object(base_file, 'exists', return_value=True), \
        patch('os.path.exists', lambda path: path == export_path):
-    
+
     result = base_file.export(export_path, force_overwrite=False)
     assert result is False
-    
+
     # With force_overwrite=True
     with patch('shutil.copy2') as mock_copy:
       result = base_file.export(export_path, force_overwrite=True)
@@ -427,7 +427,7 @@ def test_export(base_file, test_file, temp_dir):
       mock_copy.assert_called_once_with(base_file.path, export_path)
   
   # Test when source file doesn't exist
-  with patch.object(base_file, 'file_exists', return_value=False):
+  with patch.object(base_file, 'exists', return_value=False):
     result = base_file.export(export_path)
     assert result is False
 
@@ -444,7 +444,7 @@ def test_from_content(temp_dir):
   
   assert string_file is not None
   assert string_file.file_name == "string_test.txt"
-  assert string_file.file_exists() is True
+  assert string_file.exists() is True
   
   # Verify content was written correctly
   with open(string_file.path, 'r') as f:
@@ -461,7 +461,7 @@ def test_from_content(temp_dir):
   
   assert binary_file is not None
   assert binary_file.file_name == "binary_test.bin"
-  assert binary_file.file_exists() is True
+  assert binary_file.exists() is True
   
   # Verify binary content was written correctly
   with open(binary_file.path, 'rb') as f:
@@ -477,7 +477,7 @@ def test_from_content(temp_dir):
   )
   
   assert encoded_file is not None
-  assert encoded_file.file_exists() is True
+  assert encoded_file.exists() is True
   
   # Verify encoded content was written correctly
   with open(encoded_file.path, 'r', encoding='utf-8') as f:

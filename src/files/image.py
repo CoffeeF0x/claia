@@ -137,7 +137,7 @@ class ImageFile(BaseFile):
     Returns:
       Dict[str, Any]: The extracted metadata
     """
-    if not self.file_exists():
+    if not self.exists():
       return {"error": "File does not exist"}
     
     try:
@@ -178,7 +178,7 @@ class ImageFile(BaseFile):
     Returns:
       Optional[str]: Base64-encoded image data, or None if encoding failed
     """
-    if not self.file_exists():
+    if not self.exists():
       return None
     
     try:
@@ -201,7 +201,7 @@ class ImageFile(BaseFile):
     Returns:
       Optional[ImageFile]: New ImageFile with the converted format, or None if conversion failed
     """
-    if not self.file_exists():
+    if not self.exists():
       logger.error(f"Cannot convert non-existent image {self.file_id}")
       return None
     
@@ -270,7 +270,7 @@ class ImageFile(BaseFile):
     Returns:
       Optional[ImageFile]: New ImageFile with the resized image, or None if resizing failed
     """
-    if not self.file_exists():
+    if not self.exists():
       logger.error(f"Cannot resize non-existent image {self.file_id}")
       return None
     

@@ -76,7 +76,7 @@ def test_process_image(image_file):
   assert image_file.metadata["height"] == 150
   
   # Test handling non-existent file
-  with patch.object(image_file, 'file_exists', return_value=False):
+  with patch.object(image_file, 'exists', return_value=False):
     result = image_file.process()
     assert "error" in result
 
@@ -96,7 +96,7 @@ def test_get_base64(image_file, test_image_path):
     assert base64_data == base64.b64encode(mock_data).decode('utf-8')
   
   # Test with non-existent file
-  with patch.object(image_file, 'file_exists', return_value=False):
+  with patch.object(image_file, 'exists', return_value=False):
     assert image_file.get_base64() is None
 
 
@@ -107,19 +107,19 @@ def test_convert(image_file):
   
   # Create a simple mock implementation that returns our expected result
   def mock_convert(target_format, quality=90):
-    if not image_file.file_exists():
+    if not image_file.exists():
       return None
     return expected_result
   
   # Use the mock implementation for this test
   with patch.object(image_file, 'convert', side_effect=mock_convert):
     # Test successful conversion
-    with patch.object(image_file, 'file_exists', return_value=True):
+    with patch.object(image_file, 'exists', return_value=True):
       result = image_file.convert("jpeg", quality=85)
       assert result is expected_result
     
     # Test failure due to file not existing
-    with patch.object(image_file, 'file_exists', return_value=False):
+    with patch.object(image_file, 'exists', return_value=False):
       result = image_file.convert("jpeg")
       assert result is None
 
@@ -168,5 +168,5 @@ def test_resize(image_file, temp_dir):
       assert args[0] == (150, 75)
   
   # Test non-existent file
-  with patch.object(image_file, 'file_exists', return_value=False):
+  with patch.object(image_file, 'exists', return_value=False):
     assert image_file.resize(100, 100) is None 

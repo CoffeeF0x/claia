@@ -120,7 +120,7 @@ class TextFile(BaseFile):
     This is called automatically after save() or when using save() with content.
     """
     # Only update statistics if the file exists
-    if self.file_exists():
+    if self.exists():
       self.get_stats()
   
   def detect_encoding(self, min_confidence=0.7):
@@ -133,7 +133,7 @@ class TextFile(BaseFile):
     Returns:
       str: Detected encoding or default utf-8 if detection fails or confidence is low
     """
-    if not self.file_exists():
+    if not self.exists():
       return self.encoding
     
     with open(self.get_internal_path(), "rb") as f:
@@ -158,7 +158,7 @@ class TextFile(BaseFile):
     Returns:
       dict: Dictionary of text file statistics
     """
-    if not self.file_exists():
+    if not self.exists():
       return {
         "line_count": 0,
         "word_count": 0,
@@ -194,7 +194,7 @@ class TextFile(BaseFile):
     Returns:
       str: Preview of the text file content
     """
-    if not self.file_exists():
+    if not self.exists():
       return ""
       
     lines = self.get_lines()
@@ -217,7 +217,7 @@ class TextFile(BaseFile):
     Returns:
       list: List of tuples with (line_number, line_content) for matches
     """
-    if not self.file_exists():
+    if not self.exists():
       return []
     
     lines = self.get_lines()
@@ -239,7 +239,7 @@ class TextFile(BaseFile):
     Returns:
       str: Content of the text file
     """
-    if not self.file_exists():
+    if not self.exists():
       return ""
       
     try:
@@ -262,7 +262,7 @@ class TextFile(BaseFile):
     Returns:
       list: List of lines from the text file
     """
-    if not self.file_exists():
+    if not self.exists():
       return []
       
     content = self.get_content()

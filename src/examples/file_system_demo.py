@@ -169,32 +169,25 @@ def demo_regular_files(base_dir, sample_file, export_dir):
   print(f"   - Created file with custom name: {custom_name_file.file_name}")
   print(f"   - Original file basename: {os.path.basename(sample_file)}")
   
-  # Try to download a real URL (conditionally)
-  try:
-    import requests
-    print("\n11. Downloading content from URL (non-reference)")
-    try:
-      download_file = BaseFile.from_source(
-        source=DOWNLOAD_URL,
-        base_directory=base_dir,
-        is_reference=False  # Force download instead of reference
-      )
-      if download_file:
-        print(f"   - Downloaded file with ID: {download_file.file_id}")
-        print(f"   - File size: {download_file.get_file_size()} bytes")
-        
-        # Export the downloaded image
-        print("\n12. Exporting downloaded image")
-        export_path = os.path.join(export_dir, "downloaded_image.png")
-        export_result = download_file.export(export_path)
-        print(f"   - Exported to: {export_path}")
-        print(f"   - Export successful: {export_result}")
-      else:
-        print("   - Download failed - see logs for details")
-    except Exception as e:
-      print(f"   - Download error: {e}")
-  except ImportError:
-    print("\n11. Skipping URL download demo (requests library not available)")
+  # Download content from URL (now simplified without explicit requests check)
+  print("\n11. Downloading content from URL (non-reference)")
+  download_file = BaseFile.from_source(
+    source=DOWNLOAD_URL,
+    base_directory=base_dir,
+    is_reference=False  # Force download instead of reference
+  )
+  if download_file:
+    print(f"   - Downloaded file with ID: {download_file.file_id}")
+    print(f"   - File size: {download_file.get_file_size()} bytes")
+    
+    # Export the downloaded image
+    print("\n12. Exporting downloaded image")
+    export_path = os.path.join(export_dir, "downloaded_image.png")
+    export_result = download_file.export(export_path)
+    print(f"   - Exported to: {export_path}")
+    print(f"   - Export successful: {export_result}")
+  else:
+    print("   - Download failed - see logs for details")
   
   # In the regular_files demo function, add this section after the existing code
   print("\n13. Converting URL reference to local file")
@@ -219,7 +212,7 @@ def demo_regular_files(base_dir, sample_file, export_dir):
   direct_result = another_url_ref.export(direct_export_path)
   print(f"   - Direct URL export successful: {direct_result}")
   
-  # Export the converted file (should use local copy)
+  # Export the converted file (should use local copy if conversion succeeded)
   converted_export_path = os.path.join(export_dir, "converted_reference.jpg")
   converted_result = url_ref.export(converted_export_path)
   print(f"   - Converted file export successful: {converted_result}")
@@ -339,7 +332,7 @@ text = TextFile.from_string(content, base_dir, "memory_text.txt")
 """
   memory_text = TextFile.from_string(content, base_dir, "memory_text.txt")
   print(f"   - Memory text file ID: {memory_text.file_id}")
-  print(f"   - File exists: {memory_text.file_exists()}")
+  print(f"   - File exists: {memory_text.exists()}")
   
   # Create a text file without specifying a filename
   print("\n3. Creating a text file without a file name")
@@ -348,7 +341,7 @@ text = TextFile.from_string(content, base_dir, "memory_text.txt")
   if auto_named_text:
     print(f"   - Auto-named text file ID: {auto_named_text.file_id}")
     print(f"   - File name: {auto_named_text.file_name}")
-    print(f"   - File exists: {auto_named_text.file_exists()}")
+    print(f"   - File exists: {auto_named_text.exists()}")
   else:
     print("   - Failed to create auto-named text file")
   

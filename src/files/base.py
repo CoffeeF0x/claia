@@ -137,18 +137,30 @@ class BaseFile:
   def get_source_path(self) -> Optional[str]:
     """Get the original source path of the file."""
     return self.metadata.get("source_path")
-  
-  def file_exists(self) -> bool:
-    """Check if the file exists."""
-    # Special handling for URL references
+
+  def exists(self) -> bool:
+    """
+    Check if the file or resource exists.
+    
+    This method handles different types of files and resources:
+    - For URL references: Checks if the URL is accessible
+    - For file references: Checks if the referenced file exists
+    - For internal files: Checks if the file exists in storage
+    
+    Returns:
+      bool: True if the file or resource exists, False otherwise
+    """
+    # Check if this is a URL reference
     if self.is_reference and self._is_url(self.path):
-      return True  # URLs are considered to exist for file operations
+      return self._url_exists(self.path)
+    
+    # For regular files and local references, check if file exists
     return os.path.exists(self.path)
   
   def get_file_size(self) -> int:
     """Get the size of the file in bytes."""
     try:
-      if self.file_exists():
+      if self.exists():
         return os.path.getsize(self.path)
       return 0
     except Exception as e:
@@ -382,7 +394,7 @@ class BaseFile:
         return False
     
     # For regular files and local references, check if file exists
-    if not self.file_exists():
+    if not self.exists():
       logger.error(f"Cannot export non-existent file: {self.file_id}")
       return False
     
@@ -663,63 +675,64 @@ class BaseFile:
 
   def convert_to_local(self) -> bool:
     """
-    Convert a reference file to a local (non-reference) file.
-    
-    This method downloads content for URL references or copies
-    local files for file references, storing them in the internal
-    file system.
+    Converts a reference file to a local file by downloading/copying the content.
     
     Returns:
-      bool: True if the conversion was successful, False otherwise
+      bool: True if conversion was successful, False otherwise
     """
-    # If this is already a non-reference file, nothing to do
     if not self.is_reference:
       logger.debug(f"File {self.file_id} is already a non-reference file")
       return True
     
-    # Ensure target directory exists
-    if not self.ensure_directory_exists():
+    # Check if the source exists
+    if not self.exists():
+      logger.error(f"Cannot convert reference to local: Source does not exist - {self.path}")
       return False
     
-    # Get content based on reference type
-    content = None
-    source_path = self.path  # Current path (external)
-    
-    if self._is_url(source_path):
-      # Download URL content
-      content = self._fetch_url_content(source_path)
-      if content is None:
-        logger.error(f"Failed to download content from URL: {source_path}")
+    # For URL references, download the content
+    if self._is_url(self.path):
+      try:
+        content = self._fetch_url_content(self.path)
+        if content is None:
+          return False
+        
+        self.save(content)
+        self.is_reference = False
+        return True
+      except Exception as e:
+        logger.error(f"Failed to download URL content: {e}")
         return False
     else:
-      # For local file references, check if file exists
-      if not os.path.exists(source_path):
-        logger.error(f"Referenced file does not exist: {source_path}")
-        return False
-      
-      # Read the content
+      # For file references, copy the file
       try:
-        with open(source_path, 'rb') as f:
-          content = f.read()
+        # Get a file handle to the source
+        with open(self.path, 'rb') as source_file:
+          content = source_file.read()
+        
+        # Save content to storage
+        self.save(content)
+        self.is_reference = False
+        return True
       except Exception as e:
-        logger.error(f"Failed to read content from reference file {source_path}: {e}")
+        logger.error(f"Failed to copy file: {e}")
         return False
+
+  @staticmethod
+  def _url_exists(url: str, timeout: int = 5) -> bool:
+    """
+    Check if a URL exists by sending a HEAD request.
     
-    # Write content to storage
-    internal_path = self.get_internal_path()
-    if not self._write_content_to_file(internal_path, content):
+    Args:
+      url: URL to check
+      timeout: Request timeout in seconds
+      
+    Returns:
+      bool: True if the URL exists (returns 2xx status code), False otherwise
+    """
+    try:
+      import requests
+      response = requests.head(url, timeout=timeout, allow_redirects=True)
+      return response.status_code >= 200 and response.status_code < 300
+    except Exception as e:
+      logger.debug(f"Failed to check URL existence: {url} - {e}")
       return False
-    
-    # Update file properties
-    old_path = self.path
-    self.is_reference = False
-    self.path = internal_path
-    self.status = FileStatus.ACTIVE
-    
-    # Save updated metadata
-    if not self.save_metadata():
-      logger.error(f"Failed to save metadata after converting reference to local: {self.file_id}")
-      return False
-    
-    logger.info(f"Converted reference file {self.file_id} from {old_path} to local storage")
-    return True
