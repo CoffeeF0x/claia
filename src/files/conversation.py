@@ -270,29 +270,14 @@ class Conversation(TextFile):
             "created_at": self.timestamp
         }
     
-    def save(self, content: Optional[Union[str, bytes]] = None, encoding: str = "utf-8") -> Optional[str]:
+    def to_json(self) -> str:
         """
-        Save the conversation file.
+        Convert the conversation to a JSON string.
         
-        Args:
-            content: Optional content to write (overrides current conversation data if provided)
-            encoding: Encoding to use when writing the content
-            
         Returns:
-            Optional[str]: The path to the saved file, or None if saving failed
+            str: JSON representation of the conversation
         """
-        # If content is provided, use that
-        if content is not None:
-            saved_path = super().save(content=content, encoding=encoding)
-            # After saving, reload the conversation data to keep it in sync
-            if saved_path:
-                # Clear cached data to force refresh
-                if hasattr(self, '_conversation_data'):
-                    delattr(self, '_conversation_data')
-                self.get_conversation_data()
-            return saved_path
-        
-        # Otherwise, construct JSON from conversation data
+        # Construct conversation data
         conversation_data = self.to_dict()
         
         # Update cached data
@@ -305,10 +290,16 @@ class Conversation(TextFile):
         })
         
         # Convert to JSON string
-        json_content = json.dumps(conversation_data, indent=2)
+        return json.dumps(conversation_data, indent=2)
+    
+    def _get_default_content(self) -> Optional[str]:
+        """
+        Provide default content when saving without content.
         
-        # Save using parent method
-        return super().save(content=json_content, encoding=encoding)
+        Returns:
+            str: JSON representation of the conversation
+        """
+        return self.to_json()
     
     def add_message(self, speaker: Union[MessageRole, str], content: str, file_ids: Optional[List[str]] = None) -> Message:
         """

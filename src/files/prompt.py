@@ -170,28 +170,14 @@ class Prompt(TextFile):
     self._prompt_data = default_data
     return default_data
   
-  def save(self, content: Optional[Union[str, bytes]] = None, encoding: str = "utf-8") -> Optional[str]:
+  def to_json(self) -> str:
     """
-    Save the prompt file.
+    Convert the prompt to a JSON string.
     
-    This overrides the parent save method to handle saving the prompt data.
-    
-    Args:
-      content: Optional content to write (overrides current prompt data if provided)
-      encoding: Encoding to use when writing the content
-      
     Returns:
-      Optional[str]: The path to the saved file, or None if saving failed
+      str: JSON representation of the prompt
     """
-    # If content is provided, use that (allows saving arbitrary JSON content)
-    if content is not None:
-      saved_path = super().save(content=content, encoding=encoding)
-      # After saving, reload the prompt data to keep it in sync
-      if saved_path:
-        self.get_prompt_data()  # This will refresh the cached data
-      return saved_path
-    
-    # Otherwise, construct JSON from prompt data
+    # Construct prompt data
     validated_name = self.validate_prompt_name(self.prompt_name) if self.prompt_name else ""
     prompt_data = {
       "name": validated_name,
@@ -208,10 +194,16 @@ class Prompt(TextFile):
     })
     
     # Convert to JSON string
-    json_content = json.dumps(prompt_data, indent=2)
+    return json.dumps(prompt_data, indent=2)
+  
+  def _get_default_content(self) -> Optional[str]:
+    """
+    Provide default content when saving without content.
     
-    # Save using parent method
-    return super().save(content=json_content, encoding=encoding)
+    Returns:
+      str: JSON representation of the prompt
+    """
+    return self.to_json()
   
   def load_function_definitions(self, function_definitions: List[Dict[str, Any]]) -> None:
     """
