@@ -23,15 +23,15 @@ from enums.conversation import ActionType, MessageRole
 ########################################################################
 DEFAULT_CONVERSATION_TITLE = "New Conversation"
 
-# Default function format placeholder
-DEFAULT_FUNCTION_FORMAT = """
-[FUNCTION_CALL]{
-"name": "function_name",
+# Default tool format placeholder
+DEFAULT_TOOL_FORMAT = """
+[TOOL_CALL]{
+"name": "tool_name",
 "parameters": {
   "param1": "value1",
   "param2": "value2"
 }
-}[/FUNCTION_CALL]
+}[/TOOL_CALL]
 """
 
 
@@ -98,6 +98,64 @@ class Message:
       content=data.get("content", ""),
       message_id=data.get("message_id"),
       file_ids=data.get("file_ids", []),
+      created_at=data.get("created_at"),
+      updated_at=data.get("updated_at")
+    )
+
+
+
+########################################################################
+#                          TOOL DEFINITION                             #
+########################################################################
+class ToolDefinition:
+  """
+  Class representing a tool definition in a conversation.
+  """
+  
+  def __init__(self, 
+               name: str,
+               description: str,
+               parameters: Dict[str, Any],
+               tool_id: Optional[str] = None,
+               created_at: Optional[float] = None,
+               updated_at: Optional[float] = None):
+    """
+    Initialize a tool definition.
+    
+    Args:
+        name: The name of the tool
+        description: The description of the tool
+        parameters: The parameters of the tool
+        tool_id: Optional ID for the tool (generated if not provided)
+        created_at: Optional timestamp for creation time
+        updated_at: Optional timestamp for last update time
+    """
+    self.tool_id = tool_id or str(uuid.uuid4())
+    self.name = name
+    self.description = description
+    self.parameters = parameters
+    self.created_at = created_at or time.time()
+    self.updated_at = updated_at or self.created_at
+  
+  def to_dict(self) -> Dict[str, Any]:
+    """Convert the tool definition to a dictionary."""
+    return {
+      "tool_id": self.tool_id,
+      "name": self.name,
+      "description": self.description,
+      "parameters": self.parameters,
+      "created_at": self.created_at,
+      "updated_at": self.updated_at
+    }
+  
+  @classmethod
+  def from_dict(cls, data: Dict[str, Any]) -> 'ToolDefinition':
+    """Create a tool definition from a dictionary."""
+    return cls(
+      name=data.get("name", ""),
+      description=data.get("description", ""),
+      parameters=data.get("parameters", {}),
+      tool_id=data.get("tool_id"),
       created_at=data.get("created_at"),
       updated_at=data.get("updated_at")
     )
@@ -179,6 +237,7 @@ class Conversation(TextFile):
     self.prompt = kwargs.pop("prompt", "")
     initial_messages = kwargs.pop("messages", [])
     initial_actions = kwargs.pop("actions", [])
+    initial_tools = kwargs.pop("tool_definitions", [])
     
     # Ensure the file has .json extension
     file_name = kwargs.get("file_name")
@@ -189,9 +248,10 @@ class Conversation(TextFile):
     kwargs["mime_type"] = "application/json"
     super().__init__(base_directory=base_directory, **kwargs)
     
-    # Initialize messages and actions
+    # Initialize messages, actions, and tool definitions
     self.messages = []
     self.actions = []
+    self.tool_definitions = []
     
     # Load initial messages and actions if provided
     for message_data in initial_messages:
@@ -206,6 +266,13 @@ class Conversation(TextFile):
       else:
         self.actions.append(Action.from_dict(action_data))
     
+    # Load initial tool definitions if provided
+    for tool_data in initial_tools:
+      if isinstance(tool_data, ToolDefinition):
+        self.tool_definitions.append(tool_data)
+      else:
+        self.tool_definitions.append(ToolDefinition.from_dict(tool_data))
+    
     # If no actions are provided, create an initial action
     if not self.actions:
       self.add_action(ActionType.CREATE_CONVERSATION, {
@@ -216,7 +283,8 @@ class Conversation(TextFile):
     # Add conversation-specific metadata
     self.metadata.update({
       "title": self.title,
-      "message_count": len(self.messages)
+      "message_count": len(self.messages),
+      "tool_count": len(self.tool_definitions)
     })
   
   def get_subdirectory(self) -> str:
@@ -226,7 +294,7 @@ class Conversation(TextFile):
     Returns:
         str: The conversations subdirectory
     """
-    return "conversations"
+    return FileSubdirectory.CONVERSATION.value
   
   def get_conversation_data(self) -> Dict[str, Any]:
     """
@@ -253,10 +321,14 @@ class Conversation(TextFile):
         self.messages = [Message.from_dict(m) for m in data.get("messages", [])]
         self.actions = [Action.from_dict(a) for a in data.get("actions", [])]
         
+        # Update tool definitions from data
+        self.tool_definitions = [ToolDefinition.from_dict(f) for f in data.get("tool_definitions", [])]
+        
         # Update metadata
         self.metadata.update({
           "title": self.title,
-          "message_count": len(self.messages)
+          "message_count": len(self.messages),
+          "tool_count": len(self.tool_definitions)
         })
         
         # Cache the data
@@ -278,6 +350,7 @@ class Conversation(TextFile):
       "prompt": self.prompt,
       "messages": [m.to_dict() for m in self.messages],
       "actions": [a.to_dict() for a in self.actions],
+      "tool_definitions": [t.to_dict() for t in self.tool_definitions],
       "created_at": self.timestamp
     }
   
@@ -297,7 +370,8 @@ class Conversation(TextFile):
     # Update metadata
     self.metadata.update({
       "title": self.title,
-      "message_count": len(self.messages)
+      "message_count": len(self.messages),
+      "tool_count": len(self.tool_definitions)
     })
     
     # Convert to JSON string
@@ -316,11 +390,28 @@ class Conversation(TextFile):
     """
     Apply substitutions to the given text, replacing placeholders with values.
     
-    This generic substitution system handles:
+    This is the main method for all text substitutions in the conversation.
+    Use this to process any text that contains placeholders, including:
+    - Conversation prompts
+    - Message content
+    - Custom templates
+    
+    The substitution system handles:
     1. Simple placeholders like {name} or {date}
-    2. Function definition placeholders {function_definitions}
-    3. Function format placeholders {function_format}
+    2. Tool definition placeholders {tool_definitions}
+    3. Tool format placeholders {tool_format}
     4. Any other placeholders passed via kwargs
+    
+    Examples:
+        # Format a prompt
+        formatted_prompt = conversation.apply_substitutions(conversation.prompt, 
+                                                          name="User", 
+                                                          topic="Python")
+        
+        # Process a message
+        message = conversation.get_message(message_id)
+        processed_message = conversation.apply_substitutions(message.content, 
+                                                           time="9:30 AM")
     
     Args:
         text: The text containing placeholders to replace
@@ -332,16 +423,23 @@ class Conversation(TextFile):
     # Make a copy of the text to avoid modifying the original
     processed_text = text
     
-    # Handle function definitions placeholder
-    if "{function_definitions}" in processed_text and "function_definitions" not in kwargs:
-      # If function_definitions is not in kwargs but we have them stored, use them
-      if hasattr(self, 'function_definitions'):
-        function_definitions_json = json.dumps(self.function_definitions, indent=2)
-        kwargs["function_definitions"] = function_definitions_json
+    # Handle tool definitions placeholder
+    if "{tool_definitions}" in processed_text and "tool_definitions" not in kwargs:
+      # Use the stored tool definitions
+      if self.tool_definitions:
+        tool_defs_list = [
+          {
+            "name": t.name,
+            "description": t.description,
+            "parameters": t.parameters
+          }
+          for t in self.tool_definitions
+        ]
+        kwargs["tool_definitions"] = json.dumps(tool_defs_list, indent=2)
     
-    # Handle function format placeholder
-    if "{function_format}" in processed_text and "function_format" not in kwargs:
-      kwargs["function_format"] = DEFAULT_FUNCTION_FORMAT
+    # Handle tool format placeholder
+    if "{tool_format}" in processed_text and "tool_format" not in kwargs:
+      kwargs["tool_format"] = DEFAULT_TOOL_FORMAT
     
     # Only attempt formatting if there are placeholders to replace
     if kwargs and any(f"{{{key}}}" in processed_text for key in kwargs):
@@ -354,49 +452,138 @@ class Conversation(TextFile):
     
     return processed_text
   
-  def format_prompt(self, **kwargs) -> str:
+  def add_tool_definition(self, name: str, description: str, parameters: Dict[str, Any]) -> ToolDefinition:
     """
-    Format the conversation prompt with the given replacements.
-    
-    This is a convenience wrapper around apply_substitutions that uses
-    the conversation's prompt as the text.
+    Add a tool definition to the conversation.
     
     Args:
-        **kwargs: Keyword arguments for string formatting
+        name: The name of the tool
+        description: The description of the tool
+        parameters: The parameters of the tool
         
     Returns:
-        str: The formatted prompt
+        ToolDefinition: The created tool definition
     """
-    return self.apply_substitutions(self.prompt, **kwargs)
+    # First check if a tool with the same name already exists
+    for tool in self.tool_definitions:
+      if tool.name == name:
+        logger.warning(f"Tool with name '{name}' already exists. Use update_tool_definition instead.")
+        return tool
+        
+    # Create a new tool definition
+    tool_def = ToolDefinition(name=name, description=description, parameters=parameters)
+    self.tool_definitions.append(tool_def)
+    
+    # Add an action for this tool addition
+    self.add_action(ActionType.ADD_TOOL_DEFINITION, {
+      "tool_id": tool_def.tool_id,
+      "name": name,
+      "description": description[:50] + "..." if len(description) > 50 else description
+    })
+    
+    return tool_def
   
-  def process_message(self, message_id: str, **kwargs) -> str:
+  def update_tool_definition(self, tool_id: str, name: Optional[str] = None, 
+                                description: Optional[str] = None, 
+                                parameters: Optional[Dict[str, Any]] = None) -> Optional[ToolDefinition]:
     """
-    Process a message's content by applying substitutions.
+    Update a tool definition in the conversation.
     
     Args:
-        message_id: The ID of the message to process
-        **kwargs: Substitution key-value pairs
+        tool_id: The ID of the tool to update
+        name: Optional new name for the tool
+        description: Optional new description for the tool
+        parameters: Optional new parameters for the tool
         
     Returns:
-        str: The processed message content, or empty string if message not found
+        Optional[ToolDefinition]: The updated tool definition, or None if not found
     """
-    message = self.get_message(message_id)
-    if not message:
-      logger.warning(f"Cannot process message: message not found with ID {message_id}")
-      return ""
+    # Find the tool
+    for i, tool in enumerate(self.tool_definitions):
+      if tool.tool_id == tool_id:
+        # Update tool properties if provided
+        old_name = tool.name
+        old_description = tool.description
+        
+        if name is not None:
+          tool.name = name
+        if description is not None:
+          tool.description = description
+        if parameters is not None:
+          tool.parameters = parameters
+        
+        # Update timestamp
+        tool.updated_at = time.time()
+        
+        # Add an action for this update
+        self.add_action(ActionType.UPDATE_TOOL_DEFINITION, {
+          "tool_id": tool_id,
+          "old_name": old_name,
+          "new_name": tool.name,
+          "description": tool.description[:50] + "..." if len(tool.description) > 50 else tool.description
+        })
+        
+        return tool
     
-    return self.apply_substitutions(message.content, **kwargs)
+    logger.error(f"Tool definition not found for update: {tool_id}")
+    return None
   
-  def load_function_definitions(self, function_definitions: List[Dict[str, Any]]) -> None:
+  def remove_tool_definition(self, tool_id: str) -> bool:
     """
-    Load function definitions into the conversation.
-    This should be called before using format_prompt if function definitions are needed.
-
+    Remove a tool definition from the conversation.
+    
     Args:
-        function_definitions: List of function definitions to load
+        tool_id: The ID of the tool to remove
+        
+    Returns:
+        bool: True if the tool was removed, False otherwise
     """
-    self.function_definitions = function_definitions
-    logger.debug(f"Loaded {len(function_definitions)} function definitions into conversation")
+    # Find the tool
+    for i, tool in enumerate(self.tool_definitions):
+      if tool.tool_id == tool_id:
+        # Remove the tool
+        removed_tool = self.tool_definitions.pop(i)
+        
+        # Add an action for this removal
+        self.add_action(ActionType.REMOVE_TOOL_DEFINITION, {
+          "tool_id": tool_id,
+          "name": removed_tool.name
+        })
+        
+        return True
+    
+    logger.error(f"Tool definition not found for removal: {tool_id}")
+    return False
+  
+  def get_tool_definition(self, tool_id: str) -> Optional[ToolDefinition]:
+    """
+    Get a tool definition by ID.
+    
+    Args:
+        tool_id: The ID of the tool to get
+        
+    Returns:
+        Optional[ToolDefinition]: The tool definition, or None if not found
+    """
+    for tool in self.tool_definitions:
+      if tool.tool_id == tool_id:
+        return tool
+    return None
+  
+  def get_tool_definition_by_name(self, name: str) -> Optional[ToolDefinition]:
+    """
+    Get a tool definition by name.
+    
+    Args:
+        name: The name of the tool to get
+        
+    Returns:
+        Optional[ToolDefinition]: The tool definition, or None if not found
+    """
+    for tool in self.tool_definitions:
+      if tool.name == name:
+        return tool
+    return None
   
   def add_message(self, speaker: Union[MessageRole, str], content: str, file_ids: Optional[List[str]] = None) -> Message:
     """
@@ -720,8 +907,65 @@ class Conversation(TextFile):
     # Find all conversation files
     conversations = cls.find_files_by_criteria(
       base_directory=base_directory,
-      subdirectory="conversations"
+      subdirectory=FileSubdirectory.CONVERSATION.value
     )
     
     # Extract metadata
     return [metadata for _, metadata in conversations.items()]
+    
+  def load_tool_definitions_from_list(self, tool_definitions: List[Dict[str, Any]]) -> List[ToolDefinition]:
+    """
+    Load tool definitions from a list of dictionaries.
+    
+    This is a helper method to add multiple tool definitions at once. It's useful when
+    migrating from the old method of setting tool definitions as an attribute.
+    
+    Args:
+        tool_definitions: List of tool definition dictionaries
+        
+    Returns:
+        List[ToolDefinition]: List of created tool definitions
+    """
+    result = []
+    for tool_def in tool_definitions:
+      # Extract required fields
+      name = tool_def.get("name")
+      description = tool_def.get("description", "")
+      parameters = tool_def.get("parameters", {})
+      
+      if not name:
+        logger.warning("Skipping tool definition without a name")
+        continue
+        
+      # Add the tool definition
+      tool = self.add_tool_definition(name, description, parameters)
+      result.append(tool)
+    
+    return result
+  
+  def get_all_tool_definitions(self) -> List[ToolDefinition]:
+    """
+    Get all tool definitions in the conversation.
+    
+    Returns:
+        List[ToolDefinition]: List of all tool definitions
+    """
+    return self.tool_definitions
+  
+  def get_tool_definitions_as_list(self) -> List[Dict[str, Any]]:
+    """
+    Get all tool definitions as a list of dictionaries.
+    
+    This is useful for compatibility with systems expecting the old format.
+    
+    Returns:
+        List[Dict[str, Any]]: List of tool definitions as dictionaries
+    """
+    return [
+      {
+        "name": t.name,
+        "description": t.description,
+        "parameters": t.parameters
+      }
+      for t in self.tool_definitions
+    ]

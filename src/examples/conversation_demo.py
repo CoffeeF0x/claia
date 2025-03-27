@@ -110,24 +110,119 @@ Python is widely used in data science, web development, automation, and more."""
   message = conversation.get_message(user_message.message_id)
   print(f"   - Message now has {len(message.file_ids)} attached files: {message.file_ids}")
   
-  # Change the conversation title
-  print("\n6. Changing the conversation title")
+  # 6. Add tool definitions to the conversation
+  print("\n6. Adding tool definitions to the conversation")
+  
+  # Add a weather tool definition
+  weather_tool = conversation.add_tool_definition(
+    name="get_weather",
+    description="Get the current weather for a location",
+    parameters={
+      "type": "object",
+      "properties": {
+        "location": {"type": "string", "description": "City name or zip code"},
+        "unit": {"type": "string", "enum": ["celsius", "fahrenheit"], "default": "celsius"}
+      },
+      "required": ["location"]
+    }
+  )
+  print(f"   - Added tool: {weather_tool.name} (ID: {weather_tool.tool_id})")
+  print(f"   - Description: {weather_tool.description}")
+  
+  # Add a calculator tool definition
+  calculator_tool = conversation.add_tool_definition(
+    name="calculate",
+    description="Perform a calculation",
+    parameters={
+      "type": "object",
+      "properties": {
+        "operation": {"type": "string", "enum": ["add", "subtract", "multiply", "divide"]},
+        "x": {"type": "number"},
+        "y": {"type": "number"}
+      },
+      "required": ["operation", "x", "y"]
+    }
+  )
+  print(f"   - Added tool: {calculator_tool.name} (ID: {calculator_tool.tool_id})")
+  
+  # 7. List tool definitions
+  print("\n7. Listing tool definitions")
+  tools = conversation.get_all_tool_definitions()
+  print(f"   - Found {len(tools)} tool definitions:")
+  for i, tool in enumerate(tools, 1):
+    print(f"   {i}. {tool.name}: {tool.description}")
+  
+  # 8. Update a tool definition
+  print("\n8. Updating a tool definition")
+  conversation.update_tool_definition(
+    tool_id=weather_tool.tool_id,
+    description="Get detailed weather information for a location",
+    parameters={
+      "type": "object",
+      "properties": {
+        "location": {"type": "string", "description": "City name, zip code, or coordinates"},
+        "unit": {"type": "string", "enum": ["celsius", "fahrenheit"], "default": "celsius"},
+        "include_forecast": {"type": "boolean", "default": False}
+      },
+      "required": ["location"]
+    }
+  )
+  
+  # Get the updated tool
+  updated_tool = conversation.get_tool_definition(weather_tool.tool_id)
+  print(f"   - Original description: {weather_tool.description}")
+  print(f"   - Updated description: {updated_tool.description}")
+  print(f"   - Added parameter: include_forecast")
+  
+  # 9. Test the prompt with tool definitions
+  print("\n9. Testing the prompt with tool definitions")
+  
+  # Change the prompt to include tool definitions
+  conversation.change_prompt("""You are a helpful assistant with access to the following tools:
+
+{tool_definitions}
+
+If you need to call a tool, use the following format:
+{tool_format}
+
+Please help the user with their requests.""")
+  
+  # Format the prompt
+  formatted_prompt = conversation.apply_substitutions(conversation.prompt)
+  
+  print("   - Prompt with tool definitions:")
+  print("   " + "-" * 50)
+  for line in formatted_prompt.split("\n")[:10]:  # Show first 10 lines
+    print(f"   {line}")
+  print("   " + "-" * 50)
+  
+  # 10. Remove a tool definition
+  print("\n10. Removing a tool definition")
+  result = conversation.remove_tool_definition(calculator_tool.tool_id)
+  print(f"   - Removed calculator tool: {result}")
+  
+  remaining_tools = conversation.get_all_tool_definitions()
+  print(f"   - Remaining tools: {len(remaining_tools)}")
+  for tool in remaining_tools:
+    print(f"   - {tool.name}")
+  
+  # 11. Export tool definitions to list format
+  print("\n11. Exporting tool definitions to list format")
+  tools_list = conversation.get_tool_definitions_as_list()
+  print(f"   - Exported {len(tools_list)} tools as a list format")
+  print(f"   - First tool: {tools_list[0]['name']}")
+  
+  # 12. Change the conversation title and prompt
+  print("\n12. Changing the conversation title")
   print(f"   - Original title: {conversation.title}")
   
-  conversation.change_title("Python Discussion")
+  conversation.change_title("Python Discussion with Tools")
   print(f"   - New title: {conversation.title}")
   
-  # Change the conversation prompt
-  print("\n7. Changing the conversation prompt")
-  print(f"   - Original prompt: {conversation.prompt[:50]}...")
-  
-  conversation.change_prompt("You are a Python expert assistant. Provide detailed explanations about Python concepts.")
-  print(f"   - New prompt: {conversation.prompt[:50]}...")
-  
-  # View the action history
-  print("\n8. Viewing the action history")
-  print(f"   {'Timestamp':<15} {'Action Type':<25} {'Description'}")
-  print(f"   {'-'*15} {'-'*25} {'-'*50}")
+  # 13. View the action history
+  print("\n13. Viewing the action history")
+  print(f"   {'Timestamp':<15} {'Action Type':<30} {'Description'}")
+  print(f"   {'-'*15} {'-'*30} {'-'*40}")
   
   for action in conversation.actions:
     # Format timestamp to be more readable
@@ -147,13 +242,19 @@ Python is widely used in data science, web development, automation, and more."""
       description = f"Changed prompt"
     elif action.action_type == ActionType.ATTACH_FILE:
       description = f"Attached file {action.metadata.get('file_id', '')}"
+    elif action.action_type == ActionType.ADD_TOOL_DEFINITION:
+      description = f"Added tool: {action.metadata.get('name', '')}"
+    elif action.action_type == ActionType.UPDATE_TOOL_DEFINITION:
+      description = f"Updated tool: {action.metadata.get('new_name', '')}"
+    elif action.action_type == ActionType.REMOVE_TOOL_DEFINITION:
+      description = f"Removed tool: {action.metadata.get('name', '')}"
     else:
       description = str(action.metadata)
     
-    print(f"   {timestamp:<15} {action.action_type.name:<25} {description}")
+    print(f"   {timestamp:<15} {action.action_type.name:<30} {description}")
   
-  # Save and reload the conversation
-  print("\n9. Saving and reloading the conversation")
+  # 14. Save and reload the conversation
+  print("\n14. Saving and reloading the conversation")
   conversation.save()
   print(f"   - Saved conversation to: {conversation.path}")
   
@@ -161,10 +262,65 @@ Python is widely used in data science, web development, automation, and more."""
   reloaded_conversation = Conversation.load_conversation(conversation.file_id, base_dir)
   print(f"   - Reloaded conversation: {reloaded_conversation.title}")
   print(f"   - Message count: {len(reloaded_conversation.messages)}")
+  print(f"   - Tool count: {len(reloaded_conversation.tool_definitions)}")
   print(f"   - Action count: {len(reloaded_conversation.actions)}")
   
-  # List all conversations
-  print("\n10. Listing all conversations")
+  # 15. Demonstrating bulk loading of tool definitions
+  print("\n15. Demonstrating bulk loading of tool definitions")
+  
+  # Create a new conversation
+  bulk_conversation = Conversation.create_conversation(
+    base_directory=base_dir,
+    title="Bulk Tool Loading Demo"
+  )
+  
+  # Define multiple tools to load at once
+  bulk_tools = [
+    {
+      "name": "search_products",
+      "description": "Search for products in the catalog",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string"},
+          "category": {"type": "string", "enum": ["electronics", "books", "clothing"]}
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "get_product_details",
+      "description": "Get detailed information about a product",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "product_id": {"type": "string"}
+        },
+        "required": ["product_id"]
+      }
+    },
+    {
+      "name": "add_to_cart",
+      "description": "Add a product to the shopping cart",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "product_id": {"type": "string"},
+          "quantity": {"type": "integer", "default": 1}
+        },
+        "required": ["product_id"]
+      }
+    }
+  ]
+  
+  # Load the tools
+  loaded_tools = bulk_conversation.load_tool_definitions_from_list(bulk_tools)
+  print(f"   - Loaded {len(loaded_tools)} tools in bulk")
+  for tool in loaded_tools:
+    print(f"   - {tool.name}: {tool.description}")
+  
+  # 16. List all conversations
+  print("\n16. Listing all conversations")
   all_conversations = Conversation.list_conversations(base_dir)
   print(f"   - Found {len(all_conversations)} conversations")
   
@@ -172,98 +328,8 @@ Python is widely used in data science, web development, automation, and more."""
     title = conv_metadata.get("title", "Untitled")
     conv_id = conv_metadata.get("file_id", "Unknown")
     message_count = conv_metadata.get("metadata", {}).get("message_count", 0)
-    print(f"   - {title} (ID: {conv_id}, {message_count} messages)")
-  
-  # Add a new section for prompt formatting
-  print("\n11. Formatting conversation prompt")
-  # Change the prompt to one with placeholders
-  conversation.change_prompt("Hello {name}! I am an AI assistant specialized in {topic}. How can I help you today?")
-  
-  # Format the prompt with different values
-  formatted1 = conversation.format_prompt(name="User", topic="Python programming")
-  formatted2 = conversation.format_prompt(name="Developer", topic="machine learning")
-  
-  print(f"   - Original prompt: {conversation.prompt}")
-  print(f"   - Formatted for user: '{formatted1}'")
-  print(f"   - Formatted for developer: '{formatted2}'")
-  
-  # Demonstrate function definitions formatting
-  print("\n12. Formatting with function definitions")
-  function_defs = [
-    {
-      "name": "get_weather",
-      "description": "Get the current weather",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "location": {"type": "string", "description": "City name"},
-          "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}
-        },
-        "required": ["location"]
-      }
-    }
-  ]
-  
-  # Set a prompt with function definitions placeholder
-  conversation.change_prompt("""You are an assistant with access to functions.
-
-Available functions:
-{function_definitions}
-
-If you need to call a function, use this format:
-{function_format}
-
-How can I help you?""")
-  
-  # Load function definitions and format the prompt
-  conversation.load_function_definitions(function_defs)
-  formatted_with_functions = conversation.format_prompt()
-  
-  print(f"   - Formatted with functions:")
-  print("   " + "-" * 60)
-  for line in formatted_with_functions.split("\n")[:15]:  # Show first 15 lines
-    print(f"   {line}")
-  print("   " + "-" * 60)
-  
-  # Demonstrate message substitution using the new process_message method
-  print("\n13. Processing message content with substitutions")
-  
-  # Add a message with substitution placeholders
-  template_message = conversation.add_message(
-    speaker=MessageRole.ASSISTANT,
-    content="I can help you with information about {topic}. The current time is {time}."
-  )
-  
-  # Process the message with different substitutions
-  processed1 = conversation.process_message(
-    template_message.message_id, 
-    topic="Python programming",
-    time="9:30 AM"
-  )
-  
-  processed2 = conversation.process_message(
-    template_message.message_id, 
-    topic="data science",
-    time="2:45 PM"
-  )
-  
-  print(f"   - Original message: {template_message.content}")
-  print(f"   - Processed version 1: '{processed1}'")
-  print(f"   - Processed version 2: '{processed2}'")
-  
-  # Showcase the generic apply_substitutions method directly
-  print("\n14. Using the generic substitution system")
-  custom_text = "Hello {name}, welcome to {product}! Your account {status}."
-  
-  substituted_text = conversation.apply_substitutions(
-    custom_text,
-    name="John",
-    product="CLAIA",
-    status="has been activated"
-  )
-  
-  print(f"   - Template text: '{custom_text}'")
-  print(f"   - After substitution: '{substituted_text}'")
+    tool_count = conv_metadata.get("metadata", {}).get("tool_count", 0)
+    print(f"   - {title} (ID: {conv_id}, {message_count} messages, {tool_count} tools)")
   
   print("\nDemo completed successfully!")
 

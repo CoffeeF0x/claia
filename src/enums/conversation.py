@@ -17,6 +17,9 @@ class ActionType(Enum):
     DETACH_FILE = auto()
     PROCESS_MESSAGE = auto()
     CHANGE_TITLE = auto()
+    ADD_TOOL_DEFINITION = auto()
+    UPDATE_TOOL_DEFINITION = auto()
+    REMOVE_TOOL_DEFINITION = auto()
 
 
 class MessageRole(Enum):
