@@ -8,7 +8,7 @@ output.wav
 old/
 report.xml
 .pytest_cache/
-claia_demo_*/
+claia_*demo_*/
 
 /files/
 /conversations/

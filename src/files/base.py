@@ -9,10 +9,7 @@ It defines the BaseFile class for file operations.
 # - Add subfolder validation? (loop through each item in subfolder and validate)
 # - Make the base file more cohesive with our state emuns (Local, External/Reference, Empty, etc)
 # - Finish adding streaming support to our save method
-# - Create a method to load a file object just using the id or filename?
-#   Since we have the metadata, assuming it's valid, we should be able to
-#   create a file object from our store with just that
-# - Add a method to delete the file (marks as deleted in manifest, with a force delete option)
+# - Add a method to delete the file (marks as deleted in manifest, with a force delete option?)
 
 # External dependencies
 import os
@@ -697,6 +694,63 @@ class BaseFile:
       manifest.remove_file_metadata(file_id)
     
     return deleted_count
+
+  @classmethod
+  def find_files_by_criteria(cls, base_directory: str, 
+                           subdirectory: Optional[str] = None,
+                           metadata_filters: Optional[Dict[str, Any]] = None) -> Dict[str, Dict[str, Any]]:
+    """
+    Find files that match specific criteria.
+    
+    This method searches through the file manifest and returns all files that match
+    the specified subdirectory and/or metadata filters.
+    
+    Args:
+      base_directory: Base directory for file operations
+      subdirectory: Optional subdirectory to filter by
+      metadata_filters: Optional dictionary with metadata keys and values to match
+        
+    Returns:
+      Dict[str, Dict[str, Any]]: Dictionary of file_id -> metadata for matching files
+    """
+    manifest = FileManifest(base_directory)
+    all_files = manifest.get_all_files()
+    matching_files = {}
+    
+    # Filter files based on criteria
+    for file_id, metadata in all_files.items():
+      # If subdirectory is specified, check if it matches
+      if subdirectory and metadata.get("subdirectory") != subdirectory:
+        continue
+      
+      # If metadata filters are specified, check if all criteria match
+      if metadata_filters:
+        match = True
+        for key, value in metadata_filters.items():
+          # For nested metadata keys (e.g., "metadata.prompt_name")
+          if "." in key:
+            parts = key.split(".")
+            current = metadata
+            for part in parts:
+              if part in current:
+                current = current[part]
+              else:
+                match = False
+                break
+            # If we got all the way through the parts but the value doesn't match
+            if match and current != value:
+              match = False
+          # For top-level metadata keys
+          elif key not in metadata or metadata[key] != value:
+            match = False
+            break
+        
+        if not match:
+          continue
+      
+      matching_files[file_id] = metadata
+    
+    return matching_files
 
   def convert_to_local(self) -> bool:
     """

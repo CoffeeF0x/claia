@@ -22,6 +22,7 @@ class FileSubdirectory(Enum):
     # SPREADSHEET = "spreadsheets"
     # PRESENTATION = "presentations"
     ARCHIVE = "archives"
+    PROMPT = "prompts"
     MISC = "misc"
 
     @classmethod
