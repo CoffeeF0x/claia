@@ -3,6 +3,16 @@ This module contains the refactored base file handling functionality for CLAIA.
 It defines the BaseFile class for file operations.
 """
 
+# TODO:
+# - Add a validate function to the that verifies that everything is as
+#   expected (correct subfolder, mime type, reference, exists, etc)
+# - Add subfolder validation? (loop through each item in subfolder and validate)
+# - Make the base file more cohesive with our state emuns (Local, External/Reference, Empty, etc)
+# - Finish adding streaming support to our save method
+# - Create a method to load a file object just using the id or filename?
+#   Since we have the metadata, assuming it's valid, we should be able to
+#   create a file object from our store with just that
+
 # External dependencies
 import os
 import uuid
