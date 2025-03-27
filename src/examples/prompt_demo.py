@@ -39,60 +39,6 @@ SAMPLE_PROMPTS = [
   }
 ]
 
-FUNCTION_PROMPT = {
-  "name": "Function Calling",
-  "prompt": """You are a helpful assistant with access to functions.
-
-Available functions:
-{function_definitions}
-
-If you need to call a function, use the following format:
-{function_format}
-
-User query: {user_query}
-"""
-}
-
-SAMPLE_FUNCTIONS = [
-  {
-    "name": "get_weather",
-    "description": "Get the current weather for a location",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "location": {
-          "type": "string",
-          "description": "The city and state or country (e.g., 'San Francisco, CA')"
-        },
-        "unit": {
-          "type": "string",
-          "enum": ["celsius", "fahrenheit"],
-          "description": "The unit of temperature"
-        }
-      },
-      "required": ["location"]
-    }
-  },
-  {
-    "name": "search_web",
-    "description": "Search the web for information",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "The search query"
-        },
-        "num_results": {
-          "type": "integer",
-          "description": "Number of results to return"
-        }
-      },
-      "required": ["query"]
-    }
-  }
-]
-
 
 
 ########################################################################
@@ -226,52 +172,7 @@ def demo_prompt_files(base_dir):
     for i, (line_num, line_content) in enumerate(search_results, 1):
       print(f"     {i}. {line_content}")
   
-  # Demonstrate placeholder formatting and function calling
-  print("\n8. Prompt formatting and function calling")
-  
-  # Create a function calling prompt
-  function_prompt = Prompt.create_prompt(
-    base_directory=base_dir,
-    prompt_name=FUNCTION_PROMPT["name"],
-    prompt_text=FUNCTION_PROMPT["prompt"]
-  )
-  
-  print(f"   - Created function calling prompt: {function_prompt.prompt_name}")
-  print(f"   - Original prompt:\n{function_prompt.prompt_text}")
-  
-  # Load function definitions
-  function_prompt.load_function_definitions(SAMPLE_FUNCTIONS)
-  
-  # Format the prompt with placeholders
-  formatted_prompt = function_prompt.get_formatted_prompt(
-    user_query="What's the weather like in New York?"
-  )
-  
-  print("\n   - Formatted prompt with function definitions:")
-  print("   " + "-" * 60)
-  print("   " + formatted_prompt.replace("\n", "\n   "))
-  print("   " + "-" * 60)
-  
-  # Demonstrate custom formatting
-  custom_format = function_prompt.format(
-    user_query="Search for the latest news about AI",
-    function_format="""
-    To call a function, output:
-    <function>
-    {
-      "name": "function_name",
-      "arguments": {
-        "param1": "value1"
-      }
-    }
-    </function>
-    """
-  )
-  
-  print("\n   - Formatted with custom function format:")
-  print("   " + "-" * 60)
-  print("   " + custom_format.replace("\n", "\n   "))
-  print("   " + "-" * 60)
+  print("\nDemo completed successfully!")
   
   return prompt_files
 

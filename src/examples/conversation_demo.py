@@ -49,22 +49,22 @@ def setup_demo():
 #                             CONVERSATION                             #
 ########################################################################
 def demo_conversation(base_dir):
-    """Demonstrate operations with conversation files."""
-    print("\n" + "-" * 70)
-    print("CONVERSATION OPERATIONS")
-    print("-" * 70)
+    """
+    Demonstrate features of the Conversation class.
+    """
+    print("\n" + "CONVERSATION OPERATIONS".center(70, "-") + "\n")
     
-    # Create a new conversation
-    print("\n1. Creating a new conversation")
+    # 1. Create a new conversation
+    print("1. Creating a new conversation")
     conversation = Conversation.create_conversation(
         base_directory=base_dir,
         title="My First Conversation",
-        prompt=SAMPLE_PROMPT
+        prompt="You are a helpful assistant. Your goal is to provide accurate, helpful responses to user queries."
     )
     print(f"   - Created conversation: {conversation.title} (ID: {conversation.file_id})")
-    print(f"   - Prompt: {conversation.prompt[:50]}..." if len(conversation.prompt) > 50 else conversation.prompt)
+    print(f"   - Prompt: {conversation.prompt[:50]}...")
     
-    # Add messages to the conversation
+    # 2. Add messages to the conversation
     print("\n2. Adding messages to the conversation")
     user_message = conversation.add_message(
         speaker=MessageRole.USER, 
@@ -80,21 +80,18 @@ Python is widely used in data science, web development, automation, and more."""
     )
     print(f"   - Added assistant message: {assistant_message.content[:50]}...")
     
-    # Print all messages
+    # 3. List all messages in the conversation
     print("\n3. Listing messages in the conversation")
     for i, message in enumerate(conversation.messages, 1):
-        preview = message.content[:50] + "..." if len(message.content) > 50 else message.content
-        print(f"   {i}. {message.speaker.value}: {preview}")
+        print(f"   {i}. {message.speaker.value}: {message.content[:50]}...")
     
-    # Update a message
+    # 4. Update a message
     print("\n4. Updating a message")
-    print(f"   - Original message: {user_message.content}")
-    
-    updated_message = conversation.update_message(
-        message_id=user_message.message_id,
-        content="Hello! Can you explain what Python is and what it's used for?"
-    )
-    print(f"   - Updated message: {updated_message.content}")
+    original_content = user_message.content
+    new_content = "Hello! Can you explain what Python is and what it's used for?"
+    conversation.update_message(user_message.message_id, content=new_content)
+    print(f"   - Original message: {original_content}")
+    print(f"   - Updated message: {new_content}")
     
     # Create a sample file to attach
     print("\n5. Creating and attaching a file to a message")
@@ -177,7 +174,98 @@ Python is widely used in data science, web development, automation, and more."""
         message_count = conv_metadata.get("metadata", {}).get("message_count", 0)
         print(f"   - {title} (ID: {conv_id}, {message_count} messages)")
     
-    return conversation
+    # Add a new section for prompt formatting
+    print("\n11. Formatting conversation prompt")
+    # Change the prompt to one with placeholders
+    conversation.change_prompt("Hello {name}! I am an AI assistant specialized in {topic}. How can I help you today?")
+    
+    # Format the prompt with different values
+    formatted1 = conversation.format_prompt(name="User", topic="Python programming")
+    formatted2 = conversation.format_prompt(name="Developer", topic="machine learning")
+    
+    print(f"   - Original prompt: {conversation.prompt}")
+    print(f"   - Formatted for user: '{formatted1}'")
+    print(f"   - Formatted for developer: '{formatted2}'")
+    
+    # Demonstrate function definitions formatting
+    print("\n12. Formatting with function definitions")
+    function_defs = [
+        {
+            "name": "get_weather",
+            "description": "Get the current weather",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string", "description": "City name"},
+                    "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}
+                },
+                "required": ["location"]
+            }
+        }
+    ]
+    
+    # Set a prompt with function definitions placeholder
+    conversation.change_prompt("""You are an assistant with access to functions.
+
+Available functions:
+{function_definitions}
+
+If you need to call a function, use this format:
+{function_format}
+
+How can I help you?""")
+    
+    # Load function definitions and format the prompt
+    conversation.load_function_definitions(function_defs)
+    formatted_with_functions = conversation.format_prompt()
+    
+    print(f"   - Formatted with functions:")
+    print("   " + "-" * 60)
+    for line in formatted_with_functions.split("\n")[:15]:  # Show first 15 lines
+        print(f"   {line}")
+    print("   " + "-" * 60)
+    
+    # Demonstrate message substitution using the new process_message method
+    print("\n13. Processing message content with substitutions")
+    
+    # Add a message with substitution placeholders
+    template_message = conversation.add_message(
+        speaker=MessageRole.ASSISTANT,
+        content="I can help you with information about {topic}. The current time is {time}."
+    )
+    
+    # Process the message with different substitutions
+    processed1 = conversation.process_message(
+        template_message.message_id, 
+        topic="Python programming",
+        time="9:30 AM"
+    )
+    
+    processed2 = conversation.process_message(
+        template_message.message_id, 
+        topic="data science",
+        time="2:45 PM"
+    )
+    
+    print(f"   - Original message: {template_message.content}")
+    print(f"   - Processed version 1: '{processed1}'")
+    print(f"   - Processed version 2: '{processed2}'")
+    
+    # Showcase the generic apply_substitutions method directly
+    print("\n14. Using the generic substitution system")
+    custom_text = "Hello {name}, welcome to {product}! Your account {status}."
+    
+    substituted_text = conversation.apply_substitutions(
+        custom_text,
+        name="John",
+        product="CLAIA",
+        status="has been activated"
+    )
+    
+    print(f"   - Template text: '{custom_text}'")
+    print(f"   - After substitution: '{substituted_text}'")
+    
+    print("\nDemo completed successfully!")
 
 
 

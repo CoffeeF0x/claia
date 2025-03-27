@@ -23,6 +23,17 @@ from enums.conversation import ActionType, MessageRole
 ########################################################################
 DEFAULT_CONVERSATION_TITLE = "New Conversation"
 
+# Default function format placeholder
+DEFAULT_FUNCTION_FORMAT = """
+[FUNCTION_CALL]{
+"name": "function_name",
+"parameters": {
+  "param1": "value1",
+  "param2": "value2"
+}
+}[/FUNCTION_CALL]
+"""
+
 
 
 ########################################################################
@@ -300,6 +311,92 @@ class Conversation(TextFile):
             str: JSON representation of the conversation
         """
         return self.to_json()
+    
+    def apply_substitutions(self, text: str, **kwargs) -> str:
+        """
+        Apply substitutions to the given text, replacing placeholders with values.
+        
+        This generic substitution system handles:
+        1. Simple placeholders like {name} or {date}
+        2. Function definition placeholders {function_definitions}
+        3. Function format placeholders {function_format}
+        4. Any other placeholders passed via kwargs
+        
+        Args:
+            text: The text containing placeholders to replace
+            **kwargs: Keyword arguments mapping placeholder names to values
+            
+        Returns:
+            str: The text with all matched placeholders replaced
+        """
+        # Make a copy of the text to avoid modifying the original
+        processed_text = text
+        
+        # Handle function definitions placeholder
+        if "{function_definitions}" in processed_text and "function_definitions" not in kwargs:
+            # If function_definitions is not in kwargs but we have them stored, use them
+            if hasattr(self, 'function_definitions'):
+                function_definitions_json = json.dumps(self.function_definitions, indent=2)
+                kwargs["function_definitions"] = function_definitions_json
+        
+        # Handle function format placeholder
+        if "{function_format}" in processed_text and "function_format" not in kwargs:
+            kwargs["function_format"] = DEFAULT_FUNCTION_FORMAT
+        
+        # Only attempt formatting if there are placeholders to replace
+        if kwargs and any(f"{{{key}}}" in processed_text for key in kwargs):
+            try:
+                processed_text = processed_text.format(**kwargs)
+            except KeyError as e:
+                logger.warning(f"Missing key in text substitution: {e}")
+            except Exception as e:
+                logger.error(f"Error during text substitution: {e}")
+        
+        return processed_text
+    
+    def format_prompt(self, **kwargs) -> str:
+        """
+        Format the conversation prompt with the given replacements.
+        
+        This is a convenience wrapper around apply_substitutions that uses
+        the conversation's prompt as the text.
+        
+        Args:
+            **kwargs: Keyword arguments for string formatting
+            
+        Returns:
+            str: The formatted prompt
+        """
+        return self.apply_substitutions(self.prompt, **kwargs)
+    
+    def process_message(self, message_id: str, **kwargs) -> str:
+        """
+        Process a message's content by applying substitutions.
+        
+        Args:
+            message_id: The ID of the message to process
+            **kwargs: Substitution key-value pairs
+            
+        Returns:
+            str: The processed message content, or empty string if message not found
+        """
+        message = self.get_message(message_id)
+        if not message:
+            logger.warning(f"Cannot process message: message not found with ID {message_id}")
+            return ""
+        
+        return self.apply_substitutions(message.content, **kwargs)
+    
+    def load_function_definitions(self, function_definitions: List[Dict[str, Any]]) -> None:
+        """
+        Load function definitions into the conversation.
+        This should be called before using format_prompt if function definitions are needed.
+
+        Args:
+            function_definitions: List of function definitions to load
+        """
+        self.function_definitions = function_definitions
+        logger.debug(f"Loaded {len(function_definitions)} function definitions into conversation")
     
     def add_message(self, speaker: Union[MessageRole, str], content: str, file_ids: Optional[List[str]] = None) -> Message:
         """

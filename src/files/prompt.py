@@ -20,22 +20,6 @@ from enums.file import FileSubdirectory
 
 
 ########################################################################
-#                              CONSTANTS                               #
-########################################################################
-# Default function format placeholder
-DEFAULT_FUNCTION_FORMAT = """
-[FUNCTION_CALL]{
-"name": "function_name",
-"parameters": {
-  "param1": "value1",
-  "param2": "value2"
-}
-}[/FUNCTION_CALL]
-"""
-
-
-
-########################################################################
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
@@ -56,8 +40,6 @@ class Prompt(TextFile):
   - Stores prompts in JSON format
   - Validates prompt name (lowercase with hyphens)
   - Inherits text file functionality for content operations
-  - Supports placeholder replacement in prompt templates
-  - Handles function definition formats for LLM function calling
   """
   
   def __init__(self, base_directory: str, **kwargs):
@@ -90,9 +72,6 @@ class Prompt(TextFile):
       "prompt_name": self.prompt_name,
       "prompt_type": "text"  # Default type, can be extended later
     })
-    
-    # Store function definitions separately (not persisted)
-    self.function_definitions = []
   
   def get_subdirectory(self) -> str:
     """
@@ -204,63 +183,6 @@ class Prompt(TextFile):
       str: JSON representation of the prompt
     """
     return self.to_json()
-  
-  def load_function_definitions(self, function_definitions: List[Dict[str, Any]]) -> None:
-    """
-    Load function definitions into the prompt.
-    This should be called before using the prompt to ensure it has the latest function definitions.
-
-    Args:
-      function_definitions: List of function definitions to load
-    """
-    self.function_definitions = function_definitions
-    logger.debug(f"Loaded {len(function_definitions)} function definitions into prompt {self.prompt_name}")
-  
-  def format(self, **kwargs) -> str:
-    """
-    Format the prompt with the given replacements if the matching placeholders are found.
-    Currently supports 'function_definitions' and 'function_format' placeholders.
-
-    Args:
-      **kwargs: Keyword arguments for string formatting
-
-    Returns:
-      str: The formatted prompt
-    """
-    formatted_prompt = self.prompt_text
-
-    # Check if the prompt contains function_definitions placeholder
-    if "{function_definitions}" in formatted_prompt and "function_definitions" not in kwargs:
-      # Use the stored function definitions if available, otherwise use empty list
-      function_definitions_json = json.dumps(self.function_definitions, indent=2)
-      kwargs["function_definitions"] = function_definitions_json
-
-    # Check if the prompt contains function_format placeholder
-    if "{function_format}" in formatted_prompt and "function_format" not in kwargs:
-      kwargs["function_format"] = DEFAULT_FUNCTION_FORMAT
-
-    # Only attempt formatting if there are placeholders to replace
-    if kwargs and any(f"{{{key}}}" in formatted_prompt for key in kwargs):
-      try:
-        formatted_prompt = formatted_prompt.format(**kwargs)
-      except KeyError as e:
-        logger.warning(f"Missing key in prompt formatting: {e}")
-      except Exception as e:
-        logger.error(f"Error formatting prompt: {e}")
-
-    return formatted_prompt
-  
-  def get_formatted_prompt(self, **kwargs) -> str:
-    """
-    Get the formatted prompt.
-
-    Args:
-      **kwargs: Additional keyword arguments for formatting
-
-    Returns:
-      str: The formatted prompt
-    """
-    return self.format(**kwargs)
   
   @classmethod
   def create_prompt(cls: Type[T], base_directory: str, prompt_name: str, 
