@@ -4,6 +4,7 @@ This module contains the prompt file handling class for CLAIA.
 
 # TODO:
 # - Double check the save method. If content is passed, is the metadata inconsistent?
+# - Move save override stuff to post save hook
 
 
 # External dependencies
