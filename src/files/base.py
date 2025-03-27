@@ -12,6 +12,7 @@ It defines the BaseFile class for file operations.
 # - Create a method to load a file object just using the id or filename?
 #   Since we have the metadata, assuming it's valid, we should be able to
 #   create a file object from our store with just that
+# - Add a method to delete the file (marks as deleted in manifest, with a force delete option)
 
 # External dependencies
 import os

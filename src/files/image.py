@@ -2,6 +2,13 @@
 This module contains the image file handling class for CLAIA.
 """
 
+# TODO:
+# - Overhaul the resize method
+# - Make format function more robust and the output consistent
+# - Make all format metadata setting use the format method
+# - Is format metadata even needed since we have mime type?
+# - Make mime type rely on our enum
+
 # External dependencies
 import os
 import base64
@@ -62,6 +69,24 @@ class ImageFile(BaseFile):
     # If format is not set, try to determine it from file extension
     if not self.format and self.file_name:
       self.format = os.path.splitext(self.file_name)[1].lstrip('.').lower()
+
+  
+  @property
+  def get_format(self) -> str:
+    """Get the image format from the mime type."""
+    # First check if format is explicitly stored in metadata
+    if "format" in self.metadata:
+      return self.metadata["format"]
+    
+    # Otherwise derive from mime_type
+    if self.mime_type and self.mime_type.startswith('image/'):
+      return self.mime_type.split('/')[-1]
+      
+    # If all else fails, try to get from file extension
+    if self.file_name:
+      return os.path.splitext(self.file_name)[1].lstrip('.').lower()
+      
+    return ""
   
   @classmethod
   def from_bytes(cls, 
