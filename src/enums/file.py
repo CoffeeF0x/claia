@@ -23,6 +23,7 @@ class FileSubdirectory(Enum):
     # PRESENTATION = "presentations"
     ARCHIVE = "archives"
     PROMPT = "prompts"
+    CONVERSATION = "conversations"
     MISC = "misc"
 
     @classmethod

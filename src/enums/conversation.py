@@ -1,25 +1,26 @@
 # External dependencies
-from enum import Enum
+from enum import Enum, auto
 
 
 ########################################################################
 #                                ENUMS                                 #
 ########################################################################
-class MessageRole(Enum):
-  """Roles for conversation messages."""
-  SYSTEM    = "system"
-  USER      = "user"
-  ASSISTANT = "assistant"
-  TOOL      = "tool"
-  TOOL_CALL = "tool-call"
-  FILE      = "file"
-  IMAGE     = "image"
-  AUDIO     = "audio"
 
 class ActionType(Enum):
-  """Action Types for conversations"""
-  REQUEST = "request"
-  RESPONSE = "response"
-  UPDATE_SYSTEM_PROMPT = "update_system_prompt"
-  PROCESS_MESSAGE = "process_message"
-  ATTACH_FILE = "attach_file"
+    """Enum for types of actions that can occur in a conversation."""
+    CREATE_CONVERSATION = auto()
+    CHANGE_PROMPT = auto()
+    CREATE_MESSAGE = auto()
+    UPDATE_MESSAGE = auto()
+    DELETE_MESSAGE = auto()
+    ATTACH_FILE = auto()
+    DETACH_FILE = auto()
+    PROCESS_MESSAGE = auto()
+    CHANGE_TITLE = auto()
+
+
+class MessageRole(Enum):
+    """Enum for message roles in a conversation."""
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
