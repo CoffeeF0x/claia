@@ -11,7 +11,7 @@ from .file         import FileSubdirectory, FileStatus, FileMimeType
 #   'IOType',
 #   'MessageRole',
 #   'ActionType',
-#   'FileSubdirectory', 
+#   'FileSubdirectory',
 #   'FileStatus',
 #   'FileMimeType'
 # ]

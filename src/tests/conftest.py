@@ -59,7 +59,7 @@ def test_image_file(temp_dir):
 def test_image_path(temp_dir):
   """
   Create a simple test image file with specific format.
-  
+
   This is a very basic 1x1 pixel black image in PNG format.
   """
   # Base64 encoded 1x1 pixel black PNG
@@ -67,11 +67,11 @@ def test_image_path(temp_dir):
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFewJ2gP"
     "W+BAAAAABJRU5ErkJggg=="
   )
-  
+
   image_path = os.path.join(temp_dir, "test_image.png")
   with open(image_path, "wb") as f:
     f.write(png_data)
-  
+
   return image_path
 
 
@@ -135,7 +135,7 @@ def clean_environment(monkeypatch):
     "OPENROUTER_API_TOKEN",
     "HUGGINGFACE_API_TOKEN",
     "CLOUDFLARE_API_TOKEN",
-    
+
     # Directories
     "MODEL_DIRECTORY",
     "PROMPT_DIRECTORY",
@@ -144,7 +144,7 @@ def clean_environment(monkeypatch):
     "ARTIFACTS_DIRECTORY",
     "CONVERSATION_FILES_DIRECTORY",
     "TEMP_DIRECTORY",
-    
+
     # Other settings
     "ACTIVE_MODEL",
     "ACTIVE_AGENT",
@@ -153,7 +153,7 @@ def clean_environment(monkeypatch):
     "LOG_FORMAT",
     "LOG_FILE",
   ]
-  
+
   for var in variables_to_clean:
     monkeypatch.delenv(var, raising=False)
 

@@ -40,13 +40,13 @@ class FileSubdirectory(Enum):
             return cls.AUDIO
         elif mime_type in FileMimeType.get_all_video_mime_types():
             return cls.VIDEO
-        # elif mime_type in ["application/vnd.ms-excel", 
+        # elif mime_type in ["application/vnd.ms-excel",
         #                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]:
         #     return cls.SPREADSHEET
-        # elif mime_type in ["application/vnd.ms-powerpoint", 
+        # elif mime_type in ["application/vnd.ms-powerpoint",
         #                  "application/vnd.openxmlformats-officedocument.presentationml.presentation"]:
         #     return cls.PRESENTATION
-        elif mime_type in ["application/zip", "application/x-rar-compressed", 
+        elif mime_type in ["application/zip", "application/x-rar-compressed",
                          "application/x-tar", "application/gzip"]:
             return cls.ARCHIVE
         else:
@@ -74,7 +74,7 @@ class FileMimeType:
     Class for mapping file extensions to MIME types.
     This centralizes all MIME type mappings in one place for consistency.
     """
-    
+
     # Text file extensions
     TEXT_EXTENSIONS: Dict[str, str] = {
       ".txt": "text/plain",
@@ -86,7 +86,7 @@ class FileMimeType:
       ".css": "text/css",
       ".js": "application/javascript",
     }
-    
+
     # Image file extensions
     IMAGE_EXTENSIONS: Dict[str, str] = {
       ".jpg": "image/jpeg",
@@ -99,7 +99,7 @@ class FileMimeType:
       ".tiff": "image/tiff",
       ".tif": "image/tiff",
     }
-    
+
     # Document file extensions
     DOCUMENT_EXTENSIONS: Dict[str, str] = {
       ".pdf": "application/pdf",
@@ -108,7 +108,7 @@ class FileMimeType:
       ".rtf": "application/rtf",
       ".odt": "application/vnd.oasis.opendocument.text",
     }
-    
+
     # Audio file extensions
     AUDIO_EXTENSIONS: Dict[str, str] = {
       ".mp3": "audio/mpeg",
@@ -120,7 +120,7 @@ class FileMimeType:
       ".wma": "audio/x-ms-wma",
       ".opus": "audio/opus",
     }
-    
+
     # Video file extensions
     VIDEO_EXTENSIONS: Dict[str, str] = {
       ".mp4": "video/mp4",
@@ -134,7 +134,7 @@ class FileMimeType:
       ".mpeg": "video/mpeg",
       ".mpg": "video/mpeg",
     }
-    
+
     # Combine all extension mappings
     ALL_EXTENSIONS = {
       **TEXT_EXTENSIONS,
@@ -143,46 +143,46 @@ class FileMimeType:
       **AUDIO_EXTENSIONS,
       **VIDEO_EXTENSIONS,
     }
-    
+
     @classmethod
     def get_mime_type(cls, file_name: str, default: str = "application/octet-stream") -> str:
         """
         Get the MIME type for a file based on its extension.
-        
+
         Args:
             file_name: The name of the file
             default: The default MIME type to return if extension not found
-            
+
         Returns:
             The MIME type for the file
         """
         if not file_name:
             return default
-            
+
         _, ext = os.path.splitext(file_name.lower())
         return cls.ALL_EXTENSIONS.get(ext, default)
-    
+
     @classmethod
     def get_all_text_mime_types(cls) -> set:
         """Get all text MIME types."""
         return set(cls.TEXT_EXTENSIONS.values())
-    
+
     @classmethod
     def get_all_image_mime_types(cls) -> set:
         """Get all image MIME types."""
         return set(cls.IMAGE_EXTENSIONS.values())
-    
+
     @classmethod
     def get_all_document_mime_types(cls) -> set:
         """Get all document MIME types."""
         return set(cls.DOCUMENT_EXTENSIONS.values())
-    
+
     @classmethod
     def get_all_audio_mime_types(cls) -> set:
         """Get all audio MIME types."""
         return set(cls.AUDIO_EXTENSIONS.values())
-    
+
     @classmethod
     def get_all_video_mime_types(cls) -> set:
         """Get all video MIME types."""
-        return set(cls.VIDEO_EXTENSIONS.values()) 
+        return set(cls.VIDEO_EXTENSIONS.values())

@@ -92,14 +92,14 @@ def conversation_file(temp_dir, sample_conversation_data):
     title=sample_conversation_data["title"],
     prompt=sample_conversation_data["prompt"]
   )
-  
+
   # Add messages
   for message_data in sample_conversation_data["messages"]:
     conversation.add_message(
       speaker=message_data["speaker"],
       content=message_data["content"]
     )
-  
+
   # Add tool definitions
   for tool_data in sample_conversation_data["tool_definitions"]:
     conversation.add_tool_definition(
@@ -107,7 +107,7 @@ def conversation_file(temp_dir, sample_conversation_data):
       description=tool_data["description"],
       parameters=tool_data["parameters"]
     )
-  
+
   return conversation
 
 
@@ -122,17 +122,17 @@ def test_create_conversation(temp_dir, sample_conversation_data):
     title=sample_conversation_data["title"],
     prompt=sample_conversation_data["prompt"]
   )
-  
+
   assert conversation is not None
   assert conversation.title == sample_conversation_data["title"]
   assert conversation.prompt == sample_conversation_data["prompt"]
   assert conversation.file_name.endswith(".json")
   assert conversation.exists()
-  
+
   # Verify actions
   assert len(conversation.actions) == 1
   assert conversation.actions[0].action_type == ActionType.CREATE_CONVERSATION
-  
+
   # Verify the file content
   with open(conversation.path, 'r') as f:
     content = json.load(f)
@@ -147,14 +147,14 @@ def test_add_message(conversation_file):
     speaker=MessageRole.USER,
     content="This is a new test message"
   )
-  
+
   assert message is not None
   assert message.speaker == MessageRole.USER
   assert message.content == "This is a new test message"
-  
+
   # Verify the message was added to the conversation
   assert message in conversation_file.messages
-  
+
   # Verify an action was created
   assert any(a.action_type == ActionType.CREATE_MESSAGE for a in conversation_file.actions)
 
@@ -164,34 +164,34 @@ def test_load_conversation(temp_dir):
   # Create a conversation first
   conversation_title = "Test Load Conversation"
   conversation_prompt = "This is a test conversation for loading"
-  
+
   original_conversation = Conversation.create_conversation(
     base_directory=temp_dir,
     title=conversation_title,
     prompt=conversation_prompt
   )
-  
+
   # Add a message to the conversation
   original_conversation.add_message(
     speaker=MessageRole.USER,
     content="Hello, this is a test message"
   )
-  
+
   # Add a tool definition
   original_conversation.add_tool_definition(
     name="test_tool",
     description="A test tool",
     parameters={"type": "object", "properties": {}}
   )
-  
+
   # Save the conversation
   original_conversation.save()
-  
+
   # Create the messages and actions lists from the original conversation
   messages_dicts = [m.to_dict() for m in original_conversation.messages]
   actions_dicts = [a.to_dict() for a in original_conversation.actions]
   tool_defs_dicts = [t.to_dict() for t in original_conversation.tool_definitions]
-  
+
   # Mock the base load method to return a dictionary with the expected structure
   mock_load_result = {
     "metadata": {
@@ -215,11 +215,11 @@ def test_load_conversation(temp_dir):
       "created_at": original_conversation.timestamp
     })
   }
-  
+
   with patch.object(BaseFile, 'load', return_value=mock_load_result):
     # Test loading by ID
     loaded_conversation = Conversation.load_conversation(original_conversation.file_id, temp_dir)
-    
+
     assert loaded_conversation is not None
     assert loaded_conversation.title == conversation_title
     assert loaded_conversation.prompt == conversation_prompt
@@ -227,15 +227,15 @@ def test_load_conversation(temp_dir):
     assert len(loaded_conversation.messages) == len(original_conversation.messages)
     assert len(loaded_conversation.actions) == len(original_conversation.actions)
     assert len(loaded_conversation.tool_definitions) == len(original_conversation.tool_definitions)
-    
+
     # Test loading non-existent conversation
     with patch.object(BaseFile, 'load', return_value=None):
       not_found = Conversation.load_conversation("nonexistent-id", temp_dir)
       assert not_found is None
-      
+
     # Test with JSON parsing error
     invalid_load_result = mock_load_result.copy()
     invalid_load_result["content"] = "invalid json"
     with patch.object(BaseFile, 'load', return_value=invalid_load_result):
       invalid_json = Conversation.load_conversation(original_conversation.file_id, temp_dir)
-      assert invalid_json is None 
+      assert invalid_json is None
