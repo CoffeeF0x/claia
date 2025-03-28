@@ -2,6 +2,13 @@
 This module contains the conversation file handling class for CLAIA.
 """
 
+# TODO:
+# - Attach a file should just send the path or url along with whether or not
+#   it's a reference (optional), then identify and call the correct object
+#   to attach the file. If a file id is passed, then validate and identify the type
+# - Consider redesign so that an external file load is not required (ie, stored fully 
+#   in memory except on saves and loads)
+
 # External dependencies
 import json
 import uuid
