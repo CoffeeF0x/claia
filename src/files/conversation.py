@@ -936,23 +936,3 @@ class Conversation(TextFile):
       }
       for t in self.tool_definitions
     ]
-
-  def to_dict(self) -> Dict[str, Any]:
-    """
-    Convert the conversation to a dictionary for the manifest.
-    
-    This method is primarily used for manifest serialization and includes
-    both the base file metadata and conversation-specific metadata.
-    """
-    # Get the base file dictionary which includes subdirectory
-    base_dict = super().to_dict()
-    
-    # Add conversation metadata for the manifest
-    base_dict.update({
-      "title": self.title,
-      "message_count": len(self.messages),
-      "tool_count": len(self.tool_definitions),
-      "conversation_id": self.file_id
-    })
-    
-    return base_dict
