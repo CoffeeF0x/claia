@@ -279,4 +279,31 @@ class TextFile(BaseFile):
     if start_idx >= len(lines) or start_idx >= end_idx:
       return []
     
-    return lines[start_idx:end_idx] 
+    return lines[start_idx:end_idx]
+  
+  def _load_content(self) -> Optional[str]:
+    """
+    Load the text content with proper encoding handling.
+    
+    Returns:
+      Optional[str]: The text content as string, or None if loading failed
+    """
+    if not self.exists():
+      logger.error(f"Cannot load content: File does not exist - {self.path}")
+      return None
+    
+    try:
+      # Try to detect encoding if not set
+      if not self.encoding:
+        self.detect_encoding()
+      
+      with open(self.path, 'r', encoding=self.encoding) as f:
+        return f.read()
+    except UnicodeDecodeError:
+      # If the first attempt fails, try to detect encoding and read again
+      self.detect_encoding()
+      with open(self.path, 'r', encoding=self.encoding) as f:
+        return f.read()
+    except Exception as e:
+      logger.error(f"Failed to load content from {self.path}: {e}")
+      return None 

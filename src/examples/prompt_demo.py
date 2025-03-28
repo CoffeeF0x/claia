@@ -107,8 +107,11 @@ def demo_prompt_files(base_dir):
     first_prompt.save()
     
     # Reload to verify changes
-    updated_prompt = Prompt.load(first_prompt.file_id, base_dir)
-    print(f"   - Updated prompt text: '{updated_prompt.prompt_text}'")
+    reloaded_prompt = Prompt.load_prompt(first_prompt.prompt_name, base_dir)
+    if reloaded_prompt:
+      print(f"   - Updated prompt text: '{reloaded_prompt.prompt_text}'")
+    else:
+      print("   - Failed to reload prompt")
     
     # Test that the same object also has the updated data
     print(f"   - Original object's prompt text: '{first_prompt.prompt_text}'")

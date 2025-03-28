@@ -140,39 +140,6 @@ class Prompt(TextFile):
     
     return name
   
-  def get_prompt_data(self) -> Dict[str, Any]:
-    """
-    Get the prompt data as a dictionary.
-    
-    Returns:
-      Dict[str, Any]: Prompt data with name and text
-    """
-    # If file exists, load content from file
-    if self.exists():
-      try:
-        content = self.get_content()
-        data = json.loads(content)
-        
-        # Update properties from file content
-        self.prompt_name = self.validate_prompt_name(data.get("name", ""))
-        self.prompt_text = data.get("prompt", "")
-        
-        # Update metadata
-        self.metadata.update({
-          "prompt_name": self.prompt_name,
-          "prompt_text_preview": self.prompt_text[:50] + "..." if len(self.prompt_text) > 50 else self.prompt_text
-        })
-        
-        return data
-      except json.JSONDecodeError:
-        logger.error(f"Failed to parse JSON from prompt file: {self.file_id}")
-    
-    # Return default data based on current object state
-    return {
-      "name": self.prompt_name or "", 
-      "prompt": self.prompt_text or ""
-    }
-
   @classmethod
   def create_prompt(cls: Type[T], base_directory: str, prompt_name: str, 
                    prompt_text: str, **kwargs) -> Optional[T]:
@@ -244,11 +211,30 @@ class Prompt(TextFile):
     
     # Load the first matching file
     for file_id in matching_files:
-      prompt = cls.load(file_id, base_directory)
-      if prompt:
-        # Load prompt data explicitly
-        prompt.get_prompt_data()
-        return prompt
+      result = cls.load(file_id, base_directory, load_content=True)
+      if result and "content" in result:
+        try:
+          # Parse the JSON content
+          data = json.loads(result["content"])
+          
+          # Extract valid constructor parameters from metadata
+          metadata = result["metadata"].get("metadata", {})
+          
+          # Create a new Prompt instance with the loaded data
+          prompt = cls(
+            base_directory=base_directory,
+            file_id=result["metadata"].get("file_id"),
+            file_name=result["metadata"].get("file_name"),
+            mime_type=result["metadata"].get("mime_type"),
+            timestamp=result["metadata"].get("timestamp"),
+            prompt_name=data.get("name", ""),
+            prompt_text=data.get("prompt", ""),
+            metadata=metadata
+          )
+          return prompt
+        except json.JSONDecodeError:
+          logger.error(f"Failed to parse JSON from prompt file: {file_id}")
+          continue
     
     logger.error(f"Prompt not found: {prompt_name}")
     return None

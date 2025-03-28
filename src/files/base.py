@@ -22,7 +22,7 @@ from typing import Dict, List, Any, Optional, Type, TypeVar, Union
 from datetime import datetime
 
 # Internal dependencies
-from enums import FileSubdirectory, FileStatus
+from enums import FileSubdirectory, FileStatus, FileMimeType
 from .manifest import FileManifest, MANIFEST_FILENAME
 
 
@@ -458,16 +458,17 @@ class BaseFile:
       return False
   
   @classmethod
-  def load(cls: Type[T], file_id: str, base_directory: str) -> Optional[T]:
+  def load(cls: Type[T], file_id: str, base_directory: str, load_content: bool = False) -> Optional[Dict[str, Any]]:
     """
     Load a file from its ID.
     
     Args:
       file_id: The ID of the file to load
       base_directory: The base directory for file operations
+      load_content: Whether to load the file contents (default: False)
         
     Returns:
-      Optional[T]: The loaded file object, or None if loading failed
+      Optional[Dict[str, Any]]: Dictionary containing metadata and optionally content, or None if loading failed
     """
     manifest = FileManifest(base_directory)
     metadata = manifest.get_file_metadata(file_id)
@@ -478,7 +479,7 @@ class BaseFile:
     
     try:
       # Create instance with data from manifest
-      return cls(
+      file_obj = cls(
         base_directory=base_directory,
         file_name=metadata.get("file_name"),
         source_path=metadata.get("source_path"),
@@ -488,8 +489,57 @@ class BaseFile:
         timestamp=metadata.get("timestamp"),
         metadata=metadata.get("metadata", {})
       )
+      
+      # Prepare result dictionary
+      result = {
+        "metadata": metadata
+      }
+      
+      # Load content if requested
+      if load_content:
+        content = file_obj._load_content()
+        if content is not None:
+          result["content"] = content
+      
+      return result
     except Exception as e:
       logger.error(f"Failed to load file {file_id}: {e}")
+      return None
+  
+  def _load_content(self) -> Optional[Union[str, bytes]]:
+    """
+    Load the contents of the file based on its MIME type.
+    
+    This method determines how to load the file content based on the MIME type:
+    - For text-based MIME types (text/*, application/json, etc.), returns string
+    - For binary MIME types, returns bytes
+    
+    Returns:
+      Optional[Union[str, bytes]]: The file contents as string or bytes, or None if loading failed
+    """
+    if not self.exists():
+      logger.error(f"Cannot load content: File does not exist - {self.path}")
+      return None
+    
+    try:
+      # Check if this is a text-based MIME type using FileMimeType
+      is_text = (
+        self.mime_type.startswith('text/') or
+        self.mime_type in FileMimeType.get_all_text_mime_types()
+      )
+      
+      # Load content based on MIME type
+      if is_text:
+        # For text files, try to detect encoding from metadata or default to utf-8
+        encoding = self.metadata.get('encoding', 'utf-8')
+        with open(self.path, 'r', encoding=encoding) as f:
+          return f.read()
+      else:
+        # For binary files, read as bytes
+        with open(self.path, 'rb') as f:
+          return f.read()
+    except Exception as e:
+      logger.error(f"Failed to load content from {self.path}: {e}")
       return None
   
   @classmethod

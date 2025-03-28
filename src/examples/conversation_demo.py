@@ -260,10 +260,13 @@ Please help the user with their requests.""")
   
   # Reload the conversation
   reloaded_conversation = Conversation.load_conversation(conversation.file_id, base_dir)
-  print(f"   - Reloaded conversation: {reloaded_conversation.title}")
-  print(f"   - Message count: {len(reloaded_conversation.messages)}")
-  print(f"   - Tool count: {len(reloaded_conversation.tool_definitions)}")
-  print(f"   - Action count: {len(reloaded_conversation.actions)}")
+  if reloaded_conversation:
+    print(f"   - Reloaded conversation: {reloaded_conversation.title}")
+    print(f"   - Message count: {len(reloaded_conversation.messages)}")
+    print(f"   - Tool count: {len(reloaded_conversation.tool_definitions)}")
+    print(f"   - Action count: {len(reloaded_conversation.actions)}")
+  else:
+    print("   - Failed to reload conversation")
   
   # 15. Demonstrating bulk loading of tool definitions
   print("\n15. Demonstrating bulk loading of tool definitions")

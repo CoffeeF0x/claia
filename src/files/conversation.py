@@ -297,48 +297,6 @@ class Conversation(TextFile):
       "tool_count": len(self.tool_definitions)
     })
   
-  def get_conversation_data(self) -> Dict[str, Any]:
-    """
-    Get the conversation data as a dictionary.
-    
-    Returns:
-        Dict[str, Any]: Conversation data
-    """
-    # If file exists, load content from file
-    if self.exists():
-      try:
-        content = self.get_content()
-        data = json.loads(content)
-        
-        # Update object properties from file content
-        self.title = data.get("title", DEFAULT_CONVERSATION_TITLE)
-        self.prompt = data.get("prompt", "")
-        self.messages = [Message.from_dict(m) for m in data.get("messages", [])]
-        self.actions = [Action.from_dict(a) for a in data.get("actions", [])]
-        self.tool_definitions = [ToolDefinition.from_dict(f) for f in data.get("tool_definitions", [])]
-        
-        # Update metadata based on loaded content
-        self.metadata.update({
-          "title": self.title,
-          "message_count": len(self.messages),
-          "tool_count": len(self.tool_definitions)
-        })
-        
-        return data
-      except json.JSONDecodeError:
-        logger.error(f"Failed to parse JSON from conversation file: {self.file_id}")
-    
-    # Return default content data based on current object state
-    return {
-      "conversation_id": self.file_id,
-      "title": self.title,
-      "prompt": self.prompt,
-      "messages": [m.to_dict() for m in self.messages],
-      "actions": [a.to_dict() for a in self.actions],
-      "tool_definitions": [t.to_dict() for t in self.tool_definitions],
-      "created_at": self.timestamp
-    }
-  
   def _get_default_content(self) -> Optional[str]:
     """
     Provide default content when saving without content.
@@ -858,11 +816,33 @@ class Conversation(TextFile):
         Optional[T]: The loaded conversation, or None if loading failed
     """
     # Try to load the conversation file
-    conversation = cls.load(conversation_id, base_directory)
-    if conversation:
-      # Load conversation data explicitly
-      conversation.get_conversation_data()
-      return conversation
+    result = cls.load(conversation_id, base_directory, load_content=True)
+    if result and "content" in result:
+      try:
+        # Parse the JSON content
+        data = json.loads(result["content"])
+        
+        # Extract valid constructor parameters from metadata
+        metadata = result["metadata"].get("metadata", {})
+        
+        # Create a new Conversation instance with the loaded data
+        conversation = cls(
+          base_directory=base_directory,
+          file_id=result["metadata"].get("file_id"),
+          file_name=result["metadata"].get("file_name"),
+          mime_type=result["metadata"].get("mime_type"),
+          timestamp=result["metadata"].get("timestamp"),
+          title=data.get("title", DEFAULT_CONVERSATION_TITLE),
+          prompt=data.get("prompt", ""),
+          messages=[Message.from_dict(m) for m in data.get("messages", [])],
+          actions=[Action.from_dict(a) for a in data.get("actions", [])],
+          tool_definitions=[ToolDefinition.from_dict(t) for t in data.get("tool_definitions", [])],
+          metadata=metadata
+        )
+        return conversation
+      except json.JSONDecodeError:
+        logger.error(f"Failed to parse JSON from conversation file: {conversation_id}")
+        return None
     
     logger.error(f"Conversation not found: {conversation_id}")
     return None
