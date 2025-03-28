@@ -335,16 +335,32 @@ def test_load(temp_dir):
   }
   mock_manifest.get_file_metadata.return_value = mock_metadata
   
-  # Patch FileManifest constructor to return our mock
-  with patch('files.base.FileManifest', return_value=mock_manifest):
-    # Load file
-    loaded_file = BaseFile.load("test_id", temp_dir)
+  # Create mock for _load_content method
+  mock_content = "This is the test content"
+  
+  # Patch FileManifest constructor to return our mock and _load_content to return mock content
+  with patch('files.base.FileManifest', return_value=mock_manifest), \
+       patch.object(BaseFile, '_load_content', return_value=mock_content):
     
-    # Verify file was loaded with correct data
-    assert loaded_file is not None
-    assert loaded_file.file_id == "test_id"
-    assert loaded_file.file_name == "loaded.txt"
-    assert loaded_file.metadata == {"test": "data"}
+    # Test loading without content
+    result = BaseFile.load("test_id", temp_dir)
+    
+    # Verify result is a dictionary with correct metadata
+    assert result is not None
+    assert isinstance(result, dict)
+    assert "metadata" in result
+    assert result["metadata"] == mock_metadata
+    assert "content" not in result
+    
+    # Test loading with content
+    result_with_content = BaseFile.load("test_id", temp_dir, load_content=True)
+    
+    # Verify result has content
+    assert result_with_content is not None
+    assert isinstance(result_with_content, dict)
+    assert "metadata" in result_with_content
+    assert "content" in result_with_content
+    assert result_with_content["content"] == mock_content
     
     # Test when file not found
     mock_manifest.get_file_metadata.return_value = None
