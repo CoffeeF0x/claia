@@ -244,6 +244,9 @@ class Conversation(TextFile):
     if file_name and not file_name.endswith(".json"):
       kwargs["file_name"] = f"{file_name}.json"
     
+    # Set the subdirectory override before calling the parent constructor
+    self._override_subdirectory = FileSubdirectory.CONVERSATION.value
+    
     # Initialize as TextFile but ensure mime_type is application/json
     kwargs["mime_type"] = "application/json"
     super().__init__(base_directory=base_directory, **kwargs)
@@ -287,15 +290,6 @@ class Conversation(TextFile):
       "tool_count": len(self.tool_definitions)
     })
   
-  def get_subdirectory(self) -> str:
-    """
-    Override to return the conversations subdirectory.
-    
-    Returns:
-        str: The conversations subdirectory
-    """
-    return FileSubdirectory.CONVERSATION.value
-  
   def get_conversation_data(self) -> Dict[str, Any]:
     """
     Get the conversation data as a dictionary.
@@ -303,65 +297,41 @@ class Conversation(TextFile):
     Returns:
         Dict[str, Any]: Conversation data
     """
-    # If already loaded, return cached data
-    if hasattr(self, '_conversation_data'):
-      return self._conversation_data
-    
-    # Try to load from file if it exists
+    # If file exists, load content from file
     if self.exists():
       try:
         content = self.get_content()
         data = json.loads(content)
         
-        # Update title and prompt from data
+        # Update object properties from file content
         self.title = data.get("title", DEFAULT_CONVERSATION_TITLE)
         self.prompt = data.get("prompt", "")
-        
-        # Update messages and actions from data
         self.messages = [Message.from_dict(m) for m in data.get("messages", [])]
         self.actions = [Action.from_dict(a) for a in data.get("actions", [])]
-        
-        # Update tool definitions from data
         self.tool_definitions = [ToolDefinition.from_dict(f) for f in data.get("tool_definitions", [])]
         
-        # Update metadata
+        # Update metadata based on loaded content
         self.metadata.update({
           "title": self.title,
           "message_count": len(self.messages),
           "tool_count": len(self.tool_definitions)
         })
         
-        # Cache the data
-        self._conversation_data = data
         return data
       except json.JSONDecodeError:
         logger.error(f"Failed to parse JSON from conversation file: {self.file_id}")
     
-    # Return default data if file doesn't exist or parsing failed
-    default_data = self.to_dict()
-    self._conversation_data = default_data
-    return default_data
-  
-  def to_dict(self) -> Dict[str, Any]:
-    """
-    Convert the conversation to a dictionary for the manifest.
-    
-    This method is primarily used for manifest serialization and includes
-    both the base file metadata and conversation-specific metadata.
-    """
-    # Get the base file dictionary which includes subdirectory
-    base_dict = super().to_dict()
-    
-    # Add conversation metadata for the manifest
-    base_dict.update({
+    # Return default content data based on current object state
+    return {
+      "conversation_id": self.file_id,
       "title": self.title,
-      "message_count": len(self.messages),
-      "tool_count": len(self.tool_definitions),
-      "conversation_id": self.file_id
-    })
-    
-    return base_dict
-
+      "prompt": self.prompt,
+      "messages": [m.to_dict() for m in self.messages],
+      "actions": [a.to_dict() for a in self.actions],
+      "tool_definitions": [t.to_dict() for t in self.tool_definitions],
+      "created_at": self.timestamp
+    }
+  
   def _get_default_content(self) -> Optional[str]:
     """
     Provide default content when saving without content.
@@ -380,37 +350,26 @@ class Conversation(TextFile):
       "created_at": self.timestamp
     }
     
-    # Cache the conversation data
-    self._conversation_data = content_data
-    
-    # Convert to JSON string
     return json.dumps(content_data, indent=2)
   
   def _post_save_hook(self):
     """
-    Update conversation statistics after saving.
+    Update conversation metadata after saving.
     
     This is called automatically after save() completes.
     """
     # Call parent's post save hook for text stats
     super()._post_save_hook()
     
-    # Only update conversation data if the file exists
-    if self.exists():
-      # Clear cached data to force refresh
-      if hasattr(self, '_conversation_data'):
-        delattr(self, '_conversation_data')
-      
-      # Reload conversation data to ensure everything is in sync
-      self.get_conversation_data()
-      
-      # Update metadata in the manifest with the current state
-      self.metadata.update({
-        "title": self.title,
-        "message_count": len(self.messages),
-        "tool_count": len(self.tool_definitions)
-      })
-      self.save_metadata()
+    # Update metadata based on current object state
+    self.metadata.update({
+      "title": self.title,
+      "message_count": len(self.messages),
+      "tool_count": len(self.tool_definitions)
+    })
+    
+    # Save metadata to ensure it's up to date in the manifest
+    self.save_metadata()
 
   def apply_substitutions(self, text: str, **kwargs) -> str:
     """
@@ -977,3 +936,23 @@ class Conversation(TextFile):
       }
       for t in self.tool_definitions
     ]
+
+  def to_dict(self) -> Dict[str, Any]:
+    """
+    Convert the conversation to a dictionary for the manifest.
+    
+    This method is primarily used for manifest serialization and includes
+    both the base file metadata and conversation-specific metadata.
+    """
+    # Get the base file dictionary which includes subdirectory
+    base_dict = super().to_dict()
+    
+    # Add conversation metadata for the manifest
+    base_dict.update({
+      "title": self.title,
+      "message_count": len(self.messages),
+      "tool_count": len(self.tool_definitions),
+      "conversation_id": self.file_id
+    })
+    
+    return base_dict

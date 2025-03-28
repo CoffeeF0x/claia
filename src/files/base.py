@@ -114,6 +114,10 @@ class BaseFile:
   
   def get_subdirectory(self) -> str:
     """Get the appropriate subdirectory for this file type."""
+    # Check if there's an override subdirectory specified
+    if hasattr(self, '_override_subdirectory') and self._override_subdirectory:
+      return self._override_subdirectory
+    # Fall back to the file type based on mime type
     return self.get_file_type().value
   
   def ensure_directory_exists(self) -> bool:

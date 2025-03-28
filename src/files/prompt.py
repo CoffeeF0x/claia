@@ -59,6 +59,9 @@ class Prompt(TextFile):
     if file_name and not file_name.endswith(".json"):
       kwargs["file_name"] = f"{file_name}.json"
     
+    # Set the subdirectory override before calling the parent constructor
+    self._override_subdirectory = FileSubdirectory.PROMPT.value
+    
     # Initialize as TextFile but ensure mime_type is application/json
     kwargs["mime_type"] = "application/json"
     super().__init__(base_directory=base_directory, **kwargs)
@@ -85,15 +88,12 @@ class Prompt(TextFile):
       "name": self.prompt_name,
       "prompt": self.prompt_text or ""
     }
-    
-    # Update cached data
-    self._prompt_data = prompt_data
 
     return json.dumps(prompt_data, indent=2)
 
   def _post_save_hook(self):
     """
-    Update prompt statistics and data after saving.
+    Update prompt metadata after saving.
     
     This is called automatically after save() completes.
     """
@@ -105,24 +105,9 @@ class Prompt(TextFile):
       "prompt_name": self.prompt_name,
       "prompt_text_preview": self.prompt_text[:50] + "..." if len(self.prompt_text) > 50 else self.prompt_text
     })
-
-    # Only update prompt data if the file exists
-    if self.exists():
-      # Clear cached data to force refresh
-      if hasattr(self, '_prompt_data'):
-        delattr(self, '_prompt_data')
-      
-      # Reload prompt data to ensure everything is in sync
-      self.get_prompt_data() 
-  
-  def get_subdirectory(self) -> str:
-    """
-    Override to return the prompts subdirectory regardless of mime type.
     
-    Returns:
-      str: The prompts subdirectory
-    """
-    return FileSubdirectory.PROMPT.value
+    # Save metadata to ensure it's up to date in the manifest
+    self.save_metadata()
   
   @staticmethod
   def validate_prompt_name(name: str) -> str:
@@ -162,37 +147,31 @@ class Prompt(TextFile):
     Returns:
       Dict[str, Any]: Prompt data with name and text
     """
-    # If already loaded, return the cached data
-    if hasattr(self, '_prompt_data'):
-      return self._prompt_data
-    
-    # Try to load from file if it exists
+    # If file exists, load content from file
     if self.exists():
       try:
         content = self.get_content()
         data = json.loads(content)
-        self.prompt_name = data.get("name", "")
+        
+        # Update properties from file content
+        self.prompt_name = self.validate_prompt_name(data.get("name", ""))
         self.prompt_text = data.get("prompt", "")
         
-        if self.prompt_name:
-          self.prompt_name = self.validate_prompt_name(self.prompt_name)
-
         # Update metadata
         self.metadata.update({
           "prompt_name": self.prompt_name,
           "prompt_text_preview": self.prompt_text[:50] + "..." if len(self.prompt_text) > 50 else self.prompt_text
         })
         
-        # Cache the data
-        self._prompt_data = data
         return data
       except json.JSONDecodeError:
         logger.error(f"Failed to parse JSON from prompt file: {self.file_id}")
     
-    # Return default data if file doesn't exist or parsing failed
-    default_data = {"name": self.prompt_name or "", "prompt": self.prompt_text or ""}
-    self._prompt_data = default_data
-    return default_data
+    # Return default data based on current object state
+    return {
+      "name": self.prompt_name or "", 
+      "prompt": self.prompt_text or ""
+    }
 
   @classmethod
   def create_prompt(cls: Type[T], base_directory: str, prompt_name: str, 
