@@ -172,8 +172,6 @@ def demo_prompt_files(base_dir):
     for i, (line_num, line_content) in enumerate(search_results, 1):
       print(f"     {i}. {line_content}")
   
-  print("\nDemo completed successfully!")
-  
   return prompt_files
 
 
@@ -190,7 +188,7 @@ def main():
     # Demonstrate prompt file operations
     prompt_files = demo_prompt_files(base_dir)
     
-    print("\nDemo completed successfully!")
+    print("\nDemo processes completed successfully!")
   
   except Exception as e:
     print(f"Error during demo: {e}")
@@ -202,7 +200,7 @@ def main():
     print("\nCleaning up demo environment...")
     if os.path.exists(base_dir):
       shutil.rmtree(base_dir)
-    print("Demo completed!")
+    print("Demo complete!")
 
 
 if __name__ == "__main__":

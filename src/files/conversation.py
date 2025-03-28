@@ -343,8 +343,34 @@ class Conversation(TextFile):
     return default_data
   
   def to_dict(self) -> Dict[str, Any]:
-    """Convert the conversation to a dictionary."""
-    return {
+    """
+    Convert the conversation to a dictionary for the manifest.
+    
+    This method is primarily used for manifest serialization and includes
+    both the base file metadata and conversation-specific metadata.
+    """
+    # Get the base file dictionary which includes subdirectory
+    base_dict = super().to_dict()
+    
+    # Add conversation metadata for the manifest
+    base_dict.update({
+      "title": self.title,
+      "message_count": len(self.messages),
+      "tool_count": len(self.tool_definitions),
+      "conversation_id": self.file_id
+    })
+    
+    return base_dict
+
+  def _get_default_content(self) -> Optional[str]:
+    """
+    Provide default content when saving without content.
+    
+    Returns:
+        str: JSON representation of the conversation
+    """
+    # Create conversation data structure for file content
+    content_data = {
       "conversation_id": self.file_id,
       "title": self.title,
       "prompt": self.prompt,
@@ -353,39 +379,39 @@ class Conversation(TextFile):
       "tool_definitions": [t.to_dict() for t in self.tool_definitions],
       "created_at": self.timestamp
     }
-  
-  def to_json(self) -> str:
-    """
-    Convert the conversation to a JSON string.
     
-    Returns:
-        str: JSON representation of the conversation
-    """
-    # Construct conversation data
-    conversation_data = self.to_dict()
-    
-    # Update cached data
-    self._conversation_data = conversation_data
-    
-    # Update metadata
-    self.metadata.update({
-      "title": self.title,
-      "message_count": len(self.messages),
-      "tool_count": len(self.tool_definitions)
-    })
+    # Cache the conversation data
+    self._conversation_data = content_data
     
     # Convert to JSON string
-    return json.dumps(conversation_data, indent=2)
+    return json.dumps(content_data, indent=2)
   
-  def _get_default_content(self) -> Optional[str]:
+  def _post_save_hook(self):
     """
-    Provide default content when saving without content.
+    Update conversation statistics after saving.
     
-    Returns:
-        str: JSON representation of the conversation
+    This is called automatically after save() completes.
     """
-    return self.to_json()
-  
+    # Call parent's post save hook for text stats
+    super()._post_save_hook()
+    
+    # Only update conversation data if the file exists
+    if self.exists():
+      # Clear cached data to force refresh
+      if hasattr(self, '_conversation_data'):
+        delattr(self, '_conversation_data')
+      
+      # Reload conversation data to ensure everything is in sync
+      self.get_conversation_data()
+      
+      # Update metadata in the manifest with the current state
+      self.metadata.update({
+        "title": self.title,
+        "message_count": len(self.messages),
+        "tool_count": len(self.tool_definitions)
+      })
+      self.save_metadata()
+
   def apply_substitutions(self, text: str, **kwargs) -> str:
     """
     Apply substitutions to the given text, replacing placeholders with values.
@@ -811,25 +837,7 @@ class Conversation(TextFile):
     })
     
     return True
-  
-  def _post_save_hook(self):
-    """
-    Update conversation statistics after saving.
-    
-    This is called automatically after save() completes.
-    """
-    # Call parent's post save hook for text stats
-    super()._post_save_hook()
-    
-    # Only update conversation data if the file exists
-    if self.exists():
-      # Clear cached data to force refresh
-      if hasattr(self, '_conversation_data'):
-        delattr(self, '_conversation_data')
-      
-      # Reload conversation data to ensure everything is in sync
-      self.get_conversation_data()
-  
+
   @classmethod
   def create_conversation(cls: Type[T], base_directory: str, title: Optional[str] = None, 
                         prompt: Optional[str] = None, **kwargs) -> Optional[T]:

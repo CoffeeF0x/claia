@@ -73,6 +73,48 @@ class Prompt(TextFile):
       "prompt_type": "text"  # Default type, can be extended later
     })
   
+  def _get_default_content(self) -> Optional[str]:
+    """
+    Provide default content when saving without content.
+    
+    Returns:
+      str: JSON representation of the prompt
+    """
+    # Construct prompt data
+    prompt_data = {
+      "name": self.prompt_name,
+      "prompt": self.prompt_text or ""
+    }
+    
+    # Update cached data
+    self._prompt_data = prompt_data
+
+    return json.dumps(prompt_data, indent=2)
+
+  def _post_save_hook(self):
+    """
+    Update prompt statistics and data after saving.
+    
+    This is called automatically after save() completes.
+    """
+    # Call parent's post save hook for text stats
+    super()._post_save_hook()
+
+    # Update metadata
+    self.metadata.update({
+      "prompt_name": self.prompt_name,
+      "prompt_text_preview": self.prompt_text[:50] + "..." if len(self.prompt_text) > 50 else self.prompt_text
+    })
+
+    # Only update prompt data if the file exists
+    if self.exists():
+      # Clear cached data to force refresh
+      if hasattr(self, '_prompt_data'):
+        delattr(self, '_prompt_data')
+      
+      # Reload prompt data to ensure everything is in sync
+      self.get_prompt_data() 
+  
   def get_subdirectory(self) -> str:
     """
     Override to return the prompts subdirectory regardless of mime type.
@@ -132,6 +174,9 @@ class Prompt(TextFile):
         self.prompt_name = data.get("name", "")
         self.prompt_text = data.get("prompt", "")
         
+        if self.prompt_name:
+          self.prompt_name = self.validate_prompt_name(self.prompt_name)
+
         # Update metadata
         self.metadata.update({
           "prompt_name": self.prompt_name,
@@ -148,42 +193,7 @@ class Prompt(TextFile):
     default_data = {"name": self.prompt_name or "", "prompt": self.prompt_text or ""}
     self._prompt_data = default_data
     return default_data
-  
-  def to_json(self) -> str:
-    """
-    Convert the prompt to a JSON string.
-    
-    Returns:
-      str: JSON representation of the prompt
-    """
-    # Construct prompt data
-    validated_name = self.validate_prompt_name(self.prompt_name) if self.prompt_name else ""
-    prompt_data = {
-      "name": validated_name,
-      "prompt": self.prompt_text or ""
-    }
-    
-    # Update cached data
-    self._prompt_data = prompt_data
-    
-    # Update metadata
-    self.metadata.update({
-      "prompt_name": validated_name,
-      "prompt_text_preview": self.prompt_text[:50] + "..." if len(self.prompt_text) > 50 else self.prompt_text
-    })
-    
-    # Convert to JSON string
-    return json.dumps(prompt_data, indent=2)
-  
-  def _get_default_content(self) -> Optional[str]:
-    """
-    Provide default content when saving without content.
-    
-    Returns:
-      str: JSON representation of the prompt
-    """
-    return self.to_json()
-  
+
   @classmethod
   def create_prompt(cls: Type[T], base_directory: str, prompt_name: str, 
                    prompt_text: str, **kwargs) -> Optional[T]:
@@ -263,21 +273,3 @@ class Prompt(TextFile):
     
     logger.error(f"Prompt not found: {prompt_name}")
     return None
-
-  def _post_save_hook(self):
-    """
-    Update prompt statistics and data after saving.
-    
-    This is called automatically after save() completes.
-    """
-    # Call parent's post save hook for text stats
-    super()._post_save_hook()
-    
-    # Only update prompt data if the file exists
-    if self.exists():
-      # Clear cached data to force refresh
-      if hasattr(self, '_prompt_data'):
-        delattr(self, '_prompt_data')
-      
-      # Reload prompt data to ensure everything is in sync
-      self.get_prompt_data() 

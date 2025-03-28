@@ -318,20 +318,25 @@ Please help the user with their requests.""")
   print(f"   - Loaded {len(loaded_tools)} tools in bulk")
   for tool in loaded_tools:
     print(f"   - {tool.name}: {tool.description}")
+    
+  # Save this conversation too
+  bulk_conversation.save()
+  print(f"   - Saved bulk conversation to: {bulk_conversation.path}")
   
   # 16. List all conversations
   print("\n16. Listing all conversations")
-  all_conversations = Conversation.list_conversations(base_dir)
-  print(f"   - Found {len(all_conversations)} conversations")
   
-  for conv_metadata in all_conversations:
-    title = conv_metadata.get("title", "Untitled")
-    conv_id = conv_metadata.get("file_id", "Unknown")
-    message_count = conv_metadata.get("metadata", {}).get("message_count", 0)
-    tool_count = conv_metadata.get("metadata", {}).get("tool_count", 0)
+  # Use the list_conversations method to list conversations
+  conversations = Conversation.list_conversations(base_dir)
+  print(f"   - Found {len(conversations)} conversations")
+  
+  for conversation_metadata in conversations:
+    title = conversation_metadata.get("title", "Untitled")
+    conv_id = conversation_metadata.get("file_id", "Unknown")
+    message_count = conversation_metadata.get("message_count", 0)
+    tool_count = conversation_metadata.get("tool_count", 0)
     print(f"   - {title} (ID: {conv_id}, {message_count} messages, {tool_count} tools)")
   
-  print("\nDemo completed successfully!")
 
 
 
@@ -345,9 +350,8 @@ def main():
   
   try:
     # Demonstrate conversation operations
-    conversation = demo_conversation(base_dir)
-    
-    print("\nDemo completed successfully!")
+    demo_conversation(base_dir)
+    print("\nDemo processes completed successfully!")
   
   except Exception as e:
     print(f"Error during demo: {e}")
@@ -359,7 +363,7 @@ def main():
     print("\nCleaning up demo environment...")
     if os.path.exists(base_dir):
       shutil.rmtree(base_dir)
-    print("Demo completed!")
+    print("Demo complete!")
 
 
 if __name__ == "__main__":
