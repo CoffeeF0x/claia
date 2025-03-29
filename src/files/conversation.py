@@ -26,7 +26,7 @@ from .text import TextFile
 from .base import BaseFile
 from enums.file import FileSubdirectory
 from enums.conversation import ActionType, MessageRole, TagType, TagStatus
-from tool_registry import execute_tool
+from tools import execute_tool
 
 
 
