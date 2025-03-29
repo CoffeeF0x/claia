@@ -20,6 +20,7 @@ class ActionType(Enum):
     ADD_TOOL_DEFINITION = auto()
     UPDATE_TOOL_DEFINITION = auto()
     REMOVE_TOOL_DEFINITION = auto()
+    PROCESS_FUNCTION_CALL = auto()
 
 
 class MessageRole(Enum):
@@ -33,3 +34,12 @@ class TagType(Enum):
     """Enum for types of tags that can appear in message content."""
     TOOL_CALL = "[FUNCTION_CALL]"
     THINKING = "[THINKING]"
+
+
+class TagStatus(Enum):
+    """Enum for the status of a parsed tag."""
+    OPEN = auto()               # Tag has been opened but not yet closed (used internally during parsing)
+    CLOSED = auto()             # Tag was opened and correctly closed.
+    CLOSED_MISMATCH = auto()    # Tag was opened, but closed by a different tag type.
+    MALFORMED_UNCLOSED = auto() # Tag was opened but never closed by the end of the content.
+    MALFORMED_UNOPENED = auto() # Closing tag found without a corresponding open tag (optional, could just ignore).

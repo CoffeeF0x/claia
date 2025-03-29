@@ -8,6 +8,9 @@ This module contains the conversation file handling class for CLAIA.
 #   to attach the file. If a file id is passed, then validate and identify the type
 # - Consider redesign so that an external file load is not required (ie, stored fully
 #   in memory except on saves and loads)
+# - Update the function definition to match our commands structure
+# - Remove the settings object from tool calls?
+# - Make sure tools still work after load (ie, are the references stored correctly?)
 
 # External dependencies
 import json
@@ -22,7 +25,8 @@ import re
 from .text import TextFile
 from .base import BaseFile
 from enums.file import FileSubdirectory
-from enums.conversation import ActionType, MessageRole, TagType
+from enums.conversation import ActionType, MessageRole, TagType, TagStatus
+from tool_registry import execute_tool
 
 
 
@@ -368,84 +372,201 @@ class Conversation(TextFile):
         closing_tag = f"/{opening_tag}"
       return opening_tag, closing_tag
 
-  def process_tags_in_content(self, content: str) -> tuple[str, list[dict]]:
-    """
-    Identifies, extracts, and potentially replaces tagged sections in content.
+  def _get_tag_type_from_closing_tag(self, closing_tag_str: str) -> Optional[TagType]:
+      """Helper to determine the TagType associated with a closing tag string."""
+      for tag_type in TagType:
+          opening_tag, closing_tag = self._get_tag_format(tag_type)
+          if closing_tag_str == closing_tag:
+              return tag_type
+      return None
 
-    This method iterates through known TagTypes, finds corresponding tags
-    (using default or custom formats), extracts their content, and builds
-    a list of found tags. For now, it doesn't replace them, just identifies.
+  def find_tags(self, content: str) -> list[dict]:
+    """
+    Identifies and extracts tagged sections in content, handling nesting and malformed tags.
+
+    Uses a stack-based approach to parse tags according to TagType enums and
+    custom formats defined in the conversation.
 
     Args:
         content: The text content to process.
 
     Returns:
-        A tuple containing:
-        - The original content (as replacement isn't implemented yet).
-        - A list of dictionaries, each representing a found tag:
+        A list of dictionaries, each representing a found tag attempt:
           {
-            "type": TagType,
-            "opening_tag": str,
-            "closing_tag": str,
-            "content": str,
-            "start_index": int,
-            "end_index": int
+            "type": TagType,          # The type of the *opening* tag
+            "status": TagStatus,      # The status of this tag pairing
+            "opening_tag": str,       # The opening tag string found
+            "closing_tag": Optional[str], # The closing tag string found (if any)
+            "content": Optional[str], # Raw content string inside the tags (if closed)
+            "start_index": int,       # Start index of the opening tag
+            "end_index": Optional[int]  # Index *after* the closing tag (if closed)
           }
-          The list is sorted by start_index.
+        The list includes entries for successfully closed tags, mismatched closures,
+        and unclosed tags. It's generally sorted by opening tag start index.
     """
-    found_tags = []
+    found_tags_details = []
+    open_tags_stack = [] # Stack to keep track of open tags: {'type': TagType, 'start': int, 'opening_tag': str}
 
+    # Generate regex patterns for all possible opening and closing tags
+    all_tags_patterns = []
+    tag_type_map = {} # Map tag string back to TagType enum
     for tag_type in TagType:
-        opening_tag, closing_tag = self._get_tag_format(tag_type)
-        opening_len = len(opening_tag)
-        closing_len = len(closing_tag)
+        opening, closing = self._get_tag_format(tag_type)
+        all_tags_patterns.extend([re.escape(opening), re.escape(closing)])
+        tag_type_map[opening] = {'type': tag_type, 'is_opening': True}
+        tag_type_map[closing] = {'type': tag_type, 'is_opening': False}
 
-        # Find all occurrences of this tag type
-        start_index = 0
-        while True:
-            start_pos = content.find(opening_tag, start_index)
-            if start_pos == -1:
-                break # No more opening tags of this type
+    # Combine patterns into a single regex for efficient searching
+    # This finds *any* potential tag marker
+    combined_pattern = re.compile('|'.join(all_tags_patterns))
 
-            end_pos = content.find(closing_tag, start_pos + opening_len)
-            if end_pos == -1:
-                # Malformed tag - opening tag without closing tag.
-                # Log warning or handle as needed. For now, we'll just stop searching for this type.
-                logger.warning(f"Malformed tag: Found '{opening_tag}' at index {start_pos} without matching '{closing_tag}' in content.")
-                break # Stop searching for this tag type
+    last_index = 0
+    for match in combined_pattern.finditer(content):
+        tag_str = match.group(0)
+        start, end = match.span()
+        tag_info = tag_type_map.get(tag_str)
 
-            # Check for nested tags *of the same type* before the closing tag
-            # This is a simplified check; true nested parsing is more complex.
-            nested_start = content.find(opening_tag, start_pos + opening_len)
-            if nested_start != -1 and nested_start < end_pos:
-                 # For now, skip complex nesting, just advance search past inner opening tag
-                 # A more robust solution would use recursion or a stack.
-                 logger.debug(f"Skipping potential nested tag '{opening_tag}' found inside another.")
-                 start_index = nested_start # Continue searching after the inner opening tag
-                 continue
+        if not tag_info: # Should not happen with how pattern is built, but safe check
+            continue
 
-            # Extract content and store tag info
-            tag_content = content[start_pos + opening_len : end_pos]
-            found_tags.append({
-                "type": tag_type,
-                "opening_tag": opening_tag,
-                "closing_tag": closing_tag,
-                "content": tag_content,
-                "start_index": start_pos,
-                "end_index": end_pos + closing_len, # Index after the closing tag
+        if tag_info['is_opening']:
+            # Found an opening tag, push onto stack
+            open_tags_stack.append({
+                'type': tag_info['type'],
+                'start': start,
+                'opening_tag': tag_str
             })
+        else:
+            # Found a closing tag
+            closing_tag_type = tag_info['type']
+            closing_tag_str = tag_str
 
-            # Continue searching after this tag
-            start_index = end_pos + closing_len
+            if open_tags_stack:
+                # There's an open tag waiting to be closed
+                last_open_tag = open_tags_stack.pop()
+                tag_content = content[last_open_tag['start'] + len(last_open_tag['opening_tag']) : start]
 
-    # Sort tags by their appearance order in the text
-    found_tags.sort(key=lambda x: x['start_index'])
+                status = TagStatus.CLOSED
+                if last_open_tag['type'] != closing_tag_type:
+                    status = TagStatus.CLOSED_MISMATCH
+                    logger.warning(f"Tag mismatch: Opened with {last_open_tag['opening_tag']} "
+                                   f"but closed with {closing_tag_str} at index {start}.")
 
-    # TODO: Implement replacement logic if needed.
-    # For now, we just return the original content and the list of found tags.
+                found_tags_details.append({
+                    "type": last_open_tag['type'],
+                    "status": status,
+                    "opening_tag": last_open_tag['opening_tag'],
+                    "closing_tag": closing_tag_str,
+                    "content": tag_content,
+                    "start_index": last_open_tag['start'],
+                    "end_index": end
+                })
+            else:
+                # Found a closing tag without a corresponding open tag on stack
+                logger.warning(f"Found closing tag '{closing_tag_str}' at index {start} with no matching open tag.")
+                # Optionally add a MALFORMED_UNOPENED entry here if needed
+                # found_tags_details.append({
+                #     "type": closing_tag_type, # Type of the closing tag found
+                #     "status": TagStatus.MALFORMED_UNOPENED,
+                #     "opening_tag": None,
+                #     "closing_tag": closing_tag_str,
+                #     "content": None,
+                #     "start_index": None, # Or maybe 'start' of the closing tag?
+                #     "end_index": end
+                # })
+
+        last_index = end # Keep track for unclosed tags at the end
+
+    # Handle any tags left unclosed on the stack at the end of the content
+    for unclosed_tag in open_tags_stack:
+        found_tags_details.append({
+            "type": unclosed_tag['type'],
+            "status": TagStatus.MALFORMED_UNCLOSED,
+            "opening_tag": unclosed_tag['opening_tag'],
+            "closing_tag": None,
+            "content": None, # Or content from start to end of string? Decide based on need.
+            "start_index": unclosed_tag['start'],
+            "end_index": None
+        })
+
+    # Sort the results primarily by start index for consistency
+    found_tags_details.sort(key=lambda x: x['start_index'] if x['start_index'] is not None else float('inf'))
+
+    return found_tags_details
+
+  def process_tool_calls_in_content(self, content: str, settings=None) -> str:
+    """
+    Finds and executes tool calls within the content, replacing tags with results.
+
+    Uses find_tags to locate potential tool calls, then parses, executes via the
+    tool_registry, and replaces them in the content string.
+
+    Args:
+      content: The text content containing potential tool calls.
+      settings: Optional settings object to pass to tool execution.
+
+    Returns:
+      The processed content string with tool call tags replaced by their results
+      or error messages.
+    """
     processed_content = content
+    found_tags = self.find_tags(processed_content)
 
-    return processed_content, found_tags
+    for tag in reversed(found_tags):
+      if tag['type'] == TagType.TOOL_CALL and tag['status'] == TagStatus.CLOSED:
+        tool_name = "unknown"
+        parameters = {} # Initialize parameters
+        result = ""
+        try:
+          # Parse the JSON content inside the tag
+          tool_call_data = json.loads(tag['content'])
+          tool_name = tool_call_data.get("name", "unknown")
+          parameters = tool_call_data.get("parameters", {}) # Extract parameters
+
+          # Execute the tool function using the registry
+          result = execute_tool(tool_name, parameters, settings) # Call the new function
+
+          # Add action for successful processing
+          self.add_action(ActionType.PROCESS_FUNCTION_CALL, {
+              "tool_name": tool_name,
+              "parameters": parameters,
+              "result_preview": str(result)[:100] + "..." if len(str(result)) > 100 else str(result)
+          })
+
+        except json.JSONDecodeError as e:
+          logger.error(f"Failed to parse JSON for tool call: {e}\nContent: {tag['content']}")
+          result = f"[ERROR: Invalid JSON in tool call - {e}]"
+          self.add_action(ActionType.PROCESS_FUNCTION_CALL, {
+              "tool_name": tool_name, # May still be "unknown"
+              "parameters": parameters, # Might be empty if parsing failed early
+              "error": "JSONDecodeError",
+              "content_preview": tag['content'][:100] + "..."
+          })
+        except Exception as e:
+          # Errors during execute_tool are caught inside it and returned as strings,
+          # but we catch potential unexpected errors here just in case.
+          # Errors during JSON parsing *before* calling execute_tool land here.
+          logger.error(f"Unexpected error processing tool call for '{tool_name}': {e}")
+          result = f"[ERROR: Failed to process tool '{tool_name}' - {e}]"
+          self.add_action(ActionType.PROCESS_FUNCTION_CALL, {
+              "tool_name": tool_name,
+              "parameters": parameters, # Might be empty if parsing failed early
+              "error": str(e),
+              "content_preview": tag['content'][:100] + "..."
+          })
+
+        # Replace the original tag with the result/error
+        if tag['start_index'] is not None and tag['end_index'] is not None:
+            processed_content = processed_content[:tag['start_index']] + str(result) + processed_content[tag['end_index']:]
+        else:
+            logger.error(f"Cannot replace tag for tool call '{tool_name}' due to missing indices.")
+
+      elif tag['type'] == TagType.TOOL_CALL and tag['status'] != TagStatus.CLOSED:
+         # Log or handle non-closed/mismatched tool call tags if needed
+         logger.warning(f"Skipping processing of non-closed/mismatched tool call tag ({tag['status'].name}) starting at {tag['start_index']}.")
+         # Optionally replace these with an error message or marker
+
+    return processed_content
 
   def apply_substitutions(self, text: str, **kwargs) -> str:
     """

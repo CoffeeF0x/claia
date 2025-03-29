@@ -18,7 +18,7 @@ sys.path.insert(0, str(src_dir))
 
 # Internal dependencies
 from files import Conversation, BaseFile
-from enums.conversation import MessageRole, ActionType, TagType
+from enums.conversation import MessageRole, ActionType, TagType, TagStatus
 
 
 
@@ -110,40 +110,37 @@ Python is widely used in data science, web development, automation, and more."""
   message = conversation.get_message(user_message.message_id)
   print(f"   - Message now has {len(message.file_ids)} attached files: {message.file_ids}")
 
-  # 6. Add tool definitions to the conversation
-  print("\n6. Adding tool definitions to the conversation")
+  # 6. Add tool definitions to the conversation (Using Test Tools)
+  print("\n6. Adding tool definitions to the conversation (Using Test Tools)")
 
-  # Add a weather tool definition
-  weather_tool = conversation.add_tool_definition(
-    name="get_weather",
-    description="Get the current weather for a location",
+  # Add the echo tool definition
+  echo_tool = conversation.add_tool_definition(
+    name="echo",
+    description="Echoes back the provided text.",
     parameters={
       "type": "object",
       "properties": {
-        "location": {"type": "string", "description": "City name or zip code"},
-        "unit": {"type": "string", "enum": ["celsius", "fahrenheit"], "default": "celsius"}
+        "text": {"type": "string", "description": "The text to echo back."}
       },
-      "required": ["location"]
+      "required": ["text"]
     }
   )
-  print(f"   - Added tool: {weather_tool.name} (ID: {weather_tool.tool_id})")
-  print(f"   - Description: {weather_tool.description}")
+  print(f"   - Added tool: {echo_tool.name} (ID: {echo_tool.tool_id})")
+  print(f"   - Description: {echo_tool.description}")
 
-  # Add a calculator tool definition
-  calculator_tool = conversation.add_tool_definition(
-    name="calculate",
-    description="Perform a calculation",
+  # Add the reverse_string tool definition
+  reverse_tool = conversation.add_tool_definition(
+    name="reverse_string",
+    description="Reverses the provided string.",
     parameters={
       "type": "object",
       "properties": {
-        "operation": {"type": "string", "enum": ["add", "subtract", "multiply", "divide"]},
-        "x": {"type": "number"},
-        "y": {"type": "number"}
+        "input_string": {"type": "string", "description": "The string to reverse."}
       },
-      "required": ["operation", "x", "y"]
+      "required": ["input_string"]
     }
   )
-  print(f"   - Added tool: {calculator_tool.name} (ID: {calculator_tool.tool_id})")
+  print(f"   - Added tool: {reverse_tool.name} (ID: {reverse_tool.tool_id})")
 
   # 7. List tool definitions
   print("\n7. Listing tool definitions")
@@ -152,30 +149,8 @@ Python is widely used in data science, web development, automation, and more."""
   for i, tool in enumerate(tools, 1):
     print(f"   {i}. {tool.name}: {tool.description}")
 
-  # 8. Update a tool definition
-  print("\n8. Updating a tool definition")
-  conversation.update_tool_definition(
-    tool_id=weather_tool.tool_id,
-    description="Get detailed weather information for a location",
-    parameters={
-      "type": "object",
-      "properties": {
-        "location": {"type": "string", "description": "City name, zip code, or coordinates"},
-        "unit": {"type": "string", "enum": ["celsius", "fahrenheit"], "default": "celsius"},
-        "include_forecast": {"type": "boolean", "default": False}
-      },
-      "required": ["location"]
-    }
-  )
-
-  # Get the updated tool
-  updated_tool = conversation.get_tool_definition(weather_tool.tool_id)
-  print(f"   - Original description: {weather_tool.description}")
-  print(f"   - Updated description: {updated_tool.description}")
-  print(f"   - Added parameter: include_forecast")
-
-  # 9. Test the prompt with tool definitions
-  print("\n9. Testing the prompt with tool definitions")
+  # 8. Test the prompt with tool definitions (Renumbered)
+  print("\n8. Testing the prompt with tool definitions") # Renumbered
 
   # Change the prompt to include tool definitions
   conversation.change_prompt("""You are a helpful assistant with access to the following tools:
@@ -196,34 +171,22 @@ Please help the user with their requests.""")
     print(f"   {line}")
   print("   " + "-" * 50)
 
-  # 10. Remove a tool definition
-  print("\n10. Removing a tool definition")
-  result = conversation.remove_tool_definition(calculator_tool.tool_id)
-  print(f"   - Removed calculator tool: {result}")
-
-  remaining_tools = conversation.get_all_tool_definitions()
-  print(f"   - Remaining tools: {len(remaining_tools)}")
-  for tool in remaining_tools:
-    print(f"   - {tool.name}")
-
-  # 11. Export tool definitions to list format
-  print("\n11. Exporting tool definitions to list format")
+  # 9. Export tool definitions to list format (Renumbered)
+  print("\n9. Exporting tool definitions to list format") # Renumbered
   tools_list = conversation.get_tool_definitions_as_list()
   print(f"   - Exported {len(tools_list)} tools as a list format")
   print(f"   - First tool: {tools_list[0]['name']}")
 
-  # 12. Change the conversation title and prompt
-  print("\n12. Changing the conversation title")
+  # 10. Change the conversation title and prompt (Renumbered)
+  print("\n10. Changing the conversation title") # Renumbered
   print(f"   - Original title: {conversation.title}")
-
-  conversation.change_title("Python Discussion with Tools")
+  conversation.change_title("Python Discussion with Test Tools") # Updated title
   print(f"   - New title: {conversation.title}")
 
-  # 13. View the action history
-  print("\n13. Viewing the action history")
+  # 11. View the action history (Renumbered)
+  print("\n11. Viewing the action history") # Renumbered
   print(f"   {'Timestamp':<15} {'Action Type':<30} {'Description'}")
   print(f"   {'-'*15} {'-'*30} {'-'*40}")
-
   for action in conversation.actions:
     # Format timestamp to be more readable
     timestamp = f"{action.timestamp:.0f}"
@@ -248,17 +211,21 @@ Please help the user with their requests.""")
       description = f"Updated tool: {action.metadata.get('new_name', '')}"
     elif action.action_type == ActionType.REMOVE_TOOL_DEFINITION:
       description = f"Removed tool: {action.metadata.get('name', '')}"
+    elif action.action_type == ActionType.PROCESS_FUNCTION_CALL: # Handle new action type
+        meta = action.metadata
+        if meta.get("error"):
+            description = f"Failed tool call: {meta.get('tool_name', 'unknown')} - {meta.get('error')}"
+        else:
+            description = f"Executed tool call: {meta.get('tool_name', 'unknown')} -> {meta.get('result_preview', '')}"
     else:
       description = str(action.metadata)
 
     print(f"   {timestamp:<15} {action.action_type.name:<30} {description}")
 
-  # 14. Save and reload the conversation
-  print("\n14. Saving and reloading the conversation")
+  # 12. Save and reload the conversation (Renumbered)
+  print("\n12. Saving and reloading the conversation") # Renumbered
   conversation.save()
   print(f"   - Saved conversation to: {conversation.path}")
-
-  # Reload the conversation
   reloaded_conversation = Conversation.load_conversation(conversation.file_id, base_dir)
   if reloaded_conversation:
     print(f"   - Reloaded conversation: {reloaded_conversation.title}")
@@ -268,8 +235,8 @@ Please help the user with their requests.""")
   else:
     print("   - Failed to reload conversation")
 
-  # 15. Demonstrating bulk loading of tool definitions
-  print("\n15. Demonstrating bulk loading of tool definitions")
+  # 13. Demonstrating bulk loading of tool definitions (Renumbered)
+  print("\n13. Demonstrating bulk loading of tool definitions") # Renumbered
 
   # Create a new conversation
   bulk_conversation = Conversation.create_conversation(
@@ -326,8 +293,8 @@ Please help the user with their requests.""")
   bulk_conversation.save()
   print(f"   - Saved bulk conversation to: {bulk_conversation.path}")
 
-  # 16. Demonstrate Tag Processing with Custom Formats
-  print("\n16. Demonstrating Tag Processing with Custom Formats")
+  # 14. Demonstrate Tag Processing with Custom Formats (Renumbered)
+  print("\n14. Demonstrating Tag Processing with Custom Formats") # Renumbered
 
   # Define custom tag formats
   custom_formats = {
@@ -343,52 +310,77 @@ Please help the user with their requests.""")
     prompt="Assistant using custom tags.",
     custom_tag_formats=custom_formats
   )
+  # Add echo tool definition needed for the test message
+  tag_convo.add_tool_definition(
+      name="echo", description="Echoes text", parameters={"type":"object", "properties":{"text":{"type":"string"}}, "required":["text"]}
+  )
   print(f"   - Created conversation with custom tags: {tag_convo.title} (ID: {tag_convo.file_id})")
 
-  # Add a message with custom tags
-  message_content_with_tags = "Okay, I need to figure out the weather. <think>User wants weather for Paris. I should use the tool.</think> Let me check that for you: <tool_call>{\"name\": \"get_weather\", \"parameters\": {\"location\": \"Paris\"}}</tool_call>"
+  # Add a message with custom tags (using 'echo' tool)
+  message_content_with_tags = "Okay, I need to test the echo. <think>User wants to echo 'Hello World'. I should use the tool.</think> Let me try that: <tool_call>{\"name\": \"echo\", \"parameters\": {\"text\": \"Hello World\"}}</tool_call> How did that work?"
   tag_convo.add_message(
     speaker=MessageRole.ASSISTANT,
     content=message_content_with_tags
   )
   print(f"   - Added message with custom tags: '{message_content_with_tags[:60]}...'")
 
-  # Process the tags in the message content
-  print("   - Processing tags in the message content:")
-  processed_content, found_tags = tag_convo.process_tags_in_content(message_content_with_tags)
+  # Find the tags in the message content (demonstrates find_tags)
+  print("   - Finding tags in the message content:")
+  found_tags = tag_convo.find_tags(message_content_with_tags) # Use find_tags here
 
   # Print the found tags
   if found_tags:
     for tag_info in found_tags:
-      print(f"     - Found Tag:")
-      print(f"       - Type: {tag_info['type'].name}")
-      print(f"       - Format: {tag_info['opening_tag']}...{tag_info['closing_tag']}")
-      print(f"       - Content: '{tag_info['content']}'")
-      print(f"       - Indices: {tag_info['start_index']} - {tag_info['end_index']}")
+      # Only print closed tags for brevity in this step
+      if tag_info['status'] == TagStatus.CLOSED:
+          print(f"     - Found Closed Tag:")
+          print(f"       - Type: {tag_info['type'].name}")
+          print(f"       - Format: {tag_info['opening_tag']}...{tag_info['closing_tag']}")
+          print(f"       - Content: '{tag_info['content']}'")
+          print(f"       - Indices: {tag_info['start_index']} - {tag_info['end_index']}")
+      else:
+          print(f"     - Found Non-Closed Tag:")
+          print(f"       - Type: {tag_info['type'].name}")
+          print(f"       - Status: {tag_info['status'].name}")
+          print(f"       - Opening Tag: {tag_info['opening_tag']}")
+          print(f"       - Start Index: {tag_info['start_index']}")
+
   else:
     print("     - No tags found.")
 
-  # Save this conversation to persist custom formats (stored in JSON)
+  # 15. Demonstrate Processing and Executing Tool Calls (New Step)
+  print("\n15. Demonstrating Processing and Executing Tool Calls") # New Step
+  print(f"   - Original content: '{message_content_with_tags}'")
+
+  # Process the content to execute tool calls
+  processed_content = tag_convo.process_tool_calls_in_content(message_content_with_tags)
+  print(f"   - Processed content: '{processed_content}'") # Show content with tag replaced
+
+  # Add the processed message to the conversation for context
+  tag_convo.add_message(
+      speaker=MessageRole.SYSTEM, # Or TOOL role if you add one
+      content=f"Tool execution result integrated: {processed_content}"
+  )
+
+  # Save this conversation to persist custom formats and processed message
   tag_convo.save()
   print(f"   - Saved custom tag conversation to: {tag_convo.path}")
 
-  # Reload to verify custom formats are loaded (optional check)
+  # Reload to verify (optional check)
   reloaded_tag_convo = Conversation.load_conversation(tag_convo.file_id, base_dir)
-  if reloaded_tag_convo and reloaded_tag_convo.custom_tag_formats.get(TagType.TOOL_CALL) == ("<tool_call>", "</tool_call>"):
-      print("   - Custom tag formats reloaded successfully.")
+  if reloaded_tag_convo:
+      print("   - Custom tag conversation reloaded successfully.")
   else:
-      print("   - Failed to verify custom tag formats after reloading.")
+      print("   - Failed to reload custom tag conversation.")
 
-  # 17. List all conversations (Renumbered from 16)
-  print("\n17. Listing all conversations") # Renumbered
-
-  # Use the list_conversations method to list conversations
+  # 16. List all conversations (Renumbered)
+  print("\n16. Listing all conversations") # Renumbered
   conversations = Conversation.list_conversations(base_dir)
   print(f"   - Found {len(conversations)} conversations")
 
   for conversation in conversations:
     title = conversation["metadata"].get("title", "Untitled")
-    conv_id = conversation["file_id"]
+    conv_id = conversation.get("file_id", "Unknown")
     message_count = conversation["metadata"].get("message_count", 0)
     tool_count = conversation["metadata"].get("tool_count", 0)
     has_custom = conversation["metadata"].get("has_custom_tags", False) # Get custom tag flag
