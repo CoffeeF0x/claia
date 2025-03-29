@@ -17,15 +17,12 @@ import json
 import uuid
 import time
 import logging
-from datetime import datetime
 from typing import Dict, Any, Optional, Type, TypeVar, Union, List, Tuple
 import re
 
 # Internal dependencies
 from .text import TextFile
-from .base import BaseFile
-from enums.file import FileSubdirectory
-from enums.conversation import ActionType, MessageRole, TagType, TagStatus
+from enums import FileSubdirectory, ActionType, MessageRole, TagType, TagStatus
 from tools import execute_tool
 
 

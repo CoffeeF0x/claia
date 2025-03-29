@@ -32,7 +32,7 @@ from utilities import *
 from tools import process_function_calls
 from agents import ProcessQueue, Process, Agent
 from enums import MessageRole, AgentType, SourcePreference, ProcessStatus, ModelCapability
-from conversations import Conversation
+from files import Conversation
 
 
 
@@ -106,7 +106,7 @@ def create_conversation(settings: Settings, user_input: str = None) -> Conversat
     conversation = settings.active_conversation
     if settings.active_prompt:
       logger.debug(f"Updating system prompt from active prompt: {settings.active_prompt.name}")
-      conversation.update_system_prompt_if_empty(settings.active_prompt.get_formatted_prompt())
+      conversation.change_prompt(settings.active_prompt.get_formatted_prompt())
 
   # Otherwise, create a new conversation
   else:
@@ -116,7 +116,6 @@ def create_conversation(settings: Settings, user_input: str = None) -> Conversat
 
     conversation = Conversation(
       base_directory=settings.conversation_directory,
-      files_directory=settings.conversation_files_directory,
       title="New Conversation",
       system_prompt=system_prompt
     )
