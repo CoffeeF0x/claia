@@ -15,13 +15,14 @@ import uuid
 import time
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional, Type, TypeVar, Union, List
+from typing import Dict, Any, Optional, Type, TypeVar, Union, List, Tuple
+import re
 
 # Internal dependencies
 from .text import TextFile
 from .base import BaseFile
 from enums.file import FileSubdirectory
-from enums.conversation import ActionType, MessageRole
+from enums.conversation import ActionType, MessageRole, TagType
 
 
 
@@ -228,6 +229,7 @@ class Conversation(TextFile):
   - Stores conversations in JSON format
   - Manages conversation actions and messages
   - Tracks message history and attachments
+  - Handles tagged content processing (e.g., function calls)
   - Inherits text file functionality for content operations
   """
 
@@ -238,6 +240,9 @@ class Conversation(TextFile):
     Args:
         base_directory: Base directory for the file
         **kwargs: Additional arguments to pass to the parent class
+            custom_tag_formats (Optional[Dict[TagType, Tuple[str, str]]]):
+                Overrides for default tag formats. Key is TagType enum,
+                value is a tuple of (opening_tag, closing_tag).
     """
     # Extract conversation-specific kwargs
     self.title = kwargs.pop("title", DEFAULT_CONVERSATION_TITLE)
@@ -245,6 +250,7 @@ class Conversation(TextFile):
     initial_messages = kwargs.pop("messages", [])
     initial_actions = kwargs.pop("actions", [])
     initial_tools = kwargs.pop("tool_definitions", [])
+    self.custom_tag_formats = kwargs.pop("custom_tag_formats", {})
 
     # Ensure the file has .json extension
     file_name = kwargs.get("file_name")
@@ -294,7 +300,23 @@ class Conversation(TextFile):
     self.metadata.update({
       "title": self.title,
       "message_count": len(self.messages),
-      "tool_count": len(self.tool_definitions)
+      "tool_count": len(self.tool_definitions),
+      "has_custom_tags": bool(self.custom_tag_formats)
+    })
+
+  def _update_metadata(self):
+    """
+    Update conversation metadata before it is saved.
+    """
+    # Call parent's hook first (to get text stats)
+    super()._update_metadata()
+
+    # Update metadata with conversation-specific info
+    self.metadata.update({
+      "title": self.title,
+      "message_count": len(self.messages),
+      "tool_count": len(self.tool_definitions),
+      "has_custom_tags": bool(self.custom_tag_formats)
     })
 
   def _get_default_content(self) -> Optional[str]:
@@ -312,29 +334,118 @@ class Conversation(TextFile):
       "messages": [m.to_dict() for m in self.messages],
       "actions": [a.to_dict() for a in self.actions],
       "tool_definitions": [t.to_dict() for t in self.tool_definitions],
+      "custom_tag_formats": {
+        k.name: v for k, v in self.custom_tag_formats.items()
+      },
       "created_at": self.timestamp
     }
 
     return json.dumps(content_data, indent=2)
 
-  def _post_save_hook(self):
+  def _get_tag_format(self, tag_type: TagType) -> tuple[str, str]:
     """
-    Update conversation metadata after saving.
+    Gets the opening and closing tags for a given TagType.
 
-    This is called automatically after save() completes.
+    Checks for custom formats first, then falls back to defaults.
+    The default closing tag is derived from the opening tag (e.g., [TAG] -> [/TAG]).
+
+    Args:
+        tag_type: The TagType enum member.
+
+    Returns:
+        A tuple containing the (opening_tag, closing_tag).
     """
-    # Call parent's post save hook for text stats
-    super()._post_save_hook()
+    if tag_type in self.custom_tag_formats:
+      return self.custom_tag_formats[tag_type]
+    else:
+      # Default format: [TAG_NAME] and [/TAG_NAME]
+      opening_tag = tag_type.value
+      # Basic derivation for closing tag (assumes format like "[TAG]")
+      if opening_tag.startswith('[') and opening_tag.endswith(']'):
+        closing_tag = f"[/ {opening_tag[1:-1]}]" # e.g., [/FUNCTION_CALL]
+      else:
+        # Fallback if format is unexpected (though less likely with enums)
+        closing_tag = f"/{opening_tag}"
+      return opening_tag, closing_tag
 
-    # Update metadata based on current object state
-    self.metadata.update({
-      "title": self.title,
-      "message_count": len(self.messages),
-      "tool_count": len(self.tool_definitions)
-    })
+  def process_tags_in_content(self, content: str) -> tuple[str, list[dict]]:
+    """
+    Identifies, extracts, and potentially replaces tagged sections in content.
 
-    # Save metadata to ensure it's up to date in the manifest
-    self.save_metadata()
+    This method iterates through known TagTypes, finds corresponding tags
+    (using default or custom formats), extracts their content, and builds
+    a list of found tags. For now, it doesn't replace them, just identifies.
+
+    Args:
+        content: The text content to process.
+
+    Returns:
+        A tuple containing:
+        - The original content (as replacement isn't implemented yet).
+        - A list of dictionaries, each representing a found tag:
+          {
+            "type": TagType,
+            "opening_tag": str,
+            "closing_tag": str,
+            "content": str,
+            "start_index": int,
+            "end_index": int
+          }
+          The list is sorted by start_index.
+    """
+    found_tags = []
+
+    for tag_type in TagType:
+        opening_tag, closing_tag = self._get_tag_format(tag_type)
+        opening_len = len(opening_tag)
+        closing_len = len(closing_tag)
+
+        # Find all occurrences of this tag type
+        start_index = 0
+        while True:
+            start_pos = content.find(opening_tag, start_index)
+            if start_pos == -1:
+                break # No more opening tags of this type
+
+            end_pos = content.find(closing_tag, start_pos + opening_len)
+            if end_pos == -1:
+                # Malformed tag - opening tag without closing tag.
+                # Log warning or handle as needed. For now, we'll just stop searching for this type.
+                logger.warning(f"Malformed tag: Found '{opening_tag}' at index {start_pos} without matching '{closing_tag}' in content.")
+                break # Stop searching for this tag type
+
+            # Check for nested tags *of the same type* before the closing tag
+            # This is a simplified check; true nested parsing is more complex.
+            nested_start = content.find(opening_tag, start_pos + opening_len)
+            if nested_start != -1 and nested_start < end_pos:
+                 # For now, skip complex nesting, just advance search past inner opening tag
+                 # A more robust solution would use recursion or a stack.
+                 logger.debug(f"Skipping potential nested tag '{opening_tag}' found inside another.")
+                 start_index = nested_start # Continue searching after the inner opening tag
+                 continue
+
+            # Extract content and store tag info
+            tag_content = content[start_pos + opening_len : end_pos]
+            found_tags.append({
+                "type": tag_type,
+                "opening_tag": opening_tag,
+                "closing_tag": closing_tag,
+                "content": tag_content,
+                "start_index": start_pos,
+                "end_index": end_pos + closing_len, # Index after the closing tag
+            })
+
+            # Continue searching after this tag
+            start_index = end_pos + closing_len
+
+    # Sort tags by their appearance order in the text
+    found_tags.sort(key=lambda x: x['start_index'])
+
+    # TODO: Implement replacement logic if needed.
+    # For now, we just return the original content and the list of found tags.
+    processed_content = content
+
+    return processed_content, found_tags
 
   def apply_substitutions(self, text: str, **kwargs) -> str:
     """
@@ -825,6 +936,19 @@ class Conversation(TextFile):
         # Extract valid constructor parameters from metadata
         metadata = result["metadata"].get("metadata", {})
 
+        # Load custom tag formats from file data
+        custom_formats_data = data.get("custom_tag_formats", {})
+        custom_tag_formats = {}
+        for name, fmt_tuple in custom_formats_data.items():
+            try:
+                tag_type_enum = TagType[name]
+                if isinstance(fmt_tuple, list) and len(fmt_tuple) == 2:
+                     custom_tag_formats[tag_type_enum] = tuple(fmt_tuple)
+                else:
+                    logger.warning(f"Invalid format for custom tag '{name}' in conversation {conversation_id}. Expected list of 2 strings.")
+            except KeyError:
+                logger.warning(f"Unknown TagType '{name}' found in custom tags for conversation {conversation_id}. Skipping.")
+
         # Create a new Conversation instance with the loaded data
         conversation = cls(
           base_directory=base_directory,
@@ -837,6 +961,7 @@ class Conversation(TextFile):
           messages=[Message.from_dict(m) for m in data.get("messages", [])],
           actions=[Action.from_dict(a) for a in data.get("actions", [])],
           tool_definitions=[ToolDefinition.from_dict(t) for t in data.get("tool_definitions", [])],
+          custom_tag_formats=custom_tag_formats,
           metadata=metadata
         )
         return conversation

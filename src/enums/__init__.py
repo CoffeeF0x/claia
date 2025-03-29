@@ -1,6 +1,6 @@
 from .agent        import ProcessStatus, AgentType, SourcePreference
 from .model        import ModelCapability, IOType
-from .conversation import MessageRole, ActionType
+from .conversation import MessageRole, ActionType, TagType
 from .file         import FileSubdirectory, FileStatus, FileMimeType
 
 # __all__ = [

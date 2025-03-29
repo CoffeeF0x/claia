@@ -27,3 +27,9 @@ class MessageRole(Enum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
+
+
+class TagType(Enum):
+    """Enum for types of tags that can appear in message content."""
+    TOOL_CALL = "[FUNCTION_CALL]"
+    THINKING = "[THINKING]"

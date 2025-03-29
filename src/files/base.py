@@ -275,12 +275,13 @@ class BaseFile:
       logger.error(f"Failed to write content to file {self.file_id}: {e}")
       return False
 
-  def _post_save_hook(self):
+  def _update_metadata(self):
     """
-    Hook method called after saving a file.
+    Hook method called before saving metadata.
 
-    This can be overridden by subclasses to perform additional operations
-    after a file is saved, such as updating statistics or processing content.
+    This should be overridden by subclasses to ensure the self.metadata
+    dictionary is up-to-date with any class-specific information
+    before it's written to the manifest by save_metadata().
 
     The default implementation does nothing.
     """
@@ -348,13 +349,19 @@ class BaseFile:
       logger.error(f"Failed to save file {self.file_id}")
       return None
 
-    # Save metadata regardless of content or reference status
-    if not self.save_metadata():
-      logger.error(f"Failed to save metadata for file {self.file_id}")
-      return None
+    # Update the metadata dictionary via the hook
+    # Subclasses override this to add their specific fields.
+    try:
+      self._update_metadata()
+    except Exception as e:
+      logger.error(f"Error during metadata update hook for {self.file_id}: {e}")
+      # Optionally, decide if this error should prevent saving metadata
+      # For now, we log and continue, attempting to save whatever metadata exists.
 
-    # Handle file-specific post-save operations
-    self._post_save_hook()
+    # Save metadata *after* the hook has run
+    if not self.save_metadata():
+      logger.error(f"Failed to save updated metadata for file {self.file_id}")
+      return None
 
     return self.path
 

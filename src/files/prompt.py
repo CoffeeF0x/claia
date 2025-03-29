@@ -91,23 +91,18 @@ class Prompt(TextFile):
 
     return json.dumps(prompt_data, indent=2)
 
-  def _post_save_hook(self):
+  def _update_metadata(self):
     """
-    Update prompt metadata after saving.
-
-    This is called automatically after save() completes.
+    Update prompt metadata before it is saved.
     """
-    # Call parent's post save hook for text stats
-    super()._post_save_hook()
+    # Call parent's hook first (to get text stats)
+    super()._update_metadata()
 
-    # Update metadata
+    # Update metadata with prompt-specific info
     self.metadata.update({
       "prompt_name": self.prompt_name,
       "prompt_text_preview": self.prompt_text[:50] + "..." if len(self.prompt_text) > 50 else self.prompt_text
     })
-
-    # Save metadata to ensure it's up to date in the manifest
-    self.save_metadata()
 
   @staticmethod
   def validate_prompt_name(name: str) -> str:

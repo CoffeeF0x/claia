@@ -112,15 +112,19 @@ class TextFile(BaseFile):
       logger.error(f"Failed to create TextFile from string: {e}")
       return None
 
-  def _post_save_hook(self):
+  def _update_metadata(self):
     """
-    Update text statistics after saving.
+    Update text file metadata (stats and encoding) before it is saved.
+    """
+    # Update metadata with stats
+    self.get_stats()
 
-    This is called automatically after save() or when using save() with content.
-    """
-    # Only update statistics if the file exists
-    if self.exists():
-      self.get_stats()
+    # Ensure the encoding attribute is reflected in the metadata
+    if hasattr(self, 'encoding') and self.encoding:
+      self.metadata["encoding"] = self.encoding
+    # else: # Optional: Handle case where encoding might be unknown/None
+      # self.metadata.pop("encoding", None) # Remove if present but None
+      # Or set a default: self.metadata["encoding"] = "unknown"
 
   def detect_encoding(self, min_confidence=0.7):
     """
@@ -152,35 +156,39 @@ class TextFile(BaseFile):
 
   def get_stats(self):
     """
-    Get statistics about the text file (line count, word count, character count).
+    Calculate statistics about the text file (line count, word count, character count)
+    and update instance attributes.
 
     Returns:
-      dict: Dictionary of text file statistics
+      dict: Dictionary of calculated text file statistics
     """
     if not self.exists():
-      return {
-        "line_count": 0,
-        "word_count": 0,
-        "char_count": 0
-      }
+      self.line_count = 0
+      self.word_count = 0
+      self.char_count = 0
+      stats = {"line_count": 0, "word_count": 0, "char_count": 0}
+      self.metadata.update(stats) # Update metadata even if file doesn't exist (with zeros)
+      return stats
 
     content = self.get_content()
+    if content is None: # Handle case where get_content fails
+        content = ""
 
-    # Calculate statistics
+    # Calculate statistics and update instance attributes
     lines = content.splitlines()
     self.line_count = len(lines)
-
     self.word_count = sum(len(line.split()) for line in lines)
     self.char_count = len(content)
 
-    # Update metadata
+    # Prepare stats dictionary to return and update metadata
     stats = {
       "line_count": self.line_count,
       "word_count": self.word_count,
       "char_count": self.char_count
     }
-    self.metadata.update(stats)
+    self.metadata.update(stats) # Update metadata with the calculated stats
 
+    # Return the calculated stats
     return stats
 
   def get_preview(self, max_lines=10):
