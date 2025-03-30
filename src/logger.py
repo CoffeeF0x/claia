@@ -54,7 +54,7 @@ def configure_logging(log_level_name: str, log_format_name: str, log_file: str =
     # Always add a console handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
-    console_handler.setLevel(log_level.value)
+    console_handler.setLevel(log_level.name)
     root_logger.addHandler(console_handler)
 
     # Add a file handler if a log file is specified
@@ -67,7 +67,7 @@ def configure_logging(log_level_name: str, log_format_name: str, log_file: str =
 
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(formatter)
-        file_handler.setLevel(log_level.value)
+        file_handler.setLevel(log_level.name)
         root_logger.addHandler(file_handler)
 
         # Log that we've started logging to a file
@@ -83,7 +83,7 @@ def configure_logging(log_level_name: str, log_format_name: str, log_file: str =
     # Fallback configuration in case of errors
     print(f"Error configuring logging: {e}")
     fallback_logger = logging.getLogger()
-    fallback_logger.setLevel(logging.ERROR)
+    fallback_logger.setLevel(logging.WARNING)
 
     # Ensure there's at least one handler
     if not fallback_logger.handlers:
