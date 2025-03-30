@@ -28,11 +28,6 @@ You can call multiple functions in a single response if needed. Each function ca
 Incorporate the function call(s) into your response where necessary.
 """
 
-
-
-########################################################################
-#                             DEFAULT DATA                             #
-########################################################################
 DEFAULT_PROMPTS = [
   {
     "name": "default",
