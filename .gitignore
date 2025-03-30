@@ -1,12 +1,14 @@
 .env
 *scratch*.txt
-history/
-__pycache__/
-data/
-pulseaudio/
 output.wav
-old/
 report.xml
+.claia_history
+
+old/
+data/
+history/
+pulseaudio/
+__pycache__/
 .pytest_cache/
 claia_*demo_*/
 
