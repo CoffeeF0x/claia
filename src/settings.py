@@ -9,6 +9,7 @@ and loads settings from various sources (environment variables and command-line 
 import os
 import argparse
 from typing import Dict, Any, List, Tuple
+from dotenv import load_dotenv
 
 # Internal dependencies
 from enums import LogLevel, LogFormat
@@ -20,6 +21,7 @@ from enums import LogLevel, LogFormat
 ########################################################################
 DEFAULT_LOG_LEVEL  = LogLevel.ERROR
 DEFAULT_LOG_FORMAT = LogFormat.STANDARD
+DEFAULT_ENV_FILE = ".env"
 ENV_PREFIX = "CLAIA_"
 
 # Format: (variable_name, default_value, externally_settable, help_text)
@@ -61,6 +63,7 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
   ("log_level",                         "",            True,  "Logging level"),
   ("log_format",                        "",            True,  "Logging format (simple, standard, detailed)"),
   ("log_file",                          "claia.log",   True,  "Log file path (empty for console only)"),
+  ("env_file",                          "",            True,  "Path to .env file for configuration"),
 ]
 
 
@@ -94,8 +97,8 @@ class Settings:
 
   def _load_config(self):
     """
-    Load configuration from environment variables and command line arguments.
-    Command line arguments take precedence over environment variables.
+    Load configuration from command line arguments, .env file, and environment variables
+    Priority: Command line args > .env file > Environment variables > Defaults
     """
     parser = argparse.ArgumentParser(description='CLAIA Settings')
 
@@ -126,6 +129,11 @@ class Settings:
 
     args = parser.parse_args()
 
+    # Load .env file if it exists (get env_file from args or use default)
+    env_file = self._get_config_value("env_file", DEFAULT_ENV_FILE, args, True)
+    if os.path.exists(env_file):
+      load_dotenv(env_file, override=True)
+
     # Build config dictionary using helper function
     config_dict = {
       var_name: self._get_config_value(var_name, default, args, externally_settable)
@@ -139,12 +147,11 @@ class Settings:
 
   def _get_config_value(self, var_name: str, default: Any, args: argparse.Namespace, externally_settable: bool) -> Any:
     """
-    Helper function to get configuration value from either CLI args or environment variables.
-    CLI args take precedence over environment variables.
+    Helper function to get configuration value from CLI args or environment variables
 
     Args:
         var_name: The base variable name in snake_case
-        default: Default value if neither CLI arg nor env var is set
+        default: Default value if no other source sets it
         args: Parsed command line arguments
         externally_settable: Whether this setting can be set from outside the application
     """

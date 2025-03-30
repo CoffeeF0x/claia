@@ -20,3 +20,5 @@ runpod
 
 pytest
 pytest-mock
+
+python-dotenv
