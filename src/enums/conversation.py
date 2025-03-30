@@ -5,7 +5,6 @@ from enum import Enum, auto
 ########################################################################
 #                                ENUMS                                 #
 ########################################################################
-
 class ActionType(Enum):
     """Enum for types of actions that can occur in a conversation."""
     CREATE_CONVERSATION = auto()
