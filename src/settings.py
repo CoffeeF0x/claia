@@ -20,6 +20,7 @@ from enums import LogLevel, LogFormat
 ########################################################################
 DEFAULT_LOG_LEVEL  = LogLevel.ERROR
 DEFAULT_LOG_FORMAT = LogFormat.STANDARD
+ENV_PREFIX = "CLAIA_"
 
 # Format: (variable_name, default_value, externally_settable, help_text)
 CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
@@ -153,22 +154,25 @@ class Settings:
 
     # Convert naming conventions
     env_name = var_name.upper()
+    prefixed_env_name = f"{ENV_PREFIX}{var_name.upper()}"
     cli_name = var_name.replace('_', '-')
 
     # Get value from CLI args (they're already parsed with defaults)
-    cli_value = getattr(args, var_name, None)
+    value = getattr(args, cli_name, None)
 
-    # If CLI value is None, try environment variable
-    if cli_value is None:
-      env_value = os.getenv(env_name)
-      if env_value is not None:
-        # Strip quotes if present
-        if env_value and env_value[0] == env_value[-1] and env_value[0] in ('"', "'"):
-          env_value = env_value[1:-1]
-        return env_value
-      return default
+    # If CLI value is None, try prefixed environment variable
+    if value is None:
+      value = os.getenv(prefixed_env_name)
 
-    return cli_value
+    # If prefixed environment variable is None, try unprefixed environment variable
+    if value is None:
+      value = os.getenv(env_name)
+
+    # Strip quotes if present
+    if value and value[0] == value[-1] and value[0] in ('"', "'"):
+      value = value[1:-1]
+
+    return value if value else default
 
 
   def validate(self) -> bool:
