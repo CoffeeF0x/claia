@@ -12,7 +12,6 @@
 # - since model layer doesn't process conversations, it needs to compare the capabilities against the sent request, if there's content that the model doesn't support throw a warning, maybe also trim the request to the model's capabilities
 # - each command should have a small object to define flags, this will allow us to seperate global flags from command flags
 # - create a command class to set parameters (these should be saved to a .env file for now)
-# - claia will load a .env file in addition to other settings load methods
 
 # External dependencies
 import readline
