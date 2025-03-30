@@ -81,11 +81,14 @@ class Settings:
     self.function_modules = []
     self.function_definitions = []
 
+    self.active_model = None
+    self.active_agent = None
     self.active_prompt = None
     self.active_conversation = None
 
     # Load configuration
     self._load_config()
+    self.validate()
 
 
   def _load_config(self):
@@ -175,13 +178,19 @@ class Settings:
     Returns:
       bool: Always returns True as API token validation is handled elsewhere.
     """
-    if not LogLevel.from_string(self.log_level):
-      print(f"Invalid log level in environment variable. Using default: {DEFAULT_LOG_LEVEL.value}")
-      self.log_level = DEFAULT_LOG_LEVEL.value
+    try:
+      LogLevel.from_string(self.log_level)
+    except ValueError:
+      if self.log_level:
+        print(f"Invalid log level in environment variable. Using default: {DEFAULT_LOG_LEVEL.name}")
+      self.log_level = DEFAULT_LOG_LEVEL.name
 
-    if not LogFormat.from_string(self.log_format):
-      print(f"Invalid log format in environment variable. Using default: {DEFAULT_LOG_FORMAT.value}")
-      self.log_format = DEFAULT_LOG_FORMAT.value
+    try:
+      LogFormat.from_string(self.log_format)
+    except ValueError:
+      if self.log_format:
+        print(f"Invalid log format in environment variable. Using default: {DEFAULT_LOG_FORMAT.name}")
+      self.log_format = DEFAULT_LOG_FORMAT.name
 
     return True
 
