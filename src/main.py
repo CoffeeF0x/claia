@@ -13,7 +13,6 @@
 # - each command should have a small object to define flags, this will allow us to seperate global flags from command flags
 # - create a command class to set parameters (these should be saved to a .env file for now)
 # - claia will load a .env file in addition to other settings load methods
-# - prefix all env vars with CLAIA_ (or use claia prefixed env to override non prefixed env vars)
 
 # External dependencies
 import readline
