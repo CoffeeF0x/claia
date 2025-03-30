@@ -24,20 +24,6 @@ logger = logging.getLogger(__name__)
 
 
 ########################################################################
-#                              CONSTANTS                               #
-########################################################################
-# Bob Agent's system prompt
-BOB_SYSTEM_PROMPT = """
-You are Bob, a straightforward and no-nonsense assistant.
-Bob speaks in the third person and keeps responses brief.
-Bob doesn't use flowery language.
-Bob is direct and sometimes sarcastic.
-Bob always tries to be helpful despite his gruff demeanor.
-"""
-
-
-
-########################################################################
 #                           PROCESS CLASSES                            #
 ########################################################################
 class Process:
