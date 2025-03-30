@@ -12,17 +12,9 @@ from enums import LogLevel, LogFormat
 
 
 ########################################################################
-#                              CONSTANTS                               #
-########################################################################
-DEFAULT_LOG_LEVEL  = LogLevel.ERROR
-DEFAULT_LOG_FORMAT = LogFormat.STANDARD
-
-
-
-########################################################################
 #                              FUNCTIONS                               #
 ########################################################################
-def configure_logging(log_level_name: str = None, log_format_name: str = None, log_file: str = None) -> logging.Logger:
+def configure_logging(log_level_name: str, log_format_name: str, log_file: str = None) -> logging.Logger:
   """
   Configure the logging system based on the provided settings.
   This should be called early in the application startup.
@@ -36,20 +28,11 @@ def configure_logging(log_level_name: str = None, log_format_name: str = None, l
     The configured root logger
   """
   try:
-    # If no log level is provided, use the default
-    if not log_level_name:
-      log_level_name = DEFAULT_LOG_LEVEL.value
-
-    # If no log format is provided, use the default
-    if not log_format_name:
-      log_format_name = DEFAULT_LOG_FORMAT.value
-
-    # Try to convert names to enum values
     try:
       log_level = LogLevel.from_string(log_level_name)
     except ValueError:
-      print(f"Invalid log level: {log_level_name}. Using default: error")
-      log_level = LogLevel.ERROR
+      print(f"Invalid log level: {log_level_name}. Using default: warning")
+      log_level = LogLevel.WARNING
 
     try:
       log_format = LogFormat.from_string(log_format_name)
