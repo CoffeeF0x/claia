@@ -23,24 +23,45 @@ import logging
 import queue
 import os
 import sys
+from typing import List, Dict, Any
 
 # Internal dependencies
-from commands import get_function_definitions, run as command
+# from commands import get_function_definitions, run as command
 from errors import Result
 from settings import Settings
 from utilities import *
-from tools import process_function_calls
 from agents import ProcessQueue, Process, Agent
 from enums import MessageRole, AgentType, SourcePreference, ProcessStatus, ModelCapability
 from files import Conversation
+from defaults import initialize_default_prompts
+from logger import configure_logging
 
 
+
+def get_function_definitions(settings: Settings) -> List[Dict[str, Any]]:
+  """
+  Load function definitions into the settings object.
+  """
+  return []
+
+def command(command: str, settings: Settings) -> Result:
+  """
+  Execute a command.
+  """
+  return Result()
+
+def process_function_calls(response: str, settings: Settings) -> str:
+  """
+  Process function calls in the response.
+  """
+  return response
 
 ########################################################################
 #                              CONSTANTS                               #
 ########################################################################
 HISTORY_FILE = ".claia_history"
 MAX_HISTORY_LEN = 1000
+COMMAND_CHARACTER = ":"
 
 
 
@@ -105,19 +126,18 @@ def create_conversation(settings: Settings, user_input: str = None) -> Conversat
     logger.debug("Using existing active conversation")
     conversation = settings.active_conversation
     if settings.active_prompt:
-      logger.debug(f"Updating system prompt from active prompt: {settings.active_prompt.name}")
+      logger.debug(f"Updating system prompt from active prompt: {settings.active_prompt.prompt_name}")
       conversation.change_prompt(settings.active_prompt.get_formatted_prompt())
 
   # Otherwise, create a new conversation
   else:
     logger.debug("Creating new conversation")
     system_prompt = settings.active_prompt.get_formatted_prompt() if settings.active_prompt else None
-    logger.debug(f"Using system prompt from: {settings.active_prompt.name if settings.active_prompt else 'None'}")
+    logger.debug(f"Using system prompt from: {settings.active_prompt.prompt_name if settings.active_prompt else 'None'}")
 
     conversation = Conversation(
       base_directory=settings.conversation_directory,
-      title="New Conversation",
-      system_prompt=system_prompt
+      prompt=system_prompt
     )
     settings.active_conversation = conversation
     logger.debug("New conversation created and set as active")
@@ -143,6 +163,7 @@ def save_conversation_response(conversation: Conversation, response: str, settin
   """
   logger.debug("Processing and saving conversation response")
 
+  # TODO: Replace this with new functionality
   # Process any function calls in the response
   logger.debug("Checking for function calls in response")
   processed_response = process_function_calls(response, settings)
@@ -239,7 +260,8 @@ def process_user_input(user_input: str, settings: Settings, process_queue: Proce
   logger.debug(f"Processing user input: {user_input[:50]}{'...' if len(user_input) > 50 else ''}")
   result = Result()
 
-  if user_input and user_input[0] == ":":
+  if user_input and user_input[0] == COMMAND_CHARACTER:
+    # TODO: Replace this with new functionality
     # Process as a command
     logger.debug(f"Processing as command: {user_input[1:]}")
     result = command(user_input[1:], settings)
@@ -250,53 +272,53 @@ def process_user_input(user_input: str, settings: Settings, process_queue: Proce
     # Create a conversation with the user's input
     conversation = create_conversation(settings, user_input)
 
-    # Get the agent type from settings
-    agent_type_value = settings.active_agent
-    agent_type = AgentType.SIMPLE  # Default to simple agent
+  # Get the agent type from settings
+  agent_type_value = settings.active_agent
+  agent_type = AgentType.SIMPLE  # Default to simple agent
 
-    # Convert string to enum if needed
-    if isinstance(agent_type_value, str):
-      for a_type in AgentType:
-        if a_type.value == agent_type_value:
-          agent_type = a_type
-          break
-
-    logger.debug(f"Using agent type: {agent_type.value}")
-
-    # Create a process with all necessary information
-    logger.debug(f"Creating process for query with agent type: {agent_type.value}")
-    process = Process(
-      agent_type=agent_type,
-      settings=settings,
-      conversation=conversation,
-      parameters={
-        "source_preference": SourcePreference.ANY,
-        "model_id": settings.active_model
-      }
-    )
-
-    # Add the process to the queue
-    logger.debug("Adding process to queue")
-    process_id = process_queue.put(process)
-    logger.debug(f"Process added with ID: {process_id}")
-
-    # Process the queue until this process is completed
-    logger.debug("Processing queue until completion")
-    while True:
-      process_next_in_queue(settings, process_queue)
-
-      # Check if the process is completed
-      updated_process = process_queue.get_by_id(process.id)
-      if not updated_process:
-        logger.error("Error: Process not found")
+  # Convert string to enum if needed
+  if isinstance(agent_type_value, str):
+    for a_type in AgentType:
+      if a_type.value == agent_type_value:
+        agent_type = a_type
         break
 
-      if updated_process.status in [ProcessStatus.COMPLETED, ProcessStatus.FAILED, ProcessStatus.CANCELLED]:
-        logger.debug(f"Process finished with status: {updated_process.status}")
-        break
+  logger.debug(f"Using agent type: {agent_type.value}")
 
-      # Sleep a bit to avoid busy waiting
-      time.sleep(0.1)
+  # Create a process with all necessary information
+  logger.debug(f"Creating process for query with agent type: {agent_type.value}")
+  process = Process(
+    agent_type=agent_type,
+    settings=settings,
+    conversation=conversation,
+    parameters={
+      "source_preference": SourcePreference.ANY,
+      "model_id": settings.active_model
+    }
+  )
+
+  # Add the process to the queue
+  logger.debug("Adding process to queue")
+  process_id = process_queue.put(process)
+  logger.debug(f"Process added with ID: {process_id}")
+
+  # Process the queue until this process is completed
+  logger.debug("Processing queue until completion")
+  while True:
+    process_next_in_queue(settings, process_queue)
+
+    # Check if the process is completed
+    updated_process = process_queue.get_by_id(process.id)
+    if not updated_process:
+      logger.error("Error: Process not found")
+      break
+
+    if updated_process.status in [ProcessStatus.COMPLETED, ProcessStatus.FAILED, ProcessStatus.CANCELLED]:
+      logger.debug(f"Process finished with status: {updated_process.status}")
+      break
+
+    # Sleep a bit to avoid busy waiting
+    time.sleep(0.1)
 
   return result
 
@@ -314,13 +336,10 @@ def load_function_definitions(settings: Settings) -> None:
   """
   logger.debug("Loading function definitions")
   try:
+    # TODO: Replace this with new functionality
     # Get function definitions from commands
     logger.debug("Getting function definitions from commands")
     function_definitions = get_function_definitions(settings)
-
-    # Set function definitions in settings
-    logger.debug(f"Setting {len(function_definitions)} function definitions in settings")
-    settings.set_function_definitions(function_definitions)
 
   except Exception as e:
     logger.error(f"Error loading function definitions: {e}")
@@ -336,12 +355,11 @@ def load_function_definitions(settings: Settings) -> None:
 def main() -> None:
   """Main application entry point."""
   try:
-    # Create application settings
-    logger.info("Initializing CLAIA application...")
+    # Initialize the application
+    logger.info("Initializing CLAIA...")
     settings = Settings()
-
-    # Configure logging using settings
-    settings.configure_logging()
+    initialize_default_prompts(settings)
+    configure_logging(settings.log_level, settings.log_format)
 
     # Log application startup with version and environment info
     logger.info("CLAIA application starting")
@@ -360,13 +378,15 @@ def main() -> None:
     # Set up command history with arrow key navigation
     setup_command_history()
 
+    # TODO: Replace this with new functionality
     # Load function definitions into settings
     load_function_definitions(settings)
+
 
     # Log active model, agent, and prompt information
     logger.debug(f"Active model: {settings.active_model}")
     logger.debug(f"Active agent: {settings.active_agent}")
-    logger.debug(f"Active prompt: {settings.active_prompt.name if settings.active_prompt else 'None'}")
+    logger.debug(f"Active prompt: {settings.active_prompt.prompt_name if settings.active_prompt else 'None'}")
 
     logger.info("CLAIA initialization complete, entering main loop")
 
@@ -383,10 +403,6 @@ def main() -> None:
       if user_input.strip():
         logger.debug("Adding user input to history")
         readline.add_history(user_input)
-
-      if settings.active_prompt:
-        logger.debug("Applying function definitions to active prompt")
-        settings.apply_function_definitions_to_active_prompt()
 
       # Process the user input
       result = process_user_input(user_input, settings, process_queue)
