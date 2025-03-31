@@ -7,7 +7,7 @@ from PIL import Image
 from diffusers import StableDiffusionPipeline, DiffusionPipeline, EulerDiscreteScheduler, DPMSolverMultistepScheduler
 
 # Internal dependencies
-from models.transformers.base import TransformersLocalModel, TransformersModel, DEFAULT_SETTINGS
+from .base import TransformersLocalModel, TransformersModel, DEFAULT_SETTINGS
 
 
 

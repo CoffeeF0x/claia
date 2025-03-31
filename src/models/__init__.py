@@ -8,12 +8,17 @@ import logging
 from typing import Any, List, Dict, Optional, Tuple
 
 # Internal dependencies
-from models.base import APIModel, LocalModel
-from models.definitions import definitions
-from models.sources import sources, transformers_models
 from settings import Settings
+from files import Conversation
 from errors import Result
 from enums import ModelCapability
+
+from .base import APIModel, LocalModel
+from .api import OpenAIModel, AnthropicModel, RunpodModel, OpenRouterModel
+from .transformers import Gemma3Model, DiffusionModel
+from .remote import VLLMModel
+from .definitions import definitions
+from .sources import sources, transformers_models
 
 
 
@@ -372,7 +377,7 @@ def get_api_key_for_source(source: str, settings: Settings) -> str:
 
 
 # Run the model with the given messages and settings
-def run(model_name: str, messages: List[Dict[str, Any]],
+def run(model_name: str, conversation: Conversation,
          settings: Settings = None, process_type: Optional[Any] = None,
          device: Optional[str] = None) -> Result:
   """
@@ -381,7 +386,7 @@ def run(model_name: str, messages: List[Dict[str, Any]],
 
   Args:
       model_name: The name of the model to use
-      messages: A pre-processed list of message dictionaries ready for the model
+      conversation: A conversation object with the context for the model
       settings: Optional settings object
       process_type: Optional specific capability to match (for specialized processing)
       device: Optional device to use (cuda, mps, cpu, etc). If None, uses settings.device or auto-detects.
@@ -389,7 +394,7 @@ def run(model_name: str, messages: List[Dict[str, Any]],
   Returns:
       Result object containing the model's response
   """
-  logger.debug(f"Running model {model_name} with {len(messages)} messages")
+  logger.debug(f"Running model {model_name} with {conversation.metadata.get('message_count', 0)} messages")
 
   if process_type:
     logger.debug(f"Using process type: {process_type.value}")
@@ -406,16 +411,12 @@ def run(model_name: str, messages: List[Dict[str, Any]],
   logger.debug(f"Successfully retrieved model instance for {model_name}")
 
   try:
-    # Validate messages
-    if not messages or not isinstance(messages, list):
-      logger.error("Invalid messages format: expected non-empty list")
-      return Result.fail("Model requires a list of messages")
-
     # Generate response using the model
     logger.debug(f"Generating response with model {model_name}")
-    response = model.generate(messages)
+    response = model.generate(conversation)
     logger.debug(f"Successfully generated response with model {model_name}")
+    logger.debug(f"Response: {response[:50]}...")
     return Result(data=response)
   except Exception as e:
-    logger.exception(f"Error running model {model_name}")
+    logger.error(f"Error running model {model_name}")
     return Result.fail(f"Failed to run model: {str(e)}")

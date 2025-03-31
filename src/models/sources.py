@@ -1,12 +1,12 @@
 # External dependencies
 
 # Internal dependencies
-from models.api.openai import OpenAIModel
-from models.api.runpod import RunpodModel
-from models.api.anthropic import AnthropicModel
-from models.api.openrouter import OpenRouterModel
-from models.transformers import TransformersModel, Gemma3Model, DiffusionModel
-from models.remote.vllm import VLLMModel
+from .api.openai import OpenAIModel
+from .api.runpod import RunpodModel
+from .api.anthropic import AnthropicModel
+from .api.openrouter import OpenRouterModel
+from .transformers import TransformersModel, Gemma3Model, DiffusionModel
+from .remote.vllm import VLLMModel
 
 
 

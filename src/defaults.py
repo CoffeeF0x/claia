@@ -96,12 +96,15 @@ def initialize_default_prompts(settings: Settings) -> None:
   Args:
       settings: The application settings object
   """
+  logger.info("Initializing default prompts")
+
   for prompt_data in DEFAULT_PROMPTS:
     # Get the prompt if it exists in the base directory
     prompt = Prompt.load_prompt(prompt_data["name"], settings.files_directory)
 
     # If the prompt doesn't exist, create it
     if not prompt:
+      logger.debug(f"Creating default prompt '{prompt_data['name']}'")
       new_prompt = Prompt.create_prompt(
         base_directory=settings.files_directory,
         prompt_name=prompt_data["name"],
@@ -114,6 +117,18 @@ def initialize_default_prompts(settings: Settings) -> None:
 
   return settings
 
+def initialize_default_model(settings: Settings) -> None:
+  """
+  Initialize the default model if it doesn't exist.
+  """
+  logger.info("Initializing default model")
+
+  if settings.default_model:
+    logger.debug(f"Setting active model to default: {settings.default_model}")
+    settings.active_model = settings.default_model
+
+  return settings
+
 
 
 ########################################################################
@@ -123,6 +138,9 @@ def initialize_defaults(settings: Settings) -> None:
   """
   This function is a central function to initialize the defaults
   """
+  logger.info("Initializing defaults")
+
   settings = initialize_default_prompts(settings)
+  settings = initialize_default_model(settings)
 
   return settings

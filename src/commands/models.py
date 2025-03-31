@@ -7,8 +7,7 @@ from typing import List, Dict, Any, Optional
 # Internal Dependencies
 from commands.base import Command, command
 from settings import Settings
-from models.definitions import definitions
-from models.sources import sources
+from models import definitions, sources
 
 
 

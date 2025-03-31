@@ -5,8 +5,7 @@ import logging
 
 # Internal dependencies
 from errors import Result
-from settings import Settings
-
+from files import Conversation
 
 
 ########################################################################
@@ -24,7 +23,7 @@ class BaseModel(ABC):
     self.model_name = model_name
 
   @abstractmethod
-  def generate(self, messages: list, **kwargs) -> str:
+  def generate(self, conversation: Conversation, **kwargs) -> Conversation:
     """Generate a response based on the given prompt."""
     pass
 

@@ -87,6 +87,7 @@ class Settings:
     self.extra_args = []
 
     self.active_model = None
+    self.active_model_source = None
     self.active_agent = None
     self.active_prompt = None
     self.active_conversation = None

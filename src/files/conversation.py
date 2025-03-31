@@ -888,12 +888,25 @@ class Conversation(TextFile):
     """
     return self.messages[-1] if self.messages else None
 
-  def get_messages(self, speaker: Optional[MessageRole] = None) -> List[Message]:
+  def get_messages(self, speaker: Optional[Union[MessageRole, List[MessageRole]]] = None) -> List[Message]:
     """
-    Get all messages, optionally filtered by speaker.
+    Get all messages, optionally filtered by speaker(s).
+
+    Examples:
+        # Get all messages
+        all_messages = conversation.get_messages()
+
+        # Get messages from a single speaker
+        user_messages = conversation.get_messages(MessageRole.USER)
+
+        # Get messages from multiple speakers
+        dialogue = conversation.get_messages([MessageRole.USER, MessageRole.ASSISTANT])
+
+        # Using string values (automatically converted to MessageRole)
+        system_messages = conversation.get_messages("SYSTEM")
 
     Args:
-        speaker: Optional speaker to filter by
+        speaker: Optional speaker or list of speakers to filter by
 
     Returns:
         List[Message]: List of matching messages
@@ -901,7 +914,13 @@ class Conversation(TextFile):
     if speaker is None:
       return self.messages
 
-    return [m for m in self.messages if m.speaker == speaker]
+    # Convert single speaker to list for uniform handling
+    speakers = [speaker] if not isinstance(speaker, list) else speaker
+
+    # Convert any string values to MessageRole enums
+    speakers = [s if isinstance(s, MessageRole) else MessageRole(s) for s in speakers]
+
+    return [m for m in self.messages if m.speaker in speakers]
 
   def change_title(self, new_title: str) -> None:
     """
@@ -931,9 +950,13 @@ class Conversation(TextFile):
 
     # Add an action for this prompt change
     self.add_action(ActionType.CHANGE_PROMPT, {
-      "old_prompt": old_prompt[:50] + "..." if len(old_prompt) > 50 else old_prompt,
-      "new_prompt": new_prompt[:50] + "..." if len(new_prompt) > 50 else new_prompt
+      "old_prompt": old_prompt,
+      "new_prompt": new_prompt
     })
+    # self.add_action(ActionType.CHANGE_PROMPT, {
+    #   "old_prompt": old_prompt[:50] + "..." if len(old_prompt) > 50 else old_prompt,
+    #   "new_prompt": new_prompt[:50] + "..." if len(new_prompt) > 50 else new_prompt
+    # })
 
   def attach_file(self, message_id: str, file_id: str) -> bool:
     """

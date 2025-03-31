@@ -2,7 +2,9 @@ from typing import Dict, Any
 import logging
 
 # Internal dependencies
-from models.base import APIModel
+from ..base import APIModel
+from files import Conversation
+from enums import MessageRole
 
 
 
@@ -26,26 +28,42 @@ class AnthropicModel(APIModel):
     """Set the API key for authentication."""
     self.session.headers.update({"x-api-key": f"{api_key}"})
 
-  def generate(self, messages: list, **kwargs) -> str:
-    system_prompt = None
-    user_messages = []
+  def generate(self, conversation: Conversation, **kwargs) -> Conversation:
+    """
+    Generate text using the Anthropic model with a Conversation object.
 
-    # Extract system prompt if present
-    for message in messages:
-      if message.get("role") == "system":
-        system_prompt = message.get("content")
-      else:
-        user_messages.append(message)
+    Args:
+        conversation: The Conversation object containing messages
+        **kwargs: Additional arguments for generation
+
+    Returns:
+        str: The generated text response
+    """
+    # Get user and assistant messages
+    conversation_messages = conversation.get_messages([MessageRole.USER, MessageRole.ASSISTANT])
+
+    # Convert to Anthropic format
+    formatted_messages = []
+    for message in conversation_messages:
+      formatted_messages.append({
+        "role": message.speaker.value,
+        "content": message.content
+      })
 
     data = {
       "model": self.model_name,
       "max_tokens": kwargs.get("max_tokens", 1024),
-      "messages": user_messages,
+      "messages": formatted_messages,
     }
 
     # Add system prompt if found
-    if system_prompt:
-      data["system"] = system_prompt
+    if conversation.prompt:
+      data["system"] = conversation.prompt
 
     response = self.post("messages", data)
-    return response.json()["content"][0]["text"]
+    response_text = response.json()["content"][0]["text"]
+
+    # Add the response as an assistant message to the conversation
+    conversation.add_message(MessageRole.ASSISTANT, response_text)
+
+    return conversation

@@ -2,7 +2,7 @@ from typing import Dict, Any
 import logging
 
 # Internal dependencies
-from models.base import APIModel
+from ..base import APIModel
 
 
 

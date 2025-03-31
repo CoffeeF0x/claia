@@ -18,19 +18,15 @@ import readline
 import atexit
 import time
 import logging
-import queue
 import os
 import sys
-from typing import List, Dict, Any
 
 # Internal dependencies
-# from commands import get_function_definitions, run as command
 from commands import run as command
 from errors import Result
 from settings import Settings
-from utilities import *
-from agents import ProcessQueue, Process, Agent
-from enums import MessageRole, AgentType, SourcePreference, ProcessStatus, ModelCapability
+from agents import ProcessQueue, Process
+from enums import AgentType, SourcePreference, ProcessStatus, MessageRole
 from files import Conversation
 from defaults import initialize_defaults
 from logger import initialize_logging
@@ -152,6 +148,8 @@ def main() -> None:
           settings.active_conversation = Conversation(settings.files_directory)
         if not settings.active_agent:
           settings.active_agent = AgentType.SIMPLE
+
+        settings.active_conversation.add_message(MessageRole.USER, user_input)
 
         process = Process(
           agent_type=settings.active_agent,

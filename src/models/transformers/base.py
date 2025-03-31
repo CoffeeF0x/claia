@@ -8,7 +8,7 @@ from typing import List, Dict, Optional, Union, Any, Callable
 from huggingface_hub import login
 
 # Internal dependencies
-from models.base import LocalModel, APIModel
+from ..base import LocalModel, APIModel
 from settings import Settings
 
 

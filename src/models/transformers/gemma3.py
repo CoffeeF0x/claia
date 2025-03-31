@@ -6,7 +6,7 @@ from torch.cuda import empty_cache
 from typing import List, Dict, Optional, Union, Any
 
 # Internal dependencies
-from models.transformers.base import TransformersModel, TransformersLocalModel, DEFAULT_SETTINGS
+from .base import TransformersModel, TransformersLocalModel, DEFAULT_SETTINGS
 
 
 
