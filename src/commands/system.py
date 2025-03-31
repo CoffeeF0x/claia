@@ -4,7 +4,8 @@ import os
 # Internal dependencies
 from commands.base import Command, command
 from errors import Result
-from settings import Settings, LOG_LEVELS, LOG_FORMATS
+from settings import Settings
+from enums import LogLevel, LogFormat
 from utilities import clear
 
 
@@ -90,7 +91,7 @@ class SystemCommand(Command):
         "level": {
           "type": "string",
           "description": "Log level to set (debug, info, warning, error, critical)",
-          "enum": list(LOG_LEVELS.keys())
+          "enum": [level.value for level in LogLevel]
         }
       },
       "required": ["level"]
@@ -104,7 +105,7 @@ class SystemCommand(Command):
   def set_log_level(self, settings: Settings, level: str) -> str:
     """Set the log level"""
     level = level.lower()
-    if level in LOG_LEVELS:
+    if level in [level.value for level in LogLevel]:
       # Update the settings
       settings.log_level = level
 
@@ -117,7 +118,7 @@ class SystemCommand(Command):
 
       return f"Log level set to: {level}"
     else:
-      return f"Invalid log level. Valid options are: {', '.join(LOG_LEVELS.keys())}"
+      return f"Invalid log level. Valid options are: {', '.join(level.value for level in LogLevel)}"
 
   @command(
     path=["get", "log-format"],
@@ -147,7 +148,7 @@ class SystemCommand(Command):
         "format": {
           "type": "string",
           "description": "Log format to set (simple, standard, detailed)",
-          "enum": list(LOG_FORMATS.keys())
+          "enum": [format.value for format in LogFormat]
         }
       },
       "required": ["format"]
@@ -161,7 +162,7 @@ class SystemCommand(Command):
   def set_log_format(self, settings: Settings, format: str) -> str:
     """Set the log format"""
     format = format.lower()
-    if format in LOG_FORMATS:
+    if format in [format.value for format in LogFormat]:
       # Update the settings
       settings.log_format = format
 
@@ -174,7 +175,7 @@ class SystemCommand(Command):
 
       return f"Log format set to: {format}"
     else:
-      return f"Invalid log format. Valid options are: {', '.join(LOG_FORMATS.keys())}"
+      return f"Invalid log format. Valid options are: {', '.join([format.value for format in LogFormat])}"
 
   @command(
     path=["get", "log-file"],

@@ -8,7 +8,7 @@ import logging
 # Internal dependencies
 from commands.base import Command, command
 from errors import Result
-from conversations import Conversation
+from files import Conversation
 from settings import Settings
 from enums import MessageRole
 

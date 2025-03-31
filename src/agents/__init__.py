@@ -11,6 +11,8 @@ from typing import Optional, Dict, List, Any, Type
 from models import run as model_run, ModelCapability, definitions
 from errors import Result
 from enums import ProcessStatus, AgentType, SourcePreference, MessageRole
+from files import Conversation
+from settings import Settings
 from .simple import SimpleAgent
 from .bob import BobAgent
 
@@ -37,8 +39,8 @@ class Process:
   def __init__(
     self,
     agent_type: AgentType = AgentType.SIMPLE,
-    settings: Any = None,
-    conversation: Any = None,
+    settings: Settings = None,
+    conversation: Conversation = None,
     parameters: Dict[str, Any] = None,
     parent_id: Optional[str] = None,
     id: Optional[str] = None
@@ -198,6 +200,54 @@ class ProcessQueue:
     """
     with self._lock:
       return len(self._processes)
+
+  def process(self, block=False, timeout=None) -> Optional[Process]:
+    """
+    Get a process from the queue and process it using the Agent class.
+
+    Args:
+        block: Whether to block until a process is available
+        timeout: How long to wait for a process to become available
+
+    Returns:
+        The processed Process object or None if no process was available
+    """
+    # Get the next process from the queue
+    process = self.get(block=block, timeout=timeout)
+    if not process or process.status != ProcessStatus.PENDING:
+      return None
+
+    # Process the request directly with the Agent class
+    updated_process = Agent.process(process)
+
+    # Update the process in the queue
+    self.update(updated_process)
+
+    return updated_process
+
+  def process_by_id(self, process_id: str) -> Optional[Process]:
+    """
+    Process a specific process identified by its ID.
+
+    Args:
+        process_id: The ID of the process to process
+
+    Returns:
+        The processed Process object or None if the process wasn't found
+        or wasn't in a PENDING state
+    """
+    with self._lock:
+      process = self._processes.get(process_id)
+      if not process or process.status != ProcessStatus.PENDING:
+        return None
+
+    # Process the request directly with the Agent class
+    updated_process = Agent.process(process)
+
+    # Update the process in the queue
+    self.update(updated_process)
+
+    return updated_process
 
 
 

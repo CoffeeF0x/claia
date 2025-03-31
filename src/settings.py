@@ -19,7 +19,7 @@ from enums import LogLevel, LogFormat
 ########################################################################
 #                               CONSTANTS                              #
 ########################################################################
-DEFAULT_LOG_LEVEL  = LogLevel.ERROR
+DEFAULT_LOG_LEVEL  = LogLevel.WARNING
 DEFAULT_LOG_FORMAT = LogFormat.STANDARD
 DEFAULT_ENV_FILE = ".env"
 ENV_PREFIX = "CLAIA_"
@@ -84,11 +84,14 @@ class Settings:
     self.command_modules = []
     self.function_modules = []
     self.function_definitions = []
+    self.extra_args = []
 
     self.active_model = None
     self.active_agent = None
     self.active_prompt = None
     self.active_conversation = None
+
+    self.root_logger = None
 
     # Load configuration
     self._load_config()
@@ -127,7 +130,9 @@ class Settings:
             default=None,
             help=help_text)
 
-    args = parser.parse_args()
+    # Parse known args, and store unknown args for later command processing
+    args, unknown = parser.parse_known_args()
+    self.extra_args = unknown
 
     # Load .env file if it exists (get env_file from args or use default)
     env_file = self._get_config_value("env_file", DEFAULT_ENV_FILE, args, True)
@@ -162,7 +167,7 @@ class Settings:
     # Convert naming conventions
     env_name = var_name.upper()
     prefixed_env_name = f"{ENV_PREFIX}{var_name.upper()}"
-    cli_name = var_name.replace('_', '-')
+    cli_name = var_name.lower()
 
     # Get value from CLI args (they're already parsed with defaults)
     value = getattr(args, cli_name, None)
@@ -176,7 +181,7 @@ class Settings:
       value = os.getenv(env_name)
 
     # Strip quotes if present
-    if value and value[0] == value[-1] and value[0] in ('"', "'"):
+    if value and isinstance(value, str) and value[0] == value[-1] and value[0] in ('"', "'"):
       value = value[1:-1]
 
     return value if value else default
@@ -190,6 +195,7 @@ class Settings:
       bool: Always returns True as API token validation is handled elsewhere.
     """
     try:
+      print(f"Validating log level: {self.log_level}")
       LogLevel.from_string(self.log_level)
     except ValueError:
       if self.log_level:
@@ -197,6 +203,7 @@ class Settings:
       self.log_level = DEFAULT_LOG_LEVEL.name
 
     try:
+      print(f"Validating log format: {self.log_format}")
       LogFormat.from_string(self.log_format)
     except ValueError:
       if self.log_format:

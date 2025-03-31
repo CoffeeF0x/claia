@@ -1,13 +1,11 @@
 import logging
 from typing import Dict, List
-import json
-import os
 
 # Internal Dependencies
 from commands.base import Command, command
 from errors import Result
 from settings import Settings
-from conversations.prompts import Prompt
+from files import Prompt
 
 
 

@@ -23,8 +23,7 @@ import importlib
 import os
 import sys
 import logging
-import types
-from typing import Dict, Any, List, Tuple, Set, Union, Callable, Optional
+from typing import Dict, Any, List, Tuple
 
 # Internal dependencies
 from .prompts       import PromptCommand

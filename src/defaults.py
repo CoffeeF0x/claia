@@ -113,3 +113,16 @@ def initialize_default_prompts(settings: Settings) -> None:
         settings.prompt_store.append(new_prompt)
 
   return settings
+
+
+
+########################################################################
+#                         INITIALIZE DEFAULTS                          #
+########################################################################
+def initialize_defaults(settings: Settings) -> None:
+  """
+  This function is a central function to initialize the defaults
+  """
+  settings = initialize_default_prompts(settings)
+
+  return settings

@@ -882,6 +882,12 @@ class Conversation(TextFile):
         return message
     return None
 
+  def get_latest_message(self) -> Optional[Message]:
+    """
+    Get the latest message in the conversation.
+    """
+    return self.messages[-1] if self.messages else None
+
   def get_messages(self, speaker: Optional[MessageRole] = None) -> List[Message]:
     """
     Get all messages, optionally filtered by speaker.
