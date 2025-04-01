@@ -530,7 +530,7 @@ class Conversation(TextFile):
 
           # Execute the tool function using registry
           if self.registry:
-            result = self.registry.execute_command_by_name(tool_name, parameters, settings)
+            result = self.registry.execute_tool(tool_name, parameters, settings)
           else:
             result = f"[ERROR: No command registry available to execute tool '{tool_name}']"
             logger.error(f"No registry available to execute tool: {tool_name}")
@@ -1214,39 +1214,3 @@ class Conversation(TextFile):
       }
       for t in self.tool_definitions
     ]
-
-  def load_tool_definitions_from_registry(self) -> List[ToolDefinition]:
-    """
-    Load tool definitions from the registry's AI-callable functions.
-
-    This is the recommended way to keep tool definitions in sync with
-    the available commands in the registry.
-
-    Returns:
-        List[ToolDefinition]: List of tool definitions created from registry functions
-    """
-    if not self.registry:
-      logger.warning("Cannot load tool definitions: No registry available")
-      return []
-
-    result = []
-
-    # Get AI-callable function definitions from the registry
-    function_defs = self.registry.get_function_definitions(ai_callable_only=True)
-
-    for func_def in function_defs:
-      # Extract required fields
-      name = func_def.get("name")
-      description = func_def.get("description", "")
-      parameters = func_def.get("parameters", {})
-      returns = func_def.get("returns", {"type": "string"})
-
-      if not name:
-        logger.warning("Skipping function definition without a name")
-        continue
-
-      # Add the tool definition
-      tool = self.add_tool_definition(name, description, parameters, returns)
-      result.append(tool)
-
-    return result

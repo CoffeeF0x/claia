@@ -84,18 +84,18 @@ def test_registry():
 
     # Test direct function execution via registry
     print("\nTesting direct function execution via registry:")
-    result = registry.execute_command_by_name("system_get", {"setting": "log-level"}, settings)
+    result = registry.execute_tool("system_get", {"setting": "log-level"}, settings)
     print(f"system_get result: {result}")
 
-    result = registry.execute_command_by_name("system_set", {"setting": "log-level", "value": "info"}, settings)
+    result = registry.execute_tool("system_set", {"setting": "log-level", "value": "info"}, settings)
     print(f"system_set result: {result}")
 
-    result = registry.execute_command_by_name("system_get", {"setting": "log-level"}, settings)
+    result = registry.execute_tool("system_get", {"setting": "log-level"}, settings)
     print(f"system_get result: {result}")
 
     # Print some AI function definitions
     print("\nAI Function definitions sample:")
-    function_defs = registry.get_function_definitions(ai_callable_only=True)
+    function_defs = registry.get_tool_definitions()
     print(f"Total AI-callable functions: {len(function_defs)}")
 
     # Print first 3 function definitions (if available)

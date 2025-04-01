@@ -271,13 +271,15 @@ class Registry:
     """
     return [cmd for cmd, _, _, enabled in self._command_modules.values() if enabled]
 
-  def get_function_definitions(self, settings: Optional[Settings] = None, ai_callable_only: bool = True) -> List[Dict[str, Any]]:
+  def get_function_definitions(self, settings: Optional[Settings] = None) -> List[Dict[str, Any]]:
     """
-    Get function definitions from registered commands.
+    Get all command function definitions, including those not marked as AI-callable.
+
+    This method is primarily for internal use and debugging.
+    For AI function calling, use get_tool_definitions() instead.
 
     Args:
         settings: Optional settings object
-        ai_callable_only: If True, only return functions marked as AI-callable
 
     Returns:
         List of function definitions in JSON schema format
@@ -293,10 +295,6 @@ class Registry:
 
         details = cmd_entry["details"]
 
-        # Filter by ai_callable flag if requested
-        if ai_callable_only and not details.get("ai_callable", False):
-          continue
-
         definition = {
           "name": cmd_name,
           "description": details.get("description", ""),
@@ -311,27 +309,76 @@ class Registry:
 
     return definitions
 
-  def execute_command_by_name(self, function_name: str, parameters: Dict[str, Any], settings: Settings) -> str:
+  def get_tool_definitions(self, settings: Optional[Settings] = None) -> List[Dict[str, Any]]:
     """
-    Execute a command by its function name with the given parameters.
+    Get AI-callable tool definitions.
+
+    These are simplified function definitions suitable for AI function calling:
+    - Only includes functions marked as ai_callable=True
+    - Does not include command aliases
+    - Has a consistent structure for parameters and returns
 
     Args:
-        function_name: The function name (e.g., "system_set_log_level")
+        settings: Optional settings object
+
+    Returns:
+        List of tool definitions in JSON schema format
+    """
+    tool_definitions = []
+
+    try:
+      # Add definitions directly from the command map
+      for cmd_name, cmd_entry in self._command_map.items():
+        # Skip CLI aliases
+        if cmd_name.startswith("cli_"):
+          continue
+
+        details = cmd_entry["details"]
+
+        # Only include AI-callable commands
+        if not details.get("ai_callable", False):
+          continue
+
+        # Create the tool definition
+        tool_definition = {
+          "name": cmd_name,
+          "description": details.get("description", ""),
+          "parameters": details.get("parameters", {}),
+          "returns": details.get("returns", {"type": "string"})
+        }
+        tool_definitions.append(tool_definition)
+    except Exception as e:
+      logger.error(f"Error getting tool definitions: {str(e)}")
+      # Return an empty list in case of error
+      return []
+
+    return tool_definitions
+
+  def execute_tool(self, tool_name: str, parameters: Dict[str, Any], settings: Settings) -> str:
+    """
+    Execute an AI-callable tool with the given parameters.
+
+    Args:
+        tool_name: The name of the tool to execute (e.g., "system_get_log_level")
         parameters: Dictionary of parameter values
         settings: Settings object
 
     Returns:
-        Result of the command as a string
+        Result of the tool execution as a string
     """
     if settings is None:
       return "Error: Settings object is required"
 
     try:
       # Look up the command in the command map
-      if function_name in self._command_map:
-        cmd_entry = self._command_map[function_name]
+      if tool_name in self._command_map:
+        cmd_entry = self._command_map[tool_name]
         cmd_instance = cmd_entry["instance"]
         cmd_details = cmd_entry["details"]
+
+        # Skip if not AI-callable
+        if not cmd_details.get("ai_callable", False):
+          return f"Error: Tool '{tool_name}' is not AI-callable"
 
         # Get the function to execute
         func = cmd_details["function"]
@@ -379,13 +426,13 @@ class Registry:
             return result.message()
           return str(result)
         except Exception as e:
-          logger.exception(f"Error executing command '{function_name}': {str(e)}")
-          return f"Error executing command: {str(e)}"
+          logger.exception(f"Error executing tool '{tool_name}': {str(e)}")
+          return f"Error executing tool: {str(e)}"
       else:
-        return f"Unknown function: {function_name}"
+        return f"Unknown tool: {tool_name}"
     except Exception as e:
-      logger.exception(f"Error processing command '{function_name}': {str(e)}")
-      return f"Error processing command: {str(e)}"
+      logger.exception(f"Error processing tool '{tool_name}': {str(e)}")
+      return f"Error processing tool: {str(e)}"
 
   def run(self, input_str: str, settings: Settings) -> Result:
     """
@@ -480,3 +527,21 @@ class Registry:
     else:
       print(f"Unknown command: {command_name}")
       self.display_help()
+
+  # Keep the old method for backward compatibility, but mark as deprecated
+  def execute_command_by_name(self, function_name: str, parameters: Dict[str, Any], settings: Settings) -> str:
+    """
+    Execute a command by its function name with the given parameters.
+    
+    DEPRECATED: Use execute_tool instead.
+
+    Args:
+        function_name: The function name (e.g., "system_set_log_level")
+        parameters: Dictionary of parameter values
+        settings: Settings object
+
+    Returns:
+        Result of the command as a string
+    """
+    logger.warning("execute_command_by_name is deprecated, use execute_tool instead")
+    return self.execute_tool(function_name, parameters, settings)
