@@ -354,7 +354,7 @@ class Registry:
 
     return tool_definitions
 
-  def execute_tool(self, tool_name: str, parameters: Dict[str, Any], settings: Settings) -> str:
+  def execute_tool(self, tool_name: str, parameters: Dict[str, Any], settings: Settings) -> Result:
     """
     Execute an AI-callable tool with the given parameters.
 
@@ -364,10 +364,10 @@ class Registry:
         settings: Settings object
 
     Returns:
-        Result of the tool execution as a string
+        Result of the tool execution
     """
     if settings is None:
-      return "Error: Settings object is required"
+      return Result.fail("Error: Settings object is required")
 
     try:
       # Look up the command in the command map
@@ -378,7 +378,7 @@ class Registry:
 
         # Skip if not AI-callable
         if not cmd_details.get("ai_callable", False):
-          return f"Error: Tool '{tool_name}' is not AI-callable"
+          return Result.fail(f"Error: Tool '{tool_name}' is not AI-callable")
 
         # Get the function to execute
         func = cmd_details["function"]
@@ -421,18 +421,22 @@ class Registry:
           # Call the function with settings and parameters
           result = func(settings, **clean_params)
 
-          # Convert Result objects to string
-          if hasattr(result, 'message') and callable(getattr(result, 'message')):
-            return result.message()
-          return str(result)
+          # Return the Result object directly
+          if not isinstance(result, Result):
+            # Convert non-Result return values to a Result
+            new_result = Result()
+            new_result.message = str(result)
+            return new_result
+
+          return result
         except Exception as e:
           logger.exception(f"Error executing tool '{tool_name}': {str(e)}")
-          return f"Error executing tool: {str(e)}"
+          return Result.fail(f"Error executing tool: {str(e)}")
       else:
-        return f"Unknown tool: {tool_name}"
+        return Result.fail(f"Unknown tool: {tool_name}")
     except Exception as e:
       logger.exception(f"Error processing tool '{tool_name}': {str(e)}")
-      return f"Error processing tool: {str(e)}"
+      return Result.fail(f"Error processing tool: {str(e)}")
 
   def run(self, input_str: str, settings: Settings) -> Result:
     """
@@ -532,7 +536,7 @@ class Registry:
   def execute_command_by_name(self, function_name: str, parameters: Dict[str, Any], settings: Settings) -> str:
     """
     Execute a command by its function name with the given parameters.
-    
+
     DEPRECATED: Use execute_tool instead.
 
     Args:

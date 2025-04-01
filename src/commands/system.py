@@ -38,10 +38,12 @@ class SystemCommand(Command):
     aliases=["c", "cls"],
     top_level=True
   )
-  def clear_screen(self, settings: Settings) -> str:
+  def clear_screen(self, settings: Settings) -> Result:
     """Clear the terminal screen"""
+    result = Result()
     clear()
-    return "Screen cleared"
+    result.message = "Screen cleared"
+    return result
 
   @command(
     path=["quit"],
@@ -84,21 +86,26 @@ class SystemCommand(Command):
     },
     ai_callable=True
   )
-  def get_setting(self, settings: Settings, setting: str) -> str:
+  def get_setting(self, settings: Settings, setting: str) -> Result:
     """Get a system setting value"""
+    # Initialize the result object
+    result = Result()
+
     setting = setting.lower().replace('_', '-')
 
     if setting == "log-level":
-      return f"Current log level: {settings.log_level}"
+      result.message = f"Current log level: {settings.log_level}"
     elif setting == "log-format":
-      return f"Current log format: {settings.log_format}"
+      result.message = f"Current log format: {settings.log_format}"
     elif setting == "log-file":
       if settings.log_file:
-        return f"Current log file: {settings.log_file}"
+        result.message = f"Current log file: {settings.log_file}"
       else:
-        return "Logging to console only (no log file configured)"
+        result.message = "Logging to console only (no log file configured)"
     else:
-      return f"Unknown setting: {setting}"
+      return Result.fail(f"Unknown setting: {setting}")
+
+    return result
 
   @command(
     path=["set"],
@@ -125,7 +132,7 @@ class SystemCommand(Command):
     },
     ai_callable=True
   )
-  def set_setting(self, settings: Settings, setting: str, value: str) -> str:
+  def set_setting(self, settings: Settings, setting: str, value: str) -> Result:
     """Set a system setting value"""
     setting = setting.lower().replace('_', '-')
 
@@ -136,9 +143,8 @@ class SystemCommand(Command):
     elif setting == "log-file":
       return self.set_log_file(settings, file=value)
     else:
-      return f"Unknown setting: {setting}"
+      return Result.fail(f"Unknown setting: {setting}")
 
-  # Keep compatibility with previous command format
   @command(
     path=["get", "log-level"],
     description="Display the current log level",
@@ -153,9 +159,11 @@ class SystemCommand(Command):
     },
     ai_callable=True
   )
-  def get_log_level(self, settings: Settings) -> str:
+  def get_log_level(self, settings: Settings) -> Result:
     """Display the current log level"""
-    return f"Current log level: {settings.log_level}"
+    result = Result()
+    result.message = f"Current log level: {settings.log_level}"
+    return result
 
   @command(
     path=["set", "log-level"],
@@ -178,8 +186,11 @@ class SystemCommand(Command):
     },
     ai_callable=True
   )
-  def set_log_level(self, settings: Settings, level: str) -> str:
+  def set_log_level(self, settings: Settings, level: str) -> Result:
     """Set the log level"""
+    # Initialize the result object
+    result = Result()
+
     # Get logger at the beginning of the function
     logger = logging.getLogger(__name__)
 
@@ -199,9 +210,12 @@ class SystemCommand(Command):
       # Log the change at the new level
       logger.debug(f"Log level changed to {level}")
 
-      return f"Log level set to: {level}"
+      # Set success message
+      result.message = f"Log level set to: {level}"
+      return result
     else:
-      return f"Invalid log level. Valid options are: {', '.join(valid_levels)}"
+      # Return error
+      return Result.fail(f"Invalid log level: {level}. Valid levels are: {', '.join(valid_levels)}")
 
   @command(
     path=["get", "log-format"],
@@ -217,9 +231,11 @@ class SystemCommand(Command):
     },
     ai_callable=True
   )
-  def get_log_format(self, settings: Settings) -> str:
+  def get_log_format(self, settings: Settings) -> Result:
     """Display the current log format"""
-    return f"Current log format: {settings.log_format}"
+    result = Result()
+    result.message = f"Current log format: {settings.log_format}"
+    return result
 
   @command(
     path=["set", "log-format"],
@@ -242,8 +258,11 @@ class SystemCommand(Command):
     },
     ai_callable=True
   )
-  def set_log_format(self, settings: Settings, format: str) -> str:
+  def set_log_format(self, settings: Settings, format: str) -> Result:
     """Set the log format"""
+    # Initialize the result object
+    result = Result()
+
     # Get logger at the beginning of the function
     logger = logging.getLogger(__name__)
 
@@ -263,9 +282,10 @@ class SystemCommand(Command):
       # Log the change
       logger.debug(f"Log format changed to {format}")
 
-      return f"Log format set to: {format}"
+      result.message = f"Log format set to: {format}"
+      return result
     else:
-      return f"Invalid log format. Valid options are: {', '.join(valid_formats)}"
+      return Result.fail(f"Invalid log format. Valid options are: {', '.join(valid_formats)}")
 
   @command(
     path=["get", "log-file"],
@@ -281,12 +301,14 @@ class SystemCommand(Command):
     },
     ai_callable=True
   )
-  def get_log_file(self, settings: Settings) -> str:
+  def get_log_file(self, settings: Settings) -> Result:
     """Display the current log file path"""
+    result = Result()
     if settings.log_file:
-      return f"Current log file: {settings.log_file}"
+      result.message = f"Current log file: {settings.log_file}"
     else:
-      return "Logging to console only (no log file configured)"
+      result.message = "Logging to console only (no log file configured)"
+    return result
 
   @command(
     path=["set", "log-file"],
@@ -308,8 +330,11 @@ class SystemCommand(Command):
     },
     ai_callable=True
   )
-  def set_log_file(self, settings: Settings, file: str) -> str:
+  def set_log_file(self, settings: Settings, file: str) -> Result:
     """Set the log file path"""
+    # Initialize the result object
+    result = Result()
+
     # Get logger at the beginning of the function
     logger = logging.getLogger(__name__)
 
@@ -321,7 +346,8 @@ class SystemCommand(Command):
       else:
         logger.warning("Settings object does not have configure_logging method")
       logger.debug("File logging disabled")
-      return "File logging disabled"
+      result.message = "File logging disabled"
+      return result
 
     # Ensure the directory exists
     log_dir = os.path.dirname(file)
@@ -329,7 +355,7 @@ class SystemCommand(Command):
       try:
         os.makedirs(log_dir)
       except Exception as e:
-        return f"Error creating log directory: {str(e)}"
+        return Result.fail(f"Error creating log directory: {str(e)}")
 
     # Set the log file
     settings.log_file = file
@@ -338,7 +364,8 @@ class SystemCommand(Command):
     else:
       logger.warning("Settings object does not have configure_logging method")
     logger.debug(f"Log file set to {file}")
-    return f"Log file set to: {file}"
+    result.message = f"Log file set to: {file}"
+    return result
 
   @command(
     path=["log", "status"],
@@ -354,8 +381,10 @@ class SystemCommand(Command):
     },
     ai_callable=True
   )
-  def log_status(self, settings: Settings) -> str:
+  def log_status(self, settings: Settings) -> Result:
     """Display current logging configuration"""
+    result = Result()
+
     status = [
       "Current Logging Configuration:",
       f"- Log Level: {settings.log_level}",
@@ -385,4 +414,5 @@ class SystemCommand(Command):
       handler_level = logging.getLevelName(handler.level)
       status.append(f"  - Handler {i+1}: {handler_type} (Level: {handler_level})")
 
-    return "\n".join(status)
+    result.message = "\n".join(status)
+    return result

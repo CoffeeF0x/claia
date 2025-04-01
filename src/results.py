@@ -1,7 +1,7 @@
 from typing import Any
 
 class Result:
-  def __init__(self, success: bool = True, data: Any = None, message: str = "", fatal: bool = False, exit: bool = False, exit_code: int = 0):
+  def __init__(self, success: bool = True, data: Any = None, message: str = None, fatal: bool = False, exit: bool = False, exit_code: int = 0):
     self.success = success
     self.data = data
     self.message = message

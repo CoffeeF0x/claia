@@ -151,8 +151,7 @@ def main() -> None:
       # Process user input as either a command or a query
       if user_input and user_input[0] == COMMAND_CHARACTER:
         logger.debug(f"Processing as command: {user_input[1:]}")
-        result = Result()
-        result.message = command_registry.run(user_input[1:], settings)
+        result = command_registry.run(user_input[1:], settings)
         logger.debug(f"Command result: {result.message}")
       else:
         # Create a new conversation if one doesn't exist

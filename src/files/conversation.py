@@ -521,7 +521,7 @@ class Conversation(TextFile):
       if tag['type'] == TagType.TOOL_CALL and tag['status'] == TagStatus.CLOSED:
         tool_name = "unknown"
         parameters = {} # Initialize parameters
-        result = ""
+        result_message = ""
         try:
           # Parse the JSON content inside the tag
           tool_call_data = json.loads(tag['content'])
@@ -531,20 +531,30 @@ class Conversation(TextFile):
           # Execute the tool function using registry
           if self.registry:
             result = self.registry.execute_tool(tool_name, parameters, settings)
+
+            # Extract message from Result object
+            if result.is_success() and result.get_message():
+              result_message = result.get_message()
+            elif result.is_error():
+              result_message = f"[TOOL RESULT: (ERROR) {result.get_message()}]"
+            elif result.is_exit():
+              result_message = f"[TOOL RESULT: (EXIT) {result.get_message()}]"
+            else:
+              result_message = f"[TOOL RESULT: (UNKNOWN) {result.get_message()}]"
           else:
-            result = f"[ERROR: No command registry available to execute tool '{tool_name}']"
+            result_message = f"[TOOL RESULT: (ERROR) No command registry available to execute tool '{tool_name}']"
             logger.error(f"No registry available to execute tool: {tool_name}")
 
           # Add action for successful processing
           self.add_action(ActionType.PROCESS_FUNCTION_CALL, {
               "tool_name": tool_name,
               "parameters": parameters,
-              "result_preview": str(result)[:100] + "..." if len(str(result)) > 100 else str(result)
+              "result_preview": result_message[:100] + "..." if len(result_message) > 100 else result_message
           })
 
         except json.JSONDecodeError as e:
           logger.error(f"Failed to parse JSON for tool call: {e}\nContent: {tag['content']}")
-          result = f"[ERROR: Invalid JSON in tool call - {e}]"
+          result_message = f"[ERROR: Invalid JSON in tool call - {e}]"
           self.add_action(ActionType.PROCESS_FUNCTION_CALL, {
               "tool_name": tool_name,
               "parameters": parameters,
@@ -553,7 +563,7 @@ class Conversation(TextFile):
           })
         except Exception as e:
           logger.error(f"Unexpected error processing tool call for '{tool_name}': {e}")
-          result = f"[ERROR: Failed to process tool '{tool_name}' - {e}]"
+          result_message = f"[ERROR: Failed to process tool '{tool_name}' - {e}]"
           self.add_action(ActionType.PROCESS_FUNCTION_CALL, {
               "tool_name": tool_name,
               "parameters": parameters,
@@ -563,7 +573,7 @@ class Conversation(TextFile):
 
         # Replace the original tag with the result/error
         if tag['start_index'] is not None and tag['end_index'] is not None:
-            processed_content = processed_content[:tag['start_index']] + str(result) + processed_content[tag['end_index']:]
+            processed_content = processed_content[:tag['start_index']] + result_message + processed_content[tag['end_index']:]
         else:
             logger.error(f"Cannot replace tag for tool call '{tool_name}' due to missing indices.")
 
