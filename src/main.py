@@ -12,6 +12,7 @@
 # - since model layer doesn't process conversations, it needs to compare the capabilities against the sent request, if there's content that the model doesn't support throw a warning, maybe also trim the request to the model's capabilities
 # - each command should have a small object to define flags, this will allow us to seperate global flags from command flags
 # - create a command class to set parameters (these should be saved to a .env file for now)
+# - make process queue run in its own thread (for simpler async processing)
 
 # External dependencies
 import readline
@@ -22,7 +23,7 @@ import os
 import sys
 
 # Internal dependencies
-from commands import run as command
+from commands import Registry
 from errors import Result
 from settings import Settings
 from agents import ProcessQueue, Process
@@ -30,6 +31,7 @@ from enums import AgentType, SourcePreference, ProcessStatus, MessageRole
 from files import Conversation
 from defaults import initialize_defaults
 from logger import initialize_logging
+from mod import initialize_module_system
 
 
 
@@ -108,6 +110,14 @@ def main() -> None:
     for arg in settings.extra_args:
       logger.debug(f"Stored extra argument: {arg}")
 
+    # Initialize the command registry
+    logger.debug("Initializing command registry")
+    command_registry = Registry()
+
+    # Initialize the module system (must happen after commands are initialized)
+    logger.debug("Initializing module system")
+    initialize_module_system(command_registry, settings.modules_directory)
+
     # Initialize the process queue
     logger.debug("Initializing process queue")
     process_queue = ProcessQueue()
@@ -141,13 +151,13 @@ def main() -> None:
       # Process user input as either a command or a query
       if user_input and user_input[0] == COMMAND_CHARACTER:
         logger.debug(f"Processing as command: {user_input[1:]}")
-        result = command(user_input[1:], settings) # NOTE: EVALUATE
+        result = command_registry.run(user_input[1:], settings)
         logger.debug(f"Command result: {result.get_message()}")
       else:
         if not settings.active_conversation:
           settings.active_conversation = Conversation(settings.files_directory)
         if not settings.active_agent:
-          settings.active_agent = AgentType.SIMPLE
+          settings.active_agent = AgentType.BOB
 
         settings.active_conversation.add_message(MessageRole.USER, user_input)
 

@@ -41,6 +41,7 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
 
   # Directories
   ("files_directory",                   "storage",     True,  "Directory for files"),
+  ("modules_directory",                 "modules",     True,  "Directory for modules"),
 
   # Model Settings
   ("default_model",                     "",            True,  "Default model name"),
