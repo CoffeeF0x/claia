@@ -1,136 +1,76 @@
-# Claia Modules
+# CLAIA Modules System
 
-This directory contains modules that extend the functionality of Claia. Each module is a self-contained package that can add new commands and functions to Claia.
+This directory contains modules (plugins) that extend the functionality of CLAIA.
 
-## Overview
+## Creating a New Module
 
-Modules are loaded dynamically at runtime and can:
-1. Add new commands to the command system
-2. Provide functions that can be called by AI models
-3. Extend existing functionality with new features
+Creating a new module is simple:
 
-## Module Structure
+1. Create a new directory in the `modules` folder with your module name (e.g., `modules/mymodule/`)
+2. Add a `command.py` file to your module directory
+3. In `command.py`, create a class that inherits from `Command` and define your commands
 
-A module must be a directory with the following structure:
+### Module Structure
+
+A basic module should have this structure:
 
 ```
-module_name/               # The directory name becomes the command name
-├── module.py              # Required: Contains the module implementation
-└── README.md              # Optional: Documentation for the module
+modules/
+  mymodule/           # Your module directory
+    command.py        # Command implementation
+    README.md         # (Optional) Documentation for your module
 ```
 
-The `module.py` file must contain one or both of the following:
+### Example Module
 
-1. A `ModuleCommands` class that inherits from `commands.base.Command`
-2. A `FUNCTION_DEFINITIONS` list of function definitions
-
-## Commands
-
-To add commands, your module must define a `ModuleCommands` class in `module.py`:
+Here's a minimal example of a `command.py` file:
 
 ```python
-from commands.base import Command
-from errors import Result
+from commands.base import Command, command
 from settings import Settings
+from results import Result
 
-class ModuleCommands(Command):
-  def execute(self, commands: list[str], settings: Settings) -> Result:
-    # Command implementation
-    return Result(success=True, message="Command executed!")
-    
-  def help(self) -> str:
-    # Help information for the command
-    return "module_name - Description of what this module does"
-```
+class MyModuleCommand(Command):
+    """My custom module command class."""
 
-The command will be available using the module's directory name:
-
-```
-:module_name arg1 arg2
-```
-
-## Functions
-
-To add functions that can be called by AI models, your module must define a `FUNCTION_DEFINITIONS` list in `module.py`:
-
-```python
-def my_function(param1: str, param2: int = 0) -> str:
-  # Function implementation
-  return f"Function called with {param1} and {param2}"
-
-FUNCTION_DEFINITIONS = [
-  {
-    "name": "my_function",
-    "description": "Description of what the function does",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "param1": {
-          "type": "string",
-          "description": "Description of parameter 1"
+    @command(
+        path=["hello"],
+        description="Say hello",
+        parameters={
+            "type": "object",
+            "properties": {}
         },
-        "param2": {
-          "type": "integer",
-          "description": "Description of parameter 2"
-        }
-      },
-      "required": ["param1"]
-    }
-  }
-]
+        ai_callable=True
+    )
+    def hello_command(self, settings: Settings) -> Result:
+        """Simple hello command."""
+        result = Result()
+        result.message = "Hello from my module!"
+        return result
 ```
 
-Functions can then be called by AI models using:
+### How It Works
 
-```
-[FUNCTION_CALL]
-{
-  "name": "my_function",
-  "parameters": {
-    "param1": "value1",
-    "param2": 42
-  }
-}
-[/FUNCTION_CALL]
-```
+When CLAIA starts:
 
-## Creating a Module
+1. The module loader looks for directories in the `modules` folder
+2. For each directory, it checks for a `command.py` file
+3. If found, it imports the file and looks for a class that inherits from `Command`
+4. It creates an instance of that class and registers its commands with the system
+5. Commands are accessible through both the CLI and AI interfaces using the module name prefix
 
-To create a new module:
+### Command Naming
 
-1. Create a new directory in the `modules` directory
-2. Create a `module.py` file in your module directory
-3. Implement your `ModuleCommands` class and/or functions
-4. Add a `README.md` file with documentation for your module
+Commands are registered with a prefix based on the module name:
 
-See the `sample` directory for a complete example of a module with both commands and functions.
+- If your module is called `mymodule` and has a command `hello`, it will be registered as `modules_mymodule_hello` in the command registry
+- In the CLI, you can access it as `mymodule hello`
+- AI functions can call it using the full name `modules_mymodule_hello`
 
-## Module Loading Process
+### Best Practices
 
-The module loading process is as follows:
-
-1. The application calls `modules.load(settings)` during startup
-2. The `load` function gets the modules directory from settings
-3. It iterates through each subdirectory in the modules directory
-4. For each subdirectory, it looks for a `module.py` file
-5. If found, it checks if the module has a `ModuleCommands` class and/or `FUNCTION_DEFINITIONS` list
-6. Module names are added to `settings.command_modules` and/or `settings.function_modules` lists for lazy loading
-7. Modules are only fully loaded when their commands or functions are actually needed
-
-## Lazy Loading
-
-The module system uses lazy loading to improve performance:
-
-1. During startup, only the names of modules are registered, not the actual module contents
-2. When a command is executed, the corresponding module is loaded on-demand
-3. When functions are needed, they are loaded from the modules on-demand
-4. This reduces memory usage and startup time, especially for applications with many modules
-
-## Error Handling
-
-The module system will:
-
-1. Log errors if the modules directory is not defined or doesn't exist
-2. Skip modules that don't have a `module.py` file
-3. Log errors if a module fails to load
-4. Continue loading other modules even if some fail
+1. **Keep it Simple**: Modules should be focused on a specific task or domain
+2. **Consistent Returns**: Always return a `Result` object from your commands
+3. **Good Documentation**: Include a README.md that explains your module's purpose and commands
+4. **Descriptive Commands**: Use clear command names and descriptions
+5. **Error Handling**: Handle errors gracefully and provide helpful error messages in Results

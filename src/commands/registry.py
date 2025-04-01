@@ -158,13 +158,25 @@ class Registry:
       logger.info(f"Skipping disabled command module: {cmd_names[0]}")
       return
 
-    logger.debug(f"Adding command module: {cmd_names[0]}")
-    self._command_modules[cmd_names[0]] = (cmd_instance, cmd_names, description, is_enabled)
+    # Get module name (primary command name)
+    module_name = cmd_names[0]
+
+    logger.debug(f"Adding command module: {module_name}")
+    self._command_modules[module_name] = (cmd_instance, cmd_names, description, is_enabled)
+
+    # Handle module commands (e.g., from command.py in modules directory)
+    # These must have the "module_" prefix to avoid naming conflicts
+    is_module = hasattr(cmd_instance, '_module_name')
 
     if is_enabled:
       # Register all commands from the module's command map
       if hasattr(cmd_instance, 'command_map'):
         for cmd_name, cmd_details in cmd_instance.command_map.items():
+          # For module commands, ensure correct prefix
+          if is_module and not cmd_name.startswith("modules_"):
+            # Add modules_ prefix to avoid naming conflicts
+            cmd_name = f"modules_{cmd_name}"
+
           self._command_map[cmd_name] = {
             "instance": cmd_instance,
             "details": cmd_details
@@ -190,48 +202,7 @@ class Registry:
             }
           }
 
-    logger.info(f"Registered command module: {cmd_names[0]} with {len(cmd_instance.command_map) if hasattr(cmd_instance, 'command_map') else 0} commands")
-
-  def initialize_registry(self) -> None:
-    """
-    Initialize the command registry with currently registered command modules.
-
-    This should be called after all modules have been registered.
-    """
-    logger.info("Initializing command registry")
-    self._command_map = {}
-
-    # Re-register all enabled command modules
-    for cmd_instance, cmd_names, _, is_enabled in self._command_modules.values():
-      if is_enabled:
-        # Register all commands from the module's command map
-        if hasattr(cmd_instance, 'command_map'):
-          for cmd_name, cmd_details in cmd_instance.command_map.items():
-            self._command_map[cmd_name] = {
-              "instance": cmd_instance,
-              "details": cmd_details
-            }
-
-        # Register CLI aliases for command names
-        for name in cmd_names:
-          self._command_map[f"cli_{name}"] = {
-            "instance": cmd_instance,
-            "details": {"is_module_entry": True}
-          }
-
-        # Register top-level commands for CLI execution
-        if hasattr(cmd_instance, 'get_top_level_commands'):
-          top_level_commands = cmd_instance.get_top_level_commands()
-          for cmd_name, cmd_func in top_level_commands.items():
-            self._command_map[f"cli_{cmd_name}"] = {
-              "instance": cmd_instance,
-              "details": {
-                "function": cmd_func,
-                "is_top_level": True
-              }
-            }
-
-    logger.info(f"Command registry initialized with {len(self._command_map)} commands")
+    logger.info(f"Registered command module: {module_name} with {len(cmd_instance.command_map) if hasattr(cmd_instance, 'command_map') else 0} commands")
 
   def cleanup_commands(self, commands: List[str], settings: Settings) -> Result:
     """

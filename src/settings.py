@@ -197,7 +197,6 @@ class Settings:
       bool: Always returns True as API token validation is handled elsewhere.
     """
     try:
-      print(f"Validating log level: {self.log_level}")
       LogLevel.from_string(self.log_level)
     except ValueError:
       if self.log_level:
@@ -205,7 +204,6 @@ class Settings:
       self.log_level = DEFAULT_LOG_LEVEL.name
 
     try:
-      print(f"Validating log format: {self.log_format}")
       LogFormat.from_string(self.log_format)
     except ValueError:
       if self.log_format:

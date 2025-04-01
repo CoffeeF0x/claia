@@ -27,8 +27,6 @@ def initialize_logging(log_level_name: str, log_format_name: str, log_file: str 
     The configured root logger
   """
   try:
-    print(f"DEBUG: initialize_logging called with level={log_level_name}, format={log_format_name}, file={log_file}")
-
     try:
       log_level = LogLevel.from_string(log_level_name)
     except ValueError:

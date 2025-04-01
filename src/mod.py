@@ -2,7 +2,7 @@
 Module loading system for CLAIA.
 
 This module handles dynamic loading of modules (plugins) for the CLAIA application.
-Modules are loaded from the modules directory and must follow a specific structure.
+Modules are loaded by finding command.py files in the modules directory structure.
 """
 
 # External dependencies
@@ -11,11 +11,11 @@ import sys
 import importlib
 import importlib.util
 import logging
-from typing import Dict, List, Any, Optional, Type
-from pathlib import Path
+import inspect
+from typing import Dict, List, Any, Optional
 
 # Internal dependencies
-from commands import Registry
+from commands import Registry, Command
 
 
 
@@ -23,6 +23,7 @@ from commands import Registry
 #                              CONSTANTS                               #
 ########################################################################
 logger = logging.getLogger(__name__)
+MODULE_COMMAND_FILENAME = "command.py"
 
 
 
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 ########################################################################
 def load_modules(registry: Registry, modules_dir: str) -> Dict[str, Any]:
     """
-    Load all available modules from the modules directory.
+    Load all available modules from the modules directory by finding command.py files.
 
     Args:
         registry: The command registry to register modules with
@@ -48,66 +49,75 @@ def load_modules(registry: Registry, modules_dir: str) -> Dict[str, Any]:
         logger.warning(f"Modules directory '{modules_dir}' does not exist")
         return modules
 
-    # Look for module directories
-    for item in os.listdir(modules_dir):
-        module_path = os.path.join(modules_dir, item)
-
-        # Skip if not a directory or starts with underscore (hidden/disabled)
-        if not os.path.isdir(module_path) or item.startswith("_"):
+    # Only look for command.py files directly in module directories
+    for module_name in os.listdir(modules_dir):
+        # Skip hidden files and directories
+        if module_name.startswith('_') or module_name.startswith('.'):
             continue
 
-        module_file = os.path.join(module_path, "module.py")
+        # Get module directory
+        module_path = os.path.join(modules_dir, module_name)
+        if not os.path.isdir(module_path):
+            continue
 
-        # Skip if module.py doesn't exist
-        if not os.path.isfile(module_file):
-            logger.warning(f"Skipping '{item}': missing module.py file")
+        # Check for command.py file
+        command_file = os.path.join(module_path, MODULE_COMMAND_FILENAME)
+        if not os.path.isfile(command_file):
             continue
 
         try:
-            # Import the module
-            module_name = f"modules.{item}.module"
-            spec = importlib.util.spec_from_file_location(module_name, module_file)
+            # Import the command file
+            import_name = f"modules.{module_name}.command"
+            logger.debug(f"Importing {import_name} from {command_file}")
+
+            spec = importlib.util.spec_from_file_location(import_name, command_file)
             if spec is None or spec.loader is None:
-                logger.error(f"Failed to load module spec for '{item}'")
+                logger.error(f"Failed to load module spec for '{module_name}'")
                 continue
 
             module = importlib.util.module_from_spec(spec)
-            sys.modules[module_name] = module
+            sys.modules[import_name] = module
             spec.loader.exec_module(module)
 
-            # Check if module has ModuleCommands class
-            if not hasattr(module, "ModuleCommands"):
-                logger.warning(f"Skipping '{item}': missing ModuleCommands class")
+            # Find first class that inherits from Command
+            command_class = None
+            for name, obj in module.__dict__.items():
+                if (inspect.isclass(obj) and
+                    obj.__module__ == import_name and
+                    issubclass(obj, Command) and
+                    obj != Command):
+                    command_class = obj
+                    logger.debug(f"Found command class: {name}")
+                    break
+
+            if command_class is None:
+                logger.warning(f"No Command subclass found in {command_file}")
                 continue
 
-            # Create instance of ModuleCommands
-            module_instance = module.ModuleCommands()
+            # Create instance of the Command class
+            module_instance = command_class()
 
             # Set module name in the instance
-            module_instance._module_name = item
+            module_instance._module_name = module_name
             module_instance._module_path = module_path
 
-            # Build the command map if it hasn't been built yet
-            if hasattr(module_instance, '_build_command_map') and not hasattr(module_instance, 'command_map'):
-                module_instance._build_command_map()
-
             # Add to modules dict
-            modules[item] = module_instance
+            modules[module_name] = module_instance
 
             # Register the module with the registry
             registry.add_command_module(
                 module_instance,
-                [item],  # Primary name is the directory name
-                f"Module commands for {item}",
+                [module_name],  # Primary name is the directory name
+                f"Module commands for {module_name}",
                 True     # Enabled by default
             )
 
-            logger.info(f"Loaded module: {item} with {len(module_instance.command_map) if hasattr(module_instance, 'command_map') else 0} commands")
+            # Log success with number of commands
+            command_count = len(module_instance.command_map) if hasattr(module_instance, 'command_map') else 0
+            logger.info(f"Loaded module: {module_name} with {command_count} commands")
         except Exception as e:
-            logger.error(f"Error loading module '{item}': {str(e)}")
+            logger.error(f"Error loading module '{module_name}': {str(e)}")
 
-    # Re-initialize the registry to ensure all commands are properly registered
-    registry.initialize_registry()
     logger.info(f"Loaded {len(modules)} modules with a total of {len(registry.command_map)} commands")
     return modules
 
@@ -130,34 +140,42 @@ def list_available_modules(registry: Registry, modules_dir: str) -> List[Dict[st
         logger.warning(f"Modules directory '{modules_dir}' does not exist")
         return modules_info
 
-    # Look for module directories
-    for item in os.listdir(modules_dir):
-        module_path = os.path.join(modules_dir, item)
-
-        # Skip if not a directory or starts with underscore (hidden/disabled)
-        if not os.path.isdir(module_path) or item.startswith("_"):
+    # Look for module directories with command.py files
+    for module_name in os.listdir(modules_dir):
+        # Skip hidden files and directories
+        if module_name.startswith('_') or module_name.startswith('.'):
             continue
 
-        module_file = os.path.join(module_path, "module.py")
+        # Get module directory
+        module_path = os.path.join(modules_dir, module_name)
+        if not os.path.isdir(module_path):
+            continue
+
+        # Check for command.py file
+        command_file = os.path.join(module_path, MODULE_COMMAND_FILENAME)
+        if not os.path.isfile(command_file):
+            continue
+
+        # Check for README.md
         readme_file = os.path.join(module_path, "README.md")
 
         # Check if module is loaded
         is_loaded = False
         cmd_count = 0
 
-        if hasattr(registry, "command_modules") and item in registry.command_modules:
+        if hasattr(registry, "command_modules") and module_name in registry.command_modules:
             is_loaded = True
             # Get the number of commands from this module
             if hasattr(registry, "command_map"):
                 for cmd_name in registry.command_map:
-                    if cmd_name.startswith(f"modules_{item}_"):
+                    if cmd_name.startswith(f"modules_{module_name}_"):
                         cmd_count += 1
 
         # Add module info
         modules_info.append({
-            "name": item,
+            "name": module_name,
             "path": module_path,
-            "has_module_py": os.path.isfile(module_file),
+            "has_command_py": True,
             "has_readme": os.path.isfile(readme_file),
             "is_loaded": is_loaded,
             "command_count": cmd_count
