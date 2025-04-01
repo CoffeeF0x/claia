@@ -3,7 +3,7 @@ import os
 
 # Internal dependencies
 from commands.base import Command, command
-from errors import Result
+from results import Result
 from settings import Settings
 from enums import LogLevel, LogFormat
 from utilities import clear

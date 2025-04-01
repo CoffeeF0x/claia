@@ -18,7 +18,7 @@ from functools import wraps
 
 # Internal dependencies
 from commands.base import Command, command
-from errors import Result
+from results import Result
 from settings import Settings
 from conversations import Conversation
 from enums import MessageRole

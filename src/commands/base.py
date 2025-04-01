@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Callable, Optional, Union
 import logging
 
 # Internal Dependencies
-from errors import Result
+from results import Result
 from settings import Settings
 
 

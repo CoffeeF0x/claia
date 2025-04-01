@@ -24,7 +24,7 @@ import sys
 
 # Internal dependencies
 from commands import Registry
-from errors import Result
+from results import Result
 from settings import Settings
 from agents import ProcessQueue, Process
 from enums import AgentType, SourcePreference, ProcessStatus, MessageRole

@@ -10,7 +10,7 @@ from typing import Any, List, Dict, Optional, Tuple
 # Internal dependencies
 from settings import Settings
 from files import Conversation
-from errors import Result
+from results import Result
 from enums import ModelCapability
 
 from .base import APIModel, LocalModel

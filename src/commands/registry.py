@@ -10,7 +10,7 @@ import logging
 from typing import Dict, Any, List, Tuple, Optional, Callable
 
 # Internal dependencies
-from errors import Result
+from results import Result
 from settings import Settings
 from .prompts import PromptCommand
 from .conversations import ConversationCommand

@@ -10,7 +10,7 @@ from typing import Dict, Any
 
 # Internal dependencies
 from commands.base import Command, command
-from errors import Result
+from results import Result
 from settings import Settings
 
 

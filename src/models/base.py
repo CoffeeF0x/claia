@@ -4,7 +4,7 @@ import requests
 import logging
 
 # Internal dependencies
-from errors import Result
+from results import Result
 from files import Conversation
 
 
