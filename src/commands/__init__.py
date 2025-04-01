@@ -39,10 +39,3 @@ from .agents        import AgentCommand
 from .registry      import Registry
 from errors import Result
 from settings import Settings
-
-
-
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
-logger = logging.getLogger(__name__)

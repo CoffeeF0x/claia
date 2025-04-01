@@ -61,10 +61,14 @@ class ConversationCommand(Command):
   )
   def load_conversation(self, settings: Settings, conversation_id: str) -> str:
     """Load a stored conversation"""
+    # Get registry from the command's registry property
+    registry = self.registry if hasattr(self, 'registry') else None
+
     settings.active_conversation = Conversation.load(
       conversation_id=conversation_id,
       base_directory=settings.conversation_directory,
-      files_directory=settings.conversation_files_directory
+      files_directory=settings.conversation_files_directory,
+      registry=registry
     )
 
     if settings.active_conversation:
@@ -86,13 +90,17 @@ class ConversationCommand(Command):
     title = "New Conversation"
     # title = input("Enter a title for the new conversation: ")
 
+    # Get registry from the command's registry property
+    registry = self.registry if hasattr(self, 'registry') else None
+
     # Create new conversation with system prompt if available
     system_prompt = settings.active_prompt.get_formatted_prompt() if settings.active_prompt else None
     new_conversation = Conversation(
       base_directory=settings.conversation_directory,
       files_directory=settings.conversation_files_directory,
       title=title,
-      system_prompt=system_prompt
+      system_prompt=system_prompt,
+      registry=registry
     )
 
     # Save the conversation

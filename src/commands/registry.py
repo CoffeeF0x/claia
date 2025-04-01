@@ -110,15 +110,15 @@ class Registry:
   def __init__(self):
     if not self._initialized:
       logger.debug("Initializing Command Registry")
-      self._command_registry = {}
-      self._command_modules = {}
+      self._command_map = {}  # Flat map of command_name -> command_details
+      self._command_modules = {}  # Module name -> module instance info
       self._initialized = True
       self._initialize_core_commands()
 
   @property
-  def command_registry(self) -> Dict[str, Any]:
-    """Get the command registry dictionary."""
-    return self._command_registry
+  def command_map(self) -> Dict[str, Any]:
+    """Get the command map dictionary."""
+    return self._command_map
 
   @property
   def command_modules(self) -> Dict[str, Tuple[Any, List[str], str, bool]]:
@@ -162,17 +162,35 @@ class Registry:
     self._command_modules[cmd_names[0]] = (cmd_instance, cmd_names, description, is_enabled)
 
     if is_enabled:
-      # Register primary command names
-      for name in cmd_names:
-        self._command_registry[name] = cmd_instance
+      # Register all commands from the module's command map
+      if hasattr(cmd_instance, 'command_map'):
+        for cmd_name, cmd_details in cmd_instance.command_map.items():
+          self._command_map[cmd_name] = {
+            "instance": cmd_instance,
+            "details": cmd_details
+          }
+          logger.debug(f"Registered command: {cmd_name}")
 
-      # Register top-level commands if available
+      # Register CLI aliases for command names
+      for name in cmd_names:
+        self._command_map[f"cli_{name}"] = {
+          "instance": cmd_instance,
+          "details": {"is_module_entry": True}
+        }
+
+      # Register top-level commands for CLI execution
       if hasattr(cmd_instance, 'get_top_level_commands'):
         top_level_commands = cmd_instance.get_top_level_commands()
         for cmd_name, cmd_func in top_level_commands.items():
-          self._command_registry[cmd_name] = cmd_instance
+          self._command_map[f"cli_{cmd_name}"] = {
+            "instance": cmd_instance,
+            "details": {
+              "function": cmd_func,
+              "is_top_level": True
+            }
+          }
 
-    logger.info(f"Registered command module: {cmd_names[0]}")
+    logger.info(f"Registered command module: {cmd_names[0]} with {len(cmd_instance.command_map) if hasattr(cmd_instance, 'command_map') else 0} commands")
 
   def initialize_registry(self) -> None:
     """
@@ -181,22 +199,39 @@ class Registry:
     This should be called after all modules have been registered.
     """
     logger.info("Initializing command registry")
-    self._command_registry = {}
+    self._command_map = {}
 
     # Re-register all enabled command modules
     for cmd_instance, cmd_names, _, is_enabled in self._command_modules.values():
       if is_enabled:
-        # Register primary command names
-        for name in cmd_names:
-          self._command_registry[name] = cmd_instance
+        # Register all commands from the module's command map
+        if hasattr(cmd_instance, 'command_map'):
+          for cmd_name, cmd_details in cmd_instance.command_map.items():
+            self._command_map[cmd_name] = {
+              "instance": cmd_instance,
+              "details": cmd_details
+            }
 
-        # Register top-level commands if available
+        # Register CLI aliases for command names
+        for name in cmd_names:
+          self._command_map[f"cli_{name}"] = {
+            "instance": cmd_instance,
+            "details": {"is_module_entry": True}
+          }
+
+        # Register top-level commands for CLI execution
         if hasattr(cmd_instance, 'get_top_level_commands'):
           top_level_commands = cmd_instance.get_top_level_commands()
           for cmd_name, cmd_func in top_level_commands.items():
-            self._command_registry[cmd_name] = cmd_instance
+            self._command_map[f"cli_{cmd_name}"] = {
+              "instance": cmd_instance,
+              "details": {
+                "function": cmd_func,
+                "is_top_level": True
+              }
+            }
 
-    logger.info(f"Command registry initialized with {len(self._command_registry)} commands")
+    logger.info(f"Command registry initialized with {len(self._command_map)} commands")
 
   def cleanup_commands(self, commands: List[str], settings: Settings) -> Result:
     """
@@ -236,12 +271,13 @@ class Registry:
     """
     return [cmd for cmd, _, _, enabled in self._command_modules.values() if enabled]
 
-  def get_function_definitions(self, settings: Optional[Settings] = None) -> List[Dict[str, Any]]:
+  def get_function_definitions(self, settings: Optional[Settings] = None, ai_callable_only: bool = True) -> List[Dict[str, Any]]:
     """
-    Get all AI-callable function definitions from registered commands.
+    Get function definitions from registered commands.
 
     Args:
         settings: Optional settings object
+        ai_callable_only: If True, only return functions marked as AI-callable
 
     Returns:
         List of function definitions in JSON schema format
@@ -249,15 +285,25 @@ class Registry:
     definitions = []
 
     try:
-      # Process each enabled command instance once
-      for cmd_instance in self.get_enabled_command_instances():
-        if hasattr(cmd_instance, 'get_function_definitions'):
-          # Make sure we're calling the method, not trying to iterate over it
-          cmd_definitions = cmd_instance.get_function_definitions()
-          if isinstance(cmd_definitions, list):
-            definitions.extend(cmd_definitions)
-          else:
-            logger.warning(f"get_function_definitions for {cmd_instance.__class__.__name__} did not return a list")
+      # Add definitions directly from the command map
+      for cmd_name, cmd_entry in self._command_map.items():
+        # Skip CLI aliases
+        if cmd_name.startswith("cli_"):
+          continue
+
+        details = cmd_entry["details"]
+
+        # Filter by ai_callable flag if requested
+        if ai_callable_only and not details.get("ai_callable", False):
+          continue
+
+        definition = {
+          "name": cmd_name,
+          "description": details.get("description", ""),
+          "parameters": details.get("parameters", {}),
+          "returns": details.get("returns", {"type": "string"})
+        }
+        definitions.append(definition)
     except Exception as e:
       logger.error(f"Error getting function definitions: {str(e)}")
       # Return an empty list in case of error
@@ -270,7 +316,7 @@ class Registry:
     Execute a command by its function name with the given parameters.
 
     Args:
-        function_name: The function name in format "prefix_path_component1_component2_..."
+        function_name: The function name (e.g., "system_set_log_level")
         parameters: Dictionary of parameter values
         settings: Settings object
 
@@ -281,72 +327,65 @@ class Registry:
       return "Error: Settings object is required"
 
     try:
-      # Split the function name into parts (prefix_path_component1_component2_...)
-      parts = function_name.split('_')
+      # Look up the command in the command map
+      if function_name in self._command_map:
+        cmd_entry = self._command_map[function_name]
+        cmd_instance = cmd_entry["instance"]
+        cmd_details = cmd_entry["details"]
 
-      if len(parts) < 2:
-        return f"Invalid function name format: {function_name}. Expected format: prefix_command_path"
+        # Get the function to execute
+        func = cmd_details["function"]
 
-      # The first part is the prefix (class name or module name), the rest is the command path
-      prefix = parts[0]
-      command_path = parts[1:]
+        try:
+          # Convert parameters to appropriate types if needed
+          clean_params = {}
 
-      # Try each enabled command instance
-      for cmd_instance in self.get_enabled_command_instances():
-        # Determine the prefix for this command instance
-        if hasattr(cmd_instance, '_module_name'):
-          # This is a module command, use the module name
-          instance_prefix = cmd_instance._module_name
-        else:
-          # This is a core command, use the class name
-          instance_prefix = cmd_instance.__class__.__name__.replace("Command", "").lower()
+          # Get expected parameter schema if available
+          param_schema = cmd_details.get("parameters", {})
+          properties = param_schema.get("properties", {})
 
-        # Skip if this is not the right command instance
-        if instance_prefix != prefix:
-          continue
+          # Process each parameter according to its expected type
+          for key, value in parameters.items():
+            if key in properties:
+              # Get the expected type for this parameter
+              param_type = properties[key].get("type", "string")
 
-        if hasattr(cmd_instance, 'get_function_definitions'):
-          # Get all function definitions from this command instance
-          func_defs = cmd_instance.get_function_definitions()
-
-          # Check if our function name matches any of the definitions
-          for func_def in func_defs:
-            if func_def["name"] == function_name:
-              # Found the function, now execute it
-              try:
-                # Navigate the command tree to find the handler
-                current = cmd_instance.function_tree
-
-                for i, part in enumerate(command_path[:-1]):
-                  if part in current:
-                    current = current[part]
-                  else:
-                    return f"Invalid command path at part '{part}': {function_name}"
-
-                # The last part should be the function
-                last_part = command_path[-1]
-
-                if last_part in current and "function" in current[last_part]:
-                  func = current[last_part]["function"]
-
-                  try:
-                    # Call the function with settings and parameters
-                    result = func(settings, **parameters)
-
-                    # Convert Result objects to string
-                    if hasattr(result, 'message') and callable(getattr(result, 'message')):
-                      return result.message()
-                    return str(result)
-                  except Exception as e:
-                    return f"Error executing command: {str(e)}"
+              # Handle different parameter types
+              if param_type == "string":
+                clean_params[key] = str(value) if value is not None else None
+              elif param_type == "integer":
+                try:
+                  clean_params[key] = int(value) if value is not None else None
+                except (ValueError, TypeError):
+                  logger.warning(f"Failed to convert parameter '{key}' to integer: {value}")
+                  clean_params[key] = value
+              elif param_type == "boolean":
+                if isinstance(value, str):
+                  clean_params[key] = value.lower() in ("true", "yes", "1", "t", "y")
                 else:
-                  return f"Invalid command function at leaf '{last_part}': {function_name}"
-              except Exception as e:
-                return f"Error navigating command tree: {str(e)}"
-    except Exception as e:
-      return f"Error processing command: {str(e)}"
+                  clean_params[key] = bool(value)
+              else:
+                # For other types, pass as is
+                clean_params[key] = value
+            else:
+              # No schema info, convert to string if needed
+              clean_params[key] = str(value) if value is not None else None
 
-    return f"Unknown function: {function_name}"
+          # Call the function with settings and parameters
+          result = func(settings, **clean_params)
+
+          # Convert Result objects to string
+          if hasattr(result, 'message') and callable(getattr(result, 'message')):
+            return result.message()
+          return str(result)
+        except Exception as e:
+          logger.exception(f"Error executing command '{function_name}': {str(e)}")
+          return f"Error executing command: {str(e)}"
+      else:
+        return f"Unknown function: {function_name}"
+    except Exception as e:
+      logger.exception(f"Error processing command '{function_name}': {str(e)}")
+      return f"Error processing command: {str(e)}"
 
   def run(self, input_str: str, settings: Settings) -> Result:
     """
@@ -370,11 +409,27 @@ class Registry:
       else:
         self.display_help()
       result = Result()
-    elif commands[0] in self._command_registry:
-      result = self._command_registry[commands[0]].execute(commands, settings)
     else:
-      result = Result.fail("Unrecognized command.")
-      self.display_help()
+      # Check for top-level CLI command
+      cli_key = f"cli_{commands[0]}"
+      if cli_key in self._command_map:
+        cmd_entry = self._command_map[cli_key]
+        cmd_instance = cmd_entry["instance"]
+        cmd_details = cmd_entry["details"]
+
+        if cmd_details.get("is_top_level", False):
+          # Execute top-level command directly
+          func = cmd_details["function"]
+          try:
+            result = func(settings)
+          except Exception as e:
+            result = Result.fail(f"Error executing command: {str(e)}")
+        else:
+          # Pass to module's execute method
+          result = cmd_instance.execute(commands, settings)
+      else:
+        result = Result.fail(f"Unrecognized command: {commands[0]}")
+        self.display_help()
 
     return result
 
@@ -395,17 +450,11 @@ class Registry:
 
     # Display top-level commands
     print("\nTop-level commands:")
-    top_level_commands = set()
+    top_level_commands = []
 
-    for cmd_instance in self.get_enabled_command_instances():
-      if hasattr(cmd_instance, 'get_top_level_commands'):
-        for top_cmd, cmd_func in cmd_instance.get_top_level_commands().items():
-          top_level_commands.add(top_cmd)
-          # Also add aliases
-          if hasattr(cmd_func, '_command_aliases'):
-            for alias in cmd_func._command_aliases:
-              if isinstance(alias, str):
-                top_level_commands.add(alias)
+    for cmd_name, cmd_entry in self._command_map.items():
+      if cmd_name.startswith("cli_") and cmd_entry["details"].get("is_top_level", False):
+        top_level_commands.append(cmd_name[4:])  # Remove 'cli_' prefix
 
     if top_level_commands:
       print("  " + ", ".join(sorted(top_level_commands)))
@@ -418,9 +467,14 @@ class Registry:
     Args:
         command_name: The name of the command
     """
-    if command_name in self._command_registry:
-      if hasattr(self._command_registry[command_name], 'help'):
-        self._command_registry[command_name].help()
+    # Check if it's a module name
+    cli_key = f"cli_{command_name}"
+    if cli_key in self._command_map:
+      cmd_entry = self._command_map[cli_key]
+      cmd_instance = cmd_entry["instance"]
+
+      if hasattr(cmd_instance, 'help'):
+        cmd_instance.help()
       else:
         print(f"No help available for command: {command_name}")
     else:

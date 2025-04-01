@@ -23,7 +23,6 @@ import re
 # Internal dependencies
 from .text import TextFile
 from enums import FileSubdirectory, ActionType, MessageRole, TagType, TagStatus
-from tools import execute_tool
 
 
 
@@ -125,6 +124,7 @@ class ToolDefinition:
                name: str,
                description: str,
                parameters: Dict[str, Any],
+               returns: Dict[str, Any] = None,
                tool_id: Optional[str] = None,
                created_at: Optional[float] = None,
                updated_at: Optional[float] = None):
@@ -135,6 +135,7 @@ class ToolDefinition:
         name: The name of the tool
         description: The description of the tool
         parameters: The parameters of the tool
+        returns: The return value schema of the tool (default: {"type": "string"})
         tool_id: Optional ID for the tool (generated if not provided)
         created_at: Optional timestamp for creation time
         updated_at: Optional timestamp for last update time
@@ -143,6 +144,7 @@ class ToolDefinition:
     self.name = name
     self.description = description
     self.parameters = parameters
+    self.returns = returns or {"type": "string"}
     self.created_at = created_at or time.time()
     self.updated_at = updated_at or self.created_at
 
@@ -153,6 +155,7 @@ class ToolDefinition:
       "name": self.name,
       "description": self.description,
       "parameters": self.parameters,
+      "returns": self.returns,
       "created_at": self.created_at,
       "updated_at": self.updated_at
     }
@@ -164,6 +167,7 @@ class ToolDefinition:
       name=data.get("name", ""),
       description=data.get("description", ""),
       parameters=data.get("parameters", {}),
+      returns=data.get("returns", {"type": "string"}),
       tool_id=data.get("tool_id"),
       created_at=data.get("created_at"),
       updated_at=data.get("updated_at")
@@ -234,12 +238,13 @@ class Conversation(TextFile):
   - Inherits text file functionality for content operations
   """
 
-  def __init__(self, base_directory: str, **kwargs):
+  def __init__(self, base_directory: str, registry=None, **kwargs):
     """
     Initialize a conversation file.
 
     Args:
         base_directory: Base directory for the file
+        registry: Optional Registry object for direct command execution
         **kwargs: Additional arguments to pass to the parent class
             custom_tag_formats (Optional[Dict[TagType, Tuple[str, str]]]):
                 Overrides for default tag formats. Key is TagType enum,
@@ -252,6 +257,9 @@ class Conversation(TextFile):
     initial_actions = kwargs.pop("actions", [])
     initial_tools = kwargs.pop("tool_definitions", [])
     self.custom_tag_formats = kwargs.pop("custom_tag_formats", {})
+
+    # Store registry reference if provided
+    self.registry = registry
 
     # Ensure the file has .json extension
     file_name = kwargs.get("file_name")
@@ -496,7 +504,7 @@ class Conversation(TextFile):
     Finds and executes tool calls within the content, replacing tags with results.
 
     Uses find_tags to locate potential tool calls, then parses, executes via the
-    tool_registry, and replaces them in the content string.
+    command registry, and replaces them in the content string.
 
     Args:
       content: The text content containing potential tool calls.
@@ -518,10 +526,14 @@ class Conversation(TextFile):
           # Parse the JSON content inside the tag
           tool_call_data = json.loads(tag['content'])
           tool_name = tool_call_data.get("name", "unknown")
-          parameters = tool_call_data.get("parameters", {}) # Extract parameters
+          parameters = tool_call_data.get("parameters", {})
 
-          # Execute the tool function using the registry
-          result = execute_tool(tool_name, parameters, settings) # Call the new function
+          # Execute the tool function using registry
+          if self.registry:
+            result = self.registry.execute_command_by_name(tool_name, parameters, settings)
+          else:
+            result = f"[ERROR: No command registry available to execute tool '{tool_name}']"
+            logger.error(f"No registry available to execute tool: {tool_name}")
 
           # Add action for successful processing
           self.add_action(ActionType.PROCESS_FUNCTION_CALL, {
@@ -534,20 +546,17 @@ class Conversation(TextFile):
           logger.error(f"Failed to parse JSON for tool call: {e}\nContent: {tag['content']}")
           result = f"[ERROR: Invalid JSON in tool call - {e}]"
           self.add_action(ActionType.PROCESS_FUNCTION_CALL, {
-              "tool_name": tool_name, # May still be "unknown"
-              "parameters": parameters, # Might be empty if parsing failed early
+              "tool_name": tool_name,
+              "parameters": parameters,
               "error": "JSONDecodeError",
               "content_preview": tag['content'][:100] + "..."
           })
         except Exception as e:
-          # Errors during execute_tool are caught inside it and returned as strings,
-          # but we catch potential unexpected errors here just in case.
-          # Errors during JSON parsing *before* calling execute_tool land here.
           logger.error(f"Unexpected error processing tool call for '{tool_name}': {e}")
           result = f"[ERROR: Failed to process tool '{tool_name}' - {e}]"
           self.add_action(ActionType.PROCESS_FUNCTION_CALL, {
               "tool_name": tool_name,
-              "parameters": parameters, # Might be empty if parsing failed early
+              "parameters": parameters,
               "error": str(e),
               "content_preview": tag['content'][:100] + "..."
           })
@@ -559,9 +568,7 @@ class Conversation(TextFile):
             logger.error(f"Cannot replace tag for tool call '{tool_name}' due to missing indices.")
 
       elif tag['type'] == TagType.TOOL_CALL and tag['status'] != TagStatus.CLOSED:
-         # Log or handle non-closed/mismatched tool call tags if needed
          logger.warning(f"Skipping processing of non-closed/mismatched tool call tag ({tag['status'].name}) starting at {tag['start_index']}.")
-         # Optionally replace these with an error message or marker
 
     return processed_content
 
@@ -610,7 +617,8 @@ class Conversation(TextFile):
           {
             "name": t.name,
             "description": t.description,
-            "parameters": t.parameters
+            "parameters": t.parameters,
+            "returns": t.returns
           }
           for t in self.tool_definitions
         ]
@@ -631,7 +639,7 @@ class Conversation(TextFile):
 
     return processed_text
 
-  def add_tool_definition(self, name: str, description: str, parameters: Dict[str, Any]) -> ToolDefinition:
+  def add_tool_definition(self, name: str, description: str, parameters: Dict[str, Any], returns: Dict[str, Any] = None) -> ToolDefinition:
     """
     Add a tool definition to the conversation.
 
@@ -639,6 +647,7 @@ class Conversation(TextFile):
         name: The name of the tool
         description: The description of the tool
         parameters: The parameters of the tool
+        returns: The return value schema of the tool (default: {"type": "string"})
 
     Returns:
         ToolDefinition: The created tool definition
@@ -650,7 +659,7 @@ class Conversation(TextFile):
         return tool
 
     # Create a new tool definition
-    tool_def = ToolDefinition(name=name, description=description, parameters=parameters)
+    tool_def = ToolDefinition(name=name, description=description, parameters=parameters, returns=returns)
     self.tool_definitions.append(tool_def)
 
     # Add an action for this tool addition
@@ -664,7 +673,8 @@ class Conversation(TextFile):
 
   def update_tool_definition(self, tool_id: str, name: Optional[str] = None,
                                 description: Optional[str] = None,
-                                parameters: Optional[Dict[str, Any]] = None) -> Optional[ToolDefinition]:
+                                parameters: Optional[Dict[str, Any]] = None,
+                                returns: Optional[Dict[str, Any]] = None) -> Optional[ToolDefinition]:
     """
     Update a tool definition in the conversation.
 
@@ -673,6 +683,7 @@ class Conversation(TextFile):
         name: Optional new name for the tool
         description: Optional new description for the tool
         parameters: Optional new parameters for the tool
+        returns: Optional new return value schema for the tool
 
     Returns:
         Optional[ToolDefinition]: The updated tool definition, or None if not found
@@ -690,6 +701,8 @@ class Conversation(TextFile):
           tool.description = description
         if parameters is not None:
           tool.parameters = parameters
+        if returns is not None:
+          tool.returns = returns
 
         # Update timestamp
         tool.updated_at = time.time()
@@ -1022,7 +1035,7 @@ class Conversation(TextFile):
 
   @classmethod
   def create_conversation(cls: Type[T], base_directory: str, title: Optional[str] = None,
-                        prompt: Optional[str] = None, **kwargs) -> Optional[T]:
+                        prompt: Optional[str] = None, registry=None, **kwargs) -> Optional[T]:
     """
     Create a new conversation file.
 
@@ -1030,6 +1043,7 @@ class Conversation(TextFile):
         base_directory: Base directory for the file
         title: Optional title for the conversation
         prompt: Optional prompt for the conversation
+        registry: Optional Registry object for direct command execution
         **kwargs: Additional arguments to pass to the constructor
 
     Returns:
@@ -1051,6 +1065,7 @@ class Conversation(TextFile):
       base_directory=base_directory,
       title=title,
       prompt=prompt or "",
+      registry=registry,
       **kwargs
     )
 
@@ -1062,13 +1077,14 @@ class Conversation(TextFile):
     return conversation
 
   @classmethod
-  def load_conversation(cls: Type[T], conversation_id: str, base_directory: str) -> Optional[T]:
+  def load_conversation(cls: Type[T], conversation_id: str, base_directory: str, registry=None) -> Optional[T]:
     """
     Load a conversation by ID.
 
     Args:
         conversation_id: The ID of the conversation to load
         base_directory: Base directory for file operations
+        registry: Optional Registry object for direct command execution
 
     Returns:
         Optional[T]: The loaded conversation, or None if loading failed
@@ -1109,8 +1125,10 @@ class Conversation(TextFile):
           actions=[Action.from_dict(a) for a in data.get("actions", [])],
           tool_definitions=[ToolDefinition.from_dict(t) for t in data.get("tool_definitions", [])],
           custom_tag_formats=custom_tag_formats,
+          registry=registry,
           metadata=metadata
         )
+
         return conversation
       except json.JSONDecodeError:
         logger.error(f"Failed to parse JSON from conversation file: {conversation_id}")
@@ -1191,7 +1209,44 @@ class Conversation(TextFile):
       {
         "name": t.name,
         "description": t.description,
-        "parameters": t.parameters
+        "parameters": t.parameters,
+        "returns": t.returns
       }
       for t in self.tool_definitions
     ]
+
+  def load_tool_definitions_from_registry(self) -> List[ToolDefinition]:
+    """
+    Load tool definitions from the registry's AI-callable functions.
+
+    This is the recommended way to keep tool definitions in sync with
+    the available commands in the registry.
+
+    Returns:
+        List[ToolDefinition]: List of tool definitions created from registry functions
+    """
+    if not self.registry:
+      logger.warning("Cannot load tool definitions: No registry available")
+      return []
+
+    result = []
+
+    # Get AI-callable function definitions from the registry
+    function_defs = self.registry.get_function_definitions(ai_callable_only=True)
+
+    for func_def in function_defs:
+      # Extract required fields
+      name = func_def.get("name")
+      description = func_def.get("description", "")
+      parameters = func_def.get("parameters", {})
+      returns = func_def.get("returns", {"type": "string"})
+
+      if not name:
+        logger.warning("Skipping function definition without a name")
+        continue
+
+      # Add the tool definition
+      tool = self.add_tool_definition(name, description, parameters, returns)
+      result.append(tool)
+
+    return result

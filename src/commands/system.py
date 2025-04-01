@@ -64,6 +64,82 @@ class SystemCommand(Command):
     return Result.shutdown()
 
   @command(
+    path=["get"],
+    description="Get a system setting value",
+    help_text="Get the value of a system setting",
+    parameters={
+      "type": "object",
+      "properties": {
+        "setting": {
+          "type": "string",
+          "description": "The setting to get (log-level, log-format, log-file)",
+          "enum": ["log-level", "log-format", "log-file"]
+        }
+      },
+      "required": ["setting"]
+    },
+    returns={
+      "type": "string",
+      "description": "Current setting value"
+    },
+    ai_callable=True
+  )
+  def get_setting(self, settings: Settings, setting: str) -> str:
+    """Get a system setting value"""
+    setting = setting.lower().replace('_', '-')
+
+    if setting == "log-level":
+      return f"Current log level: {settings.log_level}"
+    elif setting == "log-format":
+      return f"Current log format: {settings.log_format}"
+    elif setting == "log-file":
+      if settings.log_file:
+        return f"Current log file: {settings.log_file}"
+      else:
+        return "Logging to console only (no log file configured)"
+    else:
+      return f"Unknown setting: {setting}"
+
+  @command(
+    path=["set"],
+    description="Set a system setting value",
+    help_text="Set the value of a system setting",
+    parameters={
+      "type": "object",
+      "properties": {
+        "setting": {
+          "type": "string",
+          "description": "The setting to set (log-level, log-format, log-file)",
+          "enum": ["log-level", "log-format", "log-file"]
+        },
+        "value": {
+          "type": "string",
+          "description": "The value to set"
+        }
+      },
+      "required": ["setting", "value"]
+    },
+    returns={
+      "type": "string",
+      "description": "Confirmation message"
+    },
+    ai_callable=True
+  )
+  def set_setting(self, settings: Settings, setting: str, value: str) -> str:
+    """Set a system setting value"""
+    setting = setting.lower().replace('_', '-')
+
+    if setting == "log-level":
+      return self.set_log_level(settings, level=value)
+    elif setting == "log-format":
+      return self.set_log_format(settings, format=value)
+    elif setting == "log-file":
+      return self.set_log_file(settings, file=value)
+    else:
+      return f"Unknown setting: {setting}"
+
+  # Keep compatibility with previous command format
+  @command(
     path=["get", "log-level"],
     description="Display the current log level",
     help_text="Display the current log level",
@@ -91,7 +167,7 @@ class SystemCommand(Command):
         "level": {
           "type": "string",
           "description": "Log level to set (debug, info, warning, error, critical)",
-          "enum": [level.value for level in LogLevel]
+          "enum": [level.name.lower() for level in LogLevel]
         }
       },
       "required": ["level"]
@@ -104,21 +180,28 @@ class SystemCommand(Command):
   )
   def set_log_level(self, settings: Settings, level: str) -> str:
     """Set the log level"""
+    # Get logger at the beginning of the function
+    logger = logging.getLogger(__name__)
+
     level = level.lower()
-    if level in [level.value for level in LogLevel]:
+    valid_levels = [lvl.name.lower() for lvl in LogLevel]
+
+    if level in valid_levels:
       # Update the settings
       settings.log_level = level
 
-      # Reconfigure logging with the new settings
-      settings.configure_logging()
+      # Reconfigure logging if the method exists
+      if hasattr(settings, 'configure_logging') and callable(getattr(settings, 'configure_logging')):
+        settings.configure_logging()
+      else:
+        logger.warning("Settings object does not have configure_logging method")
 
       # Log the change at the new level
-      logger = logging.getLogger(__name__)
       logger.debug(f"Log level changed to {level}")
 
       return f"Log level set to: {level}"
     else:
-      return f"Invalid log level. Valid options are: {', '.join(level.value for level in LogLevel)}"
+      return f"Invalid log level. Valid options are: {', '.join(valid_levels)}"
 
   @command(
     path=["get", "log-format"],
@@ -148,7 +231,7 @@ class SystemCommand(Command):
         "format": {
           "type": "string",
           "description": "Log format to set (simple, standard, detailed)",
-          "enum": [format.value for format in LogFormat]
+          "enum": [format.name.lower() for format in LogFormat]
         }
       },
       "required": ["format"]
@@ -161,21 +244,28 @@ class SystemCommand(Command):
   )
   def set_log_format(self, settings: Settings, format: str) -> str:
     """Set the log format"""
+    # Get logger at the beginning of the function
+    logger = logging.getLogger(__name__)
+
     format = format.lower()
-    if format in [format.value for format in LogFormat]:
+    valid_formats = [fmt.name.lower() for fmt in LogFormat]
+
+    if format in valid_formats:
       # Update the settings
       settings.log_format = format
 
-      # Reconfigure logging with the new settings
-      settings.configure_logging()
+      # Reconfigure logging if the method exists
+      if hasattr(settings, 'configure_logging') and callable(getattr(settings, 'configure_logging')):
+        settings.configure_logging()
+      else:
+        logger.warning("Settings object does not have configure_logging method")
 
       # Log the change
-      logger = logging.getLogger(__name__)
       logger.debug(f"Log format changed to {format}")
 
       return f"Log format set to: {format}"
     else:
-      return f"Invalid log format. Valid options are: {', '.join([format.value for format in LogFormat])}"
+      return f"Invalid log format. Valid options are: {', '.join(valid_formats)}"
 
   @command(
     path=["get", "log-file"],
@@ -201,16 +291,16 @@ class SystemCommand(Command):
   @command(
     path=["set", "log-file"],
     description="Set the log file path",
-    help_text="Set the log file path (empty for console only)",
+    help_text="Set the path for log output file",
     parameters={
       "type": "object",
       "properties": {
-        "path": {
+        "file": {
           "type": "string",
-          "description": "Log file path (empty for console only)"
+          "description": "Log file path (use 'none' to disable file logging)"
         }
       },
-      "required": ["path"]
+      "required": ["file"]
     },
     returns={
       "type": "string",
@@ -218,22 +308,37 @@ class SystemCommand(Command):
     },
     ai_callable=True
   )
-  def set_log_file(self, settings: Settings, path: str) -> str:
+  def set_log_file(self, settings: Settings, file: str) -> str:
     """Set the log file path"""
-    # Update the settings
-    settings.log_file = path
-
-    # Reconfigure logging with the new settings
-    settings.configure_logging()
-
-    # Log the change
+    # Get logger at the beginning of the function
     logger = logging.getLogger(__name__)
-    if path:
-      logger.debug(f"Log file changed to {path}")
-      return f"Log file set to: {path}"
+
+    if file.lower() == "none":
+      # Disable file logging
+      settings.log_file = None
+      if hasattr(settings, 'configure_logging') and callable(getattr(settings, 'configure_logging')):
+        settings.configure_logging()
+      else:
+        logger.warning("Settings object does not have configure_logging method")
+      logger.debug("File logging disabled")
+      return "File logging disabled"
+
+    # Ensure the directory exists
+    log_dir = os.path.dirname(file)
+    if log_dir and not os.path.exists(log_dir):
+      try:
+        os.makedirs(log_dir)
+      except Exception as e:
+        return f"Error creating log directory: {str(e)}"
+
+    # Set the log file
+    settings.log_file = file
+    if hasattr(settings, 'configure_logging') and callable(getattr(settings, 'configure_logging')):
+      settings.configure_logging()
     else:
-      logger.debug("Logging to console only (log file disabled)")
-      return "Logging to console only (log file disabled)"
+      logger.warning("Settings object does not have configure_logging method")
+    logger.debug(f"Log file set to {file}")
+    return f"Log file set to: {file}"
 
   @command(
     path=["log", "status"],

@@ -3,6 +3,7 @@
 output.wav
 report.xml
 .claia_history
+claia.log
 
 old/
 data/

@@ -42,7 +42,7 @@ HISTORY_FILE = ".claia_history"
 MAX_HISTORY_LEN = 1000
 COMMAND_CHARACTER = ":"
 INPUT_CHARACTER = ":"
-
+DEFAULT_AGENT = AgentType.BOB
 
 
 ########################################################################
@@ -151,13 +151,20 @@ def main() -> None:
       # Process user input as either a command or a query
       if user_input and user_input[0] == COMMAND_CHARACTER:
         logger.debug(f"Processing as command: {user_input[1:]}")
-        result = command_registry.run(user_input[1:], settings)
-        logger.debug(f"Command result: {result.get_message()}")
+        result = Result()
+        result.message = command_registry.run(user_input[1:], settings)
+        logger.debug(f"Command result: {result.message}")
       else:
+        # Create a new conversation if one doesn't exist
         if not settings.active_conversation:
-          settings.active_conversation = Conversation(settings.files_directory)
+          settings.active_conversation = Conversation(
+            settings.files_directory,
+            registry=command_registry
+          )
+
+        # Set the active agent if one doesn't exist
         if not settings.active_agent:
-          settings.active_agent = AgentType.BOB
+          settings.active_agent = DEFAULT_AGENT
 
         settings.active_conversation.add_message(MessageRole.USER, user_input)
 

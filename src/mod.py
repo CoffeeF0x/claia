@@ -87,6 +87,10 @@ def load_modules(registry: Registry, modules_dir: str) -> Dict[str, Any]:
             module_instance._module_name = item
             module_instance._module_path = module_path
 
+            # Build the command map if it hasn't been built yet
+            if hasattr(module_instance, '_build_command_map') and not hasattr(module_instance, 'command_map'):
+                module_instance._build_command_map()
+
             # Add to modules dict
             modules[item] = module_instance
 
@@ -98,11 +102,13 @@ def load_modules(registry: Registry, modules_dir: str) -> Dict[str, Any]:
                 True     # Enabled by default
             )
 
-            logger.info(f"Loaded module: {item}")
+            logger.info(f"Loaded module: {item} with {len(module_instance.command_map) if hasattr(module_instance, 'command_map') else 0} commands")
         except Exception as e:
             logger.error(f"Error loading module '{item}': {str(e)}")
 
-    logger.info(f"Loaded {len(modules)} modules")
+    # Re-initialize the registry to ensure all commands are properly registered
+    registry.initialize_registry()
+    logger.info(f"Loaded {len(modules)} modules with a total of {len(registry.command_map)} commands")
     return modules
 
 
@@ -137,11 +143,15 @@ def list_available_modules(registry: Registry, modules_dir: str) -> List[Dict[st
 
         # Check if module is loaded
         is_loaded = False
-        if hasattr(registry, "command_modules"):
-            for cmd in registry.get_enabled_command_instances():
-                if hasattr(cmd, "_module_name") and cmd._module_name == item:
-                    is_loaded = True
-                    break
+        cmd_count = 0
+
+        if hasattr(registry, "command_modules") and item in registry.command_modules:
+            is_loaded = True
+            # Get the number of commands from this module
+            if hasattr(registry, "command_map"):
+                for cmd_name in registry.command_map:
+                    if cmd_name.startswith(f"modules_{item}_"):
+                        cmd_count += 1
 
         # Add module info
         modules_info.append({
@@ -149,7 +159,8 @@ def list_available_modules(registry: Registry, modules_dir: str) -> List[Dict[st
             "path": module_path,
             "has_module_py": os.path.isfile(module_file),
             "has_readme": os.path.isfile(readme_file),
-            "is_loaded": is_loaded
+            "is_loaded": is_loaded,
+            "command_count": cmd_count
         })
 
     return sorted(modules_info, key=lambda x: x["name"])
