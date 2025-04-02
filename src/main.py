@@ -1,21 +1,19 @@
 # TODO:
-# - create new prompts or update existing (need to move prompts to json files)
 # - add streaming support
 # - models should be chosen by the user via key, and passed to the ai via another key pair in its definition
 # - add ability to rename conversations, and perhaps have ai name conversations automatically
-# - create an option to enable a server that serves and updates md files, and sync conversations to md files
+# - create an option to enable a server that serves and updates md files, and sync conversations to md files?
 # - Needs a way to filter models (since there are lots) (model list partname?)
 # - function calling doesn't work on most functions (the function calling name is just the final leaf rather than a distinct function name, which is leading to collisions)
-# - run single commands from cli, for example: claia transcribe --file <audio-file>
 # - if a command has an alias, or perhaps just if it's alias matches the root of that path the rest of the commands aren't displayed (in help or executable, test by adding list alias to mc list instances)
-# - prompt no longer gets applied to the conversation (possibly just missed updating commands)
-# - since model layer doesn't process conversations, it needs to compare the capabilities against the sent request, if there's content that the model doesn't support throw a warning, maybe also trim the request to the model's capabilities
-# - each command should have a small object to define flags, this will allow us to seperate global flags from command flags
-# - create a command class to set parameters (these should be saved to a .env file for now)
+# - perhaps have the model layer compare the capabilities against the sent request, if there's content that the model doesn't support throw a warning, maybe also trim the request to the model's capabilities
+# - each command should have a small object to define flags, this will allow us to seperate global flags from command flags?
+# - update system command to allow settings updates (and save to .env file?)
 # - make process queue run in its own thread (so we can have async message processing)
-# - update commands to support kwargs so we can pass parameters without message="asdf" for example and just pass something like "asdf" directly
-# - update the rest of the commands now that the commands module has been overhauled
+# - update commands to support kwargs so we can pass parameters without message="asdf" for example and just pass something like "asdf" directly (this works with positional args)
+# - run commands from clie with optional --flags processing instead of arg=value style, for example: claia transcribe --file <audio-file>
 # - either conversation list doesn't show all conversations or conversations aren't getting saved
+# - create new prompts or update existing (need to move prompts to json files)
 # - prompt doesn't apply to the active conversation (if there's an active conversation, it should apply to it)
 # - add way to attempt to load models not in the definitions by creating a default based on source and if source not selected, then attempt to use the name to identify the source
 
@@ -48,6 +46,7 @@ MAX_HISTORY_LEN = 1000
 COMMAND_CHARACTER = ":"
 INPUT_CHARACTER = ":"
 DEFAULT_AGENT = AgentType.BOB
+
 
 
 ########################################################################
@@ -224,6 +223,7 @@ def main() -> None:
             print(process.conversation.get_latest_message().content[len(response.content):])
           else:
             print(process.conversation.get_latest_message().content)
+          process.conversation.save()
         elif process.status == ProcessStatus.FAILED:
           logger.error(f"Process failed: {process.error}")
         elif process.status == ProcessStatus.CANCELLED:
