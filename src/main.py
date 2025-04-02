@@ -17,6 +17,7 @@
 # - update the rest of the commands now that the commands module has been overhauled
 # - either conversation list doesn't show all conversations or conversations aren't getting saved
 # - prompt doesn't apply to the active conversation (if there's an active conversation, it should apply to it)
+# - add way to attempt to load models not in the definitions by creating a default based on source and if source not selected, then attempt to use the name to identify the source
 
 # External dependencies
 import readline
