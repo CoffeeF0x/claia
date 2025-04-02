@@ -40,8 +40,9 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
   ("local_llm_base_url",                "",            True,  "LocalLLM Base URL"),
 
   # Directories
-  ("files_directory",                   "storage",     True,  "Directory for files"),
-  ("modules_directory",                 "modules",     True,  "Directory for modules"),
+  ("files_directory",                   "storage",     True,  "Directory for generated, converted, or imported files"),
+  ("modules_directory",                 "modules",     True,  "Directory for claia modules"),
+  ("models_directory",                  "models",      True,  "Directory for model files"),
 
   # Model Settings
   ("default_model",                     "",            True,  "Default model name"),

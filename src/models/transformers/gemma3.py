@@ -7,6 +7,8 @@ from typing import List, Dict, Optional, Union, Any
 
 # Internal dependencies
 from .base import TransformersModel, TransformersLocalModel, DEFAULT_SETTINGS
+from files import Conversation
+from enums import MessageRole
 
 
 
@@ -93,15 +95,44 @@ class Gemma3LocalModel(TransformersLocalModel):
       logger.error(f"Error loading Gemma 3 model: {str(e)}")
       raise
 
-  def generate(self, messages: list, **kwargs) -> str:
+  def generate(self, conversation: Conversation, **kwargs) -> str:
     """Generate a response for Gemma 3 model.
 
     Handles both text-only and multimodal inputs appropriately.
+
+    Args:
+        conversation: The Conversation object containing messages
+        **kwargs: Additional generation parameters
+
+    Returns:
+        str: The generated response text
     """
     if not self.is_loaded():
       self.load()
 
     logger.info("Generating response with Gemma 3")
+
+    # Format messages from the conversation
+    formatted_messages = []
+
+    # Add system prompt if available
+    if conversation.prompt:
+      formatted_messages.append({
+        "role": "system",
+        "content": conversation.prompt
+      })
+
+    # Get user and assistant messages
+    conversation_messages = conversation.get_messages([MessageRole.USER, MessageRole.ASSISTANT])
+
+    # Convert to format expected by the model
+    for message in conversation_messages:
+      formatted_messages.append({
+        "role": message.speaker.value,
+        "content": message.content
+      })
+
+    logger.debug(f"Formatted {len(formatted_messages)} messages for generation")
 
     # Apply model-specific generation settings
     generation_params = self.model_params.get('generation', {}).copy()
@@ -113,7 +144,7 @@ class Gemma3LocalModel(TransformersLocalModel):
 
       # Convert messages to inputs using the processor
       inputs = self.processor.apply_chat_template(
-        messages,
+        formatted_messages,
         tokenize=True,
         return_dict=True,
         return_tensors="pt",
@@ -135,7 +166,7 @@ class Gemma3LocalModel(TransformersLocalModel):
       logger.debug("Using text-only generation")
 
       # For text-only, use the standard tokenizer flow
-      model_inputs = self.tokenizer.apply_chat_template(messages, return_tensors="pt", add_generation_prompt=True).to(self.device)
+      model_inputs = self.tokenizer.apply_chat_template(formatted_messages, return_tensors="pt", add_generation_prompt=True).to(self.device)
 
       model_outputs = self.model.generate(
         model_inputs,
@@ -146,6 +177,9 @@ class Gemma3LocalModel(TransformersLocalModel):
 
       output_token_ids = model_outputs[0][len(model_inputs[0]):]
       response = self.tokenizer.decode(output_token_ids, skip_special_tokens=True)
+
+    # Add the response as an assistant message to the conversation
+    conversation.add_message(MessageRole.ASSISTANT, response)
 
     logger.info("Response generated successfully")
     logger.debug(f"Generated response: {response}")

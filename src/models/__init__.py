@@ -250,7 +250,7 @@ def create_transformers_model(model_class: Any, model_id: str, settings: Optiona
   """Create a transformers model instance with appropriate settings."""
   # Get the Hugging Face API key
   api_key = get_api_key_for_source("transformers", settings)
-  model_path = settings.model_directory if settings else "models"
+  model_path = settings.models_directory if settings else "models"
 
   # Determine the best device to use
   device = getattr(settings, 'device', None)

@@ -8,6 +8,8 @@ from diffusers import StableDiffusionPipeline, DiffusionPipeline, EulerDiscreteS
 
 # Internal dependencies
 from .base import TransformersLocalModel, TransformersModel, DEFAULT_SETTINGS
+from files import Conversation
+from enums import MessageRole
 
 
 
@@ -61,6 +63,101 @@ class DiffusionLocalModel(TransformersLocalModel):
     # If we're not deferring loading, explicitly call load now
     if not defer_loading:
       self.load()
+
+  def generate(self, conversation: Conversation, **kwargs) -> Image.Image:
+    """
+    Generate an image based on a conversation.
+
+    This method extracts the last user message from the conversation
+    to use as a prompt for image generation.
+
+    Args:
+        conversation: The conversation object containing the message history
+        **kwargs: Additional generation parameters for the diffusion model
+
+    Returns:
+        Generated PIL Image
+    """
+    if not self.is_loaded():
+      self.load()
+
+    logger.info("Generating image from conversation")
+
+    # Get the last user message as the prompt
+    user_messages = conversation.get_messages(MessageRole.USER)
+
+    if not user_messages:
+      logger.warning("No user messages found in conversation")
+      raise ValueError("Conversation contains no user messages to use as prompt")
+
+    # Use the most recent user message as the prompt
+    prompt = user_messages[-1].content
+    logger.debug(f"Extracted prompt from conversation: '{prompt[:50]}...' (truncated)")
+
+    # Generate the image
+    image = self.generate_image(prompt, **kwargs)
+
+    # Add a system message indicating the image was generated
+    conversation.add_message(
+      MessageRole.SYSTEM,
+      f"Generated image from prompt: '{prompt[:100]}...' (truncated)"
+    )
+
+    return image
+
+  def generate_image(self, prompt: str, **kwargs) -> Image.Image:
+    """
+    Generate an image from a text prompt.
+
+    Args:
+        prompt: Text prompt to generate image from
+        **kwargs: Additional generation parameters
+
+    Returns:
+        Generated PIL Image
+    """
+    if not self.is_loaded():
+      self.load()
+
+    logger.info(f"Generating image with prompt: '{prompt[:50]}...' (truncated)")
+
+    # Combine default parameters with model parameters and user parameters
+    generation_params = self.default_image_params.copy()
+    model_gen_params = self.model_params.get('generation', {})
+    generation_params.update(model_gen_params)
+    generation_params.update(kwargs)
+
+    logger.debug(f"Generation parameters: {generation_params}")
+
+    # Extract parameters for the pipeline
+    height = generation_params.pop("height", 512)
+    width = generation_params.pop("width", 512)
+    num_inference_steps = generation_params.pop("num_inference_steps", 50)
+    guidance_scale = generation_params.pop("guidance_scale", 7.5)
+    negative_prompt = generation_params.pop("negative_prompt", None)
+    guidance_rescale = generation_params.pop("guidance_rescale", 0.7)
+
+    # Generate the image
+    try:
+      output = self.pipeline(
+        prompt=prompt,
+        height=height,
+        width=width,
+        num_inference_steps=num_inference_steps,
+        guidance_scale=guidance_scale,
+        negative_prompt=negative_prompt,
+        guidance_rescale=guidance_rescale,
+        **generation_params
+      )
+
+      # Get the image from the output
+      image = output.images[0]
+
+      logger.info("Image generated successfully")
+      return image
+    except Exception as e:
+      logger.error(f"Error generating image: {str(e)}")
+      raise
 
   def load(self) -> None:
     """Load the appropriate diffusion model."""
@@ -158,60 +255,6 @@ class DiffusionLocalModel(TransformersLocalModel):
       logger.error(f"Error loading diffusion model: {str(e)}")
       raise
 
-  def generate_image(self, prompt: str, **kwargs) -> Image.Image:
-    """
-    Generate an image from a text prompt.
-
-    Args:
-        prompt: Text prompt to generate image from
-        **kwargs: Additional generation parameters
-
-    Returns:
-        Generated PIL Image
-    """
-    if not self.is_loaded():
-      self.load()
-
-    logger.info(f"Generating image with prompt: '{prompt[:50]}...' (truncated)")
-
-    # Combine default parameters with model parameters and user parameters
-    generation_params = self.default_image_params.copy()
-    model_gen_params = self.model_params.get('generation', {})
-    generation_params.update(model_gen_params)
-    generation_params.update(kwargs)
-
-    logger.debug(f"Generation parameters: {generation_params}")
-
-    # Extract parameters for the pipeline
-    height = generation_params.pop("height", 512)
-    width = generation_params.pop("width", 512)
-    num_inference_steps = generation_params.pop("num_inference_steps", 50)
-    guidance_scale = generation_params.pop("guidance_scale", 7.5)
-    negative_prompt = generation_params.pop("negative_prompt", None)
-    guidance_rescale = generation_params.pop("guidance_rescale", 0.7)
-
-    # Generate the image
-    try:
-      output = self.pipeline(
-        prompt=prompt,
-        height=height,
-        width=width,
-        num_inference_steps=num_inference_steps,
-        guidance_scale=guidance_scale,
-        negative_prompt=negative_prompt,
-        guidance_rescale=guidance_rescale,
-        **generation_params
-      )
-
-      # Get the image from the output
-      image = output.images[0]
-
-      logger.info("Image generated successfully")
-      return image
-    except Exception as e:
-      logger.error(f"Error generating image: {str(e)}")
-      raise
-
   def download(self, model_path: str) -> None:
     """
     Download the diffusion model.
@@ -292,81 +335,59 @@ class DiffusionLocalModel(TransformersLocalModel):
 ########################################################################
 class DiffusionModel(TransformersModel):
   """
-  Specialized implementation for diffusion-based image generation models.
+  A class-based implementation of diffusion model generation.
+
+  Specialization of TransformersModel for image generation models.
   """
 
   def __init__(self, model_id: str, model_path: str = "models", defer_loading: bool = False,
                device: str = "cpu", api_key: Optional[str] = None):
     """
-    Initialize a diffusion model.
+    Initialize a diffusion model for image generation.
 
     Args:
-        model_id: The model identifier (also used as HF repo ID)
+        model_id: The model identifier (HuggingFace repo ID)
         model_path: Base path where models are stored
         defer_loading: Whether to defer loading the model
         device: Device to load the model on
         api_key: Hugging Face API key for authentication
     """
-    # Initialize essential attributes
-    self.model_instance = None
-    self.model_path = model_path
-    self.defer_loading = defer_loading
-    self.device = device
-    self.loaded = False
-    self.api_key = api_key
-
-    logger.debug(f"Initializing DiffusionModel for {model_id}")
-    if api_key:
-      logger.debug(f"API key provided (first 5 chars: {api_key[:5]})")
-    else:
-      logger.debug("No API key provided")
-
-    # Set model parameters with default settings
-    # Default to the Euler scheduler which is recommended for most use cases
-    self.model_params = {
-      'model': {},
-      'scheduler': 'euler',
-      'optimizations': ['attention_slicing'],
-      'generation': {
-        'height': 512,
-        'width': 512,
-        'num_inference_steps': 50,
-        'guidance_scale': 7.5,
-        'guidance_rescale': 0.7
-      }
-    }
-
-    # Call super to initialize the base class
-    super().__init__(model_id=model_id, model_path=model_path, defer_loading=True, device=device, api_key=api_key)
-
-    # Create the actual model instance for delegation
-    folder_name = self.model_name.split("/")[-1]
-    self.full_model_path = os.path.join(model_path, folder_name)
-    logger.debug(f"Full model path: {self.full_model_path}")
-
-    # Only create the instance if not deferring loading
-    if not defer_loading:
-      logger.debug("Not deferring loading, creating model instance")
-      self._create_model_instance()
-    else:
-      logger.debug("Deferring loading, model instance will be created later")
+    super().__init__(model_id, model_path, defer_loading, device, api_key)
 
   def _create_model_instance(self) -> None:
-    """Create the underlying diffusion model instance."""
+    """Create the underlying DiffusionLocalModel instance."""
+    logger.debug(f"Creating diffusion model instance for {self.model_name}")
     try:
-      logger.info(f"Creating DiffusionLocalModel instance for {self.model_name}")
       self.model_instance = DiffusionLocalModel(
         model_name=self.model_name,
-        model_path=self.full_model_path,
+        model_path=self.model_path,
         defer_loading=self.defer_loading,
         device=self.device,
         model_params=self.model_params,
         api_key=self.api_key
       )
-      logger.info(f"Successfully created model instance for {self.model_name}")
+      logger.debug("Diffusion model instance created successfully")
     except Exception as e:
-      logger.error(f"Error creating model instance for {self.model_name}: {str(e)}")
-      raise ValueError(f"Failed to create model instance: {str(e)}")
+      logger.error(f"Error creating diffusion model instance: {str(e)}")
+      raise
+
+  def generate(self, conversation: Conversation, **kwargs) -> Image.Image:
+    """
+    Generate an image based on a conversation.
+
+    Args:
+        conversation: Conversation object containing the message history
+        **kwargs: Additional generation parameters
+
+    Returns:
+        Generated PIL Image
+    """
+    if not self.is_loaded():
+      logger.debug("Model not loaded, loading now")
+      self.load()
+
+    logger.debug("Generating image through delegated instance")
+    return self.model_instance.generate(conversation, **kwargs)
 
   def generate_image(self, prompt: str, **kwargs) -> Image.Image:
     """

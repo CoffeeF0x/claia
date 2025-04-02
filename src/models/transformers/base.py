@@ -10,6 +10,8 @@ from huggingface_hub import login
 # Internal dependencies
 from ..base import LocalModel, APIModel
 from settings import Settings
+from files import Conversation
+from enums import MessageRole
 
 
 
@@ -117,19 +119,51 @@ class TransformersLocalModel(LocalModel):
     logging.debug(f"Detokenizing tokens: {tokens}")
     return self.tokenizer.decode(tokens, skip_special_tokens=True)
 
-  def generate(self, messages: list, **kwargs) -> str:
+  def generate(self, conversation: Conversation, **kwargs) -> str:
+    """
+    Generate a response using the model based on a conversation.
+
+    Args:
+        conversation: The Conversation object containing messages
+        **kwargs: Additional generation parameters
+
+    Returns:
+        str: The generated response text
+    """
     if not self.is_loaded():
       self.load()
 
     logging.info("Generating response")
-    logging.debug(f"Input messages: {messages}")
+
+    # Format messages from the conversation
+    formatted_messages = []
+
+    # Add system prompt if available
+    if conversation.prompt:
+      formatted_messages.append({
+        "role": "system",
+        "content": conversation.prompt
+      })
+
+    # Get user and assistant messages
+    conversation_messages = conversation.get_messages([MessageRole.USER, MessageRole.ASSISTANT])
+
+    # Convert to format expected by tokenizer
+    for message in conversation_messages:
+      formatted_messages.append({
+        "role": message.speaker.value,
+        "content": message.content
+      })
+
+    logging.debug(f"Input messages: {formatted_messages}")
     logging.debug(f"Generation parameters: {kwargs}")
 
     # Apply model-specific generation settings
     generation_params = self.model_params.get('generation', {}).copy()
     generation_params.update(kwargs)
 
-    model_inputs = self.tokenizer.apply_chat_template(messages, return_tensors="pt", add_generation_prompt=True).to(self.device)
+    # Generate the response
+    model_inputs = self.tokenizer.apply_chat_template(formatted_messages, return_tensors="pt", add_generation_prompt=True).to(self.device)
 
     model_outputs = self.model.generate(
       model_inputs,
@@ -140,6 +174,10 @@ class TransformersLocalModel(LocalModel):
 
     output_token_ids = model_outputs[0][len(model_inputs[0]):]
     response = self.detokenize(output_token_ids)
+
+    # Add the response as an assistant message to the conversation
+    conversation.add_message(MessageRole.ASSISTANT, response)
+
     logging.info("Response generated successfully")
     logging.debug(f"Generated response: {response}")
     return response
@@ -249,8 +287,8 @@ class TransformersModel(LocalModel):
 
   def _create_model_instance(self) -> None:
     """Create the underlying model instance."""
+    logger.debug(f"Creating model instance for {self.model_name}")
     try:
-      logger.info(f"Creating TransformersLocalModel instance for {self.model_name}")
       self.model_instance = TransformersLocalModel(
         model_name=self.model_name,
         model_path=self.model_path,
@@ -259,59 +297,78 @@ class TransformersModel(LocalModel):
         model_params=self.model_params,
         api_key=self.api_key
       )
-      logger.info(f"Successfully created model instance for {self.model_name}")
+      logger.debug("Model instance created successfully")
     except Exception as e:
-      logger.error(f"Error creating model instance for {self.model_name}: {str(e)}")
-      raise ValueError(f"Failed to create model instance: {str(e)}")
+      logger.error(f"Error creating model instance: {str(e)}")
+      raise
 
   def load(self) -> None:
     """Load the model."""
-    logger.debug(f"Loading model {self.model_name}")
+    logger.debug("Loading model through delegated instance")
     if not hasattr(self, 'model_instance') or self.model_instance is None:
-      logger.debug("No model instance, creating one")
+      logger.debug("Creating model instance first")
       self._create_model_instance()
-    logger.debug("Loading model instance")
     self.model_instance.load()
-    self.loaded = True
-    logger.debug("Model loaded successfully")
+    self.loaded = self.model_instance.is_loaded()
+    logger.debug(f"Model loaded status: {self.loaded}")
 
   def is_loaded(self) -> bool:
     """Check if the model is loaded."""
-    if not hasattr(self, 'model_instance') or self.model_instance is None:
-      return False
-    return self.model_instance.is_loaded()
+    if hasattr(self, 'model_instance') and self.model_instance is not None:
+      logger.debug("Checking loaded status through model instance")
+      return self.model_instance.is_loaded()
+    logger.debug("No model instance, returning false for is_loaded")
+    return False
 
   def unload(self) -> None:
     """Unload the model."""
     if hasattr(self, 'model_instance') and self.model_instance is not None:
+      logger.debug("Unloading model through delegated instance")
       self.model_instance.unload()
     self.loaded = False
 
   def reset_context(self) -> None:
-    """Reset the model context."""
+    """Reset the context."""
     if hasattr(self, 'model_instance') and self.model_instance is not None:
+      logger.debug("Resetting context through delegated instance")
       self.model_instance.reset_context()
 
-  def generate(self, messages: list, **kwargs) -> str:
-    """Generate a response to the given messages."""
-    if not hasattr(self, 'model_instance') or self.model_instance is None:
-      self._create_model_instance()
-    return self.model_instance.generate(messages, **kwargs)
+  def generate(self, conversation: Conversation, **kwargs) -> str:
+    """
+    Generate a response using the model based on a conversation.
+
+    Args:
+        conversation: The Conversation object containing messages
+        **kwargs: Additional generation parameters
+
+    Returns:
+        str: The generated response text
+    """
+    if not self.is_loaded():
+      logger.debug("Model not loaded, loading now")
+      self.load()
+
+    logger.debug("Generating response through delegated instance")
+    return self.model_instance.generate(conversation, **kwargs)
 
   def download(self, model_path: str) -> None:
     """Download the model."""
-    if not hasattr(self, 'model_instance') or self.model_instance is None:
-      self._create_model_instance()
-    self.model_instance.download(model_path)
+    if hasattr(self, 'model_instance') and self.model_instance is not None:
+      logger.debug("Downloading model through delegated instance")
+      self.model_instance.download(model_path)
 
   def tokenize(self, text: str) -> List[int]:
-    """Tokenize the text."""
-    if not hasattr(self, 'model_instance') or self.model_instance is None:
-      self._create_model_instance()
-    return self.model_instance.tokenize(text)
+    """Tokenize text."""
+    if hasattr(self, 'model_instance') and self.model_instance is not None:
+      logger.debug("Tokenizing through delegated instance")
+      return self.model_instance.tokenize(text)
+    logger.error("Cannot tokenize: No model instance available")
+    raise RuntimeError("No model instance available for tokenization")
 
   def detokenize(self, tokens: List[int]) -> str:
-    """Detokenize the tokens."""
-    if not hasattr(self, 'model_instance') or self.model_instance is None:
-      self._create_model_instance()
-    return self.model_instance.detokenize(tokens)
+    """Detokenize tokens."""
+    if hasattr(self, 'model_instance') and self.model_instance is not None:
+      logger.debug("Detokenizing through delegated instance")
+      return self.model_instance.detokenize(tokens)
+    logger.error("Cannot detokenize: No model instance available")
+    raise RuntimeError("No model instance available for detokenization")
