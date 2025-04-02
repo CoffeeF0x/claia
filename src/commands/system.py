@@ -1,12 +1,12 @@
 import logging
 import os
+from os import name, system
 
 # Internal dependencies
 from .base import Command, command
 from results import Result
 from settings import Settings
 from enums import LogLevel, LogFormat
-from utilities import clear
 
 
 
@@ -14,6 +14,14 @@ from utilities import clear
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
+
+
+# Clear the console
+def clear() -> None:
+  if name == "posix":
+    system("clear")
+  else:
+    system("cls")
 
 
 
