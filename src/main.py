@@ -12,8 +12,9 @@
 # - since model layer doesn't process conversations, it needs to compare the capabilities against the sent request, if there's content that the model doesn't support throw a warning, maybe also trim the request to the model's capabilities
 # - each command should have a small object to define flags, this will allow us to seperate global flags from command flags
 # - create a command class to set parameters (these should be saved to a .env file for now)
-# - make process queue run in its own thread (for simpler async processing)
-# - module commands don't work from cli
+# - make process queue run in its own thread (so we can have async message processing)
+# - update commands to support kwargs so we can pass parameters without message="asdf" for example and just pass something like "asdf" directly
+# - update the rest of the commands now that the commands module has been overhauled
 
 # External dependencies
 import readline
@@ -131,6 +132,20 @@ def main() -> None:
     logger.debug(f"Active agent: {settings.active_agent}")
     logger.debug(f"Active prompt: {settings.active_prompt.prompt_name if settings.active_prompt else 'None'}")
 
+    # Check for and process command line arguments
+    if settings.extra_args:
+      # Process command line arguments using the registry
+      logger.info(f"Processing command line arguments: {' '.join(settings.extra_args)}")
+      result = command_registry.run(settings.extra_args, settings)
+
+      # Display the result
+      if result.get_message():
+        print(result.get_message())
+
+      # Exit after running the command
+      logger.info("CLAIA exiting after CLI command execution")
+      return
+
     logger.info("CLAIA initialization complete, entering main loop")
 
     # Main application loop
@@ -152,8 +167,8 @@ def main() -> None:
       # Process user input as either a command or a query
       if user_input and user_input[0] == COMMAND_CHARACTER:
         logger.debug(f"Processing as command: {user_input[1:]}")
-        result = command_registry.run(user_input[1:], settings)
-        logger.debug(f"Command result: {result.message}")
+        result = command_registry.run(user_input[1:].split(), settings)
+        print(result.message)
       else:
         # Create a new conversation if one doesn't exist
         if not settings.active_conversation:
@@ -214,6 +229,7 @@ def main() -> None:
       # Display any error messages
       if result.is_error():
         logger.warning(f"Error result: {result.get_message()}")
+        print(f"Error: {result.get_message()}")
 
     # Display exit message
     logger.info(f"CLAIA application exiting: {result.get_message()}")

@@ -409,50 +409,83 @@ class Registry:
       logger.exception(f"Error processing tool '{tool_name}': {str(e)}")
       return Result.fail(f"Error processing tool: {str(e)}")
 
-  def run(self, input_str: str, settings: Settings) -> Result:
+  def run(self, input_arg, settings: Settings) -> Result:
     """
-    Run a command from the input string.
+    Run a command from either a string input or list of arguments.
 
     Args:
-        input_str: The input command string
+        input_arg: Either a string command or list of command arguments
         settings: Settings object
 
     Returns:
         Result of the command execution
     """
-    commands = input_str.split()
-    result = self.cleanup_commands(commands, settings)
+    # Convert input to a list of arguments if it's a string
+    if isinstance(input_arg, str):
+      args = input_arg.split()
+    else:
+      args = input_arg.copy() if input_arg else []
 
+    # Clean up the commands
+    result = self.cleanup_commands(args, settings)
     if result.is_error():
       self.display_help()
-    elif commands[0] == "help":
-      if len(commands) > 1:
-        self.display_command_help(commands[1].lower())
+      return result
+
+    # Handle empty input
+    if not args:
+      return Result.fail("No command provided")
+
+    # Check for help command
+    if args[0] == "help":
+      if len(args) > 1:
+        self.display_command_help(args[1].lower())
       else:
         self.display_help()
-      result = Result()
-    else:
-      # Check for top-level CLI command
-      cli_key = f"cli_{commands[0]}"
-      if cli_key in self._command_map:
-        cmd_entry = self._command_map[cli_key]
-        cmd_instance = cmd_entry["instance"]
-        cmd_details = cmd_entry["details"]
+      return Result()
 
-        if cmd_details.get("is_top_level", False):
-          # Execute top-level command directly
-          func = cmd_details["function"]
-          try:
-            result = func(settings)
-          except Exception as e:
-            result = Result.fail(f"Error executing command: {str(e)}")
-        else:
-          # Pass to module's execute method
-          result = cmd_instance.execute(commands, settings)
+    # Check for module command (format: module_name command_name [params])
+    if len(args) >= 2:
+      # Convert space-separated command to underscore format expected by execute_tool
+      module_name = args[0]
+      cmd_name = args[1]
+      full_command = f"modules_{module_name}_{cmd_name}"
+
+      # Extract any parameters from remaining args
+      params = {}
+      for i in range(2, len(args)):
+        arg = args[i]
+        if "=" in arg:
+          key, value = arg.split("=", 1)
+          params[key] = value
+
+      # Try to execute the command directly
+      if full_command in self._command_map:
+        logger.info(f"Executing module command: {full_command}")
+        return self.execute_tool(full_command, params, settings)
+
+    # Check for top-level CLI command
+    cli_key = f"cli_{args[0]}"
+    if cli_key in self._command_map:
+      cmd_entry = self._command_map[cli_key]
+      cmd_instance = cmd_entry["instance"]
+      cmd_details = cmd_entry["details"]
+
+      if cmd_details.get("is_top_level", False):
+        # Execute top-level command directly
+        func = cmd_details["function"]
+        try:
+          result = func(settings)
+        except Exception as e:
+          result = Result.fail(f"Error executing command: {str(e)}")
       else:
-        result = Result.fail(f"Unrecognized command: {commands[0]}")
-        self.display_help()
+        # Pass to module's execute method
+        result = cmd_instance.execute(args, settings)
+      return result
 
+    # Unrecognized command
+    result = Result.fail(f"Unrecognized command: {args[0]}")
+    self.display_help()
     return result
 
   def display_help(self) -> None:
@@ -502,21 +535,3 @@ class Registry:
     else:
       print(f"Unknown command: {command_name}")
       self.display_help()
-
-  # Keep the old method for backward compatibility, but mark as deprecated
-  def execute_command_by_name(self, function_name: str, parameters: Dict[str, Any], settings: Settings) -> str:
-    """
-    Execute a command by its function name with the given parameters.
-
-    DEPRECATED: Use execute_tool instead.
-
-    Args:
-        function_name: The function name (e.g., "system_set_log_level")
-        parameters: Dictionary of parameter values
-        settings: Settings object
-
-    Returns:
-        Result of the command as a string
-    """
-    logger.warning("execute_command_by_name is deprecated, use execute_tool instead")
-    return self.execute_tool(function_name, parameters, settings)
