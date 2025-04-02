@@ -56,7 +56,7 @@ def require_zammad_config(func: Callable[..., T]) -> Callable[..., T]:
     if not zammad_settings.is_configured():
       result = Result()
       result.message = f"Zammad is not properly configured. Please set TOKEN_ZAMMAD and ZAMMAD_BASEURL environment variables."
-      result.status = "error"
+      result.success = False
       return result
 
     # Create Zammad API client and pass it to the function
