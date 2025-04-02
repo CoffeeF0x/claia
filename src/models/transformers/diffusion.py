@@ -1,15 +1,16 @@
 # External dependencies
 import os
+import io
 import logging
 import torch
-from typing import List, Dict, Optional, Union, Any
+from typing import Dict, Optional, Any
 from PIL import Image
-from diffusers import StableDiffusionPipeline, DiffusionPipeline, EulerDiscreteScheduler, DPMSolverMultistepScheduler
+from diffusers import StableDiffusionPipeline
 
 # Internal dependencies
-from .base import TransformersLocalModel, TransformersModel, DEFAULT_SETTINGS
-from files import Conversation
-from enums import MessageRole
+from .base import TransformersModel
+from files import Conversation, ImageFile
+from enums import MessageRole, ModelCapability
 
 
 
@@ -23,17 +24,19 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                               CLASSES                                #
 ########################################################################
-class DiffusionLocalModel(TransformersLocalModel):
+class DiffusionModel(TransformersModel):
   """
-  Specialized implementation for diffusion-based image generation models.
-  Handles text-to-image generation including Stable Diffusion variants.
+  Simple diffusion model for image generation using Stable Diffusion.
+
+  This class handles text-to-image generation and attaches the resulting
+  images to conversation messages.
   """
 
   def __init__(self,
                model_name: str,
-               model_path: str,
+               model_path: str = "models",
                defer_loading: bool = False,
-               device: str = "cpu",
+               device: str = "cuda" if torch.cuda.is_available() else "cpu",
                model_params: Optional[Dict[str, Any]] = None,
                api_key: Optional[str] = None):
     """
@@ -42,42 +45,72 @@ class DiffusionLocalModel(TransformersLocalModel):
     Args:
         model_name: Model identifier (HuggingFace repo ID)
         model_path: Path to store the model
-        defer_loading: Whether to defer loading
-        device: Device to load on
-        model_params: Additional parameters
-        api_key: Hugging Face API key
+        defer_loading: Whether to defer loading until generation
+        device: Device to load the model on (defaults to CUDA if available)
+        model_params: Additional parameters for the model
+        api_key: Hugging Face API key for authentication
     """
     # Set default image generation parameters
     self.default_image_params = {
       "height": 512,
       "width": 512,
-      "num_inference_steps": 50,
+      "num_inference_steps": 30,
       "guidance_scale": 7.5,
-      "negative_prompt": None,
-      "guidance_rescale": 0.7
+      "negative_prompt": None
     }
 
-    # Explicitly call parent init
-    super().__init__(model_name, model_path, True, device, model_params, api_key)
+    # Initialize the pipeline to None
+    self.pipeline = None
 
-    # If we're not deferring loading, explicitly call load now
-    if not defer_loading:
-      self.load()
+    # Call parent init with the TTI capability
+    super().__init__(
+      model_name=model_name,
+      model_path=model_path,
+      defer_loading=defer_loading,
+      device=device,
+      model_params=model_params,
+      api_key=api_key,
+      capability=ModelCapability.TTI
+    )
 
-  def generate(self, conversation: Conversation, **kwargs) -> Image.Image:
+  def _load_image_model(self) -> None:
+    """Load a text-to-image diffusion model."""
+    logger.debug(f"Loading diffusion model from {self.model_path}")
+
+    # Use float16 precision on GPU, float32 on CPU
+    torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+    # Load the stable diffusion pipeline
+    self.pipeline = StableDiffusionPipeline.from_pretrained(
+      self.model_path,
+      torch_dtype=torch_dtype,
+      use_safetensors=True,
+      device_map=self.device
+    )
+
+    # Enable memory optimizations on GPU
+    if torch.cuda.is_available():
+      self.pipeline.enable_attention_slicing()
+      try:
+        self.pipeline.enable_xformers_memory_efficient_attention()
+        logger.debug("Enabled xformers memory efficient attention")
+      except Exception as e:
+        logger.debug(f"Could not enable xformers: {str(e)}")
+
+    logger.debug("Diffusion model loaded successfully")
+
+  def _generate_impl(self, conversation: Conversation, **kwargs) -> str:
     """
-    Generate an image based on a conversation.
-
-    This method extracts the last user message from the conversation
-    to use as a prompt for image generation.
+    Generate an image based on the conversation and attach it to a message.
 
     Args:
         conversation: The conversation object containing the message history
-        **kwargs: Additional generation parameters for the diffusion model
+        **kwargs: Additional generation parameters
 
     Returns:
-        Generated PIL Image
+        str: A message indicating the image was generated
     """
+    # Ensure the model is loaded
     if not self.is_loaded():
       self.load()
 
@@ -87,55 +120,28 @@ class DiffusionLocalModel(TransformersLocalModel):
     user_messages = conversation.get_messages(MessageRole.USER)
 
     if not user_messages:
-      logger.warning("No user messages found in conversation")
-      raise ValueError("Conversation contains no user messages to use as prompt")
+      error_msg = "No user messages found in conversation"
+      logger.warning(error_msg)
+      conversation.add_message(MessageRole.ASSISTANT,
+                              f"Error: {error_msg}. Please provide a prompt.")
+      return f"Error: {error_msg}"
 
     # Use the most recent user message as the prompt
     prompt = user_messages[-1].content
-    logger.debug(f"Extracted prompt from conversation: '{prompt[:50]}...' (truncated)")
+    logger.debug(f"Using prompt: '{prompt[:50]}...' (truncated)")
 
-    # Generate the image
-    image = self.generate_image(prompt, **kwargs)
-
-    # Add a system message indicating the image was generated
-    conversation.add_message(
-      MessageRole.SYSTEM,
-      f"Generated image from prompt: '{prompt[:100]}...' (truncated)"
-    )
-
-    return image
-
-  def generate_image(self, prompt: str, **kwargs) -> Image.Image:
-    """
-    Generate an image from a text prompt.
-
-    Args:
-        prompt: Text prompt to generate image from
-        **kwargs: Additional generation parameters
-
-    Returns:
-        Generated PIL Image
-    """
-    if not self.is_loaded():
-      self.load()
-
-    logger.info(f"Generating image with prompt: '{prompt[:50]}...' (truncated)")
-
-    # Combine default parameters with model parameters and user parameters
+    # Combine parameters
     generation_params = self.default_image_params.copy()
     model_gen_params = self.model_params.get('generation', {})
     generation_params.update(model_gen_params)
     generation_params.update(kwargs)
 
-    logger.debug(f"Generation parameters: {generation_params}")
-
     # Extract parameters for the pipeline
     height = generation_params.pop("height", 512)
     width = generation_params.pop("width", 512)
-    num_inference_steps = generation_params.pop("num_inference_steps", 50)
+    num_inference_steps = generation_params.pop("num_inference_steps", 30)
     guidance_scale = generation_params.pop("guidance_scale", 7.5)
     negative_prompt = generation_params.pop("negative_prompt", None)
-    guidance_rescale = generation_params.pop("guidance_rescale", 0.7)
 
     # Generate the image
     try:
@@ -146,261 +152,81 @@ class DiffusionLocalModel(TransformersLocalModel):
         num_inference_steps=num_inference_steps,
         guidance_scale=guidance_scale,
         negative_prompt=negative_prompt,
-        guidance_rescale=guidance_rescale,
         **generation_params
       )
 
-      # Get the image from the output
+      # Get the first image from the output
       image = output.images[0]
 
-      logger.info("Image generated successfully")
-      return image
+      # Convert PIL image to bytes
+      image_bytes = io.BytesIO()
+      image.save(image_bytes, format="PNG")
+      image_bytes.seek(0)
+
+      # Create an image file from the bytes
+      file_name = f"generated_image_{len(user_messages)}.png"
+      image_file = self._save_image_to_file(image_bytes.getvalue(),
+                                         conversation.base_directory,
+                                         file_name)
+
+      # Create a response message
+      response = f"Generated image from prompt: '{prompt[:100]}...' (truncated)"
+      message = conversation.add_message(MessageRole.ASSISTANT, response)
+
+      # Attach the image to the message
+      if image_file and message:
+        conversation.attach_file(message.message_id, image_file.file_id)
+        logger.info(f"Attached image {image_file.file_id} to message {message.message_id}")
+
+      return response
+
     except Exception as e:
-      logger.error(f"Error generating image: {str(e)}")
-      raise
+      error_message = f"Error generating image: {str(e)}"
+      logger.error(error_message)
+      conversation.add_message(MessageRole.ASSISTANT, error_message)
+      return error_message
 
-  def load(self) -> None:
-    """Load the appropriate diffusion model."""
-    if not os.path.exists(self.model_path):
-      logger.debug(f"Model path {self.model_path} does not exist, downloading model")
-      self._authenticate_huggingface()
-      self.download(self.model_path)
-    else:
-      logger.debug(f"Model path {self.model_path} exists, loading from disk")
-
-    logger.info(f"Loading diffusion model from {self.model_path}")
-
-    try:
-      # Load the appropriate pipeline based on model type
-      # By default use StableDiffusionPipeline for text-to-image
-      torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-      device_map = self.device
-
-      # Determine scheduler type from model_params if specified
-      pipeline_type = self.model_params.get('pipeline_type', 'text2img')
-      scheduler_type = self.model_params.get('scheduler', 'euler')
-
-      logger.debug(f"Using pipeline type: {pipeline_type}")
-      logger.debug(f"Using scheduler type: {scheduler_type}")
-
-      # Initialize the appropriate scheduler
-      if scheduler_type.lower() == 'euler':
-        scheduler = EulerDiscreteScheduler.from_pretrained(
-          self.model_path,
-          subfolder="scheduler"
-        )
-        logger.debug("Using EulerDiscreteScheduler")
-      elif scheduler_type.lower() == 'dpm':
-        scheduler = DPMSolverMultistepScheduler.from_pretrained(
-          self.model_path,
-          subfolder="scheduler"
-        )
-        logger.debug("Using DPMSolverMultistepScheduler")
-      else:
-        scheduler = None
-        logger.debug("Using default scheduler")
-
-      # Load the appropriate pipeline
-      if pipeline_type == 'text2img':
-        if scheduler:
-          self.pipeline = StableDiffusionPipeline.from_pretrained(
-            self.model_path,
-            scheduler=scheduler,
-            torch_dtype=torch_dtype,
-            use_safetensors=True,
-            device_map=device_map
-          )
-        else:
-          self.pipeline = StableDiffusionPipeline.from_pretrained(
-            self.model_path,
-            torch_dtype=torch_dtype,
-            use_safetensors=True,
-            device_map=device_map
-          )
-      else:
-        # For other pipeline types, use the generic DiffusionPipeline
-        # which will automatically instantiate the correct pipeline
-        if scheduler:
-          self.pipeline = DiffusionPipeline.from_pretrained(
-            self.model_path,
-            scheduler=scheduler,
-            torch_dtype=torch_dtype,
-            use_safetensors=True,
-            device_map=device_map
-          )
-        else:
-          self.pipeline = DiffusionPipeline.from_pretrained(
-            self.model_path,
-            torch_dtype=torch_dtype,
-            use_safetensors=True,
-            device_map=device_map
-          )
-
-      # Enable memory optimization if on GPU
-      if torch.cuda.is_available():
-        # Enable attention slicing for memory efficiency
-        self.pipeline.enable_attention_slicing()
-
-        # Enable xformers memory efficient attention if available
-        try:
-          if 'xformers' in self.model_params.get('optimizations', []):
-            logger.debug("Enabling xformers memory efficient attention")
-            self.pipeline.enable_xformers_memory_efficient_attention()
-        except Exception as e:
-          logger.warning(f"Could not enable xformers: {str(e)}")
-
-      self.loaded = True
-      logger.info("Diffusion model loaded successfully")
-    except Exception as e:
-      logger.error(f"Error loading diffusion model: {str(e)}")
-      raise
-
-  def download(self, model_path: str) -> None:
+  def _save_image_to_file(self, image_data: bytes, base_directory: str,
+                         file_name: str) -> Optional[ImageFile]:
     """
-    Download the diffusion model.
+    Save image data to a file and return the ImageFile object.
 
     Args:
-        model_path: Path to download the model to
+        image_data: Binary image data
+        base_directory: Base directory for file storage
+        file_name: Name for the file
+
+    Returns:
+        Optional[ImageFile]: The created ImageFile, or None if creation failed
     """
-    logger.info(f"Downloading diffusion model {self.model_name} to {model_path}")
-    os.makedirs(model_path, exist_ok=True)
-
-    # Ensure we're authenticated with Hugging Face
-    self._authenticate_huggingface()
-
     try:
-      # Use pipeline to download model - it will handle the appropriate components
-      # and save them to the specified path
-      pipeline_type = self.model_params.get('pipeline_type', 'text2img')
-      scheduler_type = self.model_params.get('scheduler', 'euler')
-
-      # Determine if we need a custom scheduler
-      if scheduler_type.lower() == 'euler':
-        scheduler = EulerDiscreteScheduler.from_config(
-          StableDiffusionPipeline.from_pretrained(
-            self.model_name,
-            use_auth_token=self.api_key,
-            subfolder="scheduler"
-          ).scheduler.config
-        )
-      elif scheduler_type.lower() == 'dpm':
-        scheduler = DPMSolverMultistepScheduler.from_config(
-          StableDiffusionPipeline.from_pretrained(
-            self.model_name,
-            use_auth_token=self.api_key,
-            subfolder="scheduler"
-          ).scheduler.config
-        )
-      else:
-        scheduler = None
-
-      if pipeline_type == 'text2img':
-        if scheduler:
-          StableDiffusionPipeline.from_pretrained(
-            self.model_name,
-            scheduler=scheduler,
-            use_safetensors=True,
-            **self.model_params.get('model', {})
-          ).save_pretrained(model_path)
-        else:
-          StableDiffusionPipeline.from_pretrained(
-            self.model_name,
-            use_safetensors=True,
-            **self.model_params.get('model', {})
-          ).save_pretrained(model_path)
-      else:
-        if scheduler:
-          DiffusionPipeline.from_pretrained(
-            self.model_name,
-            scheduler=scheduler,
-            use_safetensors=True,
-            **self.model_params.get('model', {})
-          ).save_pretrained(model_path)
-        else:
-          DiffusionPipeline.from_pretrained(
-            self.model_name,
-            use_safetensors=True,
-            **self.model_params.get('model', {})
-          ).save_pretrained(model_path)
-
-      logger.info("Diffusion model downloaded successfully")
-    except Exception as e:
-      logger.error(f"Error downloading diffusion model: {str(e)}")
-      raise
-
-
-
-########################################################################
-#                        DIFFUSION MODEL                               #
-########################################################################
-class DiffusionModel(TransformersModel):
-  """
-  A class-based implementation of diffusion model generation.
-
-  Specialization of TransformersModel for image generation models.
-  """
-
-  def __init__(self, model_id: str, model_path: str = "models", defer_loading: bool = False,
-               device: str = "cpu", api_key: Optional[str] = None):
-    """
-    Initialize a diffusion model for image generation.
-
-    Args:
-        model_id: The model identifier (HuggingFace repo ID)
-        model_path: Base path where models are stored
-        defer_loading: Whether to defer loading the model
-        device: Device to load the model on
-        api_key: Hugging Face API key for authentication
-    """
-    super().__init__(model_id, model_path, defer_loading, device, api_key)
-
-  def _create_model_instance(self) -> None:
-    """Create the underlying DiffusionLocalModel instance."""
-    logger.debug(f"Creating diffusion model instance for {self.model_name}")
-    try:
-      self.model_instance = DiffusionLocalModel(
-        model_name=self.model_name,
-        model_path=self.model_path,
-        defer_loading=self.defer_loading,
-        device=self.device,
-        model_params=self.model_params,
-        api_key=self.api_key
+      # Create an ImageFile from the bytes
+      image_file = ImageFile.from_bytes(
+        image_data=image_data,
+        base_directory=base_directory,
+        file_name=file_name,
+        format="png",
+        mime_type="image/png",
+        metadata={"source": "diffusion_model", "model": self.model_name}
       )
-      logger.debug("Diffusion model instance created successfully")
+
+      logger.debug(f"Created image file: {image_file.file_id}")
+      return image_file
+
     except Exception as e:
-      logger.error(f"Error creating diffusion model instance: {str(e)}")
-      raise
+      logger.error(f"Failed to create image file: {str(e)}")
+      return None
 
-  def generate(self, conversation: Conversation, **kwargs) -> Image.Image:
-    """
-    Generate an image based on a conversation.
+  def _download_image_model(self, model_path: str) -> None:
+    """Download a stable diffusion model."""
+    logger.info(f"Downloading {self.model_name} model to {model_path}")
 
-    Args:
-        conversation: Conversation object containing the message history
-        **kwargs: Additional generation parameters
+    # Load and immediately save the model to the specified path
+    StableDiffusionPipeline.from_pretrained(
+      self.model_name,
+      torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+      use_safetensors=True,
+      **self.model_params.get('model', {})
+    ).save_pretrained(model_path)
 
-    Returns:
-        Generated PIL Image
-    """
-    if not self.is_loaded():
-      logger.debug("Model not loaded, loading now")
-      self.load()
-
-    logger.debug("Generating image through delegated instance")
-    return self.model_instance.generate(conversation, **kwargs)
-
-  def generate_image(self, prompt: str, **kwargs) -> Image.Image:
-    """
-    Generate an image from a text prompt.
-
-    Args:
-        prompt: Text prompt to generate image from
-        **kwargs: Additional generation parameters
-
-    Returns:
-        Generated PIL Image
-    """
-    if not self.is_loaded():
-      self.load()
-
-    return self.model_instance.generate_image(prompt, **kwargs)
+    logger.info("Model downloaded successfully")

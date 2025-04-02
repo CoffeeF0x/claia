@@ -1,3 +1,3 @@
-from .base import TransformersModel, TransformersLocalModel, DEFAULT_SETTINGS
-from .gemma3 import Gemma3Model, Gemma3LocalModel
-from .diffusion import DiffusionModel, DiffusionLocalModel
+from .base import TransformersModel, DEFAULT_SETTINGS
+from .gemma3 import Gemma3Model
+from .diffusion import DiffusionModel

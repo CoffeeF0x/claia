@@ -4,14 +4,14 @@ from torch import bfloat16
 from torch.cuda import empty_cache
 import logging
 from transformers import AutoModelForCausalLM, AutoTokenizer, logging as transformers_logging
-from typing import List, Dict, Optional, Union, Any, Callable
+from typing import List, Dict, Optional, Union, Any, Callable, Type
 from huggingface_hub import login
 
 # Internal dependencies
 from ..base import LocalModel, APIModel
 from settings import Settings
 from files import Conversation
-from enums import MessageRole
+from enums import MessageRole, ModelCapability
 
 
 
@@ -38,25 +38,65 @@ DEFAULT_SETTINGS = {
 ########################################################################
 #                               CLASSES                                #
 ########################################################################
-class TransformersLocalModel(LocalModel):
+class TransformersModel(LocalModel):
+  """
+  Unified base class for transformer models using Hugging Face libraries.
+
+  This class handles common operations for all transformer models:
+  - Authentication and API key management
+  - Model checking, downloading, and loading
+  - Default implementations for various capabilities
+  - Conversation-based generation
+  """
+
   def __init__(self,
                model_name: str,
                model_path: str,
                defer_loading: bool = False,
                device: str = "cpu",
                model_params: Optional[Dict[str, Any]] = None,
-               api_key: Optional[str] = None):
+               api_key: Optional[str] = None,
+               capability: ModelCapability = ModelCapability.TTT):
+    """
+    Initialize a transformer model.
+
+    Args:
+        model_name: The model identifier (HuggingFace repo ID)
+        model_path: Base path where models are stored
+        defer_loading: Whether to defer loading the model
+        device: Device to load the model on
+        model_params: Additional parameters for the model
+        api_key: Hugging Face API key for authentication
+        capability: Primary capability of this model
+    """
     self.model_params = model_params or {}
     self.api_key = api_key
+    self.capability = capability
+
+    # Determine full model path
     folder_name = model_name.split("/")[-1]
     full_model_path = os.path.join(model_path, folder_name)
-    logger.debug(f"Initializing TransformersLocalModel for {model_name} with path {full_model_path}")
+
+    logger.debug(f"Initializing TransformersModel for {model_name} with path {full_model_path}")
+    logger.debug(f"Model capability: {capability.value}")
+
     if api_key:
       masked_key = f"{api_key[:5]}{'*' * (len(api_key) - 5)}" if len(api_key) > 5 else "***"
       logger.debug(f"API key provided (first 5 chars: {api_key[:5]})")
     else:
       logger.debug("No API key provided")
+
+    # Initialize base class
     super().__init__(model_name, full_model_path, defer_loading, device)
+
+    # Initialize model components as None
+    self.tokenizer = None
+    self.processor = None
+    self.model = None
+
+    # Load immediately if not deferring
+    if not defer_loading:
+      self.load()
 
   def _authenticate_huggingface(self) -> None:
     """Authenticate with Hugging Face using the API token."""
@@ -74,7 +114,15 @@ class TransformersLocalModel(LocalModel):
     self.api_key = api_key
 
   def load(self) -> None:
-    logger.debug(f"Loading model {self.model_name}")
+    """
+    Load the model based on its capability.
+
+    This method checks if the model exists locally, downloads it if needed,
+    and loads the appropriate model class based on the capability.
+    """
+    logger.debug(f"Loading model {self.model_name} with capability {self.capability.value}")
+
+    # Check if model exists locally, download if needed
     if not os.path.exists(self.model_path):
       logger.debug(f"Model path {self.model_path} does not exist, downloading model")
       self._authenticate_huggingface()
@@ -82,58 +130,136 @@ class TransformersLocalModel(LocalModel):
     else:
       logger.debug(f"Model path {self.model_path} exists, loading from disk")
 
-    logger.info(f"Loading model from {self.model_path}")
+    # Load appropriate model components based on capability
     try:
-      logger.debug("Loading tokenizer")
-      self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
-      logger.debug("Loading model")
-      self.model = AutoModelForCausalLM.from_pretrained(
-        self.model_path,
-        torch_dtype=bfloat16,
-        device_map=self.device,
-        trust_remote_code=True
-      )
+      if self.capability == ModelCapability.TTT:
+        self._load_text_model()
+      elif self.capability in [ModelCapability.TTI, ModelCapability.DEFAULT]:
+        self._load_image_model()
+      elif self.capability in [ModelCapability.TAI, ModelCapability.ITT]:
+        self._load_multimodal_model()
+      else:
+        logger.warning(f"Unsupported capability: {self.capability.value}, falling back to text model")
+        self._load_text_model()
+
       self.loaded = True
-      logger.info("Model loaded successfully")
+      logger.info(f"Model {self.model_name} loaded successfully")
     except Exception as e:
       logger.error(f"Error loading model: {str(e)}")
       raise
 
+  def _load_text_model(self) -> None:
+    """Load a text-to-text model."""
+    logger.debug("Loading text-to-text model")
+    self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
+    self.model = AutoModelForCausalLM.from_pretrained(
+      self.model_path,
+      torch_dtype=bfloat16,
+      device_map=self.device,
+      trust_remote_code=True
+    )
+    logger.debug("Text model loaded successfully")
+
+  def _load_image_model(self) -> None:
+    """
+    Load a text-to-image model.
+
+    Override this in subclasses with specific image generation implementation.
+    """
+    logger.debug("Loading text-to-image model")
+    # This is a placeholder - specific implementations should override this
+    logger.warning("Default text-to-image loading not implemented, subclasses should override")
+    self._load_text_model()  # Fallback to text model
+
+  def _load_multimodal_model(self) -> None:
+    """
+    Load a multimodal model.
+
+    Override this in subclasses with specific multimodal implementation.
+    """
+    logger.debug("Loading multimodal model")
+    # This is a placeholder - specific implementations should override this
+    logger.warning("Default multimodal loading not implemented, subclasses should override")
+    self._load_text_model()  # Fallback to text model
+
   def reset_context(self) -> None:
+    """Reset the context (history) for the model if applicable."""
     # Implementation for context reset if needed
     pass
 
   def unload(self) -> None:
-    logging.info("Unloading model")
+    """Unload the model and free memory."""
+    logging.info(f"Unloading model {self.model_name}")
     self.model = None
     self.tokenizer = None
+    self.processor = None
     empty_cache()
     self.loaded = False
     logging.info("Model unloaded successfully")
 
   def tokenize(self, text: str) -> List[int]:
-    logging.debug(f"Tokenizing text: {text}")
+    """Tokenize text using the model's tokenizer."""
+    if not self.tokenizer:
+      raise RuntimeError("Tokenizer not loaded")
+
+    logging.debug(f"Tokenizing text: {text[:50]}...")
     return self.tokenizer.encode(text)
 
   def detokenize(self, tokens: List[int]) -> str:
-    logging.debug(f"Detokenizing tokens: {tokens}")
+    """Detokenize tokens using the model's tokenizer."""
+    if not self.tokenizer:
+      raise RuntimeError("Tokenizer not loaded")
+
+    logging.debug(f"Detokenizing tokens")
     return self.tokenizer.decode(tokens, skip_special_tokens=True)
 
-  def generate(self, conversation: Conversation, **kwargs) -> str:
+  def generate(self, conversation: Conversation, **kwargs) -> Any:
     """
-    Generate a response using the model based on a conversation.
+    Generate output based on the model's capability and the conversation.
+
+    This is the main entry point for all generation requests. It handles
+    common pre-processing and post-processing, delegating the actual generation
+    to the _generate_impl method which can be overridden by subclasses.
 
     Args:
         conversation: The Conversation object containing messages
         **kwargs: Additional generation parameters
 
     Returns:
-        str: The generated response text
+        Generated output (text, image, etc. depending on capability)
     """
     if not self.is_loaded():
       self.load()
 
-    logging.info("Generating response")
+    logging.info(f"Generating with {self.capability.value} model")
+
+    # Apply model-specific generation settings
+    generation_params = self.model_params.get('generation', {}).copy()
+    generation_params.update(kwargs)
+
+    # Delegate to the implementation method
+    response = self._generate_impl(conversation, **generation_params)
+
+    # Don't add the response to the conversation if it's already been added
+    # by the implementation method
+    return response
+
+  def _generate_impl(self, conversation: Conversation, **kwargs) -> Any:
+    """
+    Implementation of the generation logic.
+
+    This is the method that subclasses should override to provide
+    specialized generation behavior. The default implementation handles
+    text-to-text generation.
+
+    Args:
+        conversation: The Conversation object containing messages
+        **kwargs: Generation parameters (already merged with model defaults)
+
+    Returns:
+        Generated output (specific type depends on implementation)
+    """
+    logging.info("Generating text response")
 
     # Format messages from the conversation
     formatted_messages = []
@@ -155,21 +281,20 @@ class TransformersLocalModel(LocalModel):
         "content": message.content
       })
 
-    logging.debug(f"Input messages: {formatted_messages}")
-    logging.debug(f"Generation parameters: {kwargs}")
-
-    # Apply model-specific generation settings
-    generation_params = self.model_params.get('generation', {}).copy()
-    generation_params.update(kwargs)
+    logging.debug(f"Input messages: {len(formatted_messages)}")
 
     # Generate the response
-    model_inputs = self.tokenizer.apply_chat_template(formatted_messages, return_tensors="pt", add_generation_prompt=True).to(self.device)
+    model_inputs = self.tokenizer.apply_chat_template(
+      formatted_messages,
+      return_tensors="pt",
+      add_generation_prompt=True
+    ).to(self.device)
 
     model_outputs = self.model.generate(
       model_inputs,
-      max_new_tokens=generation_params.get('max_new_tokens', 8192),
-      top_p=generation_params.get('top_p', 0.7),
-      temperature=generation_params.get('temperature', 0.7)
+      max_new_tokens=kwargs.get('max_new_tokens', 8192),
+      top_p=kwargs.get('top_p', 0.7),
+      temperature=kwargs.get('temperature', 0.7)
     )
 
     output_token_ids = model_outputs[0][len(model_inputs[0]):]
@@ -179,10 +304,16 @@ class TransformersLocalModel(LocalModel):
     conversation.add_message(MessageRole.ASSISTANT, response)
 
     logging.info("Response generated successfully")
-    logging.debug(f"Generated response: {response}")
+    logging.debug(f"Generated response: {response[:100]}...")
     return response
 
   def download(self, model_path: str) -> None:
+    """
+    Download the model from HuggingFace.
+
+    Args:
+        model_path: Path to save the model
+    """
     logger.info(f"Downloading {self.model_name} model to {model_path}")
     os.makedirs(model_path, exist_ok=True)
 
@@ -190,185 +321,57 @@ class TransformersLocalModel(LocalModel):
     self._authenticate_huggingface()
 
     try:
-      # Download and save model
-      logger.debug(f"Downloading model weights for {self.model_name}")
-      AutoModelForCausalLM.from_pretrained(
-        self.model_name,
-        torch_dtype=bfloat16,
-        trust_remote_code=True,
-        **self.model_params.get('model', {})
-      ).save_pretrained(model_path)
-      logger.debug("Model weights downloaded successfully")
-
-      # Download and save tokenizer
-      logger.debug(f"Downloading tokenizer for {self.model_name}")
-      AutoTokenizer.from_pretrained(
-        self.model_name,
-        trust_remote_code=True,
-        **self.model_params.get('tokenizer', {})
-      ).save_pretrained(model_path)
-      logger.debug("Tokenizer downloaded successfully")
+      # Download and save appropriate components based on capability
+      if self.capability == ModelCapability.TTT:
+        self._download_text_model(model_path)
+      elif self.capability == ModelCapability.TTI:
+        self._download_image_model(model_path)
+      elif self.capability in [ModelCapability.TAI, ModelCapability.ITT]:
+        self._download_multimodal_model(model_path)
+      else:
+        logger.warning(f"Unsupported capability: {self.capability.value}, falling back to text model download")
+        self._download_text_model(model_path)
 
       logger.info("Model downloaded successfully")
     except Exception as e:
       logger.error(f"Error downloading model: {str(e)}")
       raise
 
+  def _download_text_model(self, model_path: str) -> None:
+    """Download a text-to-text model."""
+    logger.debug(f"Downloading text model weights for {self.model_name}")
 
+    # Download and save model
+    AutoModelForCausalLM.from_pretrained(
+      self.model_name,
+      torch_dtype=bfloat16,
+      trust_remote_code=True,
+      **self.model_params.get('model', {})
+    ).save_pretrained(model_path)
 
-########################################################################
-#                       TRANSFORMERS MODEL                             #
-########################################################################
-class TransformersModel(LocalModel):
-  """
-  A class-based implementation of the transformers source.
+    # Download and save tokenizer
+    AutoTokenizer.from_pretrained(
+      self.model_name,
+      trust_remote_code=True,
+      **self.model_params.get('tokenizer', {})
+    ).save_pretrained(model_path)
 
-  This class follows the pattern of other model source classes like OpenAIModel,
-  but creates local transformer models based on HuggingFace model IDs.
-  """
+    logger.debug("Text model downloaded successfully")
 
-  def __init__(self, model_id: str, model_path: str = "models", defer_loading: bool = False, device: str = "cpu", api_key: Optional[str] = None):
+  def _download_image_model(self, model_path: str) -> None:
     """
-    Initialize a transformers text model.
+    Download a text-to-image model.
 
-    Args:
-        model_id: The model identifier (also used as HF repo ID)
-        model_path: Base path where models are stored
-        defer_loading: Whether to defer loading the model
-        device: Device to load the model on
-        api_key: Hugging Face API key for authentication
+    Override this in subclasses with specific implementation.
     """
-    # Initialize essential attributes first to avoid reference errors
-    self.model_instance = None
-    self.model_path = model_path
-    self.defer_loading = defer_loading
-    self.device = device
-    self.loaded = False
-    self.api_key = api_key
+    logger.warning("Default text-to-image download not implemented, subclasses should override")
+    self._download_text_model(model_path)  # Fallback to text model
 
-    logger.debug(f"Initializing TransformersModel for {model_id}")
-    if api_key:
-      logger.debug(f"API key provided (first 5 chars: {api_key[:5]})")
-    else:
-      logger.debug("No API key provided")
-
-    # Set model parameters with default settings
-    self.model_params = {
-      'model': {},
-      'tokenizer': {},
-      'generation': DEFAULT_SETTINGS.copy()
-    }
-    logger.debug(f"Model parameters: {self.model_params}")
-
-    # Call super to initialize the base class
-    super().__init__(model_name=model_id, model_path=model_path, defer_loading=defer_loading, device=device)
-
-    # Create the actual model instance for delegation
-    folder_name = self.model_name.split("/")[-1]
-    self.full_model_path = os.path.join(model_path, folder_name)
-    logger.debug(f"Full model path: {self.full_model_path}")
-
-    # Only create the instance if not deferring loading
-    if not defer_loading:
-      logger.debug("Not deferring loading, creating model instance")
-      self._create_model_instance()
-    else:
-      logger.debug("Deferring loading, model instance will be created later")
-
-  def set_api_key(self, api_key: str) -> None:
-    """Set the API key for Hugging Face authentication."""
-    logger.debug(f"Setting API key in TransformersModel (first 5 chars: {api_key[:5]})")
-    self.api_key = api_key
-    if hasattr(self, 'model_instance') and self.model_instance is not None:
-      logger.debug("Propagating API key to model instance")
-      self.model_instance.set_api_key(api_key)
-    else:
-      logger.debug("No model instance to propagate API key to")
-
-  def _create_model_instance(self) -> None:
-    """Create the underlying model instance."""
-    logger.debug(f"Creating model instance for {self.model_name}")
-    try:
-      self.model_instance = TransformersLocalModel(
-        model_name=self.model_name,
-        model_path=self.model_path,
-        defer_loading=self.defer_loading,
-        device=self.device,
-        model_params=self.model_params,
-        api_key=self.api_key
-      )
-      logger.debug("Model instance created successfully")
-    except Exception as e:
-      logger.error(f"Error creating model instance: {str(e)}")
-      raise
-
-  def load(self) -> None:
-    """Load the model."""
-    logger.debug("Loading model through delegated instance")
-    if not hasattr(self, 'model_instance') or self.model_instance is None:
-      logger.debug("Creating model instance first")
-      self._create_model_instance()
-    self.model_instance.load()
-    self.loaded = self.model_instance.is_loaded()
-    logger.debug(f"Model loaded status: {self.loaded}")
-
-  def is_loaded(self) -> bool:
-    """Check if the model is loaded."""
-    if hasattr(self, 'model_instance') and self.model_instance is not None:
-      logger.debug("Checking loaded status through model instance")
-      return self.model_instance.is_loaded()
-    logger.debug("No model instance, returning false for is_loaded")
-    return False
-
-  def unload(self) -> None:
-    """Unload the model."""
-    if hasattr(self, 'model_instance') and self.model_instance is not None:
-      logger.debug("Unloading model through delegated instance")
-      self.model_instance.unload()
-    self.loaded = False
-
-  def reset_context(self) -> None:
-    """Reset the context."""
-    if hasattr(self, 'model_instance') and self.model_instance is not None:
-      logger.debug("Resetting context through delegated instance")
-      self.model_instance.reset_context()
-
-  def generate(self, conversation: Conversation, **kwargs) -> str:
+  def _download_multimodal_model(self, model_path: str) -> None:
     """
-    Generate a response using the model based on a conversation.
+    Download a multimodal model.
 
-    Args:
-        conversation: The Conversation object containing messages
-        **kwargs: Additional generation parameters
-
-    Returns:
-        str: The generated response text
+    Override this in subclasses with specific implementation.
     """
-    if not self.is_loaded():
-      logger.debug("Model not loaded, loading now")
-      self.load()
-
-    logger.debug("Generating response through delegated instance")
-    return self.model_instance.generate(conversation, **kwargs)
-
-  def download(self, model_path: str) -> None:
-    """Download the model."""
-    if hasattr(self, 'model_instance') and self.model_instance is not None:
-      logger.debug("Downloading model through delegated instance")
-      self.model_instance.download(model_path)
-
-  def tokenize(self, text: str) -> List[int]:
-    """Tokenize text."""
-    if hasattr(self, 'model_instance') and self.model_instance is not None:
-      logger.debug("Tokenizing through delegated instance")
-      return self.model_instance.tokenize(text)
-    logger.error("Cannot tokenize: No model instance available")
-    raise RuntimeError("No model instance available for tokenization")
-
-  def detokenize(self, tokens: List[int]) -> str:
-    """Detokenize tokens."""
-    if hasattr(self, 'model_instance') and self.model_instance is not None:
-      logger.debug("Detokenizing through delegated instance")
-      return self.model_instance.detokenize(tokens)
-    logger.error("Cannot detokenize: No model instance available")
-    raise RuntimeError("No model instance available for detokenization")
+    logger.warning("Default multimodal download not implemented, subclasses should override")
+    self._download_text_model(model_path)  # Fallback to text model
