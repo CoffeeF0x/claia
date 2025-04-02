@@ -142,26 +142,53 @@ class ModelCommand(Command):
     """Set the model to use for generation"""
     result = Result()
 
-    # Get available sources for this model
-    available_sources = []
-    for s in sources.keys():
-      if s in definitions.get(model_name, {}).get('sources', []):
-        available_sources.append(s)
+    # Handle known models in definitions
+    if model_name in definitions:
+      # Get available sources for this model
+      available_sources = []
+      for s in sources.keys():
+        if s in definitions.get(model_name, {}).get('sources', []):
+          available_sources.append(s)
 
-    if model_name not in definitions or not available_sources:
-      return Result.fail(f"Model '{model_name}' not found or has no available sources")
+      if available_sources:
+        if source:
+          if source not in available_sources:
+            return Result.fail(f"Invalid source '{source}' for model '{model_name}'. Available sources: {', '.join(available_sources)}")
+          chosen_source = source
+        else:
+          chosen_source = available_sources[0]
 
-    if source:
-      if source not in available_sources:
-        return Result.fail(f"Invalid source '{source}' for model '{model_name}'. Available sources: {', '.join(available_sources)}")
-      chosen_source = source
+        settings.active_model = model_name
+        settings.active_model_source = chosen_source
+        result.message = f"Model set to {model_name} using source {chosen_source}"
+        return result
+      else:
+        # Model exists in definitions but has no available sources
+        warning = f"Model '{model_name}' exists in definitions but has no available sources."
+        logger.warning(warning)
     else:
-      chosen_source = available_sources[0]
+      # Model not found in definitions, guess source based on name format
+      warning = f"Model '{model_name}' not found in definitions. Will attempt to use directly."
+      logger.warning(warning)
+
+    # For unknown models or models without sources, make a best guess
+    if source:
+      if source in sources.keys():
+        chosen_source = source
+      else:
+        return Result.fail(f"Invalid source '{source}'. Available sources: {', '.join(sources.keys())}")
+    else:
+      # Default to transformers source for unknown models, especially if it has a slash
+      # which likely indicates a HuggingFace model ID
+      if "/" in model_name:
+        chosen_source = "transformers"
+      else:
+        chosen_source = "transformers"  # Default fallback
 
     settings.active_model = model_name
     settings.active_model_source = chosen_source
 
-    result.message = f"Model set to {model_name} using source {chosen_source}"
+    result.message = f"Model set to {model_name} using source {chosen_source} (unregistered model, will attempt direct loading)"
     return result
 
   @command(

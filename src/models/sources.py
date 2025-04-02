@@ -1,5 +1,3 @@
-# External dependencies
-
 # Internal dependencies
 from .api.openai import OpenAIModel
 from .api.runpod import RunpodModel
@@ -21,6 +19,7 @@ sources = {
   "openrouter": OpenRouterModel,
   "vllm": VLLMModel
 }
+
 
 
 ########################################################################

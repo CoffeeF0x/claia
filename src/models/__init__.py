@@ -5,6 +5,7 @@
 
 # External dependencies
 import logging
+import torch
 from typing import Any, List, Dict, Optional, Tuple
 
 # Internal dependencies
@@ -15,7 +16,7 @@ from enums import ModelCapability
 
 from .base import APIModel, LocalModel
 from .api import OpenAIModel, AnthropicModel, RunpodModel, OpenRouterModel
-from .transformers import Gemma3Model, DiffusionModel
+from .transformers import TransformersModel, Gemma3Model, DiffusionModel
 from .remote import VLLMModel
 from .definitions import definitions
 from .sources import sources, transformers_models
@@ -41,8 +42,6 @@ def get_best_available_device() -> str:
       Device identifier string compatible with PyTorch/Transformers
   """
   try:
-    import torch
-
     # Check for CUDA (NVIDIA GPUs)
     if torch.cuda.is_available():
       device_count = torch.cuda.device_count()
@@ -98,13 +97,41 @@ def find_available_sources(model_name: str) -> List[str]:
 
 
 def select_source(model_name: str, available_sources: List[str], settings: Optional[Settings] = None) -> str:
-  """Select the appropriate source for the model."""
-  if settings and settings.active_model_source and settings.active_model_source in available_sources:
-    chosen_source = settings.active_model_source
-  else:
-    chosen_source = available_sources[0]
+  """
+  Select the appropriate source for the model.
 
-  logger.debug(f"Selected source for {model_name}: {chosen_source}")
+  Args:
+      model_name: Name of the model
+      available_sources: List of available sources
+      settings: Optional settings object with preferences
+
+  Returns:
+      The selected source name
+  """
+  # If settings specify a source and it's available, use it
+  if settings and settings.active_model_source:
+    if available_sources and settings.active_model_source in available_sources:
+      chosen_source = settings.active_model_source
+      logger.debug(f"Using source from settings: {chosen_source}")
+    elif not available_sources:
+      # If no available sources defined but settings has one, use it
+      # This supports arbitrary model IDs that don't exist in definitions
+      chosen_source = settings.active_model_source
+      logger.debug(f"Using source from settings (no available sources): {chosen_source}")
+    else:
+      # Settings source specified but not in available sources
+      chosen_source = available_sources[0]
+      logger.warning(f"Source {settings.active_model_source} not available for {model_name}, using {chosen_source} instead")
+  else:
+    # No source in settings, use first available
+    if available_sources:
+      chosen_source = available_sources[0]
+      logger.debug(f"No source specified in settings, using first available: {chosen_source}")
+    else:
+      # No available sources - this should be handled by the caller
+      chosen_source = "transformers"  # Default fallback
+      logger.warning(f"No available sources for {model_name}, defaulting to 'transformers'")
+
   return chosen_source
 
 
@@ -247,7 +274,17 @@ def create_local_model(model_name: str, model_class: Any, model_id: str, chosen_
 
 
 def create_transformers_model(model_class: Any, model_id: str, settings: Optional[Settings] = None) -> Any:
-  """Create a transformers model instance with appropriate settings."""
+  """
+  Create a transformers model instance with appropriate settings.
+
+  Args:
+      model_class: Class to instantiate
+      model_id: Model identifier (name or path)
+      settings: Optional settings object
+
+  Returns:
+      The instantiated model
+  """
   # Get the Hugging Face API key
   api_key = get_api_key_for_source("transformers", settings)
   model_path = settings.models_directory if settings else "models"
@@ -258,10 +295,29 @@ def create_transformers_model(model_class: Any, model_id: str, settings: Optiona
     device = get_best_available_device()
     logger.debug(f"Automatically selected device: {device}")
 
+  # For arbitrary model IDs, check if we need a specialized class
+  if model_class == TransformersModel:
+    # model_name_lower = model_id.lower()
+    # # Check for Stable Diffusion models
+    # if 'stable-diffusion' in model_name_lower or 'sd-' in model_name_lower:
+    #   if 'DiffusionModel' in globals() or DiffusionModel:
+    #     logger.debug(f"Detected probable Stable Diffusion model, using DiffusionModel class")
+    #     model_class = DiffusionModel
+    #     # Set capability to TTI for diffusion models
+    #     capability = ModelCapability.TTI
+    # else:
+    #   # For other transformer models, default to text capability
+    #   capability = ModelCapability.TTT
+    capability = ModelCapability.TTT
+  else:
+    # For known model classes, use the default capability
+    capability = ModelCapability.TTT
+
   # Additional parameters for model constructor
   kwargs = {
     'model_path': model_path,
-    'device': device
+    'device': device,
+    'capability': capability
   }
 
   if api_key:
@@ -271,6 +327,7 @@ def create_transformers_model(model_class: Any, model_id: str, settings: Optiona
     logger.warning("No Hugging Face API key found, model may have limited access")
 
   # Create the model with appropriate arguments
+  logger.debug(f"Creating {model_class.__name__} instance for model ID: {model_id}")
   model = model_class(model_id, **kwargs)
 
   return model
@@ -304,30 +361,56 @@ def get_model(model_name: str, settings: Settings = None, process_type: Optional
     settings.device = device
     logger.debug(f"Created new settings with device: {device}")
 
-  if model_name not in definitions:
-    logger.error(f"Model {model_name} not found in definitions")
-    return Result.fail(f"Model {model_name} not found in definitions.")
+  # Handle known models in definitions
+  if model_name in definitions:
+    logger.debug(f"Found model {model_name} in definitions")
+    # Get model-specific configuration
+    model_config = definitions.get(model_name, {})
 
-  # Get model-specific configuration
-  model_config = definitions.get(model_name, {})
+    # Find available sources for this model
+    available_sources = find_available_sources(model_name)
 
-  # Find available sources for this model
-  available_sources = find_available_sources(model_name)
+    if not available_sources:
+      logger.error(f"No sources available for model {model_name}")
+      return Result.fail(f"No sources available for model {model_name}.")
 
-  if not available_sources:
-    logger.error(f"No sources available for model {model_name}")
-    return Result.fail(f"No sources available for model {model_name}.")
+    # Select appropriate source
+    chosen_source = select_source(model_name, available_sources, settings)
 
-  # Select appropriate source
-  chosen_source = select_source(model_name, available_sources, settings)
+    # Get model class with potential override based on process_type
+    model_class, class_result = get_model_class(model_name, chosen_source, process_type)
+    if class_result.is_error():
+      return class_result
 
-  # Get model class with potential override based on process_type
-  model_class, class_result = get_model_class(model_name, chosen_source, process_type)
-  if class_result.is_error():
-    return class_result
+    # Get the model ID
+    model_id = get_model_id(model_name, chosen_source)
+  else:
+    # Handle arbitrary model names not in definitions
+    logger.warning(f"Model {model_name} not found in definitions, attempting direct loading")
 
-  # Get the model ID
-  model_id = get_model_id(model_name, chosen_source)
+    # Determine source based on settings or best guess
+    if settings and settings.active_model_source:
+      chosen_source = settings.active_model_source
+      logger.debug(f"Using source from settings: {chosen_source}")
+    elif "/" in model_name:
+      # Model names with slashes are likely HuggingFace models
+      chosen_source = "transformers"
+      logger.debug(f"Detected probable HuggingFace model format, using transformers source")
+    else:
+      # Default fallback
+      chosen_source = "transformers"
+      logger.debug(f"Using default source: {chosen_source}")
+
+    # For arbitrary models, use the model name as the model ID directly
+    model_id = model_name
+
+    # Get the basic model class for the source without specialized overrides
+    model_class = sources.get(chosen_source)
+    if not model_class:
+      logger.error(f"Source {chosen_source} not available")
+      return Result.fail(f"Source {chosen_source} not available for model {model_name}.")
+
+    logger.debug(f"Using model class {model_class.__name__} for {model_name}")
 
   # Create the model instance based on its type
   if issubclass(model_class, APIModel):
