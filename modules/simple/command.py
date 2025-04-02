@@ -40,7 +40,7 @@ class SimpleCommand(Command):
         },
         ai_callable=True
     )
-    def echo_command(self, settings: Settings, message: str) -> Result:
+    def echo_command(self, settings: Settings, message: str = None) -> Result:
         """Echo back a message."""
         result = Result()
         result.message = f"Echo: {message}"

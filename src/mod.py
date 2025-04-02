@@ -8,11 +8,10 @@ Modules are loaded by finding command.py files in the modules directory structur
 # External dependencies
 import os
 import sys
-import importlib
 import importlib.util
 import logging
 import inspect
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any
 
 # Internal dependencies
 from commands import Registry, Command
@@ -49,6 +48,11 @@ def load_modules(registry: Registry, modules_dir: str) -> Dict[str, Any]:
         logger.warning(f"Modules directory '{modules_dir}' does not exist")
         return modules
 
+    # Add modules directory to Python path if not already there
+    if modules_dir not in sys.path:
+        sys.path.insert(0, modules_dir)
+        logger.debug(f"Added modules directory to Python path: {modules_dir}")
+
     # Only look for command.py files directly in module directories
     for module_name in os.listdir(modules_dir):
         # Skip hidden files and directories
@@ -66,24 +70,26 @@ def load_modules(registry: Registry, modules_dir: str) -> Dict[str, Any]:
             continue
 
         try:
-            # Import the command file
-            import_name = f"modules.{module_name}.command"
-            logger.debug(f"Importing {import_name} from {command_file}")
+            # First import the whole module
+            logger.debug(f"Importing module {module_name}")
 
-            spec = importlib.util.spec_from_file_location(import_name, command_file)
-            if spec is None or spec.loader is None:
-                logger.error(f"Failed to load module spec for '{module_name}'")
-                continue
+            # Check if __init__.py exists to ensure it's a proper package
+            init_file = os.path.join(module_path, "__init__.py")
+            if not os.path.isfile(init_file):
+                logger.warning(f"Module {module_name} missing __init__.py file, may cause import issues")
 
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[import_name] = module
-            spec.loader.exec_module(module)
+            # Import the main module
+            module = importlib.import_module(module_name)
+
+            # Now import the command module
+            command_module_name = f"{module_name}.command"
+            command_module = importlib.import_module(command_module_name)
 
             # Find first class that inherits from Command
             command_class = None
-            for name, obj in module.__dict__.items():
+            for name, obj in command_module.__dict__.items():
                 if (inspect.isclass(obj) and
-                    obj.__module__ == import_name and
+                    obj.__module__ == command_module_name and
                     issubclass(obj, Command) and
                     obj != Command):
                     command_class = obj
@@ -91,7 +97,7 @@ def load_modules(registry: Registry, modules_dir: str) -> Dict[str, Any]:
                     break
 
             if command_class is None:
-                logger.warning(f"No Command subclass found in {command_file}")
+                logger.warning(f"No Command subclass found in {command_module_name}")
                 continue
 
             # Create instance of the Command class
@@ -118,70 +124,8 @@ def load_modules(registry: Registry, modules_dir: str) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Error loading module '{module_name}': {str(e)}")
 
-    logger.info(f"Loaded {len(modules)} modules with a total of {len(registry.command_map)} commands")
+    logger.info(f"Loaded {len(modules)} modules for a total of {len(registry.command_map)} commands")
     return modules
-
-
-def list_available_modules(registry: Registry, modules_dir: str) -> List[Dict[str, Any]]:
-    """
-    List all available modules in the modules directory.
-
-    Args:
-        registry: The command registry to check loaded modules against
-        modules_dir: Path to the modules directory, relative to application root
-
-    Returns:
-        List of dictionaries containing module information
-    """
-    modules_info = []
-
-    # Check if modules directory exists
-    if not os.path.isdir(modules_dir):
-        logger.warning(f"Modules directory '{modules_dir}' does not exist")
-        return modules_info
-
-    # Look for module directories with command.py files
-    for module_name in os.listdir(modules_dir):
-        # Skip hidden files and directories
-        if module_name.startswith('_') or module_name.startswith('.'):
-            continue
-
-        # Get module directory
-        module_path = os.path.join(modules_dir, module_name)
-        if not os.path.isdir(module_path):
-            continue
-
-        # Check for command.py file
-        command_file = os.path.join(module_path, MODULE_COMMAND_FILENAME)
-        if not os.path.isfile(command_file):
-            continue
-
-        # Check for README.md
-        readme_file = os.path.join(module_path, "README.md")
-
-        # Check if module is loaded
-        is_loaded = False
-        cmd_count = 0
-
-        if hasattr(registry, "command_modules") and module_name in registry.command_modules:
-            is_loaded = True
-            # Get the number of commands from this module
-            if hasattr(registry, "command_map"):
-                for cmd_name in registry.command_map:
-                    if cmd_name.startswith(f"modules_{module_name}_"):
-                        cmd_count += 1
-
-        # Add module info
-        modules_info.append({
-            "name": module_name,
-            "path": module_path,
-            "has_command_py": True,
-            "has_readme": os.path.isfile(readme_file),
-            "is_loaded": is_loaded,
-            "command_count": cmd_count
-        })
-
-    return sorted(modules_info, key=lambda x: x["name"])
 
 
 def initialize_module_system(registry: Registry, modules_dir: str) -> None:

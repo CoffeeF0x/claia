@@ -13,6 +13,7 @@
 # - each command should have a small object to define flags, this will allow us to seperate global flags from command flags
 # - create a command class to set parameters (these should be saved to a .env file for now)
 # - make process queue run in its own thread (for simpler async processing)
+# - module commands don't work from cli
 
 # External dependencies
 import readline
