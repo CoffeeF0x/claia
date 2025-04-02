@@ -4,13 +4,14 @@ This module contains commands for managing agents.
 
 # External dependencies
 import logging
+from typing import Dict, List, Any
 
 # Internal dependencies
-from commands.base import Command, command
+from .base import Command, command
 from results import Result
 from settings import Settings
 from agents import Agent
-from enums import AgentType
+from enums.agent import AgentType
 
 
 
@@ -25,31 +26,129 @@ logger = logging.getLogger(__name__)
 #                            COMMAND CLASS                             #
 ########################################################################
 class AgentCommand(Command):
+  """Agent command implementation"""
 
   @command(
     path=["list"],
-    description="List available agent types",
-    help_text="List all available agent types with their descriptions and capabilities"
+    description="List all available agent types",
+    help_text="List all available agent types that can be selected",
+    parameters={
+      "type": "object",
+      "properties": {}
+    },
+    returns={
+      "type": "string",
+      "description": "List of available agent types"
+    },
+    ai_callable=True
   )
-  def list_agents(self, settings: Settings) -> str:
+  def list_agents(self, settings: Settings) -> Result:
     """List all available agent types"""
-    agent_types = Agent.get_agent_types()
+    result = Result()
 
-    if not agent_types:
-      return "No agent types available"
+    # Get agent types from enum
+    agent_types = [agent_type.value for agent_type in AgentType]
 
-    # Get the active agent for highlighting
-    active_agent = settings.active_agent
+    result.data = agent_types
+    result.message = "Available agent types:\n" + "\n".join(agent_types)
+    return result
 
-    output = []
-    for agent in agent_types:
-      is_active = agent["type"] == active_agent
-      active_marker = "* " if is_active else "  "
-      capabilities = ", ".join(agent["capabilities"])
-      line = f"{active_marker}{agent['type']}: {agent['description']} (Capabilities: {capabilities})"
-      output.append(line)
+  @command(
+    path=["set"],
+    description="Set the current agent type",
+    help_text="Set the agent type to use for interactions",
+    parameters={
+      "type": "object",
+      "properties": {
+        "agent_type": {
+          "type": "string",
+          "description": "Agent type to use",
+          "enum": [agent_type.value for agent_type in AgentType]
+        }
+      },
+      "required": ["agent_type"]
+    },
+    returns={
+      "type": "string",
+      "description": "Confirmation message"
+    },
+    ai_callable=True
+  )
+  def set_agent(self, settings: Settings, agent_type: str) -> Result:
+    """Set the agent type to use"""
+    result = Result()
 
-    return "\n".join(output)
+    try:
+      # Convert string to AgentType enum
+      agent_enum = AgentType.from_string(agent_type)
+
+      # Store the string value in settings
+      settings.active_agent = agent_enum
+
+      result.data = {
+        "agent_type": agent_enum.value,
+        "agent_name": agent_enum.name
+      }
+      result.message = f"Agent type set to: {agent_enum.value}"
+      return result
+    except ValueError as e:
+      return Result.fail(str(e))
+
+  @command(
+    path=["current"],
+    description="Show the current agent type",
+    help_text="Display the currently selected agent type",
+    parameters={
+      "type": "object",
+      "properties": {}
+    },
+    returns={
+      "type": "string",
+      "description": "Current agent type"
+    },
+    ai_callable=True
+  )
+  def current_agent(self, settings: Settings) -> Result:
+    """Show the current agent type"""
+    result = Result()
+
+    if settings.active_agent:
+      try:
+        result.data = {
+          "agent_type": settings.active_agent.value,
+          "agent_name": settings.active_agent.name
+        }
+        result.message = f"Current agent type: {settings.active_agent.value}"
+      except ValueError:
+        result.data = {"agent_type": settings.active_agent}
+        result.message = f"Current agent type: {settings.active_agent}"
+    else:
+      result.message = "No agent type selected"
+
+    return result
+
+  @command(
+    path=["remove"],
+    description="Remove the current agent selection",
+    help_text="Remove the current agent selection",
+    parameters={
+      "type": "object",
+      "properties": {}
+    },
+    returns={
+      "type": "string",
+      "description": "Confirmation message"
+    },
+    ai_callable=True
+  )
+  def remove_agent(self, settings: Settings) -> Result:
+    """Remove the current agent selection"""
+    result = Result()
+
+    settings.active_agent = None
+    result.message = "Agent selection removed"
+
+    return result
 
   @command(
     path=["info"],
@@ -66,58 +165,33 @@ class AgentCommand(Command):
       "required": ["agent_type"]
     }
   )
-  def agent_info(self, settings: Settings, agent_type: str) -> str:
+  def agent_info(self, settings: Settings, agent_type: str) -> Result:
     """Get detailed information about a specific agent type"""
-    # Get all agent types
-    agent_types = Agent.get_agent_types()
+    result = Result()
 
-    # Find the specified agent type
-    for agent in agent_types:
-      if agent["type"] == agent_type:
-        # Build and return the information
-        capabilities = ", ".join(agent["capabilities"])
-        output = [
-          f"Agent Type: {agent['type']}",
-          f"Name: {agent['name']}",
-          f"Description: {agent['description']}",
-          f"Capabilities: {capabilities}"
-        ]
-        return "\n".join(output)
-
-    return f"Agent type '{agent_type}' not found"
-
-  @command(
-    path=["set"],
-    description="Set the active agent type",
-    help_text="Set the active agent type to use for processing requests",
-    parameters={
-      "type": "object",
-      "properties": {
-        "agent_type": {
-          "type": "string",
-          "description": "The type of agent to set as active"
-        }
-      },
-      "required": ["agent_type"]
-    }
-  )
-  def set_agent(self, settings: Settings, agent_type: str) -> str:
-    """Set the active agent type"""
-    # Verify that the agent type exists
     try:
-      # Check if it's in the enum
-      agent_enum = None
-      for a_type in AgentType:
-        if a_type.value == agent_type:
-          agent_enum = a_type
-          break
+      # Convert string to AgentType enum for validation
+      agent_enum = AgentType.from_string(agent_type)
+      agent_type = agent_enum.value
 
-      if not agent_enum:
-        return f"Invalid agent type: {agent_type}"
+      # Get all agent types
+      agent_types = Agent.get_agent_types()
 
-      # Set the active agent
-      settings.active_agent = agent_type
-      return f"Active agent set to: {agent_type}"
-    except Exception as e:
-      logger.error(f"Error setting agent type: {e}")
-      return f"Error setting agent type: {str(e)}"
+      # Find the specified agent type
+      for agent in agent_types:
+        if agent["type"] == agent_type:
+          # Build and return the information
+          capabilities = ", ".join(agent["capabilities"])
+          output = [
+            f"Agent Type: {agent['type']}",
+            f"Name: {agent['name']}",
+            f"Description: {agent['description']}",
+            f"Capabilities: {capabilities}"
+          ]
+          result.data = agent
+          result.message = "\n".join(output)
+          return result
+
+      return Result.fail(f"Agent type '{agent_type}' found in enum but not registered in Agent system")
+    except ValueError as e:
+      return Result.fail(str(e))

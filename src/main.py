@@ -15,6 +15,8 @@
 # - make process queue run in its own thread (so we can have async message processing)
 # - update commands to support kwargs so we can pass parameters without message="asdf" for example and just pass something like "asdf" directly
 # - update the rest of the commands now that the commands module has been overhauled
+# - either conversation list doesn't show all conversations or conversations aren't getting saved
+# - prompt doesn't apply to the active conversation (if there's an active conversation, it should apply to it)
 
 # External dependencies
 import readline

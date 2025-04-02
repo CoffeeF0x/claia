@@ -37,6 +37,6 @@ from .tools         import ToolsCommand
 from .massedcompute import MassedComputeCommand
 from .agents        import AgentCommand
 from .registry      import Registry
-from .base          import Command
+from .base          import Command, command
 from results import Result
 from settings import Settings

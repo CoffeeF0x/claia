@@ -1,12 +1,16 @@
-from commands.base import Command, command
-from results import Result
-from settings import Settings
+
+
+# External dependencies
 import requests
-from typing import Optional, Dict, Any, List
 import logging
 import subprocess
 import platform
-import os
+from typing import Optional, Dict, Any, List
+
+# Internal dependencies
+from results import Result
+from settings import Settings
+from .base import Command, command
 
 
 
@@ -176,29 +180,25 @@ class MassedComputeCommand(Command):
     description="List running instances",
     help_text="List all running instances"
   )
-  def list_instances(self, settings: Settings) -> str:
+  def list_instances(self, settings: Settings) -> Result:
     """List all running instances"""
+    result = Result()
+
     if not settings.massed_compute_api_token:
-      msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
-      print(msg)
-      return msg
+      return Result.fail("MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment.")
 
     try:
       api = MassedComputeAPI(settings)
       instances = api.get_instances()
 
-      # Print formatted table
-      output = []
-      for line in format_instances_table(instances):
-        print(line)
-        output.append(line)
-
-      return "\n".join(output)
+      # Format instances table
+      formatted_output = format_instances_table(instances)
+      result.data = instances
+      result.message = "\n".join(formatted_output)
+      return result
 
     except Exception as e:
-      error_msg = f"Error listing instances: {str(e)}"
-      print(error_msg)
-      return error_msg
+      return Result.fail(f"Error listing instances: {str(e)}")
 
   @command(
     path=["list", "gpus"],
@@ -214,18 +214,18 @@ class MassedComputeCommand(Command):
       }
     }
   )
-  def list_gpus(self, settings: Settings, sort_by: str = None) -> str:
+  def list_gpus(self, settings: Settings, sort_by: str = None) -> Result:
     """List available GPU configurations with optional sorting"""
+    result = Result()
+
     if not settings.massed_compute_api_token:
-      msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
-      print(msg)
-      return msg
+      return Result.fail("MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment.")
 
     try:
       api = MassedComputeAPI(settings)
       inventory = api.get_gpu_inventory()
 
-      # Format and print GPU inventory
+      # Format header for GPU inventory
       output = [
         "\nAvailable GPU Configurations:",
         "-" * 122,  # Increased width
@@ -306,53 +306,47 @@ class MassedComputeCommand(Command):
             "  available, a   - Sort by available capacity (hides unavailable)",
             "Add '-' prefix for reverse sort (e.g., -price)"
           ]
-          for line in sort_help:
-            print(line)
-            output.append(line)
-          return "\n".join(output)
+          output.extend(sort_help)
+          result.message = "\n".join(output)
+          return result
 
-      # Print sorted data
+      # Add sorted data to output
       for gpu in gpu_data:
         line = f"{gpu['name'][:25]:<25} {gpu['desc'][:25]:<25} {gpu['vram_str']:<10} " \
                f"${gpu['price']:<9.2f} {gpu['price_per_gb_str']:<10} {gpu['capacity']:<10}"
-        print(line)
         output.append(line)
 
-      return "\n".join(output)
+      result.data = gpu_data
+      result.message = "\n".join(output)
+      return result
 
     except Exception as e:
-      error_msg = f"Error listing GPU inventory: {str(e)}"
-      print(error_msg)
-      return error_msg
+      return Result.fail(f"Error listing GPU inventory: {str(e)}")
 
   @command(
     path=["list", "images"],
     description="List available VM images",
     help_text="List all available VM images that can be deployed"
   )
-  def list_images(self, settings: Settings) -> str:
+  def list_images(self, settings: Settings) -> Result:
     """List all available VM images"""
+    result = Result()
+
     if not settings.massed_compute_api_token:
-      msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
-      print(msg)
-      return msg
+      return Result.fail("MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment.")
 
     try:
       api = MassedComputeAPI(settings)
       images = api.get_images()
 
-      # Print formatted table
-      output = []
-      for line in format_images_table(images):
-        print(line)
-        output.append(line)
-
-      return "\n".join(output)
+      # Format images table
+      formatted_output = format_images_table(images)
+      result.data = images
+      result.message = "\n".join(formatted_output)
+      return result
 
     except Exception as e:
-      error_msg = f"Error listing images: {str(e)}"
-      print(error_msg)
-      return error_msg
+      return Result.fail(f"Error listing images: {str(e)}")
 
   @command(
     path=["deploy", "cheapest"],
@@ -382,12 +376,12 @@ class MassedComputeCommand(Command):
     }
   )
   def deploy_cheapest_instance(self, settings: Settings, image_id: int, instance_name: str,
-                              startup_script: str = None, ssh_keys: str = None) -> str:
+                              startup_script: str = None, ssh_keys: str = None) -> Result:
     """Deploy the cheapest available GPU instance"""
+    result = Result()
+
     if not settings.massed_compute_api_token:
-      msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
-      print(msg)
-      return msg
+      return Result.fail("MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment.")
 
     try:
       api = MassedComputeAPI(settings)
@@ -398,14 +392,12 @@ class MassedComputeCommand(Command):
       # Parse startup script if provided
       if startup_script:
         script_name = startup_script.lower()
-        # Parse any extra parameters (we'd need to handle those separately in a real implementation)
+        # Parse any extra parameters
         extra_params = {}
 
         script = get_startup_script(script_name, settings, extra_params)
         if script is None:
-          msg = f"Unknown startup script: {script_name}\nAvailable scripts: {', '.join(STARTUP_SCRIPTS.keys())}"
-          print(msg)
-          return msg
+          return Result.fail(f"Unknown startup script: {script_name}\nAvailable scripts: {', '.join(STARTUP_SCRIPTS.keys())}")
 
       # Parse SSH keys if provided
       if ssh_keys:
@@ -426,14 +418,15 @@ class MassedComputeCommand(Command):
         for key in ssh_key_list:
           output.append(f"  - {key}")
 
-      result = "\n".join(output)
-
+      result.data = {
+        "instance_uuid": instance_uuid,
+        "ssh_keys": ssh_key_list
+      }
+      result.message = "\n".join(output)
       return result
 
     except Exception as e:
-      error_msg = f"Error: {str(e)}"
-      print(error_msg)
-      return error_msg
+      return Result.fail(f"Error: {str(e)}")
 
   @command(
     path=["deploy", "specific"],
@@ -467,12 +460,12 @@ class MassedComputeCommand(Command):
     }
   )
   def deploy_specific_instance(self, settings: Settings, image_id: int, instance_name: str,
-                              product_name: str, startup_script: str = None, ssh_keys: str = None) -> str:
+                              product_name: str, startup_script: str = None, ssh_keys: str = None) -> Result:
     """Deploy a specific GPU instance"""
+    result = Result()
+
     if not settings.massed_compute_api_token:
-      msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
-      print(msg)
-      return msg
+      return Result.fail("MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment.")
 
     try:
       api = MassedComputeAPI(settings)
@@ -494,8 +487,9 @@ class MassedComputeCommand(Command):
           name = info['instance_type']['name']
           desc = info['instance_type']['description']
           output.append(f"  {name}: {desc}")
-        print("\n".join(output))
-        return "\n".join(output)
+
+        result.message = "\n".join(output)
+        return Result.fail(result.message)
 
       # Use the correct casing from the inventory
       product_name = matching_products[0]
@@ -508,9 +502,7 @@ class MassedComputeCommand(Command):
         script_name = startup_script.lower()
         script = get_startup_script(script_name, settings)
         if script is None:
-          msg = f"Unknown startup script: {script_name}\nAvailable scripts: {', '.join(STARTUP_SCRIPTS.keys())}"
-          print(msg)
-          return msg
+          return Result.fail(f"Unknown startup script: {script_name}\nAvailable scripts: {', '.join(STARTUP_SCRIPTS.keys())}")
 
       # Parse SSH keys if provided
       if ssh_keys:
@@ -533,8 +525,12 @@ class MassedComputeCommand(Command):
           for key in ssh_key_list:
             output.append(f"  - {key}")
 
-        result = "\n".join(output)
-
+        result.data = {
+          "instance_uuid": instance_uuid,
+          "product_name": product_name,
+          "ssh_keys": ssh_key_list
+        }
+        result.message = "\n".join(output)
         return result
 
       except requests.exceptions.HTTPError as e:
@@ -552,6 +548,7 @@ class MassedComputeCommand(Command):
               ]
 
               # Show available alternatives
+              alternatives = []
               for info in inventory.values():
                 instance_type = info.get('instance_type', {})
                 capacity = info.get('capacity_available', 0)
@@ -578,19 +575,23 @@ class MassedComputeCommand(Command):
                       break
 
                   output.append(f"{name[:15]:<15} {desc[:25]:<25} {vram:<10} ${price:<9.2f} {gb_per_dollar:<10} {capacity:<10}")
+                  alternatives.append({
+                    "name": name,
+                    "description": desc,
+                    "vram": vram,
+                    "price": price,
+                    "capacity": capacity
+                  })
 
-              print("\n".join(output))
-              return "\n".join(output)
+              result.data = {"alternatives": alternatives}
+              result.message = "\n".join(output)
+              return Result.fail(result.message)
 
         # If we couldn't parse the error or it's a different error, show the original message
-        error_msg = f"Error deploying instance: {str(e)}"
-        print(error_msg)
-        return error_msg
+        return Result.fail(f"Error deploying instance: {str(e)}")
 
     except Exception as e:
-      error_msg = f"Error: {str(e)}"
-      print(error_msg)
-      return error_msg
+      return Result.fail(f"Error: {str(e)}")
 
   @command(
     path=["terminate"],
@@ -607,17 +608,15 @@ class MassedComputeCommand(Command):
       "required": ["identifiers"]
     }
   )
-  def terminate_instances(self, settings: Settings, identifiers: str) -> str:
+  def terminate_instances(self, settings: Settings, identifiers: str) -> Result:
     """Terminate one or more instances by UUID or name"""
+    result = Result()
+
     if not settings.massed_compute_api_token:
-      msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
-      print(msg)
-      return msg
+      return Result.fail("MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment.")
 
     if not identifiers:
-      msg = "Error: Must specify at least one instance UUID or name to terminate"
-      print(msg)
-      return msg
+      return Result.fail("Error: Must specify at least one instance UUID or name to terminate")
 
     # Split the identifiers into a list
     args = identifiers.split()
@@ -634,62 +633,68 @@ class MassedComputeCommand(Command):
 
         if matching_instances:
           if len(matching_instances) > 1:
-            print(f"\nWarning: Multiple instances found with name '{identifier}':")
+            output = [f"\nWarning: Multiple instances found with name '{identifier}':"]
             for inst in matching_instances:
-              print(f"  {inst.get('name')} (UUID: {inst.get('uuid')})")
-            print("Please use UUID to terminate specific instance")
-            continue
+              output.append(f"  {inst.get('name')} (UUID: {inst.get('uuid')})")
+            output.append("Please use UUID to terminate specific instance")
+            result.message = "\n".join(output)
+            # Just return the warning, don't terminate anything in this case
+            return result
           else:
             instance_uuid = matching_instances[0].get('uuid')
             instance_name = matching_instances[0].get('name')
-            print(f"Found instance '{instance_name}' with UUID: {instance_uuid}")
             uuids_to_terminate.append(instance_uuid)
         else:
           # Assume it's a UUID
           uuids_to_terminate.append(identifier)
 
       if not uuids_to_terminate:
-        msg = "No valid instances found to terminate"
-        print(msg)
-        return msg
+        return Result.fail("No valid instances found to terminate")
 
-      # Confirm termination
+      # Build list of instances to terminate for confirmation
       output = ["\nPreparing to terminate the following instances:"]
+      instances_to_terminate = []
+
       for uuid in uuids_to_terminate:
         matching = next((i for i in instances if i.get('uuid') == uuid), None)
         if matching:
           output.append(f"  {matching.get('name')} ({uuid})")
+          instances_to_terminate.append({"name": matching.get('name'), "uuid": uuid})
         else:
           output.append(f"  {uuid}")
+          instances_to_terminate.append({"uuid": uuid})
 
+      # Set instances to terminate in result data
+      result.data = {"instances_to_terminate": instances_to_terminate}
+
+      # Ask for confirmation
       confirm = input("\nAre you sure you want to terminate these instances? (y/N): ")
       if confirm.lower() != 'y':
-        msg = "Termination cancelled"
-        print(msg)
-        return msg
+        result.message = "Termination cancelled"
+        return result
 
       # Proceed with termination
       response = api.terminate_instances(uuids_to_terminate)
 
-      # Print results
+      # Process results
       terminated = response.get('response', {}).get('data', {}).get('terminated_instances', [])
       if terminated:
         output.append("\nSuccessfully terminated instances:")
+        terminated_instances = []
         for instance in terminated:
           name = instance.get('name', 'N/A')
           uuid = instance.get('id', 'N/A')
           output.append(f"  {name} ({uuid})")
+          terminated_instances.append({"name": name, "uuid": uuid})
+        result.data["terminated_instances"] = terminated_instances
       else:
         output.append("No instances were terminated")
 
-      result = "\n".join(output)
-
+      result.message = "\n".join(output)
       return result
 
     except Exception as e:
-      error_msg = f"Error terminating instances: {str(e)}"
-      print(error_msg)
-      return error_msg
+      return Result.fail(f"Error terminating instances: {str(e)}")
 
   @command(
     path=["details"],
@@ -706,12 +711,12 @@ class MassedComputeCommand(Command):
       "required": ["identifier"]
     }
   )
-  def get_instance_details(self, settings: Settings, identifier: str) -> str:
+  def get_instance_details(self, settings: Settings, identifier: str) -> Result:
     """Get detailed information about a specific instance"""
+    result = Result()
+
     if not settings.massed_compute_api_token:
-      msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
-      print(msg)
-      return msg
+      return Result.fail("MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment.")
 
     try:
       api = MassedComputeAPI(settings)
@@ -730,17 +735,15 @@ class MassedComputeCommand(Command):
           for inst in matching_instances:
             output.append(f"  {inst.get('name')} (UUID: {inst.get('uuid')})")
           output.append("Please use UUID to get details of specific instance")
-          print("\n".join(output))
-          return "\n".join(output)
+          result.message = "\n".join(output)
+          return result
         elif len(matching_instances) == 1:
           instance = matching_instances[0]
 
       if not instance:
-        msg = f"No instance found with identifier: {identifier}"
-        print(msg)
-        return msg
+        return Result.fail(f"No instance found with identifier: {identifier}")
 
-      # Print basic info
+      # Build instance details output
       output = [
         "\nInstance Details:",
         "-" * 72,
@@ -753,12 +756,12 @@ class MassedComputeCommand(Command):
         f"Created: {instance.get('created', 'N/A')}"
       ]
 
-      # Print startup command if present
+      # Add startup command if present
       startup_cmd = instance.get('command_startup')
       if startup_cmd:
         output.append(f"Startup Command: {startup_cmd}")
 
-      # Print image info
+      # Add image info
       image = instance.get('image', {})
       output.extend([
         "\nImage:",
@@ -767,7 +770,7 @@ class MassedComputeCommand(Command):
         f"  Description: {image.get('description', 'N/A')}"
       ])
 
-      # Print product info
+      # Add product info
       product = instance.get('product', {})
       output.extend([
         "\nProduct:",
@@ -780,14 +783,12 @@ class MassedComputeCommand(Command):
         f"  Price/Hour: ${float(product.get('price_hr', 0)):.2f}"
       ])
 
-      result = "\n".join(output)
-      print(result)
+      result.data = instance
+      result.message = "\n".join(output)
       return result
 
     except Exception as e:
-      error_msg = f"Error getting instance details: {str(e)}"
-      print(error_msg)
-      return error_msg
+      return Result.fail(f"Error getting instance details: {str(e)}")
 
   @command(
     path=["ssh"],
@@ -804,12 +805,12 @@ class MassedComputeCommand(Command):
       "required": ["identifier"]
     }
   )
-  def ssh_to_instance(self, settings: Settings, identifier: str) -> str:
+  def ssh_to_instance(self, settings: Settings, identifier: str) -> Result:
     """Connect to instance via SSH"""
+    result = Result()
+
     if not settings.massed_compute_api_token:
-      msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
-      print(msg)
-      return msg
+      return Result.fail("MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment.")
 
     try:
       api = MassedComputeAPI(settings)
@@ -828,15 +829,13 @@ class MassedComputeCommand(Command):
           for inst in matching_instances:
             output.append(f"  {inst.get('name')} (UUID: {inst.get('uuid')})")
           output.append("Please use UUID to connect to specific instance")
-          print("\n".join(output))
-          return "\n".join(output)
+          result.message = "\n".join(output)
+          return result
         elif len(matching_instances) == 1:
           instance = matching_instances[0]
 
       if not instance:
-        msg = f"No instance found with identifier: {identifier}"
-        print(msg)
-        return msg
+        return Result.fail(f"No instance found with identifier: {identifier}")
 
       ip = instance.get('ip')
       username = instance.get('username')
@@ -844,13 +843,17 @@ class MassedComputeCommand(Command):
       name = instance.get('name')
 
       if not all([ip, username, password]):
-        msg = "Error: Missing connection details for instance"
-        print(msg)
-        return msg
+        return Result.fail("Error: Missing connection details for instance")
 
-      print(f"\nConnecting to {name} ({username}@{ip})...")
+      # Create connection details in result data
+      result.data = {
+        "ip": ip,
+        "username": username,
+        "password": password,
+        "name": name
+      }
 
-      # Construct sshpass command based on platform
+      # Handle Windows platform differently
       if platform.system() == "Windows":
         output = [
           "Connection details:",
@@ -859,8 +862,8 @@ class MassedComputeCommand(Command):
           f"  Password: {password}",
           "\nPlease use these credentials in your SSH client"
         ]
-        print("\n".join(output))
-        return "\n".join(output)
+        result.message = "\n".join(output)
+        return result
 
       # For Unix-like systems, use sshpass
       ssh_command = [
@@ -876,26 +879,25 @@ class MassedComputeCommand(Command):
 
       try:
         subprocess.run(ssh_command)
-        return "SSH session ended"
+        result.message = "SSH session ended"
+        return result
       except FileNotFoundError:
-        output = [
+        install_instructions = [
           "Error: 'sshpass' is required but not installed.",
           "Install it with:"
         ]
         if platform.system() == "Darwin":  # macOS
-          output.append("  brew install hudochenkov/sshpass/sshpass")
+          install_instructions.append("  brew install hudochenkov/sshpass/sshpass")
         else:  # Linux
-          output.extend([
+          install_instructions.extend([
             "  sudo apt-get install sshpass  # Ubuntu/Debian",
             "  sudo yum install sshpass      # CentOS/RHEL"
           ])
-        print("\n".join(output))
-        return "\n".join(output)
+        result.message = "\n".join(install_instructions)
+        return Result.fail(result.message)
 
     except Exception as e:
-      error_msg = f"Error connecting to instance: {str(e)}"
-      print(error_msg)
-      return error_msg
+      return Result.fail(f"Error connecting to instance: {str(e)}")
 
   @command(
     path=["run"],
@@ -916,12 +918,12 @@ class MassedComputeCommand(Command):
       "required": ["identifier", "script_name"]
     }
   )
-  def run_script(self, settings: Settings, identifier: str, script_name: str) -> str:
+  def run_script(self, settings: Settings, identifier: str, script_name: str) -> Result:
     """Run a predefined script on an instance"""
+    result = Result()
+
     if not settings.massed_compute_api_token:
-      msg = "MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment."
-      print(msg)
-      return msg
+      return Result.fail("MassedCompute API token not found. Please set TOKEN_MASSEDCOMPUTE in your environment.")
 
     try:
       api = MassedComputeAPI(settings)
@@ -939,22 +941,18 @@ class MassedComputeCommand(Command):
           for inst in matching_instances:
             output.append(f"  {inst.get('name')} (UUID: {inst.get('uuid')})")
           output.append("Please use UUID to run script on specific instance")
-          print("\n".join(output))
-          return "\n".join(output)
+          result.message = "\n".join(output)
+          return result
         elif len(matching_instances) == 1:
           instance = matching_instances[0]
 
       if not instance:
-        msg = f"No instance found with identifier: {identifier}"
-        print(msg)
-        return msg
+        return Result.fail(f"No instance found with identifier: {identifier}")
 
       # Get script
       script = get_startup_script(script_name.lower(), settings)
       if script is None:
-        msg = f"Unknown script: {script_name}\nAvailable scripts: {', '.join(STARTUP_SCRIPTS.keys())}"
-        print(msg)
-        return msg
+        return Result.fail(f"Unknown script: {script_name}\nAvailable scripts: {', '.join(STARTUP_SCRIPTS.keys())}")
 
       ip = instance.get('ip')
       username = instance.get('username')
@@ -962,11 +960,20 @@ class MassedComputeCommand(Command):
       name = instance.get('name')
 
       if not all([ip, username, password]):
-        msg = "Error: Missing connection details for instance"
-        print(msg)
-        return msg
+        return Result.fail("Error: Missing connection details for instance")
 
-      print(f"\nRunning script '{script_name}' on instance '{name}'...")
+      # Store instance and script details in result data
+      result.data = {
+        "instance": {
+          "name": name,
+          "ip": ip,
+          "username": username
+        },
+        "script": {
+          "name": script_name,
+          "commands": script
+        }
+      }
 
       # For Windows, show manual instructions
       if platform.system() == "Windows":
@@ -978,8 +985,8 @@ class MassedComputeCommand(Command):
           "\nCommands to run:",
           script
         ]
-        print("\n".join(output))
-        return "\n".join(output)
+        result.message = "\n".join(output)
+        return result
 
       # For Unix-like systems, use sshpass to execute the script
       ssh_command = [
@@ -995,40 +1002,40 @@ class MassedComputeCommand(Command):
       ]
 
       try:
-        result = subprocess.run(ssh_command, capture_output=True, text=True)
+        process_result = subprocess.run(ssh_command, capture_output=True, text=True)
         output = []
 
-        if result.returncode == 0:
+        if process_result.returncode == 0:
           output.append("\nScript executed successfully")
-          if result.stdout:
-            output.extend(["\nOutput:", result.stdout])
+          if process_result.stdout:
+            output.extend(["\nOutput:", process_result.stdout])
+            result.data["output"] = process_result.stdout
         else:
           output.append("\nScript execution failed")
-          if result.stderr:
-            output.extend(["\nError output:", result.stderr])
+          if process_result.stderr:
+            output.extend(["\nError output:", process_result.stderr])
+            result.data["error"] = process_result.stderr
+          return Result.fail("\n".join(output))
 
-        print("\n".join(output))
-        return "\n".join(output)
+        result.message = "\n".join(output)
+        return result
 
       except FileNotFoundError:
-        output = [
+        install_instructions = [
           "Error: 'sshpass' is required but not installed.",
           "Install it with:"
         ]
         if platform.system() == "Darwin":  # macOS
-          output.append("  brew install hudochenkov/sshpass/sshpass")
+          install_instructions.append("  brew install hudochenkov/sshpass/sshpass")
         else:  # Linux
-          output.extend([
+          install_instructions.extend([
             "  sudo apt-get install sshpass  # Ubuntu/Debian",
             "  sudo yum install sshpass      # CentOS/RHEL"
           ])
-        print("\n".join(output))
-        return "\n".join(output)
+        return Result.fail("\n".join(install_instructions))
 
     except Exception as e:
-      error_msg = f"Error running script: {str(e)}"
-      print(error_msg)
-      return error_msg
+      return Result.fail(f"Error running script: {str(e)}")
 
 
 

@@ -2,7 +2,7 @@ import logging
 import os
 
 # Internal dependencies
-from commands.base import Command, command
+from .base import Command, command
 from results import Result
 from settings import Settings
 from enums import LogLevel, LogFormat

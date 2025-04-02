@@ -10,7 +10,8 @@ import logging
 from typing import Dict, Any, Optional
 
 # Internal dependencies
-from commands.base import Command, command
+from .base import Command, command
+from results import Result
 from settings import Settings
 
 
@@ -42,14 +43,18 @@ class ToolsCommand(Command):
     },
     ai_callable=True
   )
-  def get_current_time(self, settings: Settings) -> str:
+  def get_current_time(self, settings: Settings) -> Result:
     """
     Get the current time.
 
     Returns:
-      str: The current time in HH:MM:SS format
+      Result: Result with the current time in HH:MM:SS format
     """
-    return datetime.datetime.now().strftime("%H:%M:%S")
+    result = Result()
+    current_time = datetime.datetime.now().strftime("%H:%M:%S")
+    result.data = current_time
+    result.message = current_time
+    return result
 
   @command(
     path=["date"],
@@ -65,14 +70,18 @@ class ToolsCommand(Command):
     },
     ai_callable=True
   )
-  def get_current_date(self, settings: Settings) -> str:
+  def get_current_date(self, settings: Settings) -> Result:
     """
     Get the current date.
 
     Returns:
-      str: The current date in YYYY-MM-DD format
+      Result: Result with the current date in YYYY-MM-DD format
     """
-    return datetime.date.today().strftime("%Y-%m-%d")
+    result = Result()
+    current_date = datetime.date.today().strftime("%Y-%m-%d")
+    result.data = current_date
+    result.message = current_date
+    return result
 
   @command(
     path=["username"],
@@ -88,18 +97,24 @@ class ToolsCommand(Command):
     },
     ai_callable=True
   )
-  def get_user_name(self, settings: Settings) -> str:
+  def get_user_name(self, settings: Settings) -> Result:
     """
     Get the user name.
 
     Returns:
-      str: The user name
+      Result: Result with the user name
     """
+    result = Result()
+
     # Use the actual username from settings if available
     if hasattr(settings, "username") and settings.username:
-      return settings.username
+      username = settings.username
     else:
-      return "John Doe"
+      username = "John Doe"
+
+    result.data = username
+    result.message = username
+    return result
 
   @command(
     path=["greet"],
@@ -121,7 +136,7 @@ class ToolsCommand(Command):
     },
     ai_callable=True
   )
-  def greet_user(self, settings: Settings, name: str) -> str:
+  def greet_user(self, settings: Settings, name: str) -> Result:
     """
     Greet a user by name.
 
@@ -129,6 +144,10 @@ class ToolsCommand(Command):
       name: The name of the user to greet
 
     Returns:
-      str: A greeting message
+      Result: Result with a greeting message
     """
-    return f"Hello, {name}!"
+    result = Result()
+    greeting = f"Hello, {name}!"
+    result.data = greeting
+    result.message = greeting
+    return result
