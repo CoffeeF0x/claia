@@ -8,7 +8,7 @@ import uuid, time
 from typing import Optional, Dict, Any
 
 # Internal dependencies
-from enums import ProcessStatus, AgentType
+from enums import ProcessStatus
 from files import Conversation
 from settings import Settings
 
@@ -27,7 +27,7 @@ class Process:
   """
   def __init__(
     self,
-    agent_type: AgentType = AgentType.SIMPLE,
+    agent_type: str = "simple",
     settings: Settings = None,
     conversation: Conversation = None,
     parameters: Dict[str, Any] = None,

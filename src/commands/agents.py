@@ -11,7 +11,6 @@ from .base import Command, command
 from results import Result
 from settings import Settings
 from agents import Agent
-from enums.agent import AgentType
 
 
 
@@ -46,11 +45,12 @@ class AgentCommand(Command):
     """List all available agent types"""
     result = Result()
 
-    # Get agent types from enum
-    agent_types = [agent_type.value for agent_type in AgentType]
+    # Get agent types from the Agent registry
+    agent_types = Agent.get_agent_types()
+    agent_type_values = [agent["type"] for agent in agent_types]
 
-    result.data = agent_types
-    result.message = "Available agent types:\n" + "\n".join(agent_types)
+    result.data = agent_type_values
+    result.message = "Available agent types:\n" + "\n".join(agent_type_values)
     return result
 
   @command(
@@ -62,8 +62,7 @@ class AgentCommand(Command):
       "properties": {
         "agent_type": {
           "type": "string",
-          "description": "Agent type to use",
-          "enum": [agent_type.value for agent_type in AgentType]
+          "description": "Agent type to use"
         }
       },
       "required": ["agent_type"]
@@ -78,21 +77,23 @@ class AgentCommand(Command):
     """Set the agent type to use"""
     result = Result()
 
-    try:
-      # Convert string to AgentType enum
-      agent_enum = AgentType.from_string(agent_type)
+    # Get all available agent types
+    agent_types = Agent.get_agent_types()
+    agent_type_values = [agent["type"] for agent in agent_types]
 
-      # Store the string value in settings
-      settings.active_agent = agent_enum
+    # Check if the agent type exists
+    agent_type_lower = agent_type.lower()
+    if agent_type_lower not in [t.lower() for t in agent_type_values]:
+      return Result.fail(f"Invalid agent type: {agent_type}. Valid types are: {', '.join(agent_type_values)}")
 
-      result.data = {
-        "agent_type": agent_enum.value,
-        "agent_name": agent_enum.name
-      }
-      result.message = f"Agent type set to: {agent_enum.value}"
-      return result
-    except ValueError as e:
-      return Result.fail(str(e))
+    # Store the agent type in settings
+    settings.active_agent = agent_type_lower
+
+    result.data = {
+      "agent_type": agent_type_lower
+    }
+    result.message = f"Agent type set to: {agent_type_lower}"
+    return result
 
   @command(
     path=["current"],
@@ -113,15 +114,10 @@ class AgentCommand(Command):
     result = Result()
 
     if settings.active_agent:
-      try:
-        result.data = {
-          "agent_type": settings.active_agent.value,
-          "agent_name": settings.active_agent.name
-        }
-        result.message = f"Current agent type: {settings.active_agent.value}"
-      except ValueError:
-        result.data = {"agent_type": settings.active_agent}
-        result.message = f"Current agent type: {settings.active_agent}"
+      result.data = {
+        "agent_type": settings.active_agent
+      }
+      result.message = f"Current agent type: {settings.active_agent}"
     else:
       result.message = "No agent type selected"
 
@@ -169,29 +165,23 @@ class AgentCommand(Command):
     """Get detailed information about a specific agent type"""
     result = Result()
 
-    try:
-      # Convert string to AgentType enum for validation
-      agent_enum = AgentType.from_string(agent_type)
-      agent_type = agent_enum.value
+    # Get all agent types
+    agent_types = Agent.get_agent_types()
 
-      # Get all agent types
-      agent_types = Agent.get_agent_types()
+    # Find the specified agent type (case-insensitive)
+    agent_type_lower = agent_type.lower()
+    for agent in agent_types:
+      if agent["type"].lower() == agent_type_lower:
+        # Build and return the information
+        output = [
+          f"Agent Type: {agent['type']}",
+          f"Name: {agent['name']}",
+          f"Description: {agent['description']}"
+        ]
+        result.data = agent
+        result.message = "\n".join(output)
+        return result
 
-      # Find the specified agent type
-      for agent in agent_types:
-        if agent["type"] == agent_type:
-          # Build and return the information
-          capabilities = ", ".join(agent["capabilities"])
-          output = [
-            f"Agent Type: {agent['type']}",
-            f"Name: {agent['name']}",
-            f"Description: {agent['description']}",
-            f"Capabilities: {capabilities}"
-          ]
-          result.data = agent
-          result.message = "\n".join(output)
-          return result
-
-      return Result.fail(f"Agent type '{agent_type}' found in enum but not registered in Agent system")
-    except ValueError as e:
-      return Result.fail(str(e))
+    # If not found, get all available types for the error message
+    available_types = [agent["type"] for agent in agent_types]
+    return Result.fail(f"Agent type '{agent_type}' not found. Available types: {', '.join(available_types)}")

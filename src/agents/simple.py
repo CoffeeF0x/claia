@@ -18,8 +18,7 @@ class SimpleAgent(BaseAgent):
   """
   A simple agent that directly calls a model for inference.
 
-  This agent serves as the central gateway for all direct model interactions,
-  translating between agent requests and model capabilities.
+  This agent will simply forward requests to the appropriate model.
   """
 
   @classmethod

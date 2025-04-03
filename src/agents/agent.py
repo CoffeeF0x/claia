@@ -8,7 +8,7 @@ the class methods directly (preferred) or by calling Agent.get_instance().
 
 Examples:
     # Using class methods directly (preferred)
-    Agent.register_agent(AgentType.CUSTOM, CustomAgent)
+    Agent.register_agent("custom", CustomAgent)
     result = Agent.process(process)
     agent_types = Agent.get_agent_types()
 
@@ -22,9 +22,15 @@ import logging
 from typing import List, Dict, Any, Type, Optional
 
 # Internal dependencies
-from enums import AgentType
 from .process import Process
 from .simple import SimpleAgent
+
+
+
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
+DEFAULT_AGENT_TYPE = "simple"
 
 
 
@@ -51,7 +57,7 @@ class Agent:
   _instance: Optional['Agent'] = None
 
   # Registry to store agent implementations
-  _agent_registry: Dict[AgentType, Type] = {}
+  _agent_registry: Dict[str, Type] = {}
 
   def __new__(cls):
     """
@@ -73,31 +79,41 @@ class Agent:
     pass
 
   @classmethod
-  def register_agent(cls, agent_type: AgentType, agent_class: Type):
+  def register_agent(cls, agent_type: str, agent_class: Type):
     """
     Register an agent implementation for a specific agent type.
 
     Args:
-        agent_type: The type of agent to register
+        agent_type: The type of agent to register (string)
         agent_class: The agent class implementation
     """
+    # Convert agent_type to lowercase for case-insensitive matching
+    agent_type = agent_type.lower()
     cls._agent_registry[agent_type] = agent_class
-    logger.debug(f"Registered agent {agent_class.__name__} for type {agent_type.value}")
+    logger.debug(f"Registered agent {agent_class.__name__} for type {agent_type}")
 
   @classmethod
-  def get_agent_for_type(cls, agent_type: AgentType):
+  def get_agent_for_type(cls, agent_type: str):
     """
     Get the agent implementation for a specific agent type.
 
     Args:
-        agent_type: The type of agent to get
+        agent_type: The type of agent to get (string)
 
     Returns:
         The agent class for the specified type, or SimpleAgent if not found
     """
-    agent_class = cls._agent_registry.get(agent_type)
+    # If agent_type is None, use the default
+    if agent_type is None:
+      logger.debug(f"No agent type specified, using default: {cls.DEFAULT_AGENT_TYPE}")
+      agent_type = cls.DEFAULT_AGENT_TYPE
+
+    # Convert to lowercase for case-insensitive matching
+    agent_type_lower = agent_type.lower() if isinstance(agent_type, str) else ""
+
+    agent_class = cls._agent_registry.get(agent_type_lower)
     if not agent_class:
-      logger.warning(f"No agent registered for type {agent_type.value}, using SimpleAgent")
+      logger.warning(f"No agent registered for type '{agent_type}', using SimpleAgent")
       return SimpleAgent
     return agent_class
 
@@ -110,13 +126,11 @@ class Agent:
         A list of agent type information dictionaries
     """
     agent_types = []
-    for agent_type in AgentType:
-      agent_class = cls.get_agent_for_type(agent_type)
+    for agent_type, agent_class in cls._agent_registry.items():
       agent_types.append({
-        "type": agent_type.value,
-        "name": agent_type.name,
-        "description": agent_class.get_description(),
-        "capabilities": agent_class.get_capabilities()
+        "type": agent_type,
+        "name": agent_type.lower(),
+        "description": agent_class.get_description()
       })
     return agent_types
 

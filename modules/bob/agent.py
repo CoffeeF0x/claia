@@ -10,7 +10,7 @@ from typing import List
 # Internal dependencies
 from models import model_definitions
 from enums import ModelCapability
-from .base import BaseAgent
+from agents.base import BaseAgent
 
 
 
