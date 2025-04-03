@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                             REGISTRY                                 #
 ########################################################################
-class Registry:
+class CommandRegistry:
   """
   Singleton class for registering and managing commands in the application.
 
@@ -103,7 +103,7 @@ class Registry:
 
   def __new__(cls):
     if cls._instance is None:
-      cls._instance = super(Registry, cls).__new__(cls)
+      cls._instance = super(CommandRegistry, cls).__new__(cls)
       cls._instance._initialized = False
     return cls._instance
 

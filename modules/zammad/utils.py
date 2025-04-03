@@ -20,7 +20,7 @@ from enums import MessageRole
 from .api import ZammadAPI
 from .settings import ZammadSettings
 from .constants import TAG_LIST, TAG_PROMPT, ACCOUNT_MANAGEMENT_PROMPT, VERIFICATION_PROMPT
-from models import run as model_run
+# from models import run as model_run
 
 
 

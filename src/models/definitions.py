@@ -31,7 +31,7 @@ DEFAULT_SETTINGS = {
 #   - attributes: Technical specifications
 #   - settings: Model-specific settings for generation (overrides defaults)
 
-definitions = {
+model_definitions = {
   "gpt-4": {
     "title": "GPT 4",
     "description": "Snapshot of gpt-4 from June 13th 2023 with improved function calling support.",

@@ -16,6 +16,9 @@
 # - create new prompts or update existing (need to move prompts to json files)
 # - prompt doesn't apply to the active conversation (if there's an active conversation, it should apply to it)
 # - add way to attempt to load models not in the definitions by creating a default based on source and if source not selected, then attempt to use the name to identify the source
+# - add a function to check model capabilities in the registry, that will also consider model names that aren't in the definitions table (see bob as the primary use case)
+# - add module imports for agents and migrate bob to be a module
+# - create a vix demo that uses a list off images to show reactions in a conversation, think emojis (this should be a tool call since it's not generating the images, thought it's an idea to train a lora and have images generated)
 
 # External dependencies
 import readline
@@ -26,7 +29,7 @@ import os
 import sys
 
 # Internal dependencies
-from commands import Registry
+from commands import CommandRegistry
 from results import Result
 from settings import Settings
 from agents import ProcessQueue, Process
@@ -116,7 +119,7 @@ def main() -> None:
 
     # Initialize the command registry
     logger.debug("Initializing command registry")
-    command_registry = Registry()
+    command_registry = CommandRegistry()
 
     # Initialize the module system (must happen after commands are initialized)
     logger.debug("Initializing module system")

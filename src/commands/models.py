@@ -12,7 +12,7 @@ from typing import List, Dict, Any, Optional
 from .base import Command, command
 from results import Result
 from settings import Settings
-from models import definitions, sources
+from models import model_definitions, model_sources
 
 
 
@@ -54,12 +54,12 @@ class ModelCommand(Command):
     if model_name:
       # Get available sources for this model
       available_sources = []
-      for s in sources.keys():
-        if s in definitions.get(model_name, {}).get('sources', []):
+      for s in model_sources.keys():
+        if s in model_definitions.get(model_name, {}).get('sources', []):
           available_sources.append(s)
 
-      if model_name in definitions and available_sources:
-        model_info = definitions[model_name]
+      if model_name in model_definitions and available_sources:
+        model_info = model_definitions[model_name]
         output = [
           f"Name: {model_name}",
           f"Title: {model_info['title']}",
@@ -81,8 +81,8 @@ class ModelCommand(Command):
     else:
       # Filter models to only those with available sources
       available_models = {
-        name: model for name, model in definitions.items()
-        if any(s in model.get('sources', []) for s in sources.keys())
+        name: model for name, model in model_definitions.items()
+        if any(s in model.get('sources', []) for s in model_sources.keys())
       }
 
       if not available_models:
@@ -97,8 +97,8 @@ class ModelCommand(Command):
       for model_name in available_models.keys():
         # Get available sources for this model
         available_sources = []
-        for s in sources.keys():
-          if s in definitions.get(model_name, {}).get('sources', []):
+        for s in model_sources.keys():
+          if s in model_definitions.get(model_name, {}).get('sources', []):
             available_sources.append(s)
         sources_str = f" ({', '.join(available_sources)})"
 
@@ -143,11 +143,11 @@ class ModelCommand(Command):
     result = Result()
 
     # Handle known models in definitions
-    if model_name in definitions:
+    if model_name in model_definitions:
       # Get available sources for this model
       available_sources = []
-      for s in sources.keys():
-        if s in definitions.get(model_name, {}).get('sources', []):
+      for s in model_sources.keys():
+        if s in model_definitions.get(model_name, {}).get('sources', []):
           available_sources.append(s)
 
       if available_sources:
@@ -173,10 +173,10 @@ class ModelCommand(Command):
 
     # For unknown models or models without sources, make a best guess
     if source:
-      if source in sources.keys():
+      if source in model_sources.keys():
         chosen_source = source
       else:
-        return Result.fail(f"Invalid source '{source}'. Available sources: {', '.join(sources.keys())}")
+        return Result.fail(f"Invalid source '{source}'. Available sources: {', '.join(model_sources.keys())}")
     else:
       # Default to transformers source for unknown models, especially if it has a slash
       # which likely indicates a HuggingFace model ID

@@ -1,8 +1,8 @@
 """
-Module loading system for CLAIA.
+This module provides support for loading external modules in CLAIA.
 
-This module handles dynamic loading of modules (plugins) for the CLAIA application.
-Modules are loaded by finding command.py files in the modules directory structure.
+Modules are loaded by finding specific files in the modules directory structure.
+These modules can provide additional commands, tools, and other functionality.
 """
 
 # External dependencies
@@ -14,7 +14,7 @@ import inspect
 from typing import Dict, Any
 
 # Internal dependencies
-from commands import Registry, Command
+from commands import CommandRegistry, Command
 
 
 
@@ -23,13 +23,15 @@ from commands import Registry, Command
 ########################################################################
 logger = logging.getLogger(__name__)
 MODULE_COMMAND_FILENAME = "command.py"
+AGENT_COMMAND_FILENAME = "agent.py"
+MODEL_COMMAND_FILENAME = "model.py"
 
 
 
 ########################################################################
 #                            MODULE LOADING                            #
 ########################################################################
-def load_modules(registry: Registry, modules_dir: str) -> Dict[str, Any]:
+def load_modules(registry: CommandRegistry, modules_dir: str) -> Dict[str, Any]:
     """
     Load all available modules from the modules directory by finding command.py files.
 
@@ -128,7 +130,7 @@ def load_modules(registry: Registry, modules_dir: str) -> Dict[str, Any]:
     return modules
 
 
-def initialize_module_system(registry: Registry, modules_dir: str) -> None:
+def initialize_module_system(registry: CommandRegistry, modules_dir: str) -> None:
     """
     Initialize the module system by loading modules.
 

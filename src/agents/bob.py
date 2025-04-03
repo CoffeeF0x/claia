@@ -8,7 +8,7 @@ import logging
 from typing import List
 
 # Internal dependencies
-from models import run as model_run, definitions
+from models import model_definitions
 from enums import ModelCapability
 from .base import BaseAgent
 
@@ -54,8 +54,8 @@ class BobAgent(BaseAgent):
       model_id = process.parameters["model_id"]
 
       # Check if the model has text-to-text capability
-      if model_id in definitions:
-        model_def = definitions[model_id]
+      if model_id in model_definitions:
+        model_def = model_definitions[model_id]
         capabilities = model_def.get("capabilities", [])
 
         if ModelCapability.TTT not in capabilities:
@@ -68,7 +68,7 @@ class BobAgent(BaseAgent):
         process.conversation.change_prompt(BOB_SYSTEM_PROMPT)
 
       # Run the model with the processed messages
-      result = model_run(model_id, process.conversation, settings=process.settings, **kwargs)
+      result = cls.model_registry.run(model_id, process.conversation, settings=process.settings, **kwargs)
 
       if result.is_error():
         raise ValueError(f"Bob ran into a problem: {result.get_message()}")

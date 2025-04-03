@@ -18,7 +18,7 @@ from settings import Settings
 from results import Result
 
 # Internal dependencies
-from models import run as model_run
+# from models import run as model_run
 from files import Conversation
 from enums import MessageRole
 from .settings import ZammadSettings

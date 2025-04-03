@@ -12,7 +12,7 @@ from .remote.vllm import VLLMModel
 #                         MODEL SOURCE MAPPING                         #
 ########################################################################
 # Maps source identifiers to their implementation classes
-sources = {
+model_sources = {
   "openai": OpenAIModel,
   "anthropic": AnthropicModel,
   "transformers": TransformersModel,

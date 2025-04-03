@@ -7,7 +7,6 @@ A simple agent that directly calls a model for inference.
 import logging
 
 # Internal dependencies
-from models import run as model_run
 from .base import BaseAgent
 
 
@@ -38,8 +37,8 @@ class SimpleAgent(BaseAgent):
       # Get the model ID from the validated parameters
       model_id = process.parameters["model_id"]
 
-      # Run the model with the conversation
-      result = model_run(model_id, process.conversation, settings=process.settings, **kwargs)
+      # Run the model with the conversation using the model registry
+      result = cls.model_registry.run(model_id, process.conversation, settings=process.settings, **kwargs)
 
       if result.is_error():
         raise ValueError(f"Error running model: {result.get_message()}")

@@ -5,7 +5,10 @@ Provides a common interface for all agent implementations.
 
 # External dependencies
 import logging
+
+# Internal dependencies
 from .process import Process
+from models import ModelRegistry
 
 
 
@@ -27,6 +30,8 @@ class BaseAgent:
   Specific agent implementations should inherit from this class and implement
   the process_request method.
   """
+  # Shared model registry instance used by all agents
+  model_registry = ModelRegistry()
 
   @classmethod
   def process(cls, process: Process, **kwargs) -> object:
@@ -101,6 +106,11 @@ class BaseAgent:
     if not model_id:
       logger.error(f"Process {process.id} missing model_id and no active model set")
       raise ValueError(f"{cls.__name__} requires an active model")
+
+    # Check for model registry
+    if not cls.model_registry:
+      logger.error(f"Process {process.id} has no model_registry available")
+      raise ValueError(f"{cls.__name__} requires a model registry to be set")
 
     # Add the validated model_id to process parameters for easy access
     process.parameters["model_id"] = model_id
