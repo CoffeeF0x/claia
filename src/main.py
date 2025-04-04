@@ -2,6 +2,7 @@
 # - create an option to enable a server that serves and updates md files, and sync conversations to md files?
 # - Needs a way to filter models (since there are lots) (model list partname?)
 # - perhaps have the model layer compare the capabilities against the sent request, if there's content that the model doesn't support throw a warning, maybe also trim the request to the model's capabilities
+# - model should pass model name from source list in definitions rather than using the model id
 
 # - add ability to rename conversations, and perhaps have ai name conversations automatically
 
