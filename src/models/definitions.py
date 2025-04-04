@@ -30,6 +30,7 @@ DEFAULT_SETTINGS = {
 #   - inputs/outputs: Supported formats
 #   - attributes: Technical specifications
 #   - settings: Model-specific settings for generation (overrides defaults)
+#   - aliases: Alternative names that can be used to reference this model
 
 model_definitions = {
   "gpt-4": {
@@ -40,6 +41,7 @@ model_definitions = {
       "openai": ["gpt-4-0613", "gpt-4"],
       "openrouter": ["openai/gpt-4"]
     },
+    "aliases": ["gpt4", "gpt-4-0613"]
   },
   "claude-3-5-sonnet": {
     "title": "Claude 3.5 Sonnet",
@@ -49,6 +51,7 @@ model_definitions = {
       "anthropic": ["claude-3-5-sonnet-20240620"],
       "openrouter": ["anthropic/claude-3-sonnet-20240620"]
     },
+    "aliases": ["claude3.5", "claude-3.5", "claude-3-5"]
   },
   "minicpm3-4b": {
     "title": "MiniCPM3-4B",
@@ -61,7 +64,8 @@ model_definitions = {
     "settings": {
       "max_new_tokens": 4096,
       "temperature": 0.8
-    }
+    },
+    "aliases": ["minicpm", "minicpm3"]
   },
   "qwen2.5-32b-instruct": {
     "title": "Qwen 2.5 32B Instruct",
@@ -70,7 +74,8 @@ model_definitions = {
     "sources": {
       "transformers": ["Qwen/Qwen2.5-32B-Instruct"],
       "vllm": ["Qwen/Qwen2.5-32B-Instruct"]
-    }
+    },
+    "aliases": ["qwen2.5", "qwen-32b", "qwen"]
   },
   "qwq-32b": {
     "title": "QwQ-32B",
@@ -79,7 +84,8 @@ model_definitions = {
     "sources": {
       "transformers": ["Qwen/QwQ-32B"],
       "vllm": ["Qwen/QwQ-32B"]
-    }
+    },
+    "aliases": ["qwq", "qwq32b"]
   },
   "phi-4": {
     "title": "Phi-4",
@@ -89,6 +95,7 @@ model_definitions = {
       "transformers": ["microsoft/Phi-4"],
       "vllm": ["microsoft/Phi-4"]
     },
+    "aliases": ["phi4", "phi"]
   },
   "gemma-3-1b": {
     "title": "Gemma 3 1B",
@@ -106,7 +113,8 @@ model_definitions = {
         ModelCapability.DEFAULT: "gemma-3",
         ModelCapability.TTT: "gemma-3"
       }
-    }
+    },
+    "aliases": ["gemma3-1b", "gemma-1b", "gemma3-small"]
   },
   "gemma-3-4b": {
     "title": "Gemma 3 4B",
@@ -124,7 +132,8 @@ model_definitions = {
         ModelCapability.DEFAULT: "gemma-3",
         ModelCapability.TAI: "gemma-3"
       }
-    }
+    },
+    "aliases": ["gemma3-4b", "gemma-4b", "gemma3-medium"]
   },
   "gemma-3-12b": {
     "title": "Gemma 3 12B",
@@ -142,7 +151,8 @@ model_definitions = {
         ModelCapability.DEFAULT: "gemma-3",
         ModelCapability.TAI: "gemma-3"
       }
-    }
+    },
+    "aliases": ["gemma3-12b", "gemma-12b", "gemma3-large"]
   },
   "gemma-3-27b": {
     "title": "Gemma 3 27B",
@@ -160,7 +170,8 @@ model_definitions = {
         ModelCapability.DEFAULT: "gemma-3",
         ModelCapability.TAI: "gemma-3"
       }
-    }
+    },
+    "aliases": ["gemma3-27b", "gemma-27b", "gemma3-xl", "gemma3-xlarge"]
   },
   "stable-diffusion-v2": {
     "title": "Stable Diffusion v2",
@@ -180,7 +191,8 @@ model_definitions = {
         ModelCapability.DEFAULT: "stable-diffusion",
         ModelCapability.TTI: "stable-diffusion"
       }
-    }
+    },
+    "aliases": ["sd-v2", "sd2", "stable-diffusion-2"]
   },
   "stable-diffusion-v1-5": {
     "title": "Stable Diffusion v1.5",
@@ -200,6 +212,7 @@ model_definitions = {
         ModelCapability.DEFAULT: "stable-diffusion",
         ModelCapability.TTI: "stable-diffusion"
       }
-    }
+    },
+    "aliases": ["sd-v1.5", "sd1.5", "stable-diffusion-1.5"]
   }
 }

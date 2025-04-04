@@ -255,6 +255,30 @@ class ModelRegistry:
     logger.debug(f"Using model ID: {model_id}")
     return model_id
 
+  def resolve_model_name(self, model_name: str) -> str:
+    """
+    Resolves a model name, potentially an alias, to its canonical key in the model_definitions dictionary.
+
+    Args:
+        model_name: Model name or alias to resolve
+
+    Returns:
+        Canonical model name (key) if found, or the original model_name if not found
+    """
+    # First check if the model name is a direct key in definitions
+    if model_name in model_definitions:
+      return model_name
+
+    # Check if it's an alias of any defined model
+    for canonical_name, model_info in model_definitions.items():
+      aliases = model_info.get('aliases', [])
+      if model_name in aliases:
+        logger.debug(f"Resolved alias '{model_name}' to model '{canonical_name}'")
+        return canonical_name
+
+    # If not found, return the original name (for direct loading)
+    return model_name
+
   def create_api_model(self, model_class: Any, model_id: str, chosen_source: str,
                       vllm_zone: Optional[str] = None,
                       vllm_subdomain: Optional[str] = None,
@@ -394,6 +418,12 @@ class ModelRegistry:
     models_directory = self._settings.models_directory if self._settings else "models"
     vllm_zone = self._settings.vllm_zone if self._settings else None
     vllm_subdomain = self._settings.vllm_subdomain if self._settings else None
+
+    # Resolve possible alias to canonical model name
+    canonical_model_name = self.resolve_model_name(model_name)
+    if canonical_model_name != model_name:
+      logger.debug(f"Resolved alias '{model_name}' to canonical name '{canonical_model_name}'")
+      model_name = canonical_model_name
 
     # Handle known models in definitions
     if model_name in model_definitions:
@@ -544,6 +574,12 @@ class ModelRegistry:
       logger.debug(f"Using process type: {process_type.value}")
     if device:
       logger.debug(f"Using specified device: {device}")
+
+    # Resolve possible alias to canonical model name
+    canonical_model_name = self.resolve_model_name(model_name)
+    if canonical_model_name != model_name:
+      logger.debug(f"Resolved alias '{model_name}' to canonical name '{canonical_model_name}'")
+      model_name = canonical_model_name
 
     # Get the model instance
     result = self.get_model(model_name, process_type=process_type, device=device)

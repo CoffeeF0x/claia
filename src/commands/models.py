@@ -12,7 +12,7 @@ from typing import List, Dict, Any, Optional
 from .base import Command, command
 from results import Result
 from settings import Settings
-from models import model_definitions, model_sources
+from models import model_definitions, model_sources, ModelRegistry
 
 
 
@@ -27,6 +27,10 @@ logger = logging.getLogger(__name__)
 #                            COMMAND CLASS                             #
 ########################################################################
 class ModelCommand(Command):
+
+  def __init__(self):
+    super().__init__()
+    self.registry = ModelRegistry()
 
   @command(
     path=["list"],
@@ -52,6 +56,12 @@ class ModelCommand(Command):
     result = Result()
 
     if model_name:
+      # Resolve potential alias to canonical model name
+      canonical_model_name = self.registry.resolve_model_name(model_name)
+      if canonical_model_name != model_name:
+        logger.debug(f"Resolved alias '{model_name}' to canonical name '{canonical_model_name}'")
+        model_name = canonical_model_name
+
       # Get available sources for this model
       available_sources = []
       for s in model_sources.keys():
@@ -72,6 +82,8 @@ class ModelCommand(Command):
         if "capabilities" in model_info:
           capabilities = [c.value for c in model_info['capabilities']]
           output.append(f"Capabilities: {', '.join(capabilities)}")
+        if "aliases" in model_info:
+          output.append(f"Aliases: {', '.join(model_info['aliases'])}")
 
         result.data = model_info
         result.message = "\n".join(output)
@@ -104,9 +116,14 @@ class ModelCommand(Command):
 
         # Add model name padded to align sources
         output.append(f"{model_name:<{max_name_length}}{sources_str}")
+
+        # Include aliases in the model list data
+        aliases = available_models[model_name].get('aliases', [])
+
         model_list.append({
           "name": model_name,
           "sources": available_sources,
+          "aliases": aliases,
           "info": available_models[model_name]
         })
 
@@ -142,6 +159,13 @@ class ModelCommand(Command):
     """Set the model to use for generation"""
     result = Result()
 
+    # Resolve potential alias to canonical model name
+    original_name = model_name
+    canonical_model_name = self.registry.resolve_model_name(model_name)
+    if canonical_model_name != model_name:
+      logger.debug(f"Resolved alias '{model_name}' to canonical name '{canonical_model_name}'")
+      model_name = canonical_model_name
+
     # Handle known models in definitions
     if model_name in model_definitions:
       # Get available sources for this model
@@ -160,7 +184,9 @@ class ModelCommand(Command):
 
         settings.active_model = model_name
         settings.active_model_source = chosen_source
-        result.message = f"Model set to {model_name} using source {chosen_source}"
+
+        alias_message = f" (resolved from alias '{original_name}')" if original_name != model_name else ""
+        result.message = f"Model set to {model_name}{alias_message} using source {chosen_source}"
         return result
       else:
         # Model exists in definitions but has no available sources
@@ -188,7 +214,8 @@ class ModelCommand(Command):
     settings.active_model = model_name
     settings.active_model_source = chosen_source
 
-    result.message = f"Model set to {model_name} using source {chosen_source} (unregistered model, will attempt direct loading)"
+    alias_message = f" (resolved from alias '{original_name}')" if original_name != model_name else ""
+    result.message = f"Model set to {model_name}{alias_message} using source {chosen_source} (unregistered model, will attempt direct loading)"
     return result
 
   @command(
