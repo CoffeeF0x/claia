@@ -698,7 +698,22 @@ class Conversation(TextFile):
 
           # Execute the tool function using registry
           if self.registry:
-            result = self.registry.execute_tool(tool_name, parameters, settings)
+            # Convert parameters to command-line format for run method
+            command_args = [tool_name]
+
+            # Add all parameters as key=value pairs
+            for key, value in parameters.items():
+              # Handle different parameter types
+              if isinstance(value, bool):
+                if value:
+                  # For boolean True, just add the flag
+                  command_args.append(f"--{key}")
+              elif value is not None:
+                # For other types, use key=value format
+                command_args.append(f"{key}={value}")
+
+            # Execute the command using run method
+            result = self.registry.run(command_args, settings)
 
             # Extract message from Result object
             if result.is_success() and result.get_message():

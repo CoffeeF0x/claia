@@ -157,16 +157,15 @@ class CommandRegistry:
     logger.debug(f"Adding command module: {module_name}")
     self._command_modules[module_name] = (cmd_instance, cmd_names, description, is_enabled)
 
-    # Handle module commands (e.g., from command.py in modules directory)
-    # These must have the "module_" prefix to avoid naming conflicts
-    is_module = hasattr(cmd_instance, '_module_name')
+    # Determine if this is an external module (has _module_name attribute)
+    is_external_module = hasattr(cmd_instance, '_module_name')
 
     if is_enabled:
       # Register all commands from the module's command map
       if hasattr(cmd_instance, 'command_map'):
         for cmd_name, cmd_details in cmd_instance.command_map.items():
-          # For module commands, ensure correct prefix
-          if is_module and not cmd_name.startswith("modules_"):
+          # For external modules, ensure correct prefix
+          if is_external_module and not cmd_name.startswith("modules_"):
             # Add modules_ prefix to avoid naming conflicts
             cmd_name = f"modules_{cmd_name}"
 
@@ -176,18 +175,18 @@ class CommandRegistry:
           }
           logger.debug(f"Registered command: {cmd_name}")
 
-      # Register CLI aliases for command names
+      # Register module names as entry points
       for name in cmd_names:
-        self._command_map[f"cli_{name}"] = {
+        self._command_map[name] = {
           "instance": cmd_instance,
           "details": {"is_module_entry": True}
         }
 
-      # Register top-level commands for CLI execution
+      # Register top-level commands for direct execution
       if hasattr(cmd_instance, 'get_top_level_commands'):
         top_level_commands = cmd_instance.get_top_level_commands()
         for cmd_name, cmd_func in top_level_commands.items():
-          self._command_map[f"cli_{cmd_name}"] = {
+          self._command_map[cmd_name] = {
             "instance": cmd_instance,
             "details": {
               "function": cmd_func,
@@ -317,87 +316,6 @@ class CommandRegistry:
 
     return tool_definitions
 
-  def execute_tool(self, tool_name: str, parameters: Dict[str, Any], settings: Settings) -> Result:
-    """
-    Execute an AI-callable tool with the given parameters.
-
-    Args:
-        tool_name: The name of the tool to execute (e.g., "system_get_log_level")
-        parameters: Dictionary of parameter values
-        settings: Settings object
-
-    Returns:
-        Result of the tool execution
-    """
-    try:
-      # Look up the command in the command map
-      if tool_name in self._command_map:
-        cmd_entry = self._command_map[tool_name]
-        cmd_instance = cmd_entry["instance"]
-        cmd_details = cmd_entry["details"]
-
-        # Skip if not AI-callable
-        if not cmd_details.get("ai_callable", False):
-          return Result.fail(f"Error: Tool '{tool_name}' is not AI-callable")
-
-        # Get the function to execute
-        func = cmd_details["function"]
-
-        try:
-          # Convert parameters to appropriate types if needed
-          clean_params = {}
-
-          # Get expected parameter schema if available
-          param_schema = cmd_details.get("parameters", {})
-          properties = param_schema.get("properties", {})
-
-          # Process each parameter according to its expected type
-          for key, value in parameters.items():
-            if key in properties:
-              # Get the expected type for this parameter
-              param_type = properties[key].get("type", "string")
-
-              # Handle different parameter types
-              if param_type == "string":
-                clean_params[key] = str(value) if value is not None else None
-              elif param_type == "integer":
-                try:
-                  clean_params[key] = int(value) if value is not None else None
-                except (ValueError, TypeError):
-                  logger.warning(f"Failed to convert parameter '{key}' to integer: {value}")
-                  clean_params[key] = value
-              elif param_type == "boolean":
-                if isinstance(value, str):
-                  clean_params[key] = value.lower() in ("true", "yes", "1", "t", "y")
-                else:
-                  clean_params[key] = bool(value)
-              else:
-                # For other types, pass as is
-                clean_params[key] = value
-            else:
-              # No schema info, convert to string if needed
-              clean_params[key] = str(value) if value is not None else None
-
-          # Call the function with settings and parameters
-          result = func(settings, **clean_params)
-
-          # Return the Result object directly
-          if not isinstance(result, Result):
-            # Convert non-Result return values to a Result
-            new_result = Result()
-            new_result.message = str(result)
-            return new_result
-
-          return result
-        except Exception as e:
-          logger.exception(f"Error executing tool '{tool_name}': {str(e)}")
-          return Result.fail(f"Error executing tool: {str(e)}")
-      else:
-        return Result.fail(f"Unknown tool: {tool_name}")
-    except Exception as e:
-      logger.exception(f"Error processing tool '{tool_name}': {str(e)}")
-      return Result.fail(f"Error processing tool: {str(e)}")
-
   def run(self, input_arg, settings: Settings) -> Result:
     """
     Run a command from either a string input or list of arguments.
@@ -423,6 +341,7 @@ class CommandRegistry:
 
     # Handle empty input
     if not args:
+      self.display_help()
       return Result.fail("No command provided")
 
     # Check for help command
@@ -433,49 +352,164 @@ class CommandRegistry:
         self.display_help()
       return Result()
 
-    # Check for module command (format: module_name command_name [params])
-    if len(args) >= 2:
-      # Convert space-separated command to underscore format expected by execute_tool
-      module_name = args[0]
-      cmd_name = args[1] # NOTE: Does this actually work for commands with more than one word? model vllm email for example
-      full_command = f"modules_{module_name}_{cmd_name}"
-
-      # Extract any parameters from remaining args
-      params = {}
-      for i in range(2, len(args)):
-        arg = args[i]
-        if "=" in arg:
-          key, value = arg.split("=", 1)
-          params[key] = value
-
-      # Try to execute the command directly
-      if full_command in self._command_map:
-        logger.info(f"Executing module command: {full_command}")
-        return self.execute_tool(full_command, params, settings)
-
-    # Check for top-level CLI command
-    cli_key = f"cli_{args[0]}"
-    if cli_key in self._command_map:
-      cmd_entry = self._command_map[cli_key]
-      cmd_instance = cmd_entry["instance"]
-      cmd_details = cmd_entry["details"]
-
-      if cmd_details.get("is_top_level", False):
-        # Execute top-level command directly
-        func = cmd_details["function"]
-        try:
-          result = func(settings)
-        except Exception as e:
-          result = Result.fail(f"Error executing command: {str(e)}")
-      else:
-        # Pass to module's execute method
-        result = cmd_instance.execute(args, settings)
-      return result
+    # Attempt to match and execute command
+    cmd_result = self._execute_command(args, settings)
+    if cmd_result is not None:
+      return cmd_result
 
     # Unrecognized command
     result = Result.fail(f"Unrecognized command: {args[0]}")
     self.display_help()
     return result
+
+  def _execute_command(self, args: List[str], settings: Settings) -> Optional[Result]:
+    """
+    Execute a command by attempting different command formats.
+
+    Args:
+        args: Command arguments
+        settings: Settings object
+
+    Returns:
+        Result of command execution, or None if no command matched
+    """
+    if not args:
+      return None
+
+    # First pass: extract arguments and options from all args after args[0]
+    command_name = args[0]
+    subcommand_parts = []
+    positional_args = []
+    kwargs = {}
+
+    # Process remaining arguments after command name
+    # NOTE: This is not very robust, so we may want to revisit this later
+    for i, arg in enumerate(args[1:]):
+      if "=" in arg:
+        # Key-value parameter
+        key, value = arg.split("=", 1)
+        kwargs[key] = value
+      elif arg.startswith("--"):
+        # Flag parameter
+        flag_name = arg[2:]
+        kwargs[flag_name] = True
+      else:
+        # Subcommand part or positional argument
+        subcommand_parts.append(arg)
+
+    # Check for top-level command
+    if command_name in self._command_map:
+      cmd_entry = self._command_map[command_name]
+      cmd_instance = cmd_entry["instance"]
+      cmd_details = cmd_entry["details"]
+
+      if cmd_details.get("is_top_level", False):
+        # For top-level commands, check if the command requires args but none provided
+        if not subcommand_parts and not kwargs and hasattr(cmd_instance, 'help'):
+          # Some commands might need arguments - show command help instead
+          if cmd_details.get("requires_args", False):
+            cmd_instance.help()
+            return Result()
+
+        # Execute top-level command directly with arguments
+        func = cmd_details["function"]
+        try:
+          return func(settings, *subcommand_parts, **kwargs)
+        except Exception as e:
+          return Result.fail(f"Error executing command: {str(e)}")
+
+      # Handle module entry points (like 'model' or custom modules)
+      if cmd_details.get("is_module_entry", False):
+        cmd_instance = cmd_entry["instance"]
+
+        if not subcommand_parts:
+          # Just the module name, show help
+          cmd_instance.help()
+          return Result()
+
+        # Continue to module command processing below
+
+    # Check for module command (e.g., "model vllm set zone=us-east1")
+    if len(args) >= 2:
+      module_name = args[0]
+
+      # Try direct module command lookup
+      # First, check if this module exists
+      if module_name in self._command_map:
+        cmd_entry = self._command_map[module_name]
+        cmd_instance = cmd_entry["instance"]
+
+        # If no subcommand parts (only parameters), show help
+        if not subcommand_parts:
+          cmd_instance.help()
+          return Result()
+
+        # Try to find the longest matching subcommand
+        found_command = False
+        for i in range(len(subcommand_parts), 0, -1):
+          # Build potential command key
+          cmd_key = '_'.join(subcommand_parts[:i])
+
+          # Determine the appropriate module prefix
+          if hasattr(cmd_instance, '_module_name'):
+            # External module
+            module_prefix = f"modules_{cmd_instance._module_name}"
+            full_key = f"{module_prefix}_{cmd_key}"
+          else:
+            # Built-in module
+            module_prefix = cmd_instance.__class__.__name__.replace("Command", "").lower()
+            full_key = f"{module_prefix}_{cmd_key}"
+
+          # Check if command exists in registry
+          if full_key in self._command_map:
+            found_command = True
+            # Found a matching command
+            cmd_data = self._command_map[full_key]
+            func = cmd_data["details"]["function"]
+
+            # Any remaining parts are positional arguments
+            remaining_args = subcommand_parts[i:]
+
+            try:
+              result = func(settings, *remaining_args, **kwargs)
+              if not isinstance(result, Result):
+                new_result = Result()
+                new_result.message = str(result)
+                return new_result
+              return result
+            except Exception as e:
+              logger.exception(f"Error executing command '{full_key}': {str(e)}")
+              return Result.fail(f"Error executing command: {str(e)}")
+
+          # Try direct module command lookup with modules_ prefix for external modules
+          if hasattr(cmd_instance, '_module_name'):
+            direct_module_key = f"modules_{cmd_key}"
+            if direct_module_key in self._command_map:
+              found_command = True
+              cmd_data = self._command_map[direct_module_key]
+              func = cmd_data["details"]["function"]
+
+              # Any remaining parts are positional arguments
+              remaining_args = subcommand_parts[i:]
+
+              try:
+                result = func(settings, *remaining_args, **kwargs)
+                if not isinstance(result, Result):
+                  new_result = Result()
+                  new_result.message = str(result)
+                  return new_result
+                return result
+              except Exception as e:
+                logger.exception(f"Error executing command '{direct_module_key}': {str(e)}")
+                return Result.fail(f"Error executing command: {str(e)}")
+
+        # If no matching command found but module exists, show module help
+        if not found_command:
+          logger.info(f"No matching command found for: {' '.join(args)}")
+          cmd_instance.help()
+          return Result.fail(f"Unknown subcommand: {subcommand_parts[0]}")
+
+    return None
 
   def display_help(self) -> None:
     """Display help for all commands."""
@@ -512,9 +546,8 @@ class CommandRegistry:
         command_name: The name of the command
     """
     # Check if it's a module name
-    cli_key = f"cli_{command_name}"
-    if cli_key in self._command_map:
-      cmd_entry = self._command_map[cli_key]
+    if command_name in self._command_map:
+      cmd_entry = self._command_map[command_name]
       cmd_instance = cmd_entry["instance"]
 
       if hasattr(cmd_instance, 'help'):
