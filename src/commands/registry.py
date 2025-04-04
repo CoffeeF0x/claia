@@ -44,7 +44,6 @@ class CommandRegistry:
   # Define core command modules with their associated information
   # Format: (command_class, primary_names, description, is_enabled)
   CORE_COMMAND_MODULES: List[Tuple[Any, List[str], str, bool]] = [
-    # System commands
     (
       SystemCommand,
       ["system", "sys", "s"],
@@ -52,7 +51,6 @@ class CommandRegistry:
       True
     ),
 
-    # Model commands
     (
       ModelCommand,
       ["model", "models"],
@@ -60,7 +58,6 @@ class CommandRegistry:
       True
     ),
 
-    # Tools commands
     (
       ToolsCommand,
       ["tool", "tools"],
@@ -68,7 +65,6 @@ class CommandRegistry:
       True
     ),
 
-    # Prompt commands
     (
       PromptCommand,
       ["prompt", "prompts"],
@@ -76,7 +72,6 @@ class CommandRegistry:
       True
     ),
 
-    # Conversation commands
     (
       ConversationCommand,
       ["conversation", "conversations"],
@@ -84,7 +79,6 @@ class CommandRegistry:
       True
     ),
 
-    # MassedCompute commands
     (
       MassedComputeCommand,
       ["massedcompute", "mc"],
@@ -92,7 +86,6 @@ class CommandRegistry:
       True
     ),
 
-    # Agent commands
     (
       AgentCommand,
       ["agent", "agents"],
@@ -204,13 +197,12 @@ class CommandRegistry:
 
     logger.info(f"Registered command module: {module_name} with {len(cmd_instance.command_map) if hasattr(cmd_instance, 'command_map') else 0} commands")
 
-  def cleanup_commands(self, commands: List[str], settings: Settings) -> Result:
+  def cleanup_commands(self, commands: List[str]) -> Result:
     """
     Clean up command input by removing empty commands and converting to lowercase.
 
     Args:
         commands: List of command strings
-        settings: Settings object
 
     Returns:
         Result indicating success or failure
@@ -337,9 +329,6 @@ class CommandRegistry:
     Returns:
         Result of the tool execution
     """
-    if settings is None:
-      return Result.fail("Error: Settings object is required")
-
     try:
       # Look up the command in the command map
       if tool_name in self._command_map:
@@ -427,7 +416,7 @@ class CommandRegistry:
       args = input_arg.copy() if input_arg else []
 
     # Clean up the commands
-    result = self.cleanup_commands(args, settings)
+    result = self.cleanup_commands(args)
     if result.is_error():
       self.display_help()
       return result
@@ -448,7 +437,7 @@ class CommandRegistry:
     if len(args) >= 2:
       # Convert space-separated command to underscore format expected by execute_tool
       module_name = args[0]
-      cmd_name = args[1]
+      cmd_name = args[1] # NOTE: Does this actually work for commands with more than one word? model vllm email for example
       full_command = f"modules_{module_name}_{cmd_name}"
 
       # Extract any parameters from remaining args

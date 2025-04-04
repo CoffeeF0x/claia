@@ -235,12 +235,6 @@ class Command(ABC):
     self.help()
     return result
 
-  def unrecognizedCommand(self) -> None:
-    """Display message for unrecognized command and show available commands"""
-    print("Command incomplete or not recognized")
-    print("\nAvailable commands in this module:")
-    self.help()
-
   def help(self) -> None:
     """Display help for this command, using help_text from decorators"""
     print(f"Here are the available {self.__class__.__name__.replace('Command', '').lower()} commands:")
@@ -263,23 +257,6 @@ class Command(ABC):
       alias_display = f" (aliases: {aliases})" if aliases else ""
       print(f"  {path_str}{alias_display}")
       print(f"    - {group['help_text']}")
-
-  def get_function_definitions(self) -> List[Dict[str, Any]]:
-    """Get AI-callable function definitions for function calling"""
-    definitions = []
-
-    for full_key, cmd_data in self.command_map.items():
-      if cmd_data.get("ai_callable", False):
-        # Create function definition compatible with OpenAI format
-        definition = {
-          "name": full_key,
-          "description": cmd_data["description"],
-          "parameters": cmd_data["parameters"],
-          "returns": cmd_data["returns"]
-        }
-        definitions.append(definition)
-
-    return definitions
 
   def get_top_level_commands(self) -> Dict[str, Callable]:
     """Get commands that should be registered at the top level"""
