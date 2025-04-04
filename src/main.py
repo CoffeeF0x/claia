@@ -3,7 +3,6 @@
 # - Needs a way to filter models (since there are lots) (model list partname?)
 # - perhaps have the model layer compare the capabilities against the sent request, if there's content that the model doesn't support throw a warning, maybe also trim the request to the model's capabilities
 # - model should pass model name from source list in definitions rather than using the model id
-# - Top level commands no longer show in command help
 
 # - add ability to rename conversations, and perhaps have ai name conversations automatically
 
@@ -18,9 +17,7 @@
 # - add module imports for agents and migrate bob to be a module
 # - create a vix demo that uses a list off images to show reactions in a conversation, think emojis (this should be a tool call since it's not generating the images, thought it's an idea to train a lora and have images generated)
 
-# - each command should have a small object to define flags, this will allow us to seperate global flags from command flags?
-# - prep all commands and models for kwargs (for specific settings, they can be passed via the settings extra args)
-# - update commands to support kwargs so we can pass parameters without message="asdf" for example and just pass something like "asdf" directly (this works with positional args)
+# - Top level commands no longer show in command help
 # - run commands from cli with optional --flags processing instead of arg=value style, for example: claia transcribe --file <audio-file>
 
 # External dependencies
