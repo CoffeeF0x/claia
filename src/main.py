@@ -3,6 +3,7 @@
 # - Needs a way to filter models (since there are lots) (model list partname?)
 # - perhaps have the model layer compare the capabilities against the sent request, if there's content that the model doesn't support throw a warning, maybe also trim the request to the model's capabilities
 # - model should pass model name from source list in definitions rather than using the model id
+# - create a new image agent that exports the images after generation
 
 # - add ability to rename conversations, and perhaps have ai name conversations automatically
 

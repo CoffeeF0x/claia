@@ -1418,6 +1418,54 @@ class Conversation(TextFile):
     """
     return self.tool_definitions
 
+  def stream_message(self, message_id: str, content: str) -> Optional[Message]:
+    """
+    Update a message's content without adding an action to the history.
+
+    This method is designed for streaming scenarios where a message is updated
+    incrementally, and we don't want to create numerous update actions.
+    Use this during streaming, then call update_message once streaming is complete.
+
+    On the first call for a given message_id, a START_STREAM action will be added
+    to indicate streaming has begun.
+
+    Args:
+        message_id: The ID of the message to update
+        content: New content for the message
+
+    Returns:
+        Optional[Message]: The updated message, or None if not found
+    """
+    # Find the message
+    for message in self.messages:
+      if message.message_id == message_id:
+        # Update message content without extracting inline args
+        message.content = content
+
+        # Update timestamp
+        message.updated_at = time.time()
+
+        # Check if we already have a START_STREAM action for this message
+        has_start_stream_action = False
+        for action in self.actions:
+          if (action.action_type == ActionType.START_STREAM and
+              action.metadata.get("message_id") == message_id):
+            has_start_stream_action = True
+            break
+
+        # Add a START_STREAM action if this is the first streaming update
+        if not has_start_stream_action:
+          self.add_action(ActionType.START_STREAM, {
+            "message_id": message_id,
+            "speaker": message.speaker.value,
+            "content_preview": content[:50] + "..." if len(content) > 50 else content
+          })
+
+        return message
+
+    logger.error(f"Message not found for streaming update: {message_id}")
+    return None
+
   def get_tool_definitions_as_list(self) -> List[Dict[str, Any]]:
     """
     Get all tool definitions as a list of dictionaries.
