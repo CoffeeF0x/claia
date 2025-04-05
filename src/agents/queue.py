@@ -4,8 +4,8 @@ The ProcessQueue manages processes that need to be executed by agents.
 """
 
 # External dependencies
-import queue, threading
-from typing import Optional
+import queue, threading, time, logging
+from typing import Optional, List, Dict
 
 # Internal dependencies
 from .process import Process
@@ -29,6 +29,9 @@ class ProcessQueue:
     self._queue = queue.Queue()
     self._lock = threading.Lock()
     self._processes = {}  # id -> Process mapping for quick lookups
+    self._workers = []  # List of worker threads
+    self._shutdown = threading.Event()  # Signal for workers to stop
+    self._logger = logging.getLogger(__name__)
 
   def put(self, process: Process):
     """
@@ -165,7 +168,7 @@ class ProcessQueue:
     with self._lock:
       process = self._processes.get(process_id)
       if not process or process.status != ProcessStatus.PENDING:
-        return None
+        return process
 
     # Process the request directly with the Agent class
     updated_process = Agent.process(process)
@@ -174,3 +177,72 @@ class ProcessQueue:
     self.update(updated_process)
 
     return updated_process
+
+  def _worker_loop(self):
+    """Worker thread function that processes items from the queue."""
+    self._logger.debug("Worker thread started")
+    while not self._shutdown.is_set():
+      try:
+        # Get next process from queue with a timeout to check shutdown flag periodically
+        process = self.get(block=True, timeout=1.0)
+        if process and process.status == ProcessStatus.PENDING:
+          # Process the request
+          self._logger.debug(f"Worker processing: {process.id}")
+          updated_process = Agent.process(process)
+          self.update(updated_process)
+      except Exception as e:
+        self._logger.error(f"Error in worker thread: {str(e)}")
+
+      # Small delay to prevent CPU spinning
+      time.sleep(0.01)
+
+    self._logger.debug("Worker thread stopped")
+
+  def start_workers(self, num_workers: int = 1):
+    """
+    Start worker threads that process items from the queue.
+
+    Args:
+        num_workers: Number of worker threads to start
+    """
+    self._logger.info(f"Starting {num_workers} worker threads")
+    self._shutdown.clear()
+
+    with self._lock:
+      # Clean up any terminated workers
+      self._workers = [w for w in self._workers if w.is_alive()]
+
+      # Start new workers
+      for _ in range(num_workers):
+        worker = threading.Thread(target=self._worker_loop)
+        worker.daemon = True  # Make thread exit when main thread exits
+        worker.start()
+        self._workers.append(worker)
+
+    self._logger.debug(f"Started {num_workers} workers, total active: {len(self._workers)}")
+
+  def stop_workers(self, wait: bool = True, timeout: float = 5.0):
+    """
+    Stop all worker threads.
+
+    Args:
+        wait: Whether to wait for workers to stop
+        timeout: How long to wait for workers to stop
+    """
+    self._logger.info("Stopping worker threads")
+    self._shutdown.set()
+
+    if wait:
+      with self._lock:
+        workers = list(self._workers)
+
+      for worker in workers:
+        worker.join(timeout=timeout / len(workers))
+
+      with self._lock:
+        # Clean up worker list
+        self._workers = [w for w in self._workers if w.is_alive()]
+        if self._workers:
+          self._logger.warning(f"{len(self._workers)} workers still running after timeout")
+        else:
+          self._logger.debug("All workers stopped successfully")

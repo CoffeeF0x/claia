@@ -5,6 +5,7 @@ from .api.anthropic import AnthropicModel
 from .api.openrouter import OpenRouterModel
 from .transformers import TransformersModel, Gemma3Model, DiffusionModel
 from .remote.vllm import VLLMModel
+from .dummy import DummyModel
 
 
 
@@ -17,7 +18,8 @@ model_sources = {
   "anthropic": AnthropicModel,
   "transformers": TransformersModel,
   "openrouter": OpenRouterModel,
-  "vllm": VLLMModel
+  "vllm": VLLMModel,
+  "dummy": DummyModel
 }
 
 

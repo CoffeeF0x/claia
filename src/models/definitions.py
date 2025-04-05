@@ -214,5 +214,17 @@ model_definitions = {
       }
     },
     "aliases": ["sd-v1.5", "sd1.5", "stable-diffusion-1.5"]
+  },
+  "dummy-model": {
+    "title": "Dummy Model",
+    "description": "A dummy model that returns a predefined story. Used for testing streaming capabilities.",
+    "capabilities": [ModelCapability.TTT],
+    "sources": {
+      "dummy": ["dummy-model"]
+    },
+    "settings": {
+      "words_per_second": 20
+    },
+    "aliases": ["dummy", "dummy-model"]
   }
 }

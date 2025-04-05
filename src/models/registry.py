@@ -14,7 +14,7 @@ from typing import Any, List, Dict, Optional, Tuple
 from results import Result
 from enums import ModelCapability
 
-from .base import APIModel, LocalModel
+from .base import APIModel, LocalModel, BaseModel
 from .api import OpenAIModel, AnthropicModel, RunpodModel, OpenRouterModel
 from .transformers import TransformersModel, Gemma3Model, DiffusionModel
 from .remote import VLLMModel
@@ -481,6 +481,7 @@ class ModelRegistry:
 
     # Create the model instance based on its type
     if issubclass(model_class, APIModel):
+      logger.debug(f"Creating API model instance for {model_name}")
       model, model_result = self.create_api_model(
         model_class,
         model_id,
@@ -492,6 +493,7 @@ class ModelRegistry:
       if model_result.is_error():
         return model_result
     elif issubclass(model_class, LocalModel):
+      logger.debug(f"Creating local model instance for {model_name}")
       model, model_result = self.create_local_model(
         model_name,
         model_class,
@@ -503,6 +505,13 @@ class ModelRegistry:
       )
       if model_result.is_error():
         return model_result
+    elif issubclass(model_class, BaseModel):
+      try:
+        logger.debug(f"Creating direct instance of {model_class.__name__}")
+        model = model_class(model_id)
+      except Exception as e:
+        logger.error(f"Error creating {model_class.__name__} instance: {str(e)}")
+        return Result.fail(f"Error creating model: {str(e)}")
     else:
       logger.error(f"Unknown model class for source {chosen_source}")
       return Result.fail(f"Unknown model class for source {chosen_source}.")

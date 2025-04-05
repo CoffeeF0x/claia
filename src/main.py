@@ -6,8 +6,9 @@
 
 # - add ability to rename conversations, and perhaps have ai name conversations automatically
 
-# - add streaming support
-# - make process queue run in its own thread (so we can have async message processing)
+# - add streaming support to models
+# - add conversation settings object to store settings such as enable streaming
+# - add a stream to message function in the conversation that doesn't create a new action every time a message is updated
 
 # - create new prompts or update existing (need to move prompts to json files)
 # - update system command to allow settings updates (and save to .env file?)
@@ -49,6 +50,7 @@ MAX_HISTORY_LEN = 1000
 COMMAND_CHARACTER = ":"
 INPUT_CHARACTER = ":"
 DEFAULT_AGENT = "simple"
+DEFAULT_WORKER_THREADS = 1
 
 
 
@@ -129,6 +131,10 @@ def main() -> None:
     logger.debug("Initializing process queue")
     process_queue = ProcessQueue()
 
+    # Start worker threads
+    logger.debug(f"Starting {DEFAULT_WORKER_THREADS} worker thread(s)")
+    process_queue.start_workers(DEFAULT_WORKER_THREADS)
+
     # Set up command history with arrow key navigation
     setup_command_history()
 
@@ -149,6 +155,7 @@ def main() -> None:
 
       # Exit after running the command
       logger.info("CLAIA exiting after CLI command execution")
+      process_queue.stop_workers()
       return
 
     logger.info("CLAIA initialization complete, entering main loop")
@@ -159,7 +166,7 @@ def main() -> None:
       # Initialize and clear variables
       process = None
       response = None
-      last_response = None
+      new_content = None
 
       # Wait for user input
       user_input = get_user_input()
@@ -186,7 +193,7 @@ def main() -> None:
         if not settings.active_agent:
           settings.active_agent = DEFAULT_AGENT
 
-        settings.active_conversation.add_message(MessageRole.USER, user_input)
+        user_message = settings.active_conversation.add_message(MessageRole.USER, user_input)
 
         process = Process(
           agent_type=settings.active_agent,
@@ -201,36 +208,44 @@ def main() -> None:
         process_id = process_queue.put(process)
         logger.debug(f"Process added with ID: {process_id}")
 
-        # Loop through the queue until the process is completed
         logger.debug(f"Waiting for process to complete: {process.id}")
+
+        # Print updates while waiting for the process to complete
         while process.status == ProcessStatus.PENDING or process.status == ProcessStatus.PROCESSING:
-          process = process_queue.process_by_id(process.id)
+          # process = process_queue.get_by_id(process.id)
 
           if process.status == ProcessStatus.PROCESSING:
             response = process.conversation.get_latest_message()
 
-            if last_response and response and len(response.content) > len(last_response.content):
-              new_content = response.content[len(last_response.content):]
-              print(new_content, end='', flush=True)
+            if response.message_id != user_message.message_id:
+              if new_content and response.content and len(response.content) > len(new_content):
+                print(response.content[len(new_content):], end='', flush=True)
+              elif not new_content:
+                print(response.content, end='', flush=True)
 
-            last_response = response
+              new_content = response.content
 
           # Sleep a bit to avoid busy waiting
           time.sleep(0.1)
 
         logger.debug(f"Process completed: {process.id}")
 
-        # If the process is completed, display the rest of the response
+        # Display the final result
         if process.status == ProcessStatus.COMPLETED:
-          if response:
-            print(process.conversation.get_latest_message().content[len(response.content):])
+          final_message = process.conversation.get_latest_message()
+          if new_content:
+            remaining_content = final_message.content[len(new_content):]
+            if remaining_content:
+              print(remaining_content, flush=True)
           else:
-            print(process.conversation.get_latest_message().content)
+            print(final_message.content, flush=True)
           process.conversation.save()
         elif process.status == ProcessStatus.FAILED:
           logger.error(f"Process failed: {process.error}")
+          print(f"Error: {process.error}")
         elif process.status == ProcessStatus.CANCELLED:
           logger.warning(f"Process cancelled: {process.error}")
+          print("Process was cancelled.")
 
       # Display any error messages
       if result.is_error():
@@ -240,8 +255,14 @@ def main() -> None:
     # Display exit message
     logger.info(f"CLAIA application exiting: {result.get_message()}")
 
+    # Stop worker threads before exiting
+    process_queue.stop_workers()
+
   except Exception as e:
     logger.critical(f"Unhandled exception in main: {str(e)}", exc_info=True)
+    # Try to stop worker threads on error
+    if 'process_queue' in locals():
+      process_queue.stop_workers(wait=False)  # Don't wait on critical error
     sys.exit(1)
 
 
