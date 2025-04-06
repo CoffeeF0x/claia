@@ -112,9 +112,9 @@ class DummyModel(BaseModel):
   def __init__(self, model_name: str = "dummy-model"):
     super().__init__(model_name)
     self.story = STORY.strip()
-    self.words = self.story.split()
-    self.story_length = len(self.words)
-    logger.debug(f"Initialized DummyModel with {self.story_length} words")
+    self.characters = list(self.story)
+    self.story_length = len(self.characters)
+    logger.debug(f"Initialized DummyModel with {self.story_length} characters")
 
   def generate(self, conversation: Conversation, **kwargs) -> str:
     """
@@ -123,33 +123,38 @@ class DummyModel(BaseModel):
     Args:
         conversation: The conversation to add the response to
         **kwargs: Additional parameters, including:
-            - words_per_second: How many words to return per second (default: 20)
+            - chars_per_second: How many characters to return per second (default: 100)
+            - chars_per_chunk: How many characters to send per chunk (default: 20)
 
     Returns:
         The complete story after streaming is finished
     """
     # Get the streaming rate
-    words_per_second = kwargs.get("words_per_second", 20)
-    logger.debug(f"Generating response at {words_per_second} words per second")
+    chars_per_second = kwargs.get("chars_per_second", 100)
+    chars_per_chunk = kwargs.get("chars_per_chunk", 20)
+    logger.debug(f"Generating response at {chars_per_second} characters per second in chunks of {chars_per_chunk}")
 
     # Add a blank assistant message to the conversation that we'll update
     message = conversation.add_message(MessageRole.ASSISTANT, "")
     current_response = ""
 
-    # Simulate streaming by adding words in chunks
-    for i in range(0, self.story_length, words_per_second):
-        # Get the next chunk of words
-        end_idx = min(i + words_per_second, self.story_length)
-        chunk = " ".join(self.words[i:end_idx])
+    # Simulate streaming by adding characters in chunks
+    for i in range(0, self.story_length, chars_per_chunk):
+        # Get the next chunk of characters
+        end_idx = min(i + chars_per_chunk, self.story_length)
+        chunk = "".join(self.characters[i:end_idx])
 
         # Add to the current response
-        current_response += (" " if current_response else "") + chunk
+        current_response += chunk
 
         # Update the message with the current response
-        conversation.update_message(message.message_id, current_response)
+        conversation.stream_message(message.message_id, current_response)
 
         # Slight variation in timing to make it feel more natural
-        delay = 1.0 + (random.random() * 0.2 - 0.1)  # 0.9 to 1.1 seconds
+        delay = (chars_per_chunk / chars_per_second) * (0.9 + (random.random() * 0.2))  # ±10% variation
         time.sleep(delay)
+
+    # Final update to process any extracted args and add the UPDATE_MESSAGE action
+    conversation.update_message(message.message_id, current_response)
 
     return current_response
