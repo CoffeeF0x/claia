@@ -1,0 +1,25 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+  pulseaudio \
+  libportaudio2 \
+  alsa-utils \
+  sox \
+  libsox-fmt-all \
+  espeak-ng \
+  cmake \
+  nano \
+  sshpass \
+  git
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt --no-cache-dir
+
+COPY src/ src/
+COPY modules/ modules/
+COPY pyproject.toml .
+
+# ENTRYPOINT [ "python", "src/main.py" ]
+CMD [ "python", "src/main.py" ]

@@ -1,0 +1,44 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start and Attach Debug Container",
+            "type": "shell",
+            "command": "docker compose -f docker-compose.debug.yml up -d; docker attach claia-claia-1",
+            "problemMatcher": [],
+            "isBackground": true
+        },
+        {
+            "label": "Start Debug Container",
+            "type": "shell",
+            "command": "docker compose -f docker-compose.debug.yml up -d",
+            "problemMatcher": [],
+            // "isBackground": true
+        },
+        {
+            "label": "Attach Debug Container",
+            "type": "shell",
+            "command": "docker attach claia-claia-1",
+            "problemMatcher": [
+                {
+                    "pattern": [
+                        {
+                            "regexp": ".",
+                            "file": 1,
+                            "line": 1,
+                            "column": 1,
+                            "message": 1
+                        }
+                    ],
+                    "background": {
+                        "activeOnStart": true,
+                        "beginsPattern": { "regexp": "." },
+                        "endsPattern": { "regexp": ".*Note: Debugging will proceed.*" }
+                    }
+                }
+            ],
+            "dependsOn": ["Start Debug Container"]
+            // "isBackground": true
+        }
+    ]
+}

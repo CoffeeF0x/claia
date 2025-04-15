@@ -1,0 +1,21 @@
+services:
+  claia:
+    stdin_open: true
+    tty: true
+    image: claia
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    command: python -m debugpy --listen 0.0.0.0:5678 --wait-for-client /app/src/__main__.py
+    volumes:
+      - ./src:/app/src
+      - ./modules:/app/modules
+    ports:
+      - 5678:5678
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

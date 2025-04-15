@@ -1,0 +1,15 @@
+services:
+  claia:
+    tty: true
+    stdin_open: true
+    image: claia
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
