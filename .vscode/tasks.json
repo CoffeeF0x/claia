@@ -2,6 +2,12 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Stop Debug Container",
+            "type": "shell",
+            "command": "docker compose -f docker/docker-compose.debug.yml down",
+            "problemMatcher": []
+        },
+        {
             "label": "Start and Attach Debug Container",
             "type": "shell",
             "command": "docker compose -f docker/docker-compose.debug.yml up -d --build; docker attach docker-claia-1",
