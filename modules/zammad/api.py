@@ -309,3 +309,22 @@ class ZammadAPI:
     except Exception as e:
       logger.error("Error removing tag '%s' from ticket %d: %s", tag, ticket_id, str(e))
       return False
+
+  def delete_ticket(self, ticket_id: int) -> bool:
+    """
+    Delete a specific ticket from Zammad.
+
+    Args:
+      ticket_id: The ID of the ticket to delete
+
+    Returns:
+      bool: True if successful, False otherwise
+    """
+    logger.debug("Deleting ticket with ID: %d", ticket_id)
+    try:
+      self.delete(f"tickets/{ticket_id}", {})
+      logger.info("Successfully deleted ticket with ID: %d", ticket_id)
+      return True
+    except Exception as e:
+      logger.error("Error deleting ticket with ID %d: %s", ticket_id, str(e))
+      return False

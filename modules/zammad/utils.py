@@ -218,6 +218,50 @@ def untag_ticket(zammad: ZammadAPI, ticket_id: str) -> Tuple[int, List[str]]:
     return 0, []
 
 
+def find_tickets_by_subject(zammad: ZammadAPI, subject: str, limit: int = 0) -> List[Dict[str, Any]]:
+  """
+  Find tickets in Zammad that have a specific subject.
+
+  Args:
+    zammad: ZammadAPI instance
+    subject: The subject line to match (case-insensitive)
+    limit: Maximum number of tickets to return (0 for no limit)
+
+  Returns:
+    List of matching ticket dictionaries with id, title, created_at, and customer info
+  """
+  logger.debug(f"Searching for tickets with subject containing: {subject}")
+
+  # Get all open tickets first
+  all_tickets = zammad.list_tickets("open-tickets", limit=999, full_response=True)
+
+  if not all_tickets:
+    logger.debug("No open tickets found.")
+    return []
+
+  matching_tickets = []
+
+  # Check each ticket to see if the subject matches
+  for ticket_id in all_tickets:
+    ticket_details = zammad.get(f"tickets/{ticket_id}")
+    if ticket_details and 'title' in ticket_details:
+      # Case-insensitive subject matching
+      if subject.lower() in ticket_details['title'].lower():
+        matching_tickets.append({
+          'id': ticket_id,
+          'title': ticket_details['title'],
+          'created_at': ticket_details.get('created_at', 'Unknown'),
+          'customer': ticket_details.get('customer', 'Unknown')
+        })
+
+  # Apply limit if specified
+  if limit > 0 and len(matching_tickets) > limit:
+    matching_tickets = matching_tickets[:limit]
+
+  logger.debug(f"Found {len(matching_tickets)} tickets with subject containing '{subject}'")
+  return matching_tickets
+
+
 def process_account_ticket(settings: Settings, zammad: ZammadAPI,
                     ticket_id: str, output_file: str,
                     conversation: Conversation) -> Tuple[bool, str, Optional[int]]:

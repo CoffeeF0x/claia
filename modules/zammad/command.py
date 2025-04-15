@@ -24,7 +24,7 @@ from enums import MessageRole
 from .settings import ZammadSettings
 from .api import ZammadAPI
 from .constants import ACCOUNT_MANAGEMENT_PROMPT, VERIFICATION_PROMPT
-from .utils import require_zammad_config, tag_ticket, untag_ticket, process_account_ticket
+from .utils import require_zammad_config, tag_ticket, untag_ticket, process_account_ticket, find_tickets_by_subject
 
 
 
@@ -725,4 +725,175 @@ class ZammadCommand(Command):
     print(f"{'='*50}\n")
 
     result.message = f"Processed {successful_count} tickets. Account list saved to {output_file}"
+    return result
+
+  @command(
+    path=["find", "subject"],
+    description="Find Zammad tickets with a specific subject",
+    help_text="Find and display Zammad tickets that have a specific subject line",
+    parameters={
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string",
+          "description": "The subject line to match (case-insensitive)"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of tickets to display (0 for no limit)",
+          "default": 0
+        },
+        "show_details": {
+          "type": "boolean",
+          "description": "Whether to show full details of the first ticket",
+          "default": False
+        }
+      },
+      "required": ["subject"]
+    },
+    returns={
+      "type": "string",
+      "description": "Search results"
+    },
+    ai_callable=True
+  )
+  @require_zammad_config
+  def find_tickets_by_subject(self, settings: Settings, zammad: ZammadAPI, subject: str, limit: int = 0, show_details: bool = False) -> Result:
+    """
+    Find tickets in Zammad that have a specific subject.
+
+    Args:
+      settings: Application settings
+      zammad: ZammadAPI instance
+      subject: The subject line to match (case-insensitive)
+      limit: Maximum number of tickets to display (0 for no limit)
+      show_details: Whether to show full details of the first ticket
+
+    Returns:
+      Result: Search results
+    """
+    # Create result
+    result = Result()
+
+    # Use the shared utility function to find matching tickets
+    matching_tickets = find_tickets_by_subject(zammad, subject, limit)
+
+    # No matching tickets found
+    if not matching_tickets:
+      logger.info(f"No tickets found with subject containing '{subject}'")
+      result.message = f"No tickets found with subject containing '{subject}'."
+      return result
+
+    # Display what was found
+    logger.info(f"Found {len(matching_tickets)} tickets with subject containing '{subject}'")
+
+    # Format the response
+    response = f"Found {len(matching_tickets)} tickets with subject containing '{subject}':\n\n"
+
+    # Show full details of the first ticket if requested
+    if show_details and matching_tickets:
+      first_ticket = matching_tickets[0]
+      response += f"First matching ticket details:\n"
+      response += f"{zammad.get_ticket_details(first_ticket['id'])}\n\n"
+      response += f"{'='*50}\n\nAll matching tickets:\n\n"
+
+    # List all matching tickets
+    for idx, ticket in enumerate(matching_tickets, 1):
+      response += f"{idx}. ID: {ticket['id']} - {ticket['title']}\n"
+      response += f"   Created: {ticket['created_at']}\n"
+      if ticket.get('customer'):
+        response += f"   Customer: {ticket['customer']}\n"
+      response += "\n"
+
+    # Add a reminder about the delete command
+    response += f"\nTo delete these tickets, use: claia zammad delete subject \"{subject}\" --confirm"
+
+    result.message = response
+    return result
+
+  @command(
+    path=["delete", "subject"],
+    description="Delete Zammad tickets with a specific subject",
+    help_text="Delete Zammad tickets that have a specific subject line",
+    parameters={
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string",
+          "description": "The subject line to match (case-insensitive)"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Confirmation to run the deletion process",
+          "default": False
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of tickets to process (0 for no limit)",
+          "default": 0
+        }
+      },
+      "required": ["subject"]
+    },
+    returns={
+      "type": "string",
+      "description": "Deletion result"
+    },
+    ai_callable=True
+  )
+  @require_zammad_config
+  def delete_tickets_by_subject(self, settings: Settings, zammad: ZammadAPI, subject: str, confirm: bool = False, limit: int = 0) -> Result:
+    """
+    Delete tickets from Zammad that have a specific subject.
+
+    Args:
+      settings: Application settings
+      zammad: ZammadAPI instance
+      subject: The subject line to match (case-insensitive)
+      confirm: Confirmation flag
+      limit: Maximum number of tickets to process (0 for no limit)
+
+    Returns:
+      Result: Deletion result
+    """
+    # Create result
+    result = Result()
+
+    # Require confirmation
+    if not confirm:
+      result.message = f"This operation will delete tickets with subject: '{subject}'. Set confirm=True to proceed."
+      result.success = False
+      return result
+
+    # Use the shared utility function to find matching tickets
+    matching_tickets = find_tickets_by_subject(zammad, subject, limit)
+
+    # No matching tickets found
+    if not matching_tickets:
+      logger.info(f"No tickets found with subject containing '{subject}'")
+      result.message = f"No tickets found with subject containing '{subject}'."
+      return result
+
+    # Display what will be deleted
+    logger.info(f"Found {len(matching_tickets)} tickets with subject containing '{subject}'")
+
+    # Delete each matching ticket
+    deleted_count = 0
+    for ticket in matching_tickets:
+      try:
+        logger.info(f"Deleting ticket {ticket['id']}: {ticket['title']}")
+        success = zammad.delete_ticket(ticket['id'])
+        if success:
+          deleted_count += 1
+        else:
+          logger.error(f"Failed to delete ticket {ticket['id']}")
+      except Exception as e:
+        logger.error(f"Error deleting ticket {ticket['id']}: {str(e)}")
+
+    # Format the result message
+    if deleted_count == len(matching_tickets):
+      result.message = f"Successfully deleted all {deleted_count} tickets with subject containing '{subject}'."
+    else:
+      result.message = f"Deleted {deleted_count} of {len(matching_tickets)} tickets with subject containing '{subject}'."
+
     return result
