@@ -22,3 +22,5 @@ pytest
 pytest-mock
 
 python-dotenv
+
+debugpy

@@ -4,12 +4,13 @@ services:
     tty: true
     image: claia
     build:
-      context: .
-      dockerfile: ./Dockerfile
+      context: ../
+      dockerfile: ./docker/Dockerfile.test
     command: python -m debugpy --listen 0.0.0.0:5678 --wait-for-client /app/src/__main__.py
     volumes:
-      - ./src:/app/src
-      - ./modules:/app/modules
+      - ../src:/app/src
+      - ../modules:/app/modules
+      - ../storage:/app/storage
     ports:
       - 5678:5678
     deploy:

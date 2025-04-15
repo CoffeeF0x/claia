@@ -20,6 +20,7 @@ RUN pip install -r requirements.txt --no-cache-dir
 COPY src/ src/
 COPY modules/ modules/
 COPY pyproject.toml .
+COPY .env .
 
 # ENTRYPOINT [ "python", "src/main.py" ]
 CMD [ "python", "src/main.py" ]
