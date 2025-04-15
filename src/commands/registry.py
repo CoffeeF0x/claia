@@ -382,10 +382,43 @@ class CommandRegistry:
     positional_args = []
     kwargs = {}
 
+    # NOTE: Review this functionality
     # Process remaining arguments after command name
-    # NOTE: This is not very robust, so we may want to revisit this later
-    for i, arg in enumerate(args[1:]):
-      if "=" in arg:
+    # Now with proper handling for quoted strings
+    i = 1
+    in_quotes = False
+    current_quoted_arg = ""
+    quote_char = None
+
+    while i < len(args):
+      arg = args[i]
+
+      # Check for the start of a quoted string
+      if not in_quotes and (arg.startswith('"') or arg.startswith("'")):
+        quote_char = arg[0]
+        # Handle the case where the quoted string is contained within a single argument
+        if len(arg) > 1 and arg.endswith(quote_char):
+          # Single argument with quotes at start and end - remove quotes and add as one arg
+          subcommand_parts.append(arg[1:-1])
+        else:
+          # Start of a multi-argument quoted string
+          in_quotes = True
+          current_quoted_arg = arg[1:]
+
+      # Continue collecting parts of a quoted string
+      elif in_quotes:
+        if arg.endswith(quote_char):
+          # End of quoted string
+          current_quoted_arg += " " + arg[:-1]
+          in_quotes = False
+          subcommand_parts.append(current_quoted_arg)
+          current_quoted_arg = ""
+        else:
+          # Middle of quoted string
+          current_quoted_arg += " " + arg
+
+      # Normal argument processing (not in quotes)
+      elif "=" in arg:
         # Key-value parameter
         key, value = arg.split("=", 1)
         kwargs[key] = value
@@ -394,8 +427,15 @@ class CommandRegistry:
         flag_name = arg[2:]
         kwargs[flag_name] = True
       else:
-        # Subcommand part or positional argument
+        # Regular argument
         subcommand_parts.append(arg)
+
+      i += 1
+
+    # If we're still in quotes at the end, add the partial quoted string
+    if in_quotes and current_quoted_arg:
+      logger.warning(f"Unclosed quote in command arguments, treating as plain text: {current_quoted_arg}")
+      subcommand_parts.append(current_quoted_arg)
 
     # Check for top-level command
     if command_name in self._command_map:
