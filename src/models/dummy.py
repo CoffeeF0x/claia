@@ -98,6 +98,9 @@ For the first time in decades, Akira felt truly alive. This was the adventure sh
 The sun broke over the horizon, painting the city in gold. A new day, and for Akira, the beginning of an extraordinary journey that would test her powers, her courage, and her heart. The ancient magic of Japan was stirring, and she would be at the center of its awakening.
 """
 
+CHARS_PER_SECOND = 2000
+CHARS_PER_CHUNK = 20
+
 
 
 ########################################################################
@@ -130,13 +133,12 @@ class DummyModel(BaseModel):
         The complete story after streaming is finished
     """
     # Get the streaming rate
-    chars_per_second = kwargs.get("chars_per_second", 100)
-    chars_per_chunk = kwargs.get("chars_per_chunk", 20)
+    chars_per_second = kwargs.get("chars_per_second", CHARS_PER_SECOND)
+    chars_per_chunk = kwargs.get("chars_per_chunk", CHARS_PER_CHUNK)
     logger.debug(f"Generating response at {chars_per_second} characters per second in chunks of {chars_per_chunk}")
 
     # Add a blank assistant message to the conversation that we'll update
     message = conversation.add_message(MessageRole.ASSISTANT, "")
-    current_response = ""
 
     # Simulate streaming by adding characters in chunks
     for i in range(0, self.story_length, chars_per_chunk):
