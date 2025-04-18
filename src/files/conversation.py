@@ -68,6 +68,71 @@ T = TypeVar('T', bound='Conversation')
 
 
 ########################################################################
+#                            CONVERSATION SETTINGS                     #
+########################################################################
+class ConversationSettings:
+  """
+  Class representing settings for a conversation.
+
+  Attributes:
+      streaming (bool): Whether to stream responses (default: True)
+      text_settings (Dict[str, Any]): Settings for text generation
+      image_settings (Dict[str, Any]): Settings for image generation
+  """
+
+  def __init__(self,
+               streaming: bool = True,
+               text_settings: Optional[Dict[str, Any]] = None,
+               image_settings: Optional[Dict[str, Any]] = None):
+    """
+    Initialize conversation settings.
+
+    Args:
+        streaming: Whether to stream responses (default: True)
+        text_settings: Settings for text generation (default: None)
+            - max_tokens: Maximum tokens for text generation
+            - temperature: Temperature for text generation
+        image_settings: Settings for image generation (default: None)
+            - height: Height of generated images
+            - width: Width of generated images
+            - steps: Number of diffusion steps for image generation
+    """
+    self.streaming = streaming
+    self.text_settings = text_settings or {}
+    self.image_settings = image_settings or {}
+
+  def to_dict(self) -> Dict[str, Any]:
+    """
+    Convert the settings to a dictionary.
+
+    Returns:
+        Dict[str, Any]: Dictionary representation of settings
+    """
+    return {
+      "streaming": self.streaming,
+      "text_settings": self.text_settings,
+      "image_settings": self.image_settings
+    }
+
+  @classmethod
+  def from_dict(cls, data: Dict[str, Any]) -> 'ConversationSettings':
+    """
+    Create settings from a dictionary.
+
+    Args:
+        data: Dictionary containing settings data
+
+    Returns:
+        ConversationSettings: New settings object
+    """
+    return cls(
+      streaming=data.get("streaming", True),
+      text_settings=data.get("text_settings"),
+      image_settings=data.get("image_settings")
+    )
+
+
+########################################################################
 #                               MESSAGE                                #
 ########################################################################
 class Message:
@@ -478,7 +543,8 @@ class Conversation(TextFile):
       "title": self.title,
       "message_count": len(self.messages),
       "tool_count": len(self.tool_definitions),
-      "has_custom_tags": bool(self.custom_tag_formats)
+      "has_custom_tags": bool(self.custom_tag_formats),
+      "settings": self.settings.to_dict()
     })
 
   def _update_metadata(self):
@@ -514,6 +580,7 @@ class Conversation(TextFile):
       "custom_tag_formats": {
         k.name: v for k, v in self.custom_tag_formats.items()
       },
+      "settings": self.settings.to_dict(),
       "created_at": self.timestamp
     }
 
@@ -1484,3 +1551,49 @@ class Conversation(TextFile):
       }
       for t in self.tool_definitions
     ]
+
+  def update_settings(self, settings: ConversationSettings) -> None:
+    """
+    Update conversation settings and record the action.
+
+    Args:
+        settings: A ConversationSettings object with the new settings
+    """
+    # Track what was changed for the action metadata
+    changes = {}
+
+    # Check if streaming setting changed
+    if settings.streaming != self.settings.streaming:
+      self.settings.streaming = settings.streaming
+      changes["streaming"] = settings.streaming
+
+    # Update text settings
+    for key, value in settings.text_settings.items():
+      if key not in self.settings.text_settings or self.settings.text_settings[key] != value:
+        self.settings.text_settings[key] = value
+        if "text_settings" not in changes:
+          changes["text_settings"] = {}
+        changes["text_settings"][key] = value
+
+    # Update image settings
+    for key, value in settings.image_settings.items():
+      if key not in self.settings.image_settings or self.settings.image_settings[key] != value:
+        self.settings.image_settings[key] = value
+        if "image_settings" not in changes:
+          changes["image_settings"] = {}
+        changes["image_settings"][key] = value
+
+    # Only add an action if something changed
+    if changes:
+      self.add_action(ActionType.UPDATE_SETTINGS, changes)
+      # Update metadata
+      self.metadata.update({"settings": self.settings.to_dict()})
+
+  def get_settings(self) -> ConversationSettings:
+    """
+    Get the current conversation settings.
+
+    Returns:
+        ConversationSettings: The current settings
+    """
+    return self.settings

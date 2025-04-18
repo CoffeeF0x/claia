@@ -21,6 +21,7 @@ class ActionType(Enum):
     REMOVE_TOOL_DEFINITION = auto()
     PROCESS_FUNCTION_CALL  = auto()
     START_STREAM           = auto()
+    UPDATE_SETTINGS        = auto()
 
 
 class MessageRole(Enum):
