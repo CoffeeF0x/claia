@@ -140,21 +140,14 @@ class DummyModel(BaseModel):
 
     # Simulate streaming by adding characters in chunks
     for i in range(0, self.story_length, chars_per_chunk):
-        # Get the next chunk of characters
         end_idx = min(i + chars_per_chunk, self.story_length)
         chunk = "".join(self.characters[i:end_idx])
-
-        # Add to the current response
-        current_response += chunk
-
-        # Update the message with the current response
-        conversation.stream_message(message.message_id, current_response)
-
-        # Slight variation in timing to make it feel more natural
-        delay = (chars_per_chunk / chars_per_second) * (0.9 + (random.random() * 0.2))  # ±10% variation
+        # Stream only the new chunk, appending to the message
+        conversation.stream_message(message.message_id, chunk, append=True)
+        delay = (chars_per_chunk / chars_per_second) * (0.9 + (random.random() * 0.2))
         time.sleep(delay)
 
-    # Final update to process any extracted args and add the UPDATE_MESSAGE action
-    conversation.update_message(message.message_id, current_response)
+    # Append a newline and mark the end of the stream
+    conversation.stream_message(message.message_id, "\n", append=True, end=True)
 
-    return current_response
+    return message.content

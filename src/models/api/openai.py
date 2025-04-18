@@ -1,10 +1,27 @@
 from typing import Dict, Any
 import logging
+import json
 
 # Internal dependencies
 from ..base import APIModel
 from files import Conversation
 from enums import MessageRole
+
+
+
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
+MODEL_DEFAULTS = {
+  "max_tokens":  1000,
+  "temperature": 0.7,
+  "top_p":       1.0,
+  "n":           1,
+  "stop":        None,
+  "stream":      True
+}
+
+
 
 ########################################################################
 #                            INITIALIZATION                            #
@@ -23,6 +40,12 @@ class OpenAIModel(APIModel):
   def generate(self, conversation: Conversation, **kwargs) -> str:
     # Get messages and add system prompt if present
     messages = []
+    is_streaming = kwargs.get("stream",      MODEL_DEFAULTS["stream"]     )
+    max_tokens   = kwargs.get("max_tokens",  MODEL_DEFAULTS["max_tokens"] )
+    temperature  = kwargs.get("temperature", MODEL_DEFAULTS["temperature"])
+    top_p        = kwargs.get("top_p",       MODEL_DEFAULTS["top_p"]      )
+    n            = kwargs.get("n",           MODEL_DEFAULTS["n"]          )
+    stop         = kwargs.get("stop",        MODEL_DEFAULTS["stop"]       )
 
     # Add system prompt if available
     if conversation.prompt:
@@ -46,18 +69,50 @@ class OpenAIModel(APIModel):
     data = {
       "model": self.model_name,
       "messages": messages,
-      "max_tokens": kwargs.get("max_tokens", 100),
-      "temperature": kwargs.get("temperature", 0.7),
-      "top_p": kwargs.get("top_p", 1.0),
-      "n": kwargs.get("n", 1),
-      "stream": kwargs.get("stream", False),
-      "stop": kwargs.get("stop", None),
+      "max_tokens": max_tokens,
+      "temperature": temperature,
+      "top_p": top_p,
+      "n": n,
+      "stream": is_streaming,
+      "stop": stop,
     }
 
-    response = self.post("chat/completions", data)
-    response_text = response.json()["choices"][0]["message"]["content"]
+    if is_streaming:
+      # Add an empty assistant message to the conversation
+      message = conversation.add_message(MessageRole.ASSISTANT, "")
 
-    # Add the response as an assistant message to the conversation
-    conversation.add_message(MessageRole.ASSISTANT, response_text)
+      # Make a streaming request
+      response = self.post("chat/completions", data, stream=True)
 
-    return response_text
+      # Process the streaming response
+      for line in response.iter_lines():
+        if line:
+          line = line.decode('utf-8') if isinstance(line, bytes) else line
+          if line.startswith('data: '):
+            data = line[6:]
+            if data == '[DONE]':
+              break
+            try:
+              chunk = json.loads(data)
+              if 'choices' in chunk and len(chunk['choices']) > 0:
+                delta = chunk['choices'][0].get('delta', {})
+                if 'content' in delta:
+                  content_chunk = delta['content']
+                  conversation.stream_message(message.message_id, content_chunk, append=True)
+            except json.JSONDecodeError:
+              logger.warning(f"Failed to parse streaming response: {data}")
+
+      # Append a newline and mark the end of the stream
+      conversation.stream_message(message.message_id, "\n", append=True, end=True)
+
+      return message.content
+
+    else:
+      # Non-streaming request
+      response = self.post("chat/completions", data)
+      response_text = response.json()["choices"][0]["message"]["content"]
+
+      # Add the response as an assistant message to the conversation
+      conversation.add_message(MessageRole.ASSISTANT, response_text)
+
+      return response_text

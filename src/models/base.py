@@ -53,10 +53,10 @@ class APIModel(BaseModel):
     """Set a custom header for authentication or other purposes."""
     self.session.headers.update({header_name: header_value})
 
-  def request(self, method: str, endpoint: str, data: Optional[Dict] = None, params: Optional[Dict] = None) -> requests.Response:
+  def request(self, method: str, endpoint: str, data: Optional[Dict] = None, params: Optional[Dict] = None, *args, **kwargs) -> requests.Response:
     """Make an API request with the configured session."""
     url = f"{self.base_url}/{endpoint}"
-    response = self.session.request(method, url, json=data, params=params)
+    response = self.session.request(method, url, json=data, params=params, *args, **kwargs)
     response.raise_for_status()
     return response
 
@@ -64,9 +64,9 @@ class APIModel(BaseModel):
     """Make a GET request to the API."""
     return self.request("GET", endpoint, params=params)
 
-  def post(self, endpoint: str, data: Dict) -> requests.Response:
+  def post(self, endpoint: str, data: Dict, *args, **kwargs) -> requests.Response:
     """Make a POST request to the API."""
-    return self.request("POST", endpoint, data=data)
+    return self.request("POST", endpoint, data=data, *args, **kwargs)
 
   def put(self, endpoint: str, data: Dict) -> requests.Response:
     """Make a PUT request to the API."""

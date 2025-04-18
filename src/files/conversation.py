@@ -68,7 +68,7 @@ T = TypeVar('T', bound='Conversation')
 
 
 ########################################################################
-#                            CONVERSATION SETTINGS                     #
+#                        CONVERSATION SETTINGS                         #
 ########################################################################
 class ConversationSettings:
   """
@@ -506,10 +506,15 @@ class Conversation(TextFile):
     kwargs["mime_type"] = "application/json"
     super().__init__(base_directory=base_directory, **kwargs)
 
-    # Initialize messages, actions, and tool definitions
+    # Initialize messages, actions, tool definitions, and settings
     self.messages = []
     self.actions = []
     self.tool_definitions = []
+    self.settings = kwargs.pop("settings", ConversationSettings())
+
+    # Convert settings to ConversationSettings if necessary
+    if not isinstance(self.settings, ConversationSettings):
+      self.settings = ConversationSettings.from_dict(self.settings)
 
     # Load initial messages and actions if provided
     for message_data in initial_messages:
@@ -559,7 +564,8 @@ class Conversation(TextFile):
       "title": self.title,
       "message_count": len(self.messages),
       "tool_count": len(self.tool_definitions),
-      "has_custom_tags": bool(self.custom_tag_formats)
+      "has_custom_tags": bool(self.custom_tag_formats),
+      "settings": self.settings.to_dict()
     })
 
   def _get_default_content(self) -> Optional[str]:
@@ -1485,7 +1491,7 @@ class Conversation(TextFile):
     """
     return self.tool_definitions
 
-  def stream_message(self, message_id: str, content: str) -> Optional[Message]:
+  def stream_message(self, message_id: str, content: str, append: bool = False, end: bool = False) -> Optional[Message]:
     """
     Update a message's content without adding an action to the history.
 
@@ -1499,6 +1505,7 @@ class Conversation(TextFile):
     Args:
         message_id: The ID of the message to update
         content: New content for the message
+        append: If True, append the content to the existing message; if False, replace it
 
     Returns:
         Optional[Message]: The updated message, or None if not found
@@ -1507,7 +1514,10 @@ class Conversation(TextFile):
     for message in self.messages:
       if message.message_id == message_id:
         # Update message content without extracting inline args
-        message.content = content
+        if append:
+          message.content += content
+        else:
+          message.content = content
 
         # Update timestamp
         message.updated_at = time.time()
@@ -1525,7 +1535,14 @@ class Conversation(TextFile):
           self.add_action(ActionType.START_STREAM, {
             "message_id": message_id,
             "speaker": message.speaker.value,
-            "content_preview": content[:50] + "..." if len(content) > 50 else content
+            "content_preview": message.content[:50] + "..." if len(message.content) > 50 else message.content
+          })
+
+        if end:
+          self.add_action(ActionType.END_STREAM, {
+            "message_id": message_id,
+            "speaker": message.speaker.value,
+            "content_preview": message.content[:50] + "..." if len(message.content) > 50 else message.content
           })
 
         return message
