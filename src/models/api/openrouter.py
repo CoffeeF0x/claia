@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List
 import logging
 import json
 
@@ -12,16 +12,9 @@ from enums import MessageRole
 ########################################################################
 #                              CONSTANTS                               #
 ########################################################################
-# API request defaults
-OPENROUTER_DEFAULTS = {
+# Openrouter-specific default settings
+DEFAULT_SETTINGS = {
   "max_tokens": 1000,
-  "temperature": 0.7,
-  "top_p": 1.0,
-  "top_k": None,
-  "presence_penalty": 0,
-  "frequency_penalty": 0,
-  "stop": None,
-  "stream": True
 }
 
 # Header defaults
@@ -47,35 +40,34 @@ class OpenRouterModel(APIModel):
     self.set_custom_header("HTTP-Referer", DEFAULT_HTTP_REFERER)
     self.set_custom_header("X-Title", DEFAULT_X_TITLE)
 
-  def _get_settings_from_conversation(self, conversation: Conversation) -> Dict[str, Any]:
+  def _format_messages(self, conversation: Conversation) -> List[Dict[str, Any]]:
     """
-    Extract settings from the conversation object, falling back to defaults.
+    Format conversation messages for the OpenRouter API.
 
     Args:
-        conversation: The conversation containing settings
+        conversation: The conversation containing messages
 
     Returns:
-        Dict[str, Any]: The settings dictionary with defaults applied where needed
+        List[Dict[str, Any]]: Formatted messages for the API request
     """
-    # Start with our defaults
-    settings = OPENROUTER_DEFAULTS.copy()
+    messages = []
 
-    # Get conversation settings if available
-    conversation_settings = conversation.get_settings()
-    if conversation_settings:
-      # Override with streaming setting
-      settings["stream"] = conversation_settings.streaming
+    # Add system prompt if available
+    if conversation.prompt:
+      messages.append({
+        "role": "system",
+        "content": conversation.prompt
+      })
 
-      # Override with text settings if available
-      text_settings = conversation_settings.text_settings
-      if text_settings:
-        if "max_tokens" in text_settings:
-          settings["max_tokens"] = text_settings["max_tokens"]
+    # Convert to OpenAI format
+    for message in conversation.get_messages([MessageRole.USER, MessageRole.ASSISTANT]):
+      messages.append({
+        "role": message.speaker.value,
+        "content": message.content
+      })
 
-        if "temperature" in text_settings:
-          settings["temperature"] = text_settings["temperature"]
-
-    return settings
+    logger.debug(f"Sending {len(messages)} messages to OpenRouter API")
+    return messages
 
   def generate(self, conversation: Conversation, **kwargs) -> str:
     """
@@ -88,114 +80,111 @@ class OpenRouterModel(APIModel):
     Returns:
         str: The generated response text
     """
-    # Get settings from conversation and apply additional overrides from kwargs
-    settings = self._get_settings_from_conversation(conversation)
-    settings.update({k: v for k, v in kwargs.items() if k in OPENROUTER_DEFAULTS})
-
-    # Extract individual settings for clarity
-    is_streaming = settings["stream"]
-    max_tokens = settings["max_tokens"]
-    temperature = settings["temperature"]
-    top_p = settings["top_p"]
-    top_k = settings["top_k"]
-    presence_penalty = settings["presence_penalty"]
-    frequency_penalty = settings["frequency_penalty"]
-    stop = settings["stop"]
-
-    # Get messages and add system prompt if present
-    messages = []
-
-    # Add system prompt if available
-    if conversation.prompt:
-      messages.append({
-        "role": "system",
-        "content": conversation.prompt
-      })
-
-    # Get user and assistant messages
-    conversation_messages = conversation.get_messages([MessageRole.USER, MessageRole.ASSISTANT])
-
-    # Convert to OpenAI format
-    for message in conversation_messages:
-      messages.append({
-        "role": message.speaker.value,
-        "content": message.content
-      })
-
-    logger.debug(f"Sending {len(messages)} messages to OpenRouter API")
+    settings = self.update_settings(DEFAULT_SETTINGS, conversation, **kwargs)
+    messages = self._format_messages(conversation)
 
     # Prepare the API request data
     data = {
       "model": self.model_name,
       "messages": messages,
-      "max_tokens": max_tokens,
-      "temperature": temperature,
-      "top_p": top_p,
-      "stream": is_streaming,
-      "stop": stop,
+      "max_tokens": settings.get("max_tokens"),
+      "stream": settings.get("stream")
     }
 
-    # Add optional parameters only if they have a value
-    if top_k is not None:
-      data["top_k"] = top_k
-    if presence_penalty != 0:
-      data["presence_penalty"] = presence_penalty
-    if frequency_penalty != 0:
-      data["frequency_penalty"] = frequency_penalty
+    # Add optional parameters if they exist in settings
+    if settings.get("temperature"):
+      data["temperature"] = settings.get("temperature")
+    if settings.get("top_p"):
+      data["top_p"] = settings.get("top_p")
+    if settings.get("top_k"):
+      data["top_k"] = settings.get("top_k")
+    if settings.get("presence_penalty"):
+      data["presence_penalty"] = settings.get("presence_penalty")
+    if settings.get("frequency_penalty"):
+      data["frequency_penalty"] = settings.get("frequency_penalty")
+    if settings.get("stop"):
+      data["stop"] = settings.get("stop")
+    if settings.get("n"):
+      data["n"] = settings.get("n")
 
-    # Handle streaming vs. non-streaming requests
-    if is_streaming:
-      # Add an empty assistant message to the conversation
-      message_id = conversation.add_message(MessageRole.ASSISTANT, "").message_id
-
-      # Make a streaming request
-      buffer = ""
-      with self.post("chat/completions", data, stream=True) as r:
-        for chunk in r.iter_content(chunk_size=1024, decode_unicode=True):
-          buffer += chunk
-          while True:
-            try:
-              # Find the next complete SSE line
-              line_end = buffer.find('\n')
-              if line_end == -1:
-                break
-              line = buffer[:line_end].strip()
-              buffer = buffer[line_end + 1:]
-              if line.startswith('data: '):
-                data = line[6:]
-                if data == '[DONE]':
-                  break
-                try:
-                  data_obj = json.loads(data)
-                  content = data_obj["choices"][0]["delta"].get("content")
-                  if content:
-                    conversation.stream_message(message_id, content, append=True)
-                    # print(content, end="", flush=True)
-                except json.JSONDecodeError:
-                  pass
-            except Exception:
-              break
-
-      # Append a newline at the end of the streamed message and mark the end of stream
-      conversation.stream_message(message_id, "\n", append=True, end=True)
-
-      return buffer
+    # Call the appropriate method based on whether streaming is enabled
+    if settings.get("stream"):
+      return self._get_text_stream(data, conversation)
     else:
-      # Initialize an empty response text
-      response_text = ""
+      return self._get_text(data, conversation)
 
-      # Non-streaming request
-      response = self.post("chat/completions", data)
-      response_json = response.json()
+  def _get_text_stream(self, data: Dict[str, Any], conversation: Conversation) -> str:
+    """
+    Get streaming response from the OpenRouter API.
 
-      if 'choices' in response_json and len(response_json['choices']) > 0:
-        response_text = response_json["choices"][0]["message"]["content"]
+    Args:
+        data: The request payload
+        conversation: The conversation to update with streamed content
 
-        # Add the response as an assistant message to the conversation
-        conversation.add_message(MessageRole.ASSISTANT, response_text)
+    Returns:
+        str: The complete generated text
+    """
+    message = conversation.add_message(MessageRole.ASSISTANT, "")
+    response = self.post("chat/completions", data, stream=True)
 
-        return response_text
-      else:
-        logger.error(f"Unexpected response format from OpenRouter: {response_json}")
-        error_message = "Error: Invalid response from OpenRouter API"
-        return error_message
+    # Process the streaming response
+    for line in response.iter_lines():
+      if not line:
+        continue
+
+      line = line.decode('utf-8') if isinstance(line, bytes) else line
+
+      if not line.startswith('data: '):
+        continue
+
+      data_line = line[6:]
+
+      if data_line == '[DONE]':
+        break
+
+      try:
+        chunk = json.loads(data_line)
+
+        if 'choices' in chunk and len(chunk['choices']) > 0:
+          delta = chunk['choices'][0].get('delta', {})
+
+          if 'content' in delta:
+            content_chunk = delta['content']
+            conversation.stream_message(message.message_id, content_chunk, append=True)
+
+      except json.JSONDecodeError:
+        logger.warning(f"Failed to parse streaming response: {data_line}")
+
+    # Finish the stream with a newline and return the message content
+    conversation.stream_message(message.message_id, "\n", append=True, end=True)
+    return message.content
+
+  def _get_text(self, data: Dict[str, Any], conversation: Conversation) -> str:
+    """
+    Get non-streaming response from the OpenRouter API.
+
+    Args:
+        data: The request payload
+        conversation: The conversation to update with the response
+
+    Returns:
+        str: The generated text
+    """
+
+    # Initialize an empty response text
+    response_text = ""
+
+    response = self.post("chat/completions", data)
+    response_json = response.json()
+
+    if 'choices' in response_json and len(response_json['choices']) > 0:
+      response_text = response_json["choices"][0]["message"]["content"]
+
+      # Add the response as an assistant message to the conversation
+      conversation.add_message(MessageRole.ASSISTANT, response_text)
+
+      return response_text
+    else:
+      logger.error(f"Unexpected response format from OpenRouter: {response_json}")
+      error_message = "Error: Invalid response from OpenRouter API"
+      return error_message

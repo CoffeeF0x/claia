@@ -22,6 +22,9 @@
 # - Top level commands no longer show in command help
 # - run commands from cli with optional --flags processing instead of arg=value style, for example: claia transcribe --file <audio-file>
 
+# - Legacy conversation_id still referenced in the conversation object?
+# - Need to clean input from user and models (set gpt-4 to temperature 2 causing issues)
+
 # External dependencies
 import readline
 import atexit
