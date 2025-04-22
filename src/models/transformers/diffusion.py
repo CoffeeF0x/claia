@@ -46,14 +46,17 @@ class DiffusionModel(TransformersModel):
   images to conversation messages.
   """
 
-  def __init__(self,
-               model_name: str,
-               model_path: str = None,
-               defer_loading: bool = False,
-               device: str = None,
-               model_params: Optional[Dict[str, Any]] = None,
-               api_key: Optional[str] = None,
-               capability: ModelCapability = ModelCapability.TTI):
+
+  def __init__(
+    self,
+    model_name: str,
+    model_path: str = None,
+    defer_loading: bool = False,
+    device: str = None,
+    model_params: Optional[Dict[str, Any]] = None,
+    api_key: Optional[str] = None,
+    capability: ModelCapability = ModelCapability.TTI):
+
     """
     Initialize a diffusion model.
 
@@ -66,6 +69,7 @@ class DiffusionModel(TransformersModel):
         api_key: Hugging Face API key for authentication
         capability: Model capability (defaults to TTI)
     """
+
     # Set default image generation parameters
     self.default_image_params = DEFAULT_PARAMS.copy()
 
@@ -83,12 +87,15 @@ class DiffusionModel(TransformersModel):
       capability=capability
     )
 
+
   def load(self) -> None:
+
     """
     Load the diffusion model.
 
     This overrides the parent class method to avoid text model loading logic.
     """
+
     logger.debug(f"Loading diffusion model {self.model_name} with capability {self.capability.value}")
 
     # Check if model exists locally, download if needed
@@ -108,8 +115,10 @@ class DiffusionModel(TransformersModel):
       logger.error(f"Error loading diffusion model: {str(e)}")
       raise
 
+
   def _load_image_model(self) -> None:
     """Load a text-to-image diffusion model."""
+
     logger.debug(f"Loading diffusion model from {self.model_path}")
 
     try:
@@ -139,7 +148,9 @@ class DiffusionModel(TransformersModel):
       logger.error(f"Model path: {self.model_path}, Device: {self.device}")
       raise
 
+
   def _generate_impl(self, conversation: Conversation, **kwargs) -> str:
+
     """
     Generate an image based on the conversation and attach it to a message.
 
@@ -150,6 +161,7 @@ class DiffusionModel(TransformersModel):
     Returns:
         str: A message indicating the image was generated
     """
+
     try:
       # Ensure the model is loaded
       if not self.is_loaded():
@@ -231,8 +243,13 @@ class DiffusionModel(TransformersModel):
       conversation.add_message(MessageRole.ASSISTANT, error_message)
       return error_message
 
-  def _save_image_to_file(self, image_data: bytes, base_directory: str,
-                         file_name: str) -> Optional[ImageFile]:
+
+  def _save_image_to_file(
+    self,
+    image_data: bytes,
+    base_directory: str,
+    file_name: str) -> Optional[ImageFile]:
+
     """
     Save image data to a file and return the ImageFile object.
 
@@ -244,6 +261,7 @@ class DiffusionModel(TransformersModel):
     Returns:
         Optional[ImageFile]: The created ImageFile, or None if creation failed
     """
+
     try:
       # Create an ImageFile from the bytes
       image_file = ImageFile.from_bytes(
@@ -262,12 +280,15 @@ class DiffusionModel(TransformersModel):
       logger.error(f"Failed to create image file: {str(e)}")
       return None
 
+
   def _download_image_model(self, model_path: str) -> None:
+
     """
     Download a stable diffusion model.
 
     This hook is called by the parent class's download method when capability is TTI.
     """
+
     logger.info(f"Downloading {self.model_name} model to {model_path}")
 
     try:

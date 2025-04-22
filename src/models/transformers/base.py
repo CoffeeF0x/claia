@@ -49,14 +49,17 @@ class TransformersModel(LocalModel):
   - Conversation-based generation
   """
 
-  def __init__(self,
-               model_name: str,
-               model_path: str,
-               defer_loading: bool = False,
-               device: str = "cpu",
-               model_params: Optional[Dict[str, Any]] = None,
-               api_key: Optional[str] = None,
-               capability: ModelCapability = ModelCapability.TTT):
+
+  def __init__(
+    self,
+    model_name: str,
+    model_path: str,
+    defer_loading: bool = False,
+    device: str = "cpu",
+    model_params: Optional[Dict[str, Any]] = None,
+    api_key: Optional[str] = None,
+    capability: ModelCapability = ModelCapability.TTT):
+
     """
     Initialize a transformer model.
 
@@ -69,6 +72,7 @@ class TransformersModel(LocalModel):
         api_key: Hugging Face API key for authentication
         capability: Primary capability of this model
     """
+
     self.model_params = model_params or {}
     self.api_key = api_key
     self.capability = capability
@@ -98,8 +102,10 @@ class TransformersModel(LocalModel):
     if not defer_loading:
       self.load()
 
+
   def _authenticate_huggingface(self) -> None:
     """Authenticate with Hugging Face using the API token."""
+
     if self.api_key:
       logger.info("Authenticating with Hugging Face")
       logger.debug(f"Using API key (first 5 chars: {self.api_key[:5]})")
@@ -108,18 +114,23 @@ class TransformersModel(LocalModel):
     else:
       logger.warning("No Hugging Face API token provided. Some models may not be accessible.")
 
+
   def set_api_key(self, api_key: str) -> None:
     """Set the API key for Hugging Face authentication."""
+
     logger.debug(f"Setting API key (first 5 chars: {api_key[:5]})")
     self.api_key = api_key
 
+
   def load(self) -> None:
+
     """
     Load the model based on its capability.
 
     This method checks if the model exists locally, downloads it if needed,
     and loads the appropriate model class based on the capability.
     """
+
     logger.debug(f"Loading model {self.model_name} with capability {self.capability.value}")
 
     # Check if model exists locally, download if needed
@@ -137,7 +148,7 @@ class TransformersModel(LocalModel):
       elif self.capability in [ModelCapability.TTI, ModelCapability.DEFAULT]:
         self._load_image_model()
       elif self.capability in [ModelCapability.TAI, ModelCapability.ITT]:
-        self._load_multimodal_model()
+        self._load_vision_model()
       else:
         logger.warning(f"Unsupported capability: {self.capability.value}, falling back to text model")
         self._load_text_model()
@@ -148,8 +159,10 @@ class TransformersModel(LocalModel):
       logger.error(f"Error loading model: {str(e)}")
       raise
 
+
   def _load_text_model(self) -> None:
     """Load a text-to-text model."""
+
     logger.debug("Loading text-to-text model")
     self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
     self.model = AutoModelForCausalLM.from_pretrained(
@@ -160,35 +173,44 @@ class TransformersModel(LocalModel):
     )
     logger.debug("Text model loaded successfully")
 
+
   def _load_image_model(self) -> None:
+
     """
     Load a text-to-image model.
 
     Override this in subclasses with specific image generation implementation.
     """
+
     logger.debug("Loading text-to-image model")
     # This is a placeholder - specific implementations should override this
     logger.warning("Default text-to-image loading not implemented, subclasses should override")
     self._load_text_model()  # Fallback to text model
 
-  def _load_multimodal_model(self) -> None:
-    """
-    Load a multimodal model.
 
-    Override this in subclasses with specific multimodal implementation.
+  def _load_vision_model(self) -> None:
+
     """
-    logger.debug("Loading multimodal model")
+    Load a vision-enabled model.
+
+    Override this in subclasses with specific vision implementation.
+    """
+
+    logger.debug("Loading vision-enabled model")
     # This is a placeholder - specific implementations should override this
-    logger.warning("Default multimodal loading not implemented, subclasses should override")
+    logger.warning("Default vision model loading not implemented, subclasses should override")
     self._load_text_model()  # Fallback to text model
+
 
   def reset_context(self) -> None:
     """Reset the context (history) for the model if applicable."""
     # Implementation for context reset if needed
     pass
 
+
   def unload(self) -> None:
     """Unload the model and free memory."""
+
     logging.info(f"Unloading model {self.model_name}")
     self.model = None
     self.tokenizer = None
@@ -213,7 +235,9 @@ class TransformersModel(LocalModel):
     logging.debug(f"Detokenizing tokens")
     return self.tokenizer.decode(tokens, skip_special_tokens=True)
 
+
   def generate(self, conversation: Conversation, **kwargs) -> Any:
+
     """
     Generate output based on the model's capability and the conversation.
 
@@ -228,6 +252,7 @@ class TransformersModel(LocalModel):
     Returns:
         Generated output (text, image, etc. depending on capability)
     """
+
     if not self.is_loaded():
       self.load()
 
@@ -244,7 +269,9 @@ class TransformersModel(LocalModel):
     # by the implementation method
     return response
 
+
   def _generate_impl(self, conversation: Conversation, **kwargs) -> Any:
+
     """
     Implementation of the generation logic.
 
@@ -259,6 +286,7 @@ class TransformersModel(LocalModel):
     Returns:
         Generated output (specific type depends on implementation)
     """
+
     logging.info("Generating text response")
 
     # Format messages from the conversation
@@ -307,13 +335,16 @@ class TransformersModel(LocalModel):
     logging.debug(f"Generated response: {response[:100]}...")
     return response
 
+
   def download(self, model_path: str) -> None:
+
     """
     Download the model from HuggingFace.
 
     Args:
         model_path: Path to save the model
     """
+
     logger.info(f"Downloading {self.model_name} model to {model_path}")
     os.makedirs(model_path, exist_ok=True)
 
@@ -327,7 +358,7 @@ class TransformersModel(LocalModel):
       elif self.capability == ModelCapability.TTI:
         self._download_image_model(model_path)
       elif self.capability in [ModelCapability.TAI, ModelCapability.ITT]:
-        self._download_multimodal_model(model_path)
+        self._download_vision_model(model_path)
       else:
         logger.warning(f"Unsupported capability: {self.capability.value}, falling back to text model download")
         self._download_text_model(model_path)
@@ -337,8 +368,10 @@ class TransformersModel(LocalModel):
       logger.error(f"Error downloading model: {str(e)}")
       raise
 
+
   def _download_text_model(self, model_path: str) -> None:
     """Download a text-to-text model."""
+
     logger.debug(f"Downloading text model weights for {self.model_name}")
 
     # Download and save model
@@ -358,20 +391,26 @@ class TransformersModel(LocalModel):
 
     logger.debug("Text model downloaded successfully")
 
+
   def _download_image_model(self, model_path: str) -> None:
+
     """
     Download a text-to-image model.
 
     Override this in subclasses with specific implementation.
     """
+
     logger.warning("Default text-to-image download not implemented, subclasses should override")
     self._download_text_model(model_path)  # Fallback to text model
 
-  def _download_multimodal_model(self, model_path: str) -> None:
+
+  def _download_vision_model(self, model_path: str) -> None:
+
     """
-    Download a multimodal model.
+    Download a vision-enabled model.
 
     Override this in subclasses with specific implementation.
     """
-    logger.warning("Default multimodal download not implemented, subclasses should override")
+
+    logger.warning("Default vision model download not implemented, subclasses should override")
     self._download_text_model(model_path)  # Fallback to text model

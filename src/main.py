@@ -24,6 +24,7 @@
 
 # - Legacy conversation_id still referenced in the conversation object?
 # - Need to clean input from user and models (set gpt-4 to temperature 2 causing issues)
+# - Add multi-gpu support for transformer models
 
 # External dependencies
 import readline

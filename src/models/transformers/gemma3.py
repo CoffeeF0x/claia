@@ -1,12 +1,11 @@
 # External dependencies
-import os
 import logging
 from torch import bfloat16
-from torch.cuda import empty_cache
-from typing import List, Dict, Optional, Union, Any
+from typing import Dict, Optional, Any
+from transformers import AutoTokenizer, Gemma3ForCausalLM, Gemma3ForConditionalGeneration, AutoProcessor
 
 # Internal dependencies
-from .base import TransformersModel, DEFAULT_SETTINGS
+from .base import TransformersModel
 from files import Conversation
 from enums import MessageRole, ModelCapability
 
@@ -27,23 +26,24 @@ class Gemma3Model(TransformersModel):
   Specialized implementation for Gemma 3 models.
 
   This class handles all Gemma 3 specific functionality:
-  - Automatically detects multimodal vs text-only models
-  - Implements specialized loading for multimodal capabilities
-  - Provides optimized generation for both text and multimodal inputs
+  - Uses the official transformers library support for Gemma 3
+  - Handles text-only (TTT) and text+image (TAI/ITT) capabilities
 
   Usage:
     model = Gemma3Model("google/gemma-3-27b-it", capability=ModelCapability.TAI)
   """
 
-  def __init__(self,
-               model_name: str,
-               model_path: str,
-               defer_loading: bool = False,
-               device: str = "cpu",
-               model_params: Optional[Dict[str, Any]] = None,
-               api_key: Optional[str] = None,
-               capability: ModelCapability = ModelCapability.TTT,
-               multimodal: bool = None):
+
+  def __init__(
+    self,
+    model_name: str,
+    model_path: str,
+    defer_loading: bool = False,
+    device: str = "cpu",
+    model_params: Optional[Dict[str, Any]] = None,
+    api_key: Optional[str] = None,
+    capability: ModelCapability = ModelCapability.TTT):
+
     """
     Initialize a Gemma 3 model.
 
@@ -54,28 +54,8 @@ class Gemma3Model(TransformersModel):
         device: Device to load on
         model_params: Additional parameters
         api_key: Hugging Face API key
-        capability: Primary capability
-        multimodal: Whether to load multimodal capabilities (auto-detected if None)
+        capability: Primary capability (determines text-only or vision-enabled)
     """
-    # Auto-detect multimodal capability if not specified
-    if multimodal is None:
-      multimodal = "1b" not in model_name.lower()
-      logger.debug(f"Auto-detected multimodal={multimodal} for {model_name}")
-
-    self.multimodal = multimodal
-
-    # If capability suggests a multimodal model but multimodal=False was specified,
-    # log a warning but respect the parameter
-    if not multimodal and capability in [ModelCapability.TAI, ModelCapability.ITT]:
-      logger.warning(f"Capability {capability.value} suggests multimodal model, but multimodal=False was specified")
-
-    # If multimodal is specified but capability doesn't match, adjust capability
-    if multimodal and capability == ModelCapability.TTT:
-      capability = ModelCapability.TAI
-      logger.debug(f"Adjusted capability to {capability.value} for multimodal model")
-    elif not multimodal and capability in [ModelCapability.TAI, ModelCapability.ITT]:
-      capability = ModelCapability.TTT
-      logger.debug(f"Adjusted capability to {capability.value} for text-only model")
 
     # Call parent init with defer_loading=True to prevent auto-loading
     # We'll handle the loading ourselves in this class
@@ -93,10 +73,11 @@ class Gemma3Model(TransformersModel):
     if not defer_loading:
       self.load()
 
+
   def _load_text_model(self) -> None:
     """Load a text-only Gemma 3 model."""
+
     logger.debug("Loading text-only Gemma 3 model")
-    from transformers import AutoTokenizer, Gemma3ForCausalLM
 
     self.tokenizer = AutoTokenizer.from_pretrained(
       self.model_path,
@@ -112,14 +93,11 @@ class Gemma3Model(TransformersModel):
 
     logger.debug("Text-only Gemma 3 model loaded successfully")
 
-  def _load_multimodal_model(self) -> None:
-    """Load a multimodal Gemma 3 model."""
-    if not self.multimodal:
-      logger.debug("Multimodal loading requested but multimodal=False was specified, using text-only model instead")
-      return self._load_text_model()
 
-    logger.debug("Loading multimodal Gemma 3 model")
-    from transformers import AutoProcessor, Gemma3ForConditionalGeneration
+  def _load_vision_model(self) -> None:
+    """Load a Gemma 3 model with vision capabilities (for TAI/ITT)."""
+
+    logger.debug("Loading Gemma 3 model with vision capabilities")
 
     self.processor = AutoProcessor.from_pretrained(
       self.model_path,
@@ -134,13 +112,18 @@ class Gemma3Model(TransformersModel):
       trust_remote_code=True
     )
 
-    logger.debug("Multimodal Gemma 3 model loaded successfully")
+    # For compatibility with token counting, etc.
+    self.tokenizer = self.processor.tokenizer
+
+    logger.debug("Gemma 3 model with vision capabilities loaded successfully")
+
 
   def _generate_impl(self, conversation: Conversation, **kwargs) -> str:
+
     """
     Implement generation for Gemma 3 models.
 
-    This method handles both text-only and multimodal Gemma 3 models,
+    This method handles both text-only and vision-enabled Gemma 3 models,
     selecting the appropriate processing approach based on the model's
     configuration.
 
@@ -151,36 +134,49 @@ class Gemma3Model(TransformersModel):
     Returns:
         str: The generated text response
     """
-    if not self.is_loaded():
-      self.load()
 
-    logger.info(f"Generating with Gemma 3 ({self.capability.value})")
+    logger.info("Generating response with Gemma 3 model")
 
-    # Format messages from the conversation
     formatted_messages = []
 
     # Add system prompt if available
     if conversation.prompt:
-      formatted_messages.append({
-        "role": "system",
-        "content": conversation.prompt
-      })
+      if self.capability in [ModelCapability.TAI, ModelCapability.ITT]:
+        # Vision-enabled models expect content as array of typed objects
+        formatted_messages.append({
+          "role": "system",
+          "content": [{"type": "text", "text": conversation.prompt}]
+        })
+      else:
+        # Text-only models expect content as string
+        formatted_messages.append({
+          "role": "system",
+          "content": conversation.prompt
+        })
 
     # Get user and assistant messages
     conversation_messages = conversation.get_messages([MessageRole.USER, MessageRole.ASSISTANT])
 
     # Convert to format expected by the model
     for message in conversation_messages:
-      formatted_messages.append({
-        "role": message.speaker.value,
-        "content": message.content
-      })
+      if self.capability in [ModelCapability.TAI, ModelCapability.ITT]:
+        # Vision-enabled models expect content as array of typed objects
+        formatted_messages.append({
+          "role": message.speaker.value,
+          "content": [{"type": "text", "text": message.content}]
+        })
+      else:
+        # Text-only models expect content as string
+        formatted_messages.append({
+          "role": message.speaker.value,
+          "content": message.content
+        })
 
     logger.debug(f"Formatted {len(formatted_messages)} messages for generation")
 
-    # Use appropriate generation approach based on model configuration
-    if self.multimodal and hasattr(self, 'processor'):
-      logger.debug("Using multimodal generation")
+    # Use appropriate generation approach based on capability
+    if self.capability in [ModelCapability.TAI, ModelCapability.ITT] and hasattr(self, 'processor'):
+      logger.debug(f"Using vision-enabled generation for capability {self.capability.value}")
 
       # Convert messages to inputs using the processor
       inputs = self.processor.apply_chat_template(
@@ -188,8 +184,8 @@ class Gemma3Model(TransformersModel):
         tokenize=True,
         return_dict=True,
         return_tensors="pt",
-        add_generation_prompt=True,
-        do_pan_and_scan=kwargs.get('high_res', False)
+        add_generation_prompt=True
+        # do_pan_and_scan=kwargs.get('high_res', False)
       ).to(self.device)
 
       # Generate the output
@@ -229,10 +225,11 @@ class Gemma3Model(TransformersModel):
     logger.debug(f"Generated response: {response[:100]}...")
     return response
 
+
   def _download_text_model(self, model_path: str) -> None:
     """Download a text-only Gemma 3 model."""
+
     logger.debug("Downloading text-only Gemma 3 model")
-    from transformers import AutoTokenizer, Gemma3ForCausalLM
 
     # Download and save model
     Gemma3ForCausalLM.from_pretrained(
@@ -251,14 +248,11 @@ class Gemma3Model(TransformersModel):
 
     logger.debug("Text-only Gemma 3 model downloaded successfully")
 
-  def _download_multimodal_model(self, model_path: str) -> None:
-    """Download a multimodal Gemma 3 model."""
-    if not self.multimodal:
-      logger.debug("Multimodal download requested but multimodal=False was specified, downloading text-only model instead")
-      return self._download_text_model(model_path)
 
-    logger.debug("Downloading multimodal Gemma 3 model")
-    from transformers import AutoProcessor, Gemma3ForConditionalGeneration
+  def _download_vision_model(self, model_path: str) -> None:
+    """Download a Gemma 3 model with vision capabilities (for TAI/ITT)."""
+
+    logger.debug("Downloading Gemma 3 model with vision capabilities")
 
     # Download and save model
     Gemma3ForConditionalGeneration.from_pretrained(
@@ -276,4 +270,4 @@ class Gemma3Model(TransformersModel):
       **self.model_params.get('processor', {})
     ).save_pretrained(model_path)
 
-    logger.debug("Multimodal Gemma 3 model downloaded successfully")
+    logger.debug("Gemma 3 model with vision capabilities downloaded successfully")
