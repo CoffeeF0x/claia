@@ -23,15 +23,42 @@ class ProcessQueue:
 
   This queue is used to manage processes that need to be executed by agents.
   Processes are processed in FIFO (First In, First Out) order.
+
+  This class is implemented as a singleton to ensure only one instance
+  exists throughout the application.
   """
+  # Class variables for singleton pattern
+  _instance = None
+  _worker_count = 1  # Default number of workers
+  _init_lock = threading.Lock()
+
+  def __new__(cls, *args, **kwargs):
+    """Override __new__ to implement the singleton pattern."""
+    with cls._init_lock:
+      if cls._instance is None:
+        logger = logging.getLogger(__name__)
+        logger.debug("Creating singleton ProcessQueue instance")
+        cls._instance = super(ProcessQueue, cls).__new__(cls)
+        # Mark as uninitialized so we know to call init
+        cls._instance._initialized = False
+      return cls._instance
+
   def __init__(self):
-    """Initialize a new ProcessQueue."""
+    """Initialize the ProcessQueue singleton instance."""
+    # Only initialize once
+    if getattr(self, '_initialized', False):
+      return
+
     self._queue = queue.Queue()
     self._lock = threading.Lock()
     self._processes = {}  # id -> Process mapping for quick lookups
     self._workers = []  # List of worker threads
     self._shutdown = threading.Event()  # Signal for workers to stop
     self._logger = logging.getLogger(__name__)
+    self._initialized = True
+
+    # Start the default number of workers
+    self.start_workers(self._worker_count)
 
   def put(self, process: Process):
     """
@@ -246,3 +273,90 @@ class ProcessQueue:
           self._logger.warning(f"{len(self._workers)} workers still running after timeout")
         else:
           self._logger.debug("All workers stopped successfully")
+
+  def wait_for_process(self, process_id: str, timeout: float = None, check_interval: float = 0.1) -> Optional[Process]:
+    """
+    Wait for a specific process to complete.
+
+    Args:
+        process_id: The ID of the process to wait for
+        timeout: Maximum time to wait in seconds (None for no timeout)
+        check_interval: How often to check the process status in seconds
+
+    Returns:
+        The completed Process object or None if timed out or not found
+    """
+    start_time = time.time()
+    self._logger.debug(f"Waiting for process: {process_id}")
+
+    while timeout is None or time.time() - start_time < timeout:
+      process = self.get_by_id(process_id)
+      if not process:
+        self._logger.debug(f"Process {process_id} not found in queue")
+        return None
+
+      if process.status in [ProcessStatus.COMPLETED, ProcessStatus.FAILED, ProcessStatus.CANCELLED]:
+        self._logger.debug(f"Process {process_id} completed with status: {process.status}")
+        return process
+
+      time.sleep(check_interval)
+
+    self._logger.warning(f"Timed out waiting for process {process_id} after {timeout} seconds")
+    return self.get_by_id(process_id)
+
+  def wait_for_all_processes(self, timeout: float = None, check_interval: float = 0.1) -> bool:
+    """
+    Wait for all processes in the queue to complete.
+
+    Args:
+        timeout: Maximum time to wait in seconds (None for no timeout)
+        check_interval: How often to check the queue status in seconds
+
+    Returns:
+        True if all processes completed, False if timed out
+    """
+    start_time = time.time()
+    self._logger.debug("Waiting for all processes to complete")
+
+    while timeout is None or time.time() - start_time < timeout:
+      with self._lock:
+        # Get all process IDs that are still pending
+        pending_processes = [pid for pid, proc in self._processes.items()
+                           if proc.status == ProcessStatus.PENDING]
+
+      if not pending_processes:
+        self._logger.debug("All processes completed successfully")
+        return True
+
+      self._logger.debug(f"Still waiting for {len(pending_processes)} processes")
+      time.sleep(check_interval)
+
+    self._logger.warning(f"Timed out waiting for all processes after {timeout} seconds")
+    return False
+
+  def set_worker_count(self, count: int):
+    """
+    Set the number of worker threads for the ProcessQueue singleton.
+
+    If the ProcessQueue already has workers, they will be stopped and
+    new workers started with the updated count.
+
+    Args:
+        count: Number of worker threads to use
+    """
+    # Ensure at least one worker
+    worker_count = max(1, count)
+
+    # Update the class variable for future instances
+    ProcessQueue._worker_count = worker_count
+
+    # If already initialized, update workers
+    if hasattr(self, '_initialized') and self._initialized:
+      # Stop existing workers if any
+      self.stop_workers(wait=True, timeout=120.0)
+      # Start new workers with updated count
+      self.start_workers(worker_count)
+      self._logger.debug(f"Updated ProcessQueue to use {worker_count} worker(s)")
+    else:
+      # Set worker count for initialization
+      self._worker_count = worker_count

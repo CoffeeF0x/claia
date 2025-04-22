@@ -54,7 +54,6 @@ MAX_HISTORY_LEN = 1000
 COMMAND_CHARACTER = ":"
 INPUT_CHARACTER = ":"
 DEFAULT_AGENT = "simple"
-DEFAULT_WORKER_THREADS = 1
 
 
 
@@ -134,10 +133,6 @@ def main() -> None:
     # Initialize the process queue
     logger.debug("Initializing process queue")
     process_queue = ProcessQueue()
-
-    # Start worker threads
-    logger.debug(f"Starting {DEFAULT_WORKER_THREADS} worker thread(s)")
-    process_queue.start_workers(DEFAULT_WORKER_THREADS)
 
     # Set up command history with arrow key navigation
     setup_command_history()
