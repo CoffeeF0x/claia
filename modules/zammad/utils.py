@@ -6,21 +6,30 @@ This module provides utility functions and decorators for the Zammad integration
 
 # External dependencies
 import logging
-import os
 from functools import wraps
 from typing import Callable, TypeVar, Tuple, Any, List, Dict, Optional
+
+# Process queue dependencies
+from agents import Process, ProcessQueue
+from enums import ProcessStatus, SourcePreference
 
 # Internal dependencies
 from settings import Settings
 from results import Result
-from files import Conversation
+from files import Conversation, TextFile
 from enums import MessageRole
 
 # Internal module dependencies
 from .api import ZammadAPI
 from .settings import ZammadSettings
 from .constants import TAG_LIST, TAG_PROMPT, ACCOUNT_MANAGEMENT_PROMPT, VERIFICATION_PROMPT
-# from models import run as model_run
+
+
+
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
+TIMEOUT = 120.0
 
 
 
@@ -38,6 +47,7 @@ T = TypeVar('T')
 #                              DECORATORS                              #
 ########################################################################
 def require_zammad_config(func: Callable[..., T]) -> Callable[..., T]:
+
   """
   Decorator to check if Zammad is properly configured before executing a command.
 
@@ -47,6 +57,7 @@ def require_zammad_config(func: Callable[..., T]) -> Callable[..., T]:
   Returns:
     The decorated function that checks for Zammad configuration
   """
+
   @wraps(func)
   def wrapper(self, settings: Settings, *args, **kwargs) -> T:
     # Get Zammad settings
@@ -73,6 +84,7 @@ def require_zammad_config(func: Callable[..., T]) -> Callable[..., T]:
 #                              FUNCTIONS                               #
 ########################################################################
 def extract_tag(response: str) -> Tuple[str, bool]:
+
   """
   Extract tag from AI model response.
 
@@ -82,7 +94,8 @@ def extract_tag(response: str) -> Tuple[str, bool]:
   Returns:
     Tuple containing the extracted tag and a success flag
   """
-  logger.debug("Extracting tag from response of length: %d", len(response) if response else 0)
+
+  logger.debug(f"Extracting tag from response of length: {len(response) if response else 0}")
   if not response:
     logger.debug("Empty response received")
     return "Blank", False
@@ -96,24 +109,29 @@ def extract_tag(response: str) -> Tuple[str, bool]:
       start = cleaned_response.index("[TAG]") + len("[TAG]")
       end = cleaned_response.index("[/TAG]")
       tag = cleaned_response[start:end].strip()
-      logger.debug("Found tag: %s", tag)
+      logger.debug(f"Found tag: {tag}")
 
       # Validate tag is in our list
       if tag in TAG_LIST:
-        logger.debug("Tag '%s' is valid", tag)
+        logger.debug(f"Tag '{tag}' is valid")
         return tag, True
       else:
-        logger.warning("Tag '%s' not in valid tag list", tag)
+        logger.warning(f"Tag '{tag}' not in valid tag list")
         return "Unknown", False
     else:
       logger.debug("No tag markers found in response")
       return "Blank", False
   except Exception as e:
-    logger.error("Error extracting tag: %s", str(e))
+    logger.error(f"Error extracting tag: {str(e)}")
     return "Error", False
 
 
-def tag_ticket(settings: Settings, zammad: ZammadAPI, ticket_id: str) -> Tuple[bool, str, str]:
+def tag_ticket(
+  settings: Settings,
+  zammad: ZammadAPI,
+  ticket_id: str,
+  conversation: Optional[Conversation] = None) -> Tuple[bool, str, str]:
+
   """
   Process a single ticket for AI tagging.
 
@@ -121,11 +139,14 @@ def tag_ticket(settings: Settings, zammad: ZammadAPI, ticket_id: str) -> Tuple[b
     settings: Application settings
     zammad: ZammadAPI instance
     ticket_id: The ID of the ticket to tag
+    conversation: Optional conversation object to record actions
 
   Returns:
     Tuple of (success flag, tag applied, error message if any)
   """
+
   logger.debug(f"Processing ticket: {ticket_id}")
+  process_queue = ProcessQueue()
 
   try:
     # Get ticket details
@@ -133,24 +154,54 @@ def tag_ticket(settings: Settings, zammad: ZammadAPI, ticket_id: str) -> Tuple[b
     if not ticket_details:
       return False, "", "Could not retrieve ticket details"
 
-    # Prepare messages for the AI model
-    tagging_messages = [
-      {"role": "system", "content": TAG_PROMPT},
-      {"role": "user", "content": ticket_details}
-    ]
+    # Create blank conversation object to process tag
+    tag_conversation = Conversation(
+      settings.files_directory,
+      prompt=TAG_PROMPT
+    )
+    tag_conversation.add_message(
+      MessageRole.USER,
+      ticket_details
+    )
 
-    # Run the AI model to get tag
-    logger.debug(f"Running AI model for ticket {ticket_id}")
-    tagging_result = model_run(settings.active_model, tagging_messages, settings=settings)
+    # Create a process for the request
+    logger.debug(f"Creating process for ticket {ticket_id}")
+    process = Process(
+      agent_type="simple",
+      settings=settings,
+      conversation=tag_conversation,
+      parameters={
+        "source_preference": SourcePreference.ANY,
+        "model": settings.active_model
+      }
+    )
 
-    if tagging_result.is_error():
-      error_msg = tagging_result.get_message()
-      logger.error(f"Error running tagging model for ticket {ticket_id}: {error_msg}")
+    # Add the process to the queue
+    process_id = process_queue.put(process)
+    logger.debug(f"Added process {process_id} to queue for ticket {ticket_id}")
+
+    # Wait for the process to complete
+    completed_process = process_queue.wait_for_process(process_id, timeout=TIMEOUT)
+
+    # Request post processing
+    if not completed_process or completed_process.status != ProcessStatus.COMPLETED:
+      error_msg = completed_process.error if completed_process else "Process failed or timed out"
+      logger.error(f"Process for ticket {ticket_id} failed: {error_msg}")
       return False, "", f"Model error: {error_msg}"
+    else:
+      logger.debug(f"Process {process_id} completed for ticket {ticket_id}")
+      if conversation is not None:
+        for message in tag_conversation.get_messages():
+          conversation.add_message(
+            message.speaker,
+            message.content
+          )
+        conversation.save()
 
     # Extract and apply tag
-    if tagging_result.data:
-      tag, success = extract_tag(tagging_result.data)
+    response = tag_conversation.get_latest_message()
+    if response and response.content:
+      tag, success = extract_tag(response.content)
       logger.debug(f"Extracted tag '{tag}' with success: {success}")
 
       # Add the appropriate tag
@@ -179,17 +230,22 @@ def tag_ticket(settings: Settings, zammad: ZammadAPI, ticket_id: str) -> Tuple[b
     return False, "", f"Error: {str(e)}"
 
 
-def untag_ticket(zammad: ZammadAPI, ticket_id: str) -> Tuple[int, List[str]]:
+def untag_ticket(
+  zammad: ZammadAPI,
+  ticket_id: str) -> Tuple[int, List[str]]:
+
   """
   Remove AI tags from a single ticket.
 
   Args:
     zammad: ZammadAPI instance
     ticket_id: The ID of the ticket
+    conversation: Optional conversation object to record actions
 
   Returns:
     Tuple of (number of tags removed, list of removed tags)
   """
+
   logger.debug(f"Removing AI tags from ticket {ticket_id}")
 
   try:
@@ -211,6 +267,7 @@ def untag_ticket(zammad: ZammadAPI, ticket_id: str) -> Tuple[int, List[str]]:
         logger.warning(f"Failed to remove tag {tag} from ticket {ticket_id}")
 
     logger.info(f"Removed {removed_count} AI tags from ticket {ticket_id}")
+
     return removed_count, removed_tags
 
   except Exception as e:
@@ -218,7 +275,11 @@ def untag_ticket(zammad: ZammadAPI, ticket_id: str) -> Tuple[int, List[str]]:
     return 0, []
 
 
-def find_tickets_by_subject(zammad: ZammadAPI, subject: str, limit: int = 0) -> List[Dict[str, Any]]:
+def find_tickets_by_subject(
+  zammad: ZammadAPI,
+  subject: str,
+  limit: int = 0) -> List[Dict[str, Any]]:
+
   """
   Find tickets in Zammad that have a specific subject.
 
@@ -230,6 +291,7 @@ def find_tickets_by_subject(zammad: ZammadAPI, subject: str, limit: int = 0) -> 
   Returns:
     List of matching ticket dictionaries with id, title, created_at, and customer info
   """
+
   logger.debug(f"Searching for tickets with subject containing: {subject}")
 
   # Get all open tickets first
@@ -262,9 +324,13 @@ def find_tickets_by_subject(zammad: ZammadAPI, subject: str, limit: int = 0) -> 
   return matching_tickets
 
 
-def process_account_ticket(settings: Settings, zammad: ZammadAPI,
-                    ticket_id: str, output_file: str,
-                    conversation: Conversation) -> Tuple[bool, str, Optional[int]]:
+def process_account_ticket(
+  settings: Settings,
+  zammad: ZammadAPI,
+  ticket_id: str,
+  file: Optional[TextFile] = None,
+  conversation: Optional[Conversation] = None) -> Tuple[bool, str, Optional[TextFile]]:
+
   """
   Process a single account management ticket and update account list.
 
@@ -272,13 +338,15 @@ def process_account_ticket(settings: Settings, zammad: ZammadAPI,
     settings: Application settings
     zammad: ZammadAPI instance
     ticket_id: The ID of the ticket to process
-    output_file: Path to the account list file
+    file: Optional TextFile instance for the account list
     conversation: Conversation instance
 
   Returns:
-    Tuple of (success flag, error message if any, file_id if successful)
+    Tuple of (success flag, error message if any, TextFile instance if successful)
   """
+
   logger.debug(f"Processing account ticket: {ticket_id}")
+  process_queue = ProcessQueue()
 
   try:
     # Get ticket details
@@ -287,60 +355,112 @@ def process_account_ticket(settings: Settings, zammad: ZammadAPI,
       return False, "Could not retrieve ticket details", None
 
     # Initialize or load the account list file
-    file_id = None
-    current_account_list = ""
+    file = TextFile(file_id) if file is None else TextFile()
+    current_account_list = file.get_content()
 
-    if os.path.exists(output_file):
-      logger.debug(f"Loading existing account list from {output_file}")
-      file_id = conversation.add_file(output_file)
-      account_file = conversation.get_file(file_id)
-      if account_file and hasattr(account_file, 'get_preview'):
-        current_account_list = account_file.get_preview()
-    else:
-      logger.debug(f"Creating new account list file: {output_file}")
-      # Create an empty file
-      with open(output_file, "w") as f:
-        f.write("")
-      file_id = conversation.add_file(output_file)
+    # Create account processing conversation
+    account_conversation = Conversation(
+      settings.files_directory,
+      prompt=ACCOUNT_MANAGEMENT_PROMPT
+    )
+    account_conversation.add_message(
+      MessageRole.USER,
+      f"Current account list:\n{current_account_list}\n\n\nNew ticket to process:\n{ticket_details}"
+    )
 
-    # Prepare optimized messages for the LLM
-    account_messages = [
-      {"role": "system", "content": ACCOUNT_MANAGEMENT_PROMPT},
-      {"role": "user", "content": f"Current account list:\n{current_account_list}\n\n\nNew ticket to process:\n{ticket_details}"}
-    ]
+    # Create a process for the request
+    logger.debug(f"Creating process for account ticket {ticket_id}")
+    process = Process(
+      agent_type="simple",
+      settings=settings,
+      conversation=account_conversation,
+      parameters={
+        "source_preference": SourcePreference.ANY,
+        "model": settings.active_model
+      }
+    )
 
-    # Run the AI model to update the account list
-    logger.debug(f"Sending ticket {ticket_id} to LLM for processing")
-    model_result = model_run(settings.active_model, account_messages, settings=settings)
+    # Add the process to the queue
+    process_id = process_queue.put(process)
+    logger.debug(f"Added process {process_id} to queue for account ticket {ticket_id}")
 
-    if model_result.is_error():
-      error_msg = model_result.get_message()
-      logger.error(f"Error processing ticket {ticket_id}: {error_msg}")
+    # Wait for the process to complete
+    completed_process = process_queue.wait_for_process(process_id, timeout=TIMEOUT)
+
+    # Request post processing
+    if not completed_process or completed_process.status != ProcessStatus.COMPLETED:
+      error_msg = completed_process.error if completed_process else "Process failed or timed out"
+      logger.error(f"Process for account ticket {ticket_id} failed: {error_msg}")
       return False, f"Model error: {error_msg}", None
 
-    # Update account list with model's response
-    if not model_result.data:
+    # Get the model response from the conversation
+    response = account_conversation.get_latest_message()
+    if not response or not response.content:
       return False, "No response generated by the model", None
 
+    # Copy messages to main conversation if provided
+    if conversation is not None:
+      for message in account_conversation.get_messages():
+        conversation.add_message(
+          message.speaker,
+          message.content
+        )
+
     previous_account_list = current_account_list
-    current_account_list = model_result.data.strip()
+    current_account_list = response.content.strip()
 
     # Verify no data has been lost in the update
     if previous_account_list:
       logger.debug("Verifying that no data has been lost")
-      verification_messages = [
-        {"role": "system", "content": VERIFICATION_PROMPT},
-        {"role": "user", "content": f"Previous list:\n{previous_account_list}\n\nUpdated list:\n{current_account_list}\n\nHas any data been lost? Respond with YES or NO followed by details."}
-      ]
 
-      verification_result = model_run(settings.active_model, verification_messages, settings=settings)
+      # Create verification conversation
+      verification_conversation = Conversation(
+        settings.files_directory,
+        prompt=VERIFICATION_PROMPT
+      )
+      verification_conversation.add_message(
+        MessageRole.USER,
+        f"Previous list:\n{previous_account_list}\n\nUpdated list:\n{current_account_list}\n\nHas any data been lost? Respond with YES or NO followed by details."
+      )
 
-      if verification_result.is_error():
-        error_msg = verification_result.get_message()
-        logger.error(f"Error during verification for ticket {ticket_id}: {error_msg}")
+      # Create a process for the verification
+      verify_process = Process(
+        agent_type="simple",
+        settings=settings,
+        conversation=verification_conversation,
+        parameters={
+          "source_preference": SourcePreference.ANY,
+          "model": settings.active_model
+        }
+      )
+
+      # Add the process to the queue
+      verify_process_id = process_queue.put(verify_process)
+      logger.debug(f"Added verification process {verify_process_id} for account ticket {ticket_id}")
+
+      # Wait for the process to complete
+      completed_verify_process = process_queue.wait_for_process(verify_process_id, timeout=TIMEOUT)
+
+      # Process verification results
+      if not completed_verify_process or completed_verify_process.status != ProcessStatus.COMPLETED:
+        error_msg = completed_verify_process.error if completed_verify_process else "Verification process failed or timed out"
+        logger.error(f"Verification for account ticket {ticket_id} failed: {error_msg}")
         return False, f"Verification error: {error_msg}", None
 
-      verification_response = verification_result.data.strip() if verification_result.data else ""
+      # Get verification response
+      verification_msg = verification_conversation.get_latest_message()
+      if not verification_msg or not verification_msg.content:
+        return False, "No verification response generated", None
+
+      # Copy verification messages to main conversation if provided
+      if conversation is not None:
+        for message in verification_conversation.get_messages():
+          conversation.add_message(
+            message.speaker,
+            message.content
+          )
+
+      verification_response = verification_msg.content.strip()
       if verification_response.startswith("YES"):
         logger.warning(f"Data loss detected for ticket {ticket_id}: {verification_response}")
         return False, "Data loss detected during processing", None
@@ -348,23 +468,15 @@ def process_account_ticket(settings: Settings, zammad: ZammadAPI,
       logger.debug("Verification passed: No data has been lost")
 
     # Save the updated content
-    with open(output_file, "w") as f:
-      f.write(current_account_list)
+    file.set_content(current_account_list)
+    file.save()
 
-    # Update the file in the conversation
-    file_id = conversation.add_file(output_file)
-
-    # Add a message to the conversation about the update
-    conversation.add_message(
-      role=MessageRole.SYSTEM,
-      content=f"Updated account list after processing ticket {ticket_id}"
-    )
-
-    # Save the conversation state
-    conversation.save()
+    # Update the file in the conversation if provided
+    if conversation is not None:
+      conversation.save()
 
     logger.info(f"Successfully processed account ticket {ticket_id}")
-    return True, "", file_id
+    return True, "", file
 
   except Exception as e:
     logger.error(f"Error processing account ticket {ticket_id}: {str(e)}")

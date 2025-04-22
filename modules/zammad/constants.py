@@ -36,12 +36,12 @@ TAG_LIST = [
 
 # Predefined ticket queries
 TICKET_QUERIES = {
-  "new-tickets": "state_id:1",
-  "open-tickets": "state_id:1 OR state_id:2 OR state_id:3",
-  "reminder-tickets": "state_id:3",
-  "untagged-tickets": "(state_id:1 OR state_id:2 OR state_id:3) AND !(tags:AI-Tagged)",
-  "tagged-tickets": "tags:AI-Tagged",
-  "high-priority": "priority.name:\"3 high\"",
+  "new-tickets"       : "state_id:1",
+  "open-tickets"      : "state_id:1 OR state_id:2 OR state_id:3",
+  "reminder-tickets"  : "state_id:3",
+  "untagged-tickets"  : "(state_id:1 OR state_id:2 OR state_id:3) AND !(tags:AI-Tagged)",
+  "tagged-tickets"    : "tags:AI-Tagged",
+  "high-priority"     : "priority.name:\"3 high\"",
   "account-management": "(tags:\"AD & User Account Management\" OR tags:AI-AccountManagement) AND (state_id:1 OR state_id:2 OR state_id:3)"
 }
 
@@ -50,7 +50,6 @@ TICKET_QUERIES = {
 ########################################################################
 #                               PROMPTS                                #
 ########################################################################
-# Summarization prompt
 SUMMARIZE_PROMPT = """
 You are an expert IT professional. You offer all sorts of support ranging from simple device advice to complex education software systems. You are tasked with summarizing and describing all relevant information about a provided ticket. Don't make any note on whether or not this is submitted by a student, staff, or faculty.
 
@@ -64,7 +63,6 @@ Your response should follow this layout:
 - Finally suggest a potential response, even if the best response is to ignore or close the ticket. Be explicit and show your reasoning.
 """
 
-# Tagging prompt
 TAG_PROMPT = """
 You are a helpful and harmless assistant. You are Qwen developed by Alibaba. You should think step-by-step.
 
@@ -109,7 +107,6 @@ Notes:
 Respond to the user's request by assigning the appropriate tag. The answer MUST be one of the above tags.
 """
 
-# Account management prompt
 ACCOUNT_MANAGEMENT_PROMPT = """
 You are an expert IT professional specializing in account management. Your task is to analyze a ticket and extract information about accounts that need work.
 
@@ -127,7 +124,6 @@ Based on the ticket information, update the current list of accounts that need w
 Your response should ONLY contain the updated list in a clear, structured format. Do not include any explanations or additional text.
 """
 
-# Verification prompt
 VERIFICATION_PROMPT = """
 You are an expert data auditor. Your task is to compare two versions of a list and verify that no important data has been lost.
 The updated list should contain all the relevant information from the previous list, plus any new additions.

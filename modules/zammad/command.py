@@ -11,6 +11,7 @@ This module provides commands for interacting with the Zammad ticketing system.
 import logging
 import os
 from typing import Optional
+from datetime import datetime
 
 # Internal dependencies
 from commands.base import Command, command
@@ -23,7 +24,7 @@ from files import Conversation
 from enums import MessageRole
 from .settings import ZammadSettings
 from .api import ZammadAPI
-from .constants import ACCOUNT_MANAGEMENT_PROMPT, VERIFICATION_PROMPT
+from .constants import ACCOUNT_MANAGEMENT_PROMPT, VERIFICATION_PROMPT, TICKET_QUERIES
 from .utils import require_zammad_config, tag_ticket, untag_ticket, process_account_ticket, find_tickets_by_subject
 
 
@@ -41,6 +42,7 @@ logger = logging.getLogger(__name__)
 class ZammadCommand(Command):
   """Command class for Zammad ticket management"""
 
+
   @command(
     path=["list"],
     description="List tickets from Zammad",
@@ -52,6 +54,16 @@ class ZammadCommand(Command):
           "type": "string",
           "description": "Query name or custom query string (default: open-tickets)",
           "default": "open-tickets"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of tickets to display (default: 99)",
+          "default": 99
+        },
+        "detailed": {
+          "type": "boolean",
+          "description": "Show detailed ticket information",
+          "default": False
         }
       }
     },
@@ -62,7 +74,14 @@ class ZammadCommand(Command):
     ai_callable=True
   )
   @require_zammad_config
-  def list_tickets(self, settings: Settings, zammad: ZammadAPI, query: str = "open-tickets") -> Result:
+  def list_tickets(
+    self,
+    settings: Settings,
+    zammad: ZammadAPI,
+    query: str = "open-tickets",
+    limit: int = 99,
+    detailed: bool = False) -> Result:
+
     """
     List tickets from Zammad based on a query.
 
@@ -70,30 +89,92 @@ class ZammadCommand(Command):
       settings: Application settings
       zammad: ZammadAPI instance
       query: Query name or custom query string
+      limit: Maximum number of tickets to display
+      detailed: Show detailed ticket information
 
     Returns:
       Result: Operation result
     """
-    # Create result
+
     result = Result()
 
     # Get tickets
-    logger.debug("Listing tickets with query: %s", query)
+    logger.debug(f"Listing tickets with query: {query}, limit: {limit}")
     tickets = zammad.list_tickets(query)
 
     # Format the response
     if not tickets:
-      logger.info("No tickets found for query: %s", query)
+      logger.info(f"No tickets found for query: {query}")
       result.message = "No tickets found."
       return result
 
-    logger.info("Found %d tickets for query: %s", len(tickets), query)
-    response = f"Found {len(tickets)} tickets:\n\n"
-    for ticket_id in tickets:
-      response += f"- Ticket ID: {ticket_id}\n"
+    # Apply limit after we get the count
+    total_tickets = len(tickets)
+    if limit > 0 and limit < total_tickets:
+      tickets = tickets[:limit]
 
-    result.message = response
+    # Build header
+    query_display = query
+    if query in TICKET_QUERIES:
+      query_display = f"{query} ({TICKET_QUERIES[query]})"
+
+    response = [f"┌{'─' * 78}┐"]
+    response.append(f"│ {'ZAMMAD TICKETS':^76} │")
+    response.append(f"├{'─' * 78}┤")
+    response.append(f"│ Query: {query_display:<68} │")
+    response.append(f"│ Found {total_tickets} tickets, showing {len(tickets)}{'':^41} │")
+    response.append(f"├{'─' * 78}┤")
+
+    if detailed:
+      # Add column headers for detailed view
+      response.append(f"│ {'ID':<5}│ {'TITLE':<30}│ {'CREATED':<20}│ {'STATE':<15} │")
+      response.append(f"├{'─' * 5}┼{'─' * 30}┼{'─' * 20}┼{'─' * 15}┤")
+
+      # Add ticket rows
+      for ticket in tickets:
+        # Truncate long titles
+        title = ticket.get('title', 'Unknown')
+        if len(title) > 27:
+          title = title[:27] + '...'
+        else:
+          title = title.ljust(30)
+
+        # Format dates
+        created_at = ticket.get('created_at', '')
+        if created_at:
+          try:
+            # Parse ISO format to datetime and convert to cleaner format
+            dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            created_at = dt.strftime('%Y-%m-%d %H:%M')
+          except Exception:
+            pass
+
+        # Get state name if available
+        state = ticket.get('state', str(ticket.get('state_id', 'Unknown')))
+
+        response.append(f"│ {ticket['id']:<5}│ {title:<30}│ {created_at:<20}│ {state:<15} │")
+    else:
+      # Simple list view
+      for ticket in tickets:
+        title = ticket.get('title', 'Unknown')
+        if len(title) > 60:
+          title = title[:57] + '...'
+        response.append(f"│ #{ticket['id']} - {title:<{69 - len(str(ticket['id']))}} │")
+
+    response.append(f"└{'─' * 78}┘")
+
+    # Add a note about the details command
+    response.append("\nTo view details for a specific ticket:")
+    response.append("claia zammad details <ticket_id>")
+
+    # Add a note about detailed view if not already using it
+    if not detailed and total_tickets > 0:
+      response.append("\nFor more detailed view:")
+      response.append(f"claia zammad list {query} --detailed")
+
+    result.message = "\n".join(response)
     return result
+
 
   @command(
     path=["details"],
@@ -105,6 +186,11 @@ class ZammadCommand(Command):
         "ticket_id": {
           "type": "string",
           "description": "The ID of the ticket to retrieve"
+        },
+        "compact": {
+          "type": "boolean",
+          "description": "Show compact view without full message bodies",
+          "default": False
         }
       },
       "required": ["ticket_id"]
@@ -116,7 +202,13 @@ class ZammadCommand(Command):
     ai_callable=True
   )
   @require_zammad_config
-  def get_ticket_details(self, settings: Settings, zammad: ZammadAPI, ticket_id: str) -> Result:
+  def get_ticket_details(
+    self,
+    settings: Settings,
+    zammad: ZammadAPI,
+    ticket_id: str,
+    compact: bool = False) -> Result:
+
     """
     Get details of a specific ticket from Zammad.
 
@@ -124,17 +216,21 @@ class ZammadCommand(Command):
       settings: Application settings
       zammad: ZammadAPI instance
       ticket_id: The ID of the ticket to retrieve
+      compact: Show compact view without full message bodies
 
     Returns:
       Result: Operation result with ticket details
     """
-    # Create result
+
     result = Result()
 
-    logger.debug("Getting details for ticket ID: %s", ticket_id)
+    logger.debug(f"Getting details for ticket ID: {ticket_id}")
 
-    result.message = zammad.get_ticket_details(ticket_id)
+    # The formatting is now handled in the API layer
+    result.message = zammad.get_ticket_details(ticket_id, compact)
+
     return result
+
 
   @command(
     path=["tag", "add"],
@@ -161,7 +257,13 @@ class ZammadCommand(Command):
     ai_callable=True
   )
   @require_zammad_config
-  def add_tag(self, settings: Settings, zammad: ZammadAPI, ticket_id: str, tag: str) -> Result:
+  def add_tag(
+    self,
+    settings: Settings,
+    zammad: ZammadAPI,
+    ticket_id: str,
+    tag: str) -> Result:
+
     """
     Add a tag to a ticket in Zammad.
 
@@ -174,22 +276,23 @@ class ZammadCommand(Command):
     Returns:
       Result: Operation result
     """
-    # Create result
+
     result = Result()
 
-    logger.debug("Adding tag '%s' to ticket %s", tag, ticket_id)
+    logger.debug(f"Adding tag '{tag}' to ticket {ticket_id}")
 
     tag_result = zammad.add_tag(int(ticket_id), tag)
 
     if tag_result:
-      logger.info("Successfully added tag '%s' to ticket %s", tag, ticket_id)
+      logger.info(f"Successfully added tag '{tag}' to ticket {ticket_id}")
       result.message = f"Successfully added tag '{tag}' to ticket {ticket_id}."
     else:
-      logger.error("Failed to add tag '%s' to ticket %s", tag, ticket_id)
+      logger.error(f"Failed to add tag '{tag}' to ticket {ticket_id}")
       result.message = f"Failed to add tag '{tag}' to ticket {ticket_id}."
       result.success = False
 
     return result
+
 
   @command(
     path=["tag", "remove"],
@@ -216,7 +319,13 @@ class ZammadCommand(Command):
     ai_callable=True
   )
   @require_zammad_config
-  def remove_tag(self, settings: Settings, zammad: ZammadAPI, ticket_id: str, tag: str) -> Result:
+  def remove_tag(
+    self,
+    settings: Settings,
+    zammad: ZammadAPI,
+    ticket_id: str,
+    tag: str) -> Result:
+
     """
     Remove a tag from a ticket in Zammad.
 
@@ -229,22 +338,23 @@ class ZammadCommand(Command):
     Returns:
       Result: Operation result
     """
-    # Create result
+
     result = Result()
 
-    logger.debug("Removing tag '%s' from ticket %s", tag, ticket_id)
+    logger.debug(f"Removing tag '{tag}' from ticket {ticket_id}")
 
     tag_result = zammad.remove_tag(int(ticket_id), tag)
 
     if tag_result:
-      logger.info("Successfully removed tag '%s' from ticket %s", tag, ticket_id)
+      logger.info(f"Successfully removed tag '{tag}' from ticket {ticket_id}")
       result.message = f"Successfully removed tag '{tag}' from ticket {ticket_id}."
     else:
-      logger.error("Failed to remove tag '%s' from ticket %s", tag, ticket_id)
+      logger.error(f"Failed to remove tag '{tag}' from ticket {ticket_id}")
       result.message = f"Failed to remove tag '{tag}' from ticket {ticket_id}."
       result.success = False
 
     return result
+
 
   @command(
     path=["process", "tag", "single"],
@@ -272,7 +382,13 @@ class ZammadCommand(Command):
     ai_callable=True
   )
   @require_zammad_config
-  def apply_ai_tag(self, settings: Settings, zammad: ZammadAPI, ticket_id: str, confirm: bool = False) -> Result:
+  def apply_ai_tag(
+    self,
+    settings: Settings,
+    zammad: ZammadAPI,
+    ticket_id: str,
+    confirm: bool = False) -> Result:
+
     """
     Process a single ticket and add AI tags.
 
@@ -285,6 +401,7 @@ class ZammadCommand(Command):
     Returns:
       Result: Processing result
     """
+
     result = Result()
 
     # Require confirmation
@@ -294,7 +411,12 @@ class ZammadCommand(Command):
       return result
 
     # Use the utility function to process the ticket
-    success, tag, error_msg = tag_ticket(settings, zammad, ticket_id)
+    success, tag, error_msg = tag_ticket(
+      settings=settings,
+      zammad=zammad,
+      ticket_id=ticket_id,
+      conversation=Conversation(settings.files_directory, title=f"Ticket {ticket_id} Tagging")
+    )
 
     if success:
       result.message = f"Successfully processed ticket {ticket_id} with tag {tag}"
@@ -303,6 +425,7 @@ class ZammadCommand(Command):
       result.success = False
 
     return result
+
 
   @command(
     path=["process", "untag", "single"],
@@ -330,7 +453,13 @@ class ZammadCommand(Command):
     ai_callable=True
   )
   @require_zammad_config
-  def remove_ai_tags(self, settings: Settings, zammad: ZammadAPI, ticket_id: str, confirm: bool = False) -> Result:
+  def remove_ai_tags(
+    self,
+    settings: Settings,
+    zammad: ZammadAPI,
+    ticket_id: str,
+    confirm: bool = False) -> Result:
+
     """
     Remove AI tags from a single ticket.
 
@@ -343,6 +472,7 @@ class ZammadCommand(Command):
     Returns:
       Result: Untagging result
     """
+
     result = Result()
 
     # Require confirmation
@@ -361,6 +491,7 @@ class ZammadCommand(Command):
       result.message = f"No AI tags found for ticket {ticket_id}"
 
     return result
+
 
   @command(
     path=["process", "account", "single"],
@@ -393,7 +524,14 @@ class ZammadCommand(Command):
     ai_callable=True
   )
   @require_zammad_config
-  def update_account_list(self, settings: Settings, zammad: ZammadAPI, ticket_id: str, output_file: str = "account_list.txt", confirm: bool = False) -> Result:
+  def update_account_list(
+    self,
+    settings: Settings,
+    zammad: ZammadAPI,
+    ticket_id: str,
+    output_file: str = "account_list.txt",
+    confirm: bool = False) -> Result:
+
     """
     Process a single account management ticket and update account list.
 
@@ -407,6 +545,7 @@ class ZammadCommand(Command):
     Returns:
       Result: Processing result
     """
+
     result = Result()
 
     # Require confirmation
@@ -417,17 +556,15 @@ class ZammadCommand(Command):
 
     # Create or load a conversation
     conversation = Conversation(
-      base_directory=settings.conversation_directory,
-      files_directory=settings.conversation_files_directory,
-      title="Account Management Processing"
+      settings.files_directory,
+      title=f"Ticket {ticket_id} Account Management"
     )
 
     # Use the utility function to process the account ticket
-    success, error_msg, file_id = process_account_ticket(
+    success, error_msg, file = process_account_ticket(
       settings=settings,
       zammad=zammad,
       ticket_id=ticket_id,
-      output_file=output_file,
       conversation=conversation
     )
 
@@ -438,6 +575,7 @@ class ZammadCommand(Command):
       result.success = False
 
     return result
+
 
   @command(
     path=["process", "tag"],
@@ -465,7 +603,13 @@ class ZammadCommand(Command):
     ai_callable=True
   )
   @require_zammad_config
-  def batch_apply_ai_tags(self, settings: Settings, zammad: ZammadAPI, confirm: bool = False, limit: int = 0) -> Result:
+  def batch_apply_ai_tags(
+    self,
+    settings: Settings,
+    zammad: ZammadAPI,
+    confirm: bool = False,
+    limit: int = 0) -> Result:
+
     """
     Process untagged tickets and add AI tags.
 
@@ -478,6 +622,7 @@ class ZammadCommand(Command):
     Returns:
       Result: Processing result
     """
+
     result = Result()
 
     # Require confirmation
@@ -504,7 +649,12 @@ class ZammadCommand(Command):
     success_count = 0
 
     for ticket_id in tickets:
-      success, tag, error_msg = tag_ticket(settings, zammad, ticket_id)
+      success, tag, error_msg = tag_ticket(
+        settings=settings,
+        zammad=zammad,
+        ticket_id=ticket_id,
+        conversation=Conversation(settings.files_directory, title=f"Batch Ticket Tagging")
+      )
       processed_count += 1
 
       if success:
@@ -517,6 +667,7 @@ class ZammadCommand(Command):
     logger.info(f"Completed processing {processed_count} tickets ({success_count} successful)")
     result.message = f"Processed {processed_count} tickets ({success_count} successful)"
     return result
+
 
   @command(
     path=["process", "untag"],
@@ -544,7 +695,13 @@ class ZammadCommand(Command):
     ai_callable=True
   )
   @require_zammad_config
-  def batch_remove_ai_tags(self, settings: Settings, zammad: ZammadAPI, confirm: bool = False, limit: int = 0) -> Result:
+  def batch_remove_ai_tags(
+    self,
+    settings: Settings,
+    zammad: ZammadAPI,
+    confirm: bool = False,
+    limit: int = 0) -> Result:
+
     """
     Remove AI tags from all tagged tickets.
 
@@ -557,6 +714,7 @@ class ZammadCommand(Command):
     Returns:
       Result: Untagging result
     """
+
     result = Result()
 
     # Require confirmation
@@ -593,6 +751,7 @@ class ZammadCommand(Command):
     result.message = f"Completed! Removed {total_removed} AI tags from {processed_count} tickets"
     return result
 
+
   @command(
     path=["process", "account"],
     description="Process account management tickets",
@@ -624,7 +783,14 @@ class ZammadCommand(Command):
     ai_callable=True
   )
   @require_zammad_config
-  def batch_update_account_list(self, settings: Settings, zammad: ZammadAPI, output_file: str = "account_list.txt", limit: int = 50, confirm: bool = False) -> Result:
+  def batch_update_account_list(
+    self,
+    settings: Settings,
+    zammad: ZammadAPI,
+    output_file: str = "account_list.txt",
+    limit: int = 50,
+    confirm: bool = False) -> Result:
+
     """
     Process tickets with account management tags and build a list of accounts that need work.
 
@@ -638,6 +804,7 @@ class ZammadCommand(Command):
     Returns:
       Result: Processing result
     """
+
     result = Result()
 
     # Require confirmation
@@ -655,9 +822,8 @@ class ZammadCommand(Command):
 
     # Create or load a conversation
     conversation = Conversation(
-      base_directory=settings.conversation_directory,
-      files_directory=settings.conversation_files_directory,
-      title="Account Management Processing"
+      settings.files_directory,
+      title="Batch Account Management"
     )
 
     # Display initial status
@@ -670,6 +836,7 @@ class ZammadCommand(Command):
     successful_count = 0
     remaining_tickets = tickets.copy()
     retry_count = {}  # Track how many times each ticket has been retried
+    file = TextFile()
 
     while remaining_tickets:
       # Get the next ticket
@@ -693,11 +860,11 @@ class ZammadCommand(Command):
       print(f"Processing ticket ID: {ticket_id}{attempt_info} ({processed_count+1}/{len(tickets)})")
 
       # Process the ticket using the utility function
-      success, error_msg, _ = process_account_ticket(
+      success, error_msg, file = process_account_ticket(
         settings=settings,
         zammad=zammad,
         ticket_id=ticket_id,
-        output_file=output_file,
+        file=file,
         conversation=conversation
       )
 
@@ -726,6 +893,7 @@ class ZammadCommand(Command):
 
     result.message = f"Processed {successful_count} tickets. Account list saved to {output_file}"
     return result
+
 
   @command(
     path=["find", "subject"],
@@ -758,7 +926,14 @@ class ZammadCommand(Command):
     ai_callable=True
   )
   @require_zammad_config
-  def find_tickets_by_subject(self, settings: Settings, zammad: ZammadAPI, subject: str, limit: int = 0, show_details: bool = False) -> Result:
+  def find_tickets_by_subject(
+    self,
+    settings: Settings,
+    zammad: ZammadAPI,
+    subject: str,
+    limit: int = 0,
+    show_details: bool = False) -> Result:
+
     """
     Find tickets in Zammad that have a specific subject.
 
@@ -772,7 +947,7 @@ class ZammadCommand(Command):
     Returns:
       Result: Search results
     """
-    # Create result
+
     result = Result()
 
     # Use the shared utility function to find matching tickets
@@ -811,6 +986,7 @@ class ZammadCommand(Command):
     result.message = response
     return result
 
+
   @command(
     path=["delete", "subject"],
     description="Delete Zammad tickets with a specific subject",
@@ -842,7 +1018,14 @@ class ZammadCommand(Command):
     ai_callable=True
   )
   @require_zammad_config
-  def delete_tickets_by_subject(self, settings: Settings, zammad: ZammadAPI, subject: str, confirm: bool = False, limit: int = 0) -> Result:
+  def delete_tickets_by_subject(
+    self,
+    settings: Settings,
+    zammad: ZammadAPI,
+    subject: str,
+    confirm: bool = False,
+    limit: int = 0) -> Result:
+
     """
     Delete tickets from Zammad that have a specific subject.
 
@@ -856,7 +1039,7 @@ class ZammadCommand(Command):
     Returns:
       Result: Deletion result
     """
-    # Create result
+
     result = Result()
 
     # Require confirmation
