@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 VLLM_MODEL = "Qwen/QwQ-32B"
 VLLM_MAX_MODEL_LEN = 32768 # 131072
 VLLM_TENSOR_PARALLEL_SIZE = 2
+DEFAULT_USER = "Ubuntu"
 
 STARTUP_SCRIPTS = {
   "vllm": [
@@ -137,10 +138,10 @@ STARTUP_SCRIPTS = {
     "sudo apt install -y nano htop",
 
     # Add SSH key
-    "echo ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA3URurOcAVdWz+RJcZJYgXKhIJdEg2D49M4D9LOpC0i > ~/.ssh/authorized_keys",
+    "echo ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA3URurOcAVdWz+RJcZJYgXKhIJdEg2D49M4D9LOpC0i > /home/{default_user}/.ssh/authorized_keys",
 
     # Add user to docker group
-    "sudo usermod -aG docker $USER",
+    "sudo usermod -aG docker {default_user}",
 
     # # Restart system
     # "sudo shutdown -r now",
@@ -1145,6 +1146,10 @@ def get_startup_script(script_name: str, settings: Optional[Settings] = None, ex
       params['eab_kid'] = settings.vllm_eab_kid
     if settings.vllm_eab_hmac_encoded:
       params['eab_hmac_encoded'] = settings.vllm_eab_hmac_encoded
+    if DEFAULT_USER:
+      params['default_user'] = DEFAULT_USER
+    else:
+      params['default_user'] = '$USER'
 
   # Add any additional parameters
   if extra_params:
