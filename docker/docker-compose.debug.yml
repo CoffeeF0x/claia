@@ -11,6 +11,8 @@ services:
       - ../src:/app/src
       - ../modules:/app/modules
       - ../storage:/app/storage
+      - ../.claia_history:/app/.claia_history
+      - C:\.cache\claia\models:/app/models
     ports:
       - 5678:5678
     deploy:
