@@ -10,7 +10,7 @@ services:
     image: clai:dev
     build:
       context: ../
-      dockerfile: ./docker/Dockerfile
+      dockerfile: ./docker-old/Dockerfile
     env_file:
       - ../.env
     volumes:
@@ -28,7 +28,7 @@ services:
     image: clai:test
     build:
       context: ../
-      dockerfile: ./docker/Dockerfile.test
+      dockerfile: ./docker-old/Dockerfile.test
     env_file:
       - ../.env
     volumes:
@@ -48,7 +48,7 @@ services:
     image: clai:run-tests
     build:
       context: ../
-      dockerfile: ./docker/Dockerfile.run-tests
+      dockerfile: ./docker-old/Dockerfile.run-tests
     env_file:
       - ../.env
     volumes:
@@ -65,7 +65,7 @@ services:
     image: clai:package
     build:
       context: ../
-      dockerfile: ./docker/Dockerfile.package
+      dockerfile: ./docker-old/Dockerfile.package
     env_file:
       - ../.env
     volumes:

@@ -5,7 +5,7 @@ services:
     image: claia
     build:
       context: ../
-      dockerfile: ./docker/Dockerfile.test
+      dockerfile: ./docker-old/Dockerfile.test
     command: python -m debugpy --listen 0.0.0.0:5678 --wait-for-client /app/src-old/__main__.py
     volumes:
       - ../src-old:/app/src-old
