@@ -15,7 +15,7 @@ if [ ! -z "$CI_COMMIT_SHA" ]; then
 fi
 
 # Copy source files to temp directory
-cp -r src/* "${TEMP_DIR}/"
+cp -r src-old/* "${TEMP_DIR}/"
 cp requirements.txt README.md "${TEMP_DIR}/"
 
 # Package source code

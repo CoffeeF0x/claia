@@ -6,9 +6,9 @@ services:
     build:
       context: ../
       dockerfile: ./docker/Dockerfile.test
-    command: python -m debugpy --listen 0.0.0.0:5678 --wait-for-client /app/src/__main__.py
+    command: python -m debugpy --listen 0.0.0.0:5678 --wait-for-client /app/src-old/__main__.py
     volumes:
-      - ../src:/app/src
+      - ../src-old:/app/src-old
       - ../modules:/app/modules
       - ../storage:/app/storage
       - ../.claia_history:/app/.claia_history

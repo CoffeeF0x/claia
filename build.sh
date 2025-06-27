@@ -8,12 +8,15 @@ pip install -r requirements.txt --no-cache-dir
 # Build binary
 pyinstaller --onefile \
   --name "${BINARY_NAME}" \
-  --add-data "src/models:models" \
-  --add-data "src/commands:commands" \
-  --add-data "src/modules:modules" \
-  --add-data "src/tools:tools" \
+  --add-data "src-old/models:models" \
+  --add-data "src-old/commands:commands" \
+  --add-data "src-old/modules:modules" \
+  --add-data "src-old/tools:tools" \
   --distpath "${DIST_DIR}" \
-  src/main.py
+  src-old/main.py
+
+# --hidden-import "PyQt6.QtGui" \
+
 
 # Create version file
 if [ ! -z "$CI_COMMIT_SHA" ]; then

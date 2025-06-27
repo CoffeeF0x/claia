@@ -3,15 +3,15 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
-testpaths = ["src/tests"]
+testpaths = ["src-old/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --import-mode=importlib --junitxml=report.xml"
-pythonpath = ["src"]
+pythonpath = ["src-old"]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["src-old"]
 branch = true
 
 [tool.coverage.report]

@@ -33,7 +33,7 @@ services:
       - ../.env
     volumes:
       - files:/app/files
-      # - ../src:/app/src
+      # - ../src-old:/app/src-old
       # - ../modules:/app/modules
     # - ./output:/app/files
     deploy:
