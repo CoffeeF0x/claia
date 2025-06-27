@@ -1,0 +1,32 @@
+# volumes:
+#   models:
+
+services:
+  claia-cpu:
+    image: claia:dev-cpu
+    container_name: claia-cpu
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile
+    env_file:
+      - ../.env
+    # volumes:
+    #   - ../storage:/app/storage
+
+  claia:
+    image: claia:dev
+    container_name: claia
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile
+    env_file:
+      - ../.env
+    # volumes:
+    #   - ../storage:/app/storage
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
