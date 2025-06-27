@@ -60,9 +60,9 @@ class ZammadCommand(Command):
           "description": "Maximum number of tickets to display (default: 99)",
           "default": 99
         },
-        "detailed": {
+        "compact": {
           "type": "boolean",
-          "description": "Show detailed ticket information",
+          "description": "Show compact view without detailed ticket information",
           "default": False
         }
       }
@@ -80,7 +80,7 @@ class ZammadCommand(Command):
     zammad: ZammadAPI,
     query: str = "open-tickets",
     limit: int = 99,
-    detailed: bool = False) -> Result:
+    compact: bool = False) -> Result:
 
     """
     List tickets from Zammad based on a query.
@@ -90,7 +90,7 @@ class ZammadCommand(Command):
       zammad: ZammadAPI instance
       query: Query name or custom query string
       limit: Maximum number of tickets to display
-      detailed: Show detailed ticket information
+      compact: Show compact view without detailed ticket information
 
     Returns:
       Result: Operation result
@@ -98,8 +98,8 @@ class ZammadCommand(Command):
 
     result = Result()
 
-    # Get tickets
-    logger.debug(f"Listing tickets with query: {query}, limit: {limit}")
+    # Get tickets - API now returns detailed info by default
+    logger.debug(f"Listing tickets with query: {query}, limit: {limit}, compact: {compact}")
     tickets = zammad.list_tickets(query)
 
     # Format the response
@@ -125,7 +125,13 @@ class ZammadCommand(Command):
     response.append(f"│ Found {total_tickets} tickets, showing {len(tickets)}{'':^41} │")
     response.append(f"├{'─' * 78}┤")
 
-    if detailed:
+    if compact:
+      for ticket in tickets:
+        title = ticket.get('title', 'Unknown')
+        if len(title) > 60:
+          title = title[:57] + '...'
+        response.append(f"│ #{ticket['id']} - {title:<{69 - len(str(ticket['id']))}} │")
+    else:
       # Add column headers for detailed view
       response.append(f"│ {'ID':<5}│ {'TITLE':<30}│ {'CREATED':<20}│ {'STATE':<15} │")
       response.append(f"├{'─' * 5}┼{'─' * 30}┼{'─' * 20}┼{'─' * 15}┤")
@@ -153,13 +159,6 @@ class ZammadCommand(Command):
         state = ticket.get('state', str(ticket.get('state_id', 'Unknown')))
 
         response.append(f"│ {ticket['id']:<5}│ {title:<30}│ {created_at:<20}│ {state:<15} │")
-    else:
-      # Simple list view
-      for ticket in tickets:
-        title = ticket.get('title', 'Unknown')
-        if len(title) > 60:
-          title = title[:57] + '...'
-        response.append(f"│ #{ticket['id']} - {title:<{69 - len(str(ticket['id']))}} │")
 
     response.append(f"└{'─' * 78}┘")
 
@@ -168,9 +167,9 @@ class ZammadCommand(Command):
     response.append("claia zammad details <ticket_id>")
 
     # Add a note about detailed view if not already using it
-    if not detailed and total_tickets > 0:
+    if compact and total_tickets > 0:
       response.append("\nFor more detailed view:")
-      response.append(f"claia zammad list {query} --detailed")
+      response.append(f"claia zammad list {query} --compact")
 
     result.message = "\n".join(response)
     return result
@@ -836,7 +835,7 @@ class ZammadCommand(Command):
     successful_count = 0
     remaining_tickets = tickets.copy()
     retry_count = {}  # Track how many times each ticket has been retried
-    file = TextFile()
+    file = TextFile(settings.files_directory)
 
     while remaining_tickets:
       # Get the next ticket

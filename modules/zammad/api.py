@@ -23,7 +23,7 @@ except ImportError:
       return ""
 
 # Internal dependencies
-from .constants import TICKET_QUERIES
+from .constants import TICKET_QUERIES, SAFETY_LIMIT
 
 
 
@@ -201,7 +201,7 @@ class ZammadAPI:
     self,
     query_name: str = "open-tickets",
     limit: int = 100,
-    full_response: bool = True):
+    full_response: bool = False):
 
     """
     List tickets based on a predefined query or custom query string.
@@ -209,14 +209,12 @@ class ZammadAPI:
     Args:
       query_name: Name of predefined query or custom query string
       limit: Maximum number of tickets per page
-      full_response: Whether to fetch all pages or just the first page
 
     Returns:
       List of ticket objects or None if an error occurred
     """
 
     logger.debug(f"Listing tickets with query: {query_name}, limit: {limit}, full_response: {full_response}")
-    # Get the query string from predefined queries or use the input as a custom query
     query = TICKET_QUERIES.get(query_name, query_name)
     encoded_query = urllib.parse.quote(query)
     logger.debug(f"Using encoded query: {encoded_query}")
@@ -226,31 +224,31 @@ class ZammadAPI:
       page = 1
       response = self.get(f"tickets/search?query={encoded_query}&page={page}&per_page={limit}&sort_by=updated_at&order_by=asc")
       ticket_ids = response["tickets"]
+      assets = response["assets"]
       ticket_count = response["tickets_count"]
+      tickets = []
       logger.debug(f"Initial page retrieved with {ticket_count} tickets")
 
       # If full_response is True, fetch all pages
-      while full_response and response["tickets_count"] > 0 and page * limit < 500:  # Safety limit for pagination
+      while full_response and response["tickets_count"] > 0 and page * limit < SAFETY_LIMIT:
         logger.debug(f"Fetching page {page + 1}, total tickets so far: {ticket_count}")
         page += 1
         response = self.get(f"tickets/search?query={encoded_query}&page={page}&per_page={limit}&sort_by=updated_at&order_by=asc")
         ticket_ids.extend(response["tickets"])
+        assets.extend(response["assets"])
         ticket_count += response["tickets_count"]
 
-      # Fetch full ticket details for each ID
-      logger.info(f"Fetching details for {len(ticket_ids)} tickets")
-      tickets = []
-      for ticket_id in ticket_ids:
-        try:
-          # Get basic ticket info (without articles to reduce API load)
-          ticket = self.get(f"tickets/{ticket_id}")
-          tickets.append(ticket)
-        except Exception as e:
-          logger.error(f"Error fetching ticket {ticket_id}: {str(e)}")
-          # Add a basic ticket object with just the ID to ensure we don't lose entries
-          tickets.append({"id": ticket_id, "title": f"Error loading ticket {ticket_id}"})
+      # Extract various assets
+      asset_tickets = assets["Ticket"]
+      asset_users   = assets["User"]
+      asset_groups  = assets["Group"]
+      asset_roles   = assets["Role"]
 
-      logger.info(f"Retrieved details for {len(tickets)} tickets")
+      # Append ticket information for each ticket id
+      for ticket in asset_tickets.values():
+        tickets.append(ticket)
+
+      logger.info(f"Created {len(tickets)} ticket objects")
       return tickets
     except Exception as e:
       logger.error(f"Error listing tickets: {str(e)}")

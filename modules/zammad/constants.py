@@ -45,6 +45,9 @@ TICKET_QUERIES = {
   "account-management": "(tags:\"AD & User Account Management\" OR tags:AI-AccountManagement) AND (state_id:1 OR state_id:2 OR state_id:3)"
 }
 
+# Safety limit for pagination
+SAFETY_LIMIT = 500
+
 
 
 ########################################################################

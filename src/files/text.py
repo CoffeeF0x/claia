@@ -51,12 +51,11 @@ class TextFile(BaseFile):
     # Extract text-specific kwargs that shouldn't be passed to parent
     encoding = kwargs.pop("encoding", "utf-8") if "encoding" in kwargs else "utf-8"
 
-    super().__init__(base_directory=base_directory, **kwargs)
+    # Set mime_type to text/plain if not specified
+    if 'mime_type' not in kwargs:
+      kwargs['mime_type'] = "text/plain"
 
-    # Set MIME type based on file extension
-    self.mime_type = kwargs.get("mime_type") or FileMimeType.get_mime_type(
-      self.file_name, default="text/plain"
-    )
+    super().__init__(base_directory=base_directory, **kwargs)
 
     # Text-specific attributes
     self.encoding = encoding

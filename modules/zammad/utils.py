@@ -355,7 +355,8 @@ def process_account_ticket(
       return False, "Could not retrieve ticket details", None
 
     # Initialize or load the account list file
-    file = TextFile(file_id) if file is None else TextFile()
+    if file is None:
+      file = TextFile(settings.files_directory)
     current_account_list = file.get_content()
 
     # Create account processing conversation
@@ -468,8 +469,7 @@ def process_account_ticket(
       logger.debug("Verification passed: No data has been lost")
 
     # Save the updated content
-    file.set_content(current_account_list)
-    file.save()
+    file.save(content=current_account_list)
 
     # Update the file in the conversation if provided
     if conversation is not None:
