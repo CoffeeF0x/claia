@@ -2,20 +2,15 @@
 This module contains the prompt file handling class for CLAIA.
 """
 
-# TODO:
-# - Double check the save method. If content is passed, is the metadata inconsistent?
-# - Move save override stuff to post save hook
-
-
 # External dependencies
 import json
 import re
 import logging
-from typing import Dict, Any, Optional, Type, TypeVar, Union, List
+from typing import Optional, Type, TypeVar
 
 # Internal dependencies
 from .text import TextFile
-from enums.file import FileSubdirectory
+from ..enums.file import FileSubdirectory
 
 
 
@@ -63,7 +58,7 @@ class Prompt(TextFile):
     self._override_subdirectory = FileSubdirectory.PROMPT.value
 
     # Initialize as TextFile but ensure mime_type is application/json
-    kwargs["mime_type"] = "application/json"
+    kwargs["mime_type"] = FileMimeType.JSON
     super().__init__(base_directory=base_directory, **kwargs)
 
     # Update the prompt name if provided

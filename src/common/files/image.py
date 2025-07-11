@@ -2,19 +2,12 @@
 This module contains the image file handling class for CLAIA.
 """
 
-# TODO:
-# - Overhaul the resize method
-# - Make format function more robust and the output consistent
-# - Make all format metadata setting use the format method
-# - Is format metadata even needed since we have mime type?
-# - Make mime type rely on our enum
-
 # External dependencies
 import os
 import base64
 import logging
 import io
-from typing import Dict, Any, Optional, Type, TypeVar, Union, Tuple
+from typing import Dict, Any, Optional, TypeVar
 
 # Internal dependencies
 from .base import BaseFile

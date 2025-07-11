@@ -3,14 +3,6 @@ This module contains the refactored base file handling functionality for CLAIA.
 It defines the BaseFile class for file operations.
 """
 
-# TODO:
-# - Add a validate function to the that verifies that everything is as
-#   expected (correct subfolder, mime type, reference, exists, etc)
-# - Add subfolder validation? (loop through each item in subfolder and validate)
-# - Make the base file more cohesive with our state emuns (Local, External/Reference, Empty, etc)
-# - Finish adding streaming support to our save method
-# - Add a method to delete the file (marks as deleted in manifest, with a force delete option?)
-
 # External dependencies
 import os
 import uuid
@@ -18,12 +10,11 @@ import time
 import mimetypes
 import logging
 import shutil
-from typing import Dict, List, Any, Optional, Type, TypeVar, Union
-from datetime import datetime
+from typing import Dict, Any, Optional, Type, TypeVar, Union
 
 # Internal dependencies
-from enums import FileSubdirectory, FileStatus, FileMimeType
-from .manifest import FileManifest, MANIFEST_FILENAME
+from ..enums.file import FileSubdirectory, FileStatus, FileMimeType
+from .manifest import FileManifest
 
 
 

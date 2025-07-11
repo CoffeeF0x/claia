@@ -1,5 +1,11 @@
+# External dependencies
 from typing import Any
 
+
+
+########################################################################
+#                              RESULT                                  #
+########################################################################
 class Result:
   def __init__(self, success: bool = True, data: Any = None, message: str = None, fatal: bool = False, exit: bool = False, exit_code: int = 0):
     self.success = success
@@ -47,8 +53,3 @@ class Result:
   @staticmethod
   def shutdown(message: str = "Shutting down", exit: bool = True, exit_code: int = 0) -> 'Result':
     return Result(message=message, exit=exit, exit_code=exit_code)
-
-  # Placeholder for future logging functionality
-  def log(self) -> None:
-    # This will be implemented later when we add the file module
-    pass

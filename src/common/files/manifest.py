@@ -11,15 +11,8 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 # Internal dependencies
-from enums import FileStatus
-
-
-
-########################################################################
-#                              CONSTANTS                               #
-########################################################################
-MANIFEST_FILENAME = "manifest.json"
-
+from ..enums.file import FileStatus
+from ..constants import MANIFEST_FILENAME
 
 
 ########################################################################
