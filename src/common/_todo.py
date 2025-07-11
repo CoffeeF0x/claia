@@ -1,4 +1,5 @@
 # TODO:
+# - Refactor to use pluggy for file types
 # - BASEFILE:
 #   - Add a validate function to the that verifies that everything is as
 #     expected (correct subfolder, mime type, reference, exists, etc)
@@ -24,3 +25,5 @@
 #   - Update the function definition to match our commands structure
 #   - Remove the settings object from tool calls?
 #   - Make sure tools still work after load (ie, are the references stored correctly?)
+# - MANIFEST:
+#   - 'FileManifest" object has no attribute 'add_file' (from demo)

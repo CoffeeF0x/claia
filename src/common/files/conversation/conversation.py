@@ -20,9 +20,30 @@ import re
 
 # Internal dependencies
 from ..text import TextFile
-from .constants import DEFAULT_CONVERSATION_TITLE, DEFAULT_TOOL_FORMAT
 from ...enums.conversation import ActionType, MessageRole, TagType, TagStatus
 from ...enums.file import FileSubdirectory
+from .tool_definition import ToolDefinition
+from .action import Action
+from .message import Message
+from .conversation_settings import ConversationSettings
+
+
+
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
+DEFAULT_CONVERSATION_TITLE = "New Conversation"
+
+# Default tool format placeholder
+DEFAULT_TOOL_FORMAT = """
+[TOOL_CALL]{
+"name": "tool_name",
+"parameters": {
+  "param1": "value1",
+  "param2": "value2"
+}
+}[/TOOL_CALL]
+"""
 
 
 
@@ -33,6 +54,7 @@ logger = logging.getLogger(__name__)
 
 # Type variable for class methods
 T = TypeVar('T', bound='Conversation')
+
 
 
 ########################################################################

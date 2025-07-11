@@ -58,7 +58,7 @@ class Prompt(TextFile):
     self._override_subdirectory = FileSubdirectory.PROMPT.value
 
     # Initialize as TextFile but ensure mime_type is application/json
-    kwargs["mime_type"] = FileMimeType.JSON
+    kwargs["mime_type"] = "application/json"
     super().__init__(base_directory=base_directory, **kwargs)
 
     # Update the prompt name if provided

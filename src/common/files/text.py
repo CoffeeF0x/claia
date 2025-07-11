@@ -10,7 +10,6 @@ import chardet
 
 # Internal dependencies
 from .base import BaseFile
-from ..enums.file import FileMimeType
 
 
 
@@ -53,7 +52,7 @@ class TextFile(BaseFile):
 
     # Set mime_type to text/plain if not specified
     if 'mime_type' not in kwargs:
-      kwargs['mime_type'] = FileMimeType.TEXT
+      kwargs['mime_type'] = "text/plain"
 
     super().__init__(base_directory=base_directory, **kwargs)
 
@@ -91,7 +90,7 @@ class TextFile(BaseFile):
     try:
       # Set mime_type to text/plain if not specified
       if 'mime_type' not in kwargs:
-        kwargs['mime_type'] = FileMimeType.TEXT
+        kwargs['mime_type'] = "text/plain"
 
       # Create a new TextFile instance - the file_id will be auto-generated in BaseFile
       text_file = cls(

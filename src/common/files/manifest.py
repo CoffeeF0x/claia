@@ -12,7 +12,14 @@ from datetime import datetime
 
 # Internal dependencies
 from ..enums.file import FileStatus
-from ..constants import MANIFEST_FILENAME
+
+
+
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
+MANIFEST_FILENAME = "manifest.json"
+
 
 
 ########################################################################

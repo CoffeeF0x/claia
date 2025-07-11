@@ -7,8 +7,15 @@ import uuid
 import re
 
 # Internal dependencies
-from .constants import LEFT_ARG_WRAPPER, RIGHT_ARG_WRAPPER
 from ...enums.conversation import MessageRole
+
+
+
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
+LEFT_ARG_WRAPPER = "{"
+RIGHT_ARG_WRAPPER = "}"
 
 
 
