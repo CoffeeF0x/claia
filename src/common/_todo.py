@@ -1,5 +1,5 @@
 # TODO:
-# - Refactor to use pluggy for file types
+# - Refactor to use pluggy for file types?
 # - BASEFILE:
 #   - Add a validate function to the that verifies that everything is as
 #     expected (correct subfolder, mime type, reference, exists, etc)

@@ -3,10 +3,10 @@ This module contains the text file handling class for CLAIA.
 """
 
 # External dependencies
+from typing import Optional, Type, TypeVar
 import logging
-import re
-from typing import Dict, Any, Optional, Type, TypeVar, List, Tuple
 import chardet
+import re
 
 # Internal dependencies
 from .base import BaseFile

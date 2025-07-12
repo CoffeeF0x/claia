@@ -4,6 +4,7 @@ Allows user to select and test different common functionality.
 """
 
 # External dependencies
+import logging
 import uuid
 import os
 
@@ -12,7 +13,7 @@ from common.files.base import BaseFile
 from common.files.text import TextFile
 from common.files.conversation.conversation import Conversation
 from common.files.conversation.conversation_settings import ConversationSettings
-from common.logger import initialize_logging
+from common.files.prompt import Prompt
 from common.results import Result
 from common.files.manifest import FileManifest
 from common.enums.conversation import MessageRole
@@ -30,8 +31,8 @@ DEMOS_SUBDIR = "demos"
 DEMOS = [
   "BaseFile Demo",
   "TextFile Demo",
+  "Prompt Demo",
   "Conversation Demo",
-  "Logger Demo",
   "Result Demo",
   "FileManifest Demo"
 ]
@@ -49,6 +50,8 @@ The TextFile class provides:
 """
 
 
+
+
 ########################################################################
 #                              CLASSES                                 #
 ########################################################################
@@ -64,19 +67,19 @@ class CommonDemos:
     self.base_dir = os.path.abspath(DEFAULT_STORAGE_DIR)
     self.demos_dir = os.path.join(self.base_dir, DEMOS_SUBDIR)
     self.session_dir = os.path.join(self.demos_dir, session_id)
-    self.log_dir = os.path.join(self.session_dir, "log")
 
     # Create directories if they don't exist
     os.makedirs(self.session_dir, exist_ok=True)
-    os.makedirs(self.log_dir, exist_ok=True)
+
+    # Initialize logging for demos
+    self.logger = logging.getLogger(__name__)
 
     print(f"Demo session directory: {self.session_dir}")
-    print(f"Log directory: {self.log_dir}")
+    self.logger.info(f"Demo session initialized: {session_id}")
 
   def cleanup(self):
     """Clean up demo files (optional - files are kept for inspection)."""
     print(f"\nDemo files are saved in: {self.session_dir}")
-    print(f"Log files are saved in: {self.log_dir}")
     print("Files are kept for inspection. You can manually delete them if needed.")
 
   def demo_base_file(self):
@@ -162,6 +165,108 @@ class CommonDemos:
     except Exception as e:
       print(f"✗ Error in TextFile demo: {e}")
 
+  def demo_prompt(self):
+    """Demonstrate Prompt functionality."""
+    print("\n=== Prompt Demo ===")
+    print("Prompt manages AI prompts with JSON storage and name validation.")
+
+    try:
+      # 1. Demonstrate prompt name validation
+      print("\n1. Prompt Name Validation:")
+      test_names = ["My Cool Prompt", "ASSISTANT_PROMPT", "chat-bot!", "  multiple---spaces  "]
+      for name in test_names:
+        validated = Prompt.validate_prompt_name(name)
+        print(f"  '{name}' -> '{validated}'")
+
+      # 2. Create a prompt using create_prompt class method
+      print("\n2. Creating Prompt with create_prompt():")
+      prompt_text = """You are a helpful AI assistant.
+
+User Query: {query}
+Context: {context}
+
+Please provide a clear and helpful response."""
+
+      prompt = Prompt.create_prompt(
+        base_directory=self.session_dir,
+        prompt_name="Demo Assistant Prompt",
+        prompt_text=prompt_text
+      )
+
+      if prompt:
+        print(f"✓ Created Prompt: {prompt.file_name}")
+        print(f"  - Prompt Name: {prompt.prompt_name}")
+        print(f"  - File ID: {prompt.file_id}")
+        print(f"  - Internal Path: {prompt.get_internal_path()}")
+        print(f"  - MIME Type: {prompt.mime_type}")
+
+      # 3. Demonstrate manual prompt creation
+      print("\n3. Manual Prompt Creation:")
+      manual_prompt = Prompt(
+        base_directory=self.session_dir,
+        prompt_name="manual test prompt",
+        prompt_text="This is a manually created prompt for testing.",
+        file_name="custom_prompt_name"  # Will become custom_prompt_name.json
+      )
+
+      saved_path = manual_prompt.save()
+      if saved_path:
+        print(f"✓ Manual prompt saved: {manual_prompt.file_name}")
+        print(f"  - Validated name: {manual_prompt.prompt_name}")
+        print(f"  - Saved to: {saved_path}")
+
+      # 4. Demonstrate loading prompts
+      print("\n4. Loading Prompt by Name:")
+      loaded_prompt = Prompt.load_prompt(
+        prompt_name="demo-assistant-prompt.json",  # This should match the validated name
+        base_directory=self.session_dir
+      )
+
+      if loaded_prompt:
+        print(f"✓ Loaded prompt: {loaded_prompt.prompt_name}")
+        print(f"  - File: {loaded_prompt.file_name}")
+        print(f"  - Text preview: {loaded_prompt.prompt_text[:50]}...")
+      else:
+        print("✗ Failed to load prompt (this might be expected if name doesn't match)")
+
+      # 5. Show metadata and content inspection
+      print("\n5. Metadata and Content:")
+      if prompt:
+        # Get metadata
+        metadata = prompt.to_dict()
+        print(f"✓ Prompt metadata fields: {list(metadata.keys())}")
+        print(f"  - Prompt name in metadata: {metadata.get('metadata', {}).get('prompt_name')}")
+
+        # Show content structure (since it's JSON)
+        content = prompt._get_default_content()
+        if content:
+          print(f"✓ Default JSON content structure:")
+          import json
+          try:
+            parsed = json.loads(content)
+            for key, value in parsed.items():
+              preview = str(value)[:30] + "..." if len(str(value)) > 30 else str(value)
+              print(f"  - {key}: {preview}")
+          except json.JSONDecodeError:
+            print("  - Content is not valid JSON")
+
+      # 6. Demonstrate text file inherited functionality
+      print("\n6. TextFile Inherited Features:")
+      if prompt:
+        # Since Prompt inherits from TextFile, show text stats
+        if hasattr(prompt, 'get_stats'):
+          stats = prompt.get_stats()
+          print(f"✓ Text statistics available: {list(stats.keys())}")
+
+        # Show file operations
+        print(f"✓ File operations:")
+        print(f"  - File exists: {prompt.exists()}")
+        print(f"  - File size: {prompt.get_file_size()} bytes")
+        print(f"  - Subdirectory: {prompt.get_subdirectory()}")
+
+    except Exception as e:
+      print(f"✗ Error in Prompt demo: {e}")
+
   def demo_conversation(self):
     """Demonstrate Conversation functionality."""
     print("\n=== Conversation Demo ===")
@@ -230,50 +335,6 @@ class CommonDemos:
     except Exception as e:
       print(f"✗ Error in Conversation demo: {e}")
 
-  def demo_logger(self):
-    """Demonstrate Logger functionality."""
-    print("\n=== Logger Demo ===")
-    print("Logger provides configurable logging for the CLAIA application.")
-
-    try:
-      # Test different log configurations
-      print("✓ Testing different log configurations:")
-
-      # Configure with DEBUG level and detailed format
-      logger = initialize_logging("debug", "detailed")
-      print("  - Configured with DEBUG level and detailed format")
-
-      # Log some messages
-      logger.debug("This is a debug message")
-      logger.info("This is an info message")
-      logger.warning("This is a warning message")
-      logger.error("This is an error message")
-
-      # Configure with WARNING level and simple format
-      print("\n  - Reconfiguring with WARNING level and simple format")
-      logger = initialize_logging("warning", "simple")
-
-      logger.debug("This debug message won't show")
-      logger.info("This info message won't show")
-      logger.warning("This warning message will show")
-      logger.error("This error message will show")
-
-      # Test file logging
-      log_file_path = os.path.join(self.log_dir, "demo.log")
-      print(f"\n  - Testing file logging to: {log_file_path}")
-      logger = initialize_logging("info", "standard", log_file_path)
-
-      logger.info("This message goes to both console and file")
-      logger.warning("This warning also goes to both outputs")
-
-      if os.path.exists(log_file_path):
-        with open(log_file_path, 'r') as f:
-          log_content = f.read()
-        print(f"✓ Log file created with {len(log_content.splitlines())} lines")
-
-    except Exception as e:
-      print(f"✗ Error in Logger demo: {e}")
-
   def demo_result(self):
     """Demonstrate Result functionality."""
     print("\n=== Result Demo ===")
@@ -314,38 +375,47 @@ class CommonDemos:
   def demo_file_manifest(self):
     """Demonstrate FileManifest functionality."""
     print("\n=== FileManifest Demo ===")
-    print("FileManifest manages metadata for files in the system.")
+    print("FileManifest manages metadata for files in the system using BaseFile objects.")
 
     try:
       # Create a FileManifest
       manifest = FileManifest(self.session_dir)
       print(f"✓ Created FileManifest for: {self.session_dir}")
 
-      # Add some file entries
-      file_metadata = {
-        "file_id": "demo_file_1",
-        "file_name": "demo1.txt",
-        "mime_type": "text/plain",
-        "size": 1024,
-        "status": "active",
-        "metadata": {"description": "Demo file 1"}
-      }
+      # Create actual BaseFile objects to demonstrate the new interface
+      demo_file1 = BaseFile(
+        base_directory=self.session_dir,
+        file_name="demo_manifest_file1.txt"
+      )
+      demo_file1.metadata["description"] = "Demo file 1 for manifest"
+      demo_file1.metadata["category"] = "demo"
 
-      if manifest.add_file(file_metadata):
-        print("✓ Added file metadata to manifest")
+      # Save the file with some content
+      demo_file1.save(content="This is demo file 1 content for manifest testing.")
+      print(f"✓ Created demo file 1: {demo_file1.file_name}")
 
-      # Add another file
-      file_metadata2 = {
-        "file_id": "demo_file_2",
-        "file_name": "demo2.json",
-        "mime_type": "application/json",
-        "size": 512,
-        "status": "active",
-        "metadata": {"description": "Demo file 2", "type": "config"}
-      }
+      # Add file to manifest using new interface
+      if manifest.add(demo_file1):
+        print("✓ Added file 1 to manifest using new add() method")
 
-      if manifest.add_file(file_metadata2):
-        print("✓ Added second file metadata to manifest")
+      # Create second file
+      demo_file2 = TextFile(
+        base_directory=self.session_dir,
+        file_name="demo_manifest_file2.txt"
+      )
+      demo_file2.metadata["description"] = "Demo text file 2"
+      demo_file2.metadata["type"] = "text"
+      demo_file2.save(content="This is demo text file 2 content.\nIt has multiple lines.")
+      print(f"✓ Created demo file 2: {demo_file2.file_name}")
+
+      # Add second file to manifest
+      if manifest.add(demo_file2):
+        print("✓ Added file 2 to manifest using new add() method")
+
+      # Update file metadata
+      demo_file1.metadata["last_accessed"] = "2024-01-01"
+      if manifest.update(demo_file1):
+        print("✓ Updated file 1 metadata using new update() method")
 
       # Get all files
       all_files = manifest.get_all_files()
@@ -353,17 +423,22 @@ class CommonDemos:
       for file_id, metadata in all_files.items():
         print(f"  - {file_id}: {metadata.get('file_name')} ({metadata.get('mime_type')})")
 
-      # Get specific file
-      file_info = manifest.get_file("demo_file_1")
-      if file_info:
-        print(f"✓ Retrieved specific file: {file_info['file_name']}")
+      # Demonstrate search functionality
+      search_results = manifest.find_files_by_criteria(
+        metadata_filters={"category": "demo"}
+      )
+      print(f"✓ Found {len(search_results)} files with category='demo'")
 
-      # Update file metadata
-      if manifest.update_file("demo_file_1", {"last_accessed": "2024-01-01"}):
-        print("✓ Updated file metadata")
+      # Demonstrate deletion marking
+      if manifest.delete(demo_file2):
+        print("✓ Marked file 2 for deletion using new delete() method")
+
+      # Show cleanup functionality
+      print("✓ Cleanup functionality available via permanently_delete_files()")
+      print("  (Not running actual cleanup in demo)")
 
       # Save manifest
-      if manifest.save():
+      if manifest._save_manifest():
         print("✓ Manifest saved successfully")
 
     except Exception as e:
@@ -425,8 +500,8 @@ def handle_demo_selection(selected_demo: str, demos: CommonDemos) -> None:
     demo_map = {
       "BaseFile Demo": demos.demo_base_file,
       "TextFile Demo": demos.demo_text_file,
+      "Prompt Demo": demos.demo_prompt,
       "Conversation Demo": demos.demo_conversation,
-      "Logger Demo": demos.demo_logger,
       "Result Demo": demos.demo_result,
       "FileManifest Demo": demos.demo_file_manifest
     }

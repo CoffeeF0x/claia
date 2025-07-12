@@ -49,7 +49,7 @@ class BaseFile:
                base_directory: str,
                file_name: Optional[str] = None,
                source_path: Optional[str] = None,
-               is_reference: bool = False,
+               is_reference: Optional[bool] = False,
                file_id: Optional[str] = None,
                mime_type: Optional[str] = None,
                timestamp: Optional[float] = None,
@@ -69,10 +69,15 @@ class BaseFile:
     """
     self.base_directory = base_directory
     self.file_id = file_id or str(uuid.uuid4())
-    self.file_name = file_name or self.file_id
     self.is_reference = is_reference
     self.timestamp = timestamp or time.time()
     self.metadata = metadata or {}
+
+    # Handle filename with conflict resolution
+    if file_name:
+      self.file_name = self._resolve_filename_conflict(file_name)
+    else:
+      self.file_name = self.file_id
 
     # Determine MIME type
     if mime_type:
@@ -98,6 +103,37 @@ class BaseFile:
     self.manifest = FileManifest(base_directory)
 
     logger.debug(f"Initializing file: id={self.file_id}, name={self.file_name}, reference={is_reference}")
+
+  def _resolve_filename_conflict(self, desired_name: str) -> str:
+    """
+    Resolve filename conflicts by checking if the name already exists.
+    If it exists, insert -{guid} before the file extension to make it unique.
+
+    Args:
+      desired_name: The desired filename
+
+    Returns:
+      str: A unique filename (original or with guid before extension)
+    """
+    # Check if the desired name already exists in the manifest
+    manifest = FileManifest(self.base_directory)
+    all_files = manifest.get_all_files()
+
+    # Check if any existing file has this filename
+    existing_names = {metadata.get('file_name', '') for metadata in all_files.values()}
+
+    if desired_name not in existing_names:
+      logger.debug(f"Filename '{desired_name}' is available")
+      return desired_name
+
+    # Conflict detected - insert guid before file extension
+    name_parts = os.path.splitext(desired_name)
+    base_name = name_parts[0]  # filename without extension
+    extension = name_parts[1]  # file extension (including dot)
+
+    unique_name = f"{base_name}-{self.file_id}{extension}"
+    logger.debug(f"Filename conflict resolved: '{desired_name}' -> '{unique_name}'")
+    return unique_name
 
   def get_file_type(self) -> FileSubdirectory:
     """Get the file type enum based on MIME type."""
@@ -135,7 +171,7 @@ class BaseFile:
 
   def get_internal_path(self) -> str:
     """Get the full path for the file in internal storage."""
-    return os.path.join(self.base_directory, self.get_subdirectory(), self.file_id)
+    return os.path.join(self.base_directory, self.get_subdirectory(), self.file_name)
 
   def get_source_path(self) -> Optional[str]:
     """Get the original source path of the file."""
@@ -229,7 +265,14 @@ class BaseFile:
     Returns:
       bool: True if metadata was saved successfully
     """
-    return self.manifest.update_file_metadata(self.file_id, self.to_dict())
+    logger.debug(f"Saving metadata for file: {self.file_id} (type: {type(self).__name__})")
+
+    if self.manifest.save(self):
+      logger.debug(f"Successfully saved metadata for file: {self.file_id}")
+      return True
+    else:
+      logger.error(f"Failed to save metadata for file: {self.file_id}")
+      return False
 
   def _write_content_to_file(self, full_path: str, content: Union[str, bytes], encoding: str = "utf-8") -> bool:
     """
@@ -243,9 +286,14 @@ class BaseFile:
     Returns:
       bool: True if writing was successful, False otherwise
     """
+    logger.debug(f"Writing content to file: {full_path} (file_id: {self.file_id})")
+
     try:
       # Determine the write mode based on content type
       mode = "wb" if isinstance(content, bytes) else "w"
+      content_size = len(content) if isinstance(content, (str, bytes)) else 0
+
+      logger.debug(f"Writing {content_size} {'bytes' if mode == 'wb' else 'characters'} in {mode} mode")
 
       if mode == "wb":
         with open(full_path, mode) as f:
@@ -260,10 +308,12 @@ class BaseFile:
         self.encoding = encoding
         if 'encoding' in self.metadata:
           self.metadata['encoding'] = encoding
+          logger.debug(f"Updated encoding to {encoding} for file: {self.file_id}")
 
+      logger.info(f"Successfully wrote content to file: {full_path}")
       return True
     except Exception as e:
-      logger.error(f"Failed to write content to file {self.file_id}: {e}")
+      logger.error(f"Failed to write content to file {self.file_id} at {full_path}: {e}")
       return False
 
   def _update_metadata(self):
@@ -356,39 +406,88 @@ class BaseFile:
 
     return self.path
 
-  def mark_for_deletion(self) -> bool:
+  def delete(self) -> bool:
     """
-    Mark the file for deletion instead of deleting immediately.
+    Delete the file (marks for deletion in manifest).
 
     Returns:
       bool: True if the file was marked for deletion
     """
+    logger.info(f"Deleting file: {self.file_id} (current status: {self.status.name})")
     self.status = FileStatus.DELETED
-    return self.manifest.mark_for_deletion(self.file_id)
 
-  def add_reference(self, reference_id: str) -> bool:
+    if self.manifest.delete(self):
+      logger.info(f"Successfully marked file for deletion: {self.file_id}")
+      return True
+    else:
+      logger.error(f"Failed to mark file for deletion: {self.file_id}")
+      return False
+
+  def rename(self, new_name: str) -> bool:
     """
-    Add a reference to this file.
+    Rename the file to a new filename.
+
+    This method will handle filename conflicts by appending the GUID if necessary.
+    It will also update the internal file path and save the updated metadata.
 
     Args:
-      reference_id: ID of the object referencing this file
+      new_name: The new filename for the file
 
     Returns:
-      bool: True if successful
+      bool: True if the rename was successful, False otherwise
     """
-    return self.manifest.add_reference(self.file_id, reference_id)
+    logger.info(f"Renaming file {self.file_id} from '{self.file_name}' to '{new_name}'")
 
-  def remove_reference(self, reference_id: str) -> bool:
-    """
-    Remove a reference to this file.
+    old_name = self.file_name
+    old_path = self.path
 
-    Args:
-      reference_id: ID of the object that was referencing this file
+    # Resolve any filename conflicts
+    resolved_name = self._resolve_filename_conflict(new_name)
 
-    Returns:
-      bool: True if successful
-    """
-    return self.manifest.remove_reference(self.file_id, reference_id)
+    # Update the filename
+    self.file_name = resolved_name
+
+    # Update the path if this is not a reference file
+    if not self.is_reference:
+      new_path = self.get_internal_path()
+
+      # If the file exists on disk, rename it
+      if os.path.exists(old_path) and old_path != new_path:
+        try:
+          # Ensure the directory exists
+          os.makedirs(os.path.dirname(new_path), exist_ok=True)
+          # Move the file
+          shutil.move(old_path, new_path)
+          logger.debug(f"Moved file from '{old_path}' to '{new_path}'")
+        except Exception as e:
+          logger.error(f"Failed to move file during rename: {e}")
+          # Revert the filename change
+          self.file_name = old_name
+          return False
+
+      # Update the internal path
+      self.path = new_path
+
+    # Save the updated metadata
+    if self.save_metadata():
+      logger.info(f"Successfully renamed file {self.file_id} to '{resolved_name}'")
+      if resolved_name != new_name:
+        logger.info(f"Note: Filename was modified to avoid conflicts: '{new_name}' -> '{resolved_name}'")
+      return True
+    else:
+      logger.error(f"Failed to save metadata after renaming file {self.file_id}")
+      # Revert changes if metadata save failed
+      self.file_name = old_name
+      if not self.is_reference:
+        self.path = old_path
+        # Try to move the file back if it was moved
+        if os.path.exists(new_path) and old_path != new_path:
+          try:
+            shutil.move(new_path, old_path)
+            logger.debug(f"Reverted file move from '{new_path}' to '{old_path}'")
+          except Exception as e:
+            logger.error(f"Failed to revert file move during rename rollback: {e}")
+      return False
 
   def export(self, target_path: str, force_overwrite: bool = False) -> bool:
     """
@@ -405,14 +504,17 @@ class BaseFile:
     Returns:
       bool: True if the file was exported successfully, False otherwise
     """
+    logger.info(f"Exporting file {self.file_id} to: {target_path} (overwrite: {force_overwrite})")
+
     # Check if target already exists
     if os.path.exists(target_path) and not force_overwrite:
-      logger.error(f"Target path already exists and force_overwrite is False: {target_path}")
+      logger.warning(f"Target path already exists and force_overwrite is False: {target_path}")
       return False
 
-    # Handle URL references as a special case first
-    if self.is_reference and self._is_url(self.path):
-      try:
+    try:
+      # Handle URL references as a special case first
+      if self.is_reference and self._is_url(self.path):
+        logger.debug(f"Exporting URL reference: {self.path}")
         # Download the content
         content = self._fetch_url_content(self.path)
         if content is None:
@@ -421,36 +523,37 @@ class BaseFile:
 
         # Create target directory if it doesn't exist
         target_dir = os.path.dirname(target_path)
-        if target_dir and not os.path.exists(target_dir):
+        if target_dir:
           os.makedirs(target_dir, exist_ok=True)
+          logger.debug(f"Created target directory: {target_dir}")
 
         # Write content to the target path
         with open(target_path, 'wb') as f:
           f.write(content)
 
-        logger.debug(f"Exported URL reference {self.file_id} to {target_path}")
+        logger.info(f"Successfully exported URL reference {self.file_id} to: {target_path}")
         return True
-      except Exception as e:
-        logger.error(f"Failed to export URL reference {self.file_id} to {target_path}: {e}")
+
+      # For regular files and local references, check if file exists
+      if not self.exists():
+        logger.error(f"Cannot export non-existent file: {self.file_id}")
         return False
 
-    # For regular files and local references, check if file exists
-    if not self.exists():
-      logger.error(f"Cannot export non-existent file: {self.file_id}")
-      return False
+      # Get the source file path
+      source_path = self.path
+      logger.debug(f"Copying from {source_path} to {target_path}")
 
-    try:
       # Create target directory if it doesn't exist
       target_dir = os.path.dirname(target_path)
-      if target_dir and not os.path.exists(target_dir):
+      if target_dir:
         os.makedirs(target_dir, exist_ok=True)
+        logger.debug(f"Created target directory: {target_dir}")
 
-      # Copy the file to the target path
-      source_path = self.path
+      # Copy the file
       shutil.copy2(source_path, target_path)
-
-      logger.debug(f"Exported file {self.file_id} to {target_path}")
+      logger.info(f"Successfully exported file {self.file_id} to: {target_path}")
       return True
+
     except Exception as e:
       logger.error(f"Failed to export file {self.file_id} to {target_path}: {e}")
       return False
@@ -728,40 +831,22 @@ class BaseFile:
   @classmethod
   def cleanup_deleted_files(cls, base_directory: str, older_than_days: int = 30) -> int:
     """
-    Permanently delete files that were marked for deletion.
+    Clean up files that have been marked for deletion.
+
+    This method finds files marked for deletion older than the specified number
+    of days and permanently removes them from both the file system and manifest.
 
     Args:
-      base_directory: Base directory for file operations
-      older_than_days: Only delete files deleted this many days ago
+      base_directory: Base directory to search for deleted files
+      older_than_days: Only delete files marked for deletion this many days ago
 
     Returns:
-      int: Number of files deleted
+      int: Number of files that were permanently deleted
     """
+    logger.info(f"Starting cleanup of deleted files in {base_directory} (older than {older_than_days} days)")
     manifest = FileManifest(base_directory)
-    cleanup_list = manifest.cleanup_files(older_than_days)
-    deleted_count = 0
-
-    for file_id in cleanup_list:
-      metadata = manifest.get_file_metadata(file_id)
-      if not metadata:
-        continue
-
-      # Only try to delete if it's not a reference
-      if not metadata.get("is_reference", False):
-        subdirectory = metadata.get("subdirectory", "misc")
-        file_path = os.path.join(base_directory, subdirectory, file_id)
-
-        if os.path.exists(file_path):
-          try:
-            os.remove(file_path)
-            deleted_count += 1
-          except Exception as e:
-            logger.error(f"Failed to delete file {file_path}: {e}")
-            continue
-
-      # Remove from manifest regardless of whether file deletion succeeded
-      manifest.remove_file_metadata(file_id)
-
+    deleted_count = manifest.permanently_delete_files(older_than_days)
+    logger.info(f"Cleanup completed: {deleted_count} files permanently deleted")
     return deleted_count
 
   @classmethod
@@ -782,44 +867,11 @@ class BaseFile:
     Returns:
       Dict[str, Dict[str, Any]]: Dictionary of file_id -> metadata for matching files
     """
+    logger.debug(f"Searching files in {base_directory} with subdirectory={subdirectory}, filters={metadata_filters}")
     manifest = FileManifest(base_directory)
-    all_files = manifest.get_all_files()
-    matching_files = {}
-
-    # Filter files based on criteria
-    for file_id, metadata in all_files.items():
-      # If subdirectory is specified, check if it matches
-      if subdirectory and metadata.get("subdirectory") != subdirectory:
-        continue
-
-      # If metadata filters are specified, check if all criteria match
-      if metadata_filters:
-        match = True
-        for key, value in metadata_filters.items():
-          # For nested metadata keys (e.g., "metadata.prompt_name")
-          if "." in key:
-            parts = key.split(".")
-            current = metadata
-            for part in parts:
-              if part in current:
-                current = current[part]
-              else:
-                match = False
-                break
-            # If we got all the way through the parts but the value doesn't match
-            if match and current != value:
-              match = False
-          # For top-level metadata keys
-          elif key not in metadata or metadata[key] != value:
-            match = False
-            break
-
-        if not match:
-          continue
-
-      matching_files[file_id] = metadata
-
-    return matching_files
+    results = manifest.find_files_by_criteria(subdirectory, metadata_filters)
+    logger.debug(f"Found {len(results)} files matching criteria")
+    return results
 
   def convert_to_local(self) -> bool:
     """
@@ -828,6 +880,8 @@ class BaseFile:
     Returns:
       bool: True if conversion was successful, False otherwise
     """
+    logger.info(f"Converting reference file {self.file_id} to local (source: {self.path})")
+
     if not self.is_reference:
       logger.debug(f"File {self.file_id} is already a non-reference file")
       return True
@@ -839,33 +893,42 @@ class BaseFile:
 
     # For URL references, download the content
     if self._is_url(self.path):
+      logger.debug(f"Converting URL reference to local: {self.path}")
       try:
         content = self._fetch_url_content(self.path)
         if content is None:
+          logger.error(f"Failed to fetch URL content for conversion: {self.path}")
           return False
 
         # Use the save method which now handles conversion automatically
         if self.save(content=content) is None:
+          logger.error(f"Failed to save downloaded content for file: {self.file_id}")
           return False
 
+        logger.info(f"Successfully converted URL reference to local: {self.file_id}")
         return True
       except Exception as e:
-        logger.error(f"Failed to download URL content: {e}")
+        logger.error(f"Failed to download URL content for conversion: {e}")
         return False
     else:
       # For file references, copy the file
+      logger.debug(f"Converting file reference to local: {self.path}")
       try:
         # Get a file handle to the source
         with open(self.path, 'rb') as source_file:
           content = source_file.read()
 
+        logger.debug(f"Read {len(content)} bytes from source file")
+
         # Use the save method which now handles conversion automatically
         if self.save(content=content) is None:
+          logger.error(f"Failed to save copied content for file: {self.file_id}")
           return False
 
+        logger.info(f"Successfully converted file reference to local: {self.file_id}")
         return True
       except Exception as e:
-        logger.error(f"Failed to copy file: {e}")
+        logger.error(f"Failed to copy file for conversion: {e}")
         return False
 
   @staticmethod

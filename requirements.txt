@@ -28,3 +28,5 @@ debugpy
 
 pytest-playwright
 playwright
+
+pluggy
