@@ -4,8 +4,8 @@ import json
 
 # Internal dependencies
 from ..base import APIModel
-from files import Conversation
-from enums import MessageRole
+from common.files.conversation import Conversation
+from common.enums.conversation import MessageRole
 
 
 

@@ -2,16 +2,26 @@
 requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "claia"
+version = "0.1.0"
+description = "CLAIA AI Assistant Framework"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["*"]
+
 [tool.pytest.ini_options]
-testpaths = ["src-old/tests"]
+testpaths = ["src/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --import-mode=importlib --junitxml=report.xml"
-pythonpath = ["src-old"]
+pythonpath = ["src"]
 
 [tool.coverage.run]
-source = ["src-old"]
+source = ["src"]
 branch = true
 
 [tool.coverage.report]

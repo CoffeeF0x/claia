@@ -1,12 +1,14 @@
 """
 Demo package for the models module.
-Contains mock demonstrations of model functionality.
+Contains demonstrations of model functionality using actual models.
 """
 
-from .mock_model_1 import MockModel1Demo
-from .mock_model_2 import MockModel2Demo
+from .gemma_text_demo import GemmaTextDemo
+from .gemma_specialized_demo import GemmaSpecializedDemo
+from .openai_api_demo import OpenAIAPIDemo
 
 __all__ = [
-  "MockModel1Demo",
-  "MockModel2Demo"
+  "GemmaTextDemo",
+  "GemmaSpecializedDemo",
+  "OpenAIAPIDemo"
 ]

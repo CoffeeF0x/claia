@@ -9,9 +9,10 @@ from huggingface_hub import login
 
 # Internal dependencies
 from ..base import LocalModel, APIModel
-from settings import Settings
-from files import Conversation
-from enums import MessageRole, ModelCapability
+# from settings import Settings
+from common.files.conversation import Conversation
+from common.enums.conversation import MessageRole
+from common.enums.model import ModelCapability
 
 
 

@@ -11,8 +11,8 @@ from typing import Dict, Any
 
 # Internal dependencies
 from .base import BaseModel
-from files import Conversation
-from enums import MessageRole
+from common.files.conversation import Conversation
+from common.enums.conversation import MessageRole
 
 
 

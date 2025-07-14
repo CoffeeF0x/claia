@@ -67,7 +67,7 @@ def setup_logger() -> logging.Logger:
 
   # Console handler
   console_handler = logging.StreamHandler(sys.stdout)
-  console_handler.setLevel(logging.WARNING)
+  console_handler.setLevel(logging.INFO)
   console_handler.setFormatter(console_formatter)
 
   # Add handlers to logger (only if not already added)

@@ -6,8 +6,9 @@ from transformers import AutoTokenizer, Gemma3ForCausalLM, Gemma3ForConditionalG
 
 # Internal dependencies
 from .base import TransformersModel
-from files import Conversation
-from enums import MessageRole, ModelCapability
+from common.files.conversation import Conversation
+from common.enums.conversation import MessageRole
+from common.enums.model import ModelCapability
 
 
 

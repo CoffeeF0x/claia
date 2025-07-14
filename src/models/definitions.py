@@ -1,5 +1,5 @@
 # Internal dependencies
-from enums import ModelCapability, IOType
+from common.enums.model import ModelCapability, IOType
 
 
 

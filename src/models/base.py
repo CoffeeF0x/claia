@@ -5,9 +5,9 @@ import logging
 import json
 
 # Internal dependencies
-from results import Result
-from files import Conversation
-from enums import MessageRole
+from common.results import Result
+from common.files.conversation import Conversation
+from common.enums.conversation import MessageRole
 
 
 ########################################################################

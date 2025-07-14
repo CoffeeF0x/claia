@@ -1,0 +1,25 @@
+services:
+  claia-debug:
+    stdin_open: true
+    tty: true
+    container_name: claia-debug
+    image: claia:dev
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile
+    command: python -m debugpy --listen 0.0.0.0:5678 --wait-for-client /app/src/main.py
+    volumes:
+      # - ../src:/app/src
+      # - ../modules:/app/modules
+      - ../storage:/app/storage
+      - ../.claia_history:/app/.claia_history
+      - C:\.cache\claia\models:/app/models
+    ports:
+      - 5678:5678
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

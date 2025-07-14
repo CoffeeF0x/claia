@@ -9,8 +9,10 @@ from diffusers import StableDiffusionPipeline
 
 # Internal dependencies
 from .base import TransformersModel
-from files import Conversation, ImageFile
-from enums import MessageRole, ModelCapability
+from common.files.conversation import Conversation
+from common.files.image import ImageFile
+from common.enums.conversation import MessageRole
+from common.enums.model import ModelCapability
 
 
 

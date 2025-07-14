@@ -14,4 +14,7 @@ COPY src/ src/
 COPY pyproject.toml .
 COPY .env .
 
+# Ensure local packages are installed
+RUN pip install -e .
+
 CMD [ "python", "src/main.py" ]

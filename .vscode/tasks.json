@@ -10,7 +10,7 @@
         {
             "label": "Start and Attach Debug Container",
             "type": "shell",
-            "command": "docker compose -f docker/docker-compose.debug.yml up -d --build; docker attach docker-claia-1",
+            "command": "docker compose -f docker/docker-compose.debug.yml up -d --build; docker attach claia-debug",
             "problemMatcher": [],
             "isBackground": true
         },
@@ -24,7 +24,7 @@
         {
             "label": "Attach Debug Container",
             "type": "shell",
-            "command": "docker attach docker-claia-1",
+            "command": "docker attach claia-debug",
             "problemMatcher": [
                 {
                     "pattern": [

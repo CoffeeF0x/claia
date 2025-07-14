@@ -7,11 +7,15 @@ Allows user to select and test different model functionality.
 import logging
 import uuid
 import os
+import sys
+from datetime import datetime
 
 # Internal dependencies
-from .demo import (
-  MockModel1Demo,
-  MockModel2Demo
+from models.config import ModelConfig
+from models.demo import (
+  GemmaTextDemo,
+  GemmaSpecializedDemo,
+  OpenAIAPIDemo
 )
 
 
@@ -24,8 +28,9 @@ DEMOS_SUBDIR = "demos"
 
 # Available demos
 DEMOS = [
-  "Mock Model 1 Demo",
-  "Mock Model 2 Demo"
+  "Gemma-3-1B-IT Text Demo",
+  "Gemma-3-4B-IT Specialized Demo",
+  "OpenAI API Models Demo"
 ]
 
 
@@ -73,61 +78,62 @@ def get_user_selection() -> str:
       return ""
 
 
-def handle_demo_selection(selected_demo: str, session_dir: str) -> None:
+def handle_demo_selection(selected_demo: str, session_dir: str, config) -> None:
   """
   Handle the selected demo by running the appropriate demonstration.
 
   Args:
   selected_demo: The name of the selected demo
   session_dir: The session directory for demo files
+  config: Model configuration
   """
   print(f"\nRunning demo: {selected_demo}")
   print("-" * 50)
 
   # Create demo instances and map
   demo_map = {
-    "Mock Model 1 Demo": MockModel1Demo(session_dir).run,
-    "Mock Model 2 Demo": MockModel2Demo(session_dir).run
+    "Gemma-3-1B-IT Text Demo": lambda: GemmaTextDemo(session_dir, config).run(),
+    "Gemma-3-4B-IT Specialized Demo": lambda: GemmaSpecializedDemo(session_dir, config).run(),
+    "OpenAI API Models Demo": lambda: OpenAIAPIDemo(session_dir, config).run()
   }
 
   if selected_demo in demo_map:
-    demo_map[selected_demo]()
+    try:
+      demo_map[selected_demo]()
+      print(f"\n✅ {selected_demo} completed successfully!")
+    except Exception as e:
+      print(f"\n❌ {selected_demo} failed: {str(e)}")
+      logger.error(f"Demo {selected_demo} failed: {str(e)}")
   else:
-    print(f"Demo not implemented: {selected_demo}")
+    print(f"\n❌ Demo '{selected_demo}' not found.")
 
   print("-" * 50)
 
 
 def main() -> None:
-  """Main function to run the demo selector."""
-  print("Welcome to the CLAIA Models Module Demo!")
-  print("This demonstrates mock functionality for the models module classes.")
-
-  # Create unique demo session directory
-  session_id = str(uuid.uuid4())[:8]  # Use first 8 chars of UUID
-
-  # Build directory structure: storage/demos/{session_id}/
-  base_dir = os.path.abspath(DEFAULT_STORAGE_DIR)
-  demos_dir = os.path.join(base_dir, DEMOS_SUBDIR)
-  session_dir = os.path.join(demos_dir, session_id)
-
-  # Create directories if they don't exist
+  """Main entry point for models package demo."""
+  print("\n🚀 CLAIA Models Package Demo")
+  print("=" * 50)
+  
+  # Create session directory
+  session_dir = os.path.join(os.getcwd(), "demo_sessions", f"models_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
   os.makedirs(session_dir, exist_ok=True)
-
-  # Initialize logging
+  
+  # Initialize model configuration
+  config = ModelConfig(models_directory=os.path.join(session_dir, 'models'))
   logger = logging.getLogger(__name__)
   print(f"Demo session directory: {session_dir}")
-  logger.info(f"Demo session initialized: {session_id}")
+  logger.info(f"Demo session initialized")
 
   while True:
     display_menu()
     selected_demo = get_user_selection()
 
-    if not selected_demo:
-      print("Goodbye!")
+    if selected_demo:
+      handle_demo_selection(selected_demo, session_dir, config)
+    else:
+      print("\n👋 Goodbye!")
       break
-
-    handle_demo_selection(selected_demo, session_dir)
 
 
 if __name__ == "__main__":
