@@ -5,8 +5,7 @@
 #     expected (correct subfolder, mime type, reference, exists, etc)
 #   - Add subfolder validation? (loop through each item in subfolder and validate)
 #   - Make the base file more cohesive with our state emuns (Local, External/Reference, Empty, etc)
-#   - Finish adding streaming support to our save method
-#   - Add a method to delete the file (marks as deleted in manifest, with a force delete option?)
+#   - Add streaming support to our save method
 # - PROMPT:
 #   - Double check the save method. If content is passed, is the metadata inconsistent?
 #   - Move save override stuff to post save hook
@@ -25,5 +24,3 @@
 #   - Update the function definition to match our commands structure
 #   - Remove the settings object from tool calls?
 #   - Make sure tools still work after load (ie, are the references stored correctly?)
-# - MANIFEST:
-#   - 'FileManifest" object has no attribute 'add_file' (from demo)
