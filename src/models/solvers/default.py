@@ -10,7 +10,7 @@ from typing import Optional, Dict, List, Any
 
 # Internal dependencies
 from common.results import Result
-from ..hooks.solver_hooks import SolverInfo, DeploymentDecision
+from ..hooks.solver_hooks import SolverInfo, DeploymentParams
 
 
 ########################################################################
@@ -54,30 +54,35 @@ class DefaultSolverPlugin:
     deployment_preference: Optional[str] = None,
     deployment_method: Optional[str] = None,
     **kwargs
-  ) -> Result[DeploymentDecision]:
+  ) -> Result[DeploymentParams]:
     """
     Determine the best deployment method for the request.
     """
     try:
       logger.debug(f"Default solver processing: {model_name}")
 
-      # If deployment method is forced, use it
+      # Step 1: Resolve model name to canonical form
+      canonical_model_name = self._resolve_model_name(model_name, available_models)
+      if canonical_model_name != model_name:
+        logger.debug(f"Resolved '{model_name}' to '{canonical_model_name}'")
+        model_name = canonical_model_name
+
+      # Step 2: Validate model exists
+      if model_name not in available_models:
+        return Result.fail(f"Model '{model_name}' not found in supported models")
+
+      # Step 3: If deployment method is forced, use it
       if deployment_method:
         if deployment_method in available_deployments:
-          return Result(data=DeploymentDecision(
-            deployment_method=deployment_method,
-            model_name=model_name,
-            model_type=self._determine_model_type(model_name, available_models),
-            deployment_params=self._build_deployment_params(kwargs),
-            confidence=1.0
+          return Result(data=DeploymentParams(
+            deployment_name=deployment_method,
+            model_name=model_name
           ))
         else:
           return Result.fail(f"Forced deployment method '{deployment_method}' not available")
 
-      # Determine model type
+      # Step 4: Determine model type and choose deployment
       model_type = self._determine_model_type(model_name, available_models)
-
-      # Apply deployment preference logic
       chosen_deployment = self._choose_deployment(
         model_name,
         model_type,
@@ -88,12 +93,9 @@ class DefaultSolverPlugin:
       if not chosen_deployment:
         return Result.fail(f"No suitable deployment method found for {model_name}")
 
-      return Result(data=DeploymentDecision(
-        deployment_method=chosen_deployment,
-        model_name=model_name,
-        model_type=model_type,
-        deployment_params=self._build_deployment_params(kwargs),
-        confidence=0.8  # Moderate confidence for default logic
+      return Result(data=DeploymentParams(
+        deployment_name=chosen_deployment,
+        model_name=model_name
       ))
 
     except Exception as e:
@@ -154,8 +156,18 @@ class DefaultSolverPlugin:
 
     return None
 
-  def _build_deployment_params(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-    """Build deployment parameters from the provided kwargs."""
-    # Pass through all kwargs as deployment parameters
-    # The deployment method will decide what to use
-    return dict(kwargs)
+  def _resolve_model_name(self, model_name: str, available_models: Dict[str, Any]) -> str:
+    """Resolve a model name or alias to its canonical name."""
+    # Check if it's already a canonical name
+    if model_name in available_models:
+      return model_name
+
+    # Check aliases
+    for canonical_name, model_info in available_models.items():
+      if hasattr(model_info, 'aliases') and model_info.aliases and model_name in model_info.aliases:
+        logger.debug(f"Resolved alias '{model_name}' to '{canonical_name}'")
+        return canonical_name
+
+    # Return original if not found
+    logger.debug(f"No resolution found for '{model_name}'")
+    return model_name

@@ -19,6 +19,14 @@ from .manager import ModuleManager
 logger = logging.getLogger(__name__)
 
 
+
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
+DEFAULT_SOLVER = "default"
+
+
+
 ########################################################################
 #                            MODEL REGISTRY                            #
 ########################################################################
@@ -49,7 +57,7 @@ class ModelRegistry:
     self,
     model_name: str,
     conversation: Conversation,
-    solver: Optional[str] = None,
+    solver: Optional[str] = DEFAULT_SOLVER,
     deployment_method: Optional[str] = None,
     deployment_preference: Optional[str] = None,
     **kwargs
@@ -71,26 +79,17 @@ class ModelRegistry:
     try:
       logger.debug(f"Running model {model_name}")
 
-      # Resolve model name to canonical form
-      canonical_model_name = self.manager.resolve_model_name(model_name)
-      if canonical_model_name != model_name:
-        logger.debug(f"Resolved '{model_name}' to '{canonical_model_name}'")
-        model_name = canonical_model_name
-
       # Get available models and deployments
       available_models = self.manager.get_supported_models()
       available_deployments = list(self.manager.get_available_deployments().keys())
-
-      if model_name not in available_models:
-        return Result.fail(f"Model '{model_name}' not found in supported models")
 
       # Get solver plugin
       selected_solver = self.manager.get_solver_plugin(solver)
       if not selected_solver:
         return Result.fail(f"No solver available (requested: {solver})")
 
-      # Let solver determine deployment strategy
-      decision_result = selected_solver.solve_deployment(
+      # Call solver to determine deployment
+      params_result = selected_solver.solve_deployment(
         model_name=model_name,
         available_deployments=available_deployments,
         available_models=available_models,
@@ -99,33 +98,33 @@ class ModelRegistry:
         **kwargs
       )
 
-      if decision_result.is_error():
-        return decision_result
+      if params_result.is_error():
+        return params_result
 
-      decision = decision_result.data
-      logger.debug(f"Solver decision: {decision.deployment_method} for {decision.model_name}")
+      params = params_result.data
+      logger.debug(f"Solver result: {params.deployment_name} for {params.model_name}")
 
       # Get deployment plugin
-      selected_deployment = self.manager.get_deployment_plugin(decision.deployment_method)
+      selected_deployment = self.manager.get_deployment_plugin(params.deployment_name)
       if not selected_deployment:
-        return Result.fail(f"Deployment method '{decision.deployment_method}' not available")
+        return Result.fail(f"Deployment method '{params.deployment_name}' not available")
 
       # Check cache for existing model instance
-      cache_key = f"{decision.model_name}:{decision.deployment_method}"
+      cache_key = f"{params.model_name}:{params.deployment_name}"
       if cache_key in self.cache:
         model_instance = self.cache[cache_key]
         logger.debug(f"Using cached model instance for {cache_key}")
       else:
         # Get model class
-        model_class = self.manager.get_model_class(decision.model_name)
+        model_class = self.manager.get_model_class(params.model_name)
         if not model_class:
-          return Result.fail(f"No model class found for {decision.model_name}")
+          return Result.fail(f"No model class found for {params.model_name}")
 
         # Deploy model
         deploy_result = selected_deployment.deploy_model(
-          model_name=decision.model_name,
+          model_name=params.model_name,
           model_class=model_class,
-          **decision.deployment_params
+          **kwargs
         )
 
         if deploy_result.is_error():
