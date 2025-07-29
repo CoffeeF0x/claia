@@ -13,8 +13,8 @@ import importlib.metadata as metadata
 from typing import Optional, Dict, List, Type, Any
 
 # Internal dependencies
-from .hooks import ModelHooks, DeploymentHooks, SolverHooks
-from .hooks import ModelInfo, DeploymentInfo, SolverInfo
+from .hooks import ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHooks
+from .hooks import ArchitectureInfo, DeploymentInfo, SolverInfo, ModelDefinition
 from .base import BaseModel
 from common.enums.model import ModelCapability
 
@@ -28,23 +28,31 @@ logger = logging.getLogger(__name__)
 
 
 ########################################################################
+#                              CONSTANTS                               #
+########################################################################
+DEFAULT_SOLVER = "default"
+
+
+
+########################################################################
 #                               CLASSES                                #
 ########################################################################
 class ModuleManager:
   """
   Manages all plugin types for the CLAIA model system.
 
-  This class coordinates three types of plugins:
-  - Model plugins: Implement specific AI models
+  This class coordinates four types of plugins:
+  - Architecture plugins: Implement specific AI model architectures
   - Deployment plugins: Handle deployment methods
   - Solver plugins: Determine deployment strategies
+  - Definition plugins: Provide model metadata
   """
 
   def __init__(self):
     """Initialize the module manager."""
     # Create separate plugin managers for each plugin type
-    self.model_pm = pluggy.PluginManager("claia_models")
-    self.model_pm.add_hookspecs(ModelHooks)
+    self.architecture_pm = pluggy.PluginManager("claia_architectures")
+    self.architecture_pm.add_hookspecs(ArchitectureHooks)
 
     self.deployment_pm = pluggy.PluginManager("claia_deployments")
     self.deployment_pm.add_hookspecs(DeploymentHooks)
@@ -52,8 +60,9 @@ class ModuleManager:
     self.solver_pm = pluggy.PluginManager("claia_solvers")
     self.solver_pm.add_hookspecs(SolverHooks)
 
-    # Caches
-    self._model_cache = None
+    self.definition_pm = pluggy.PluginManager("claia_definitions")
+    self.definition_pm.add_hookspecs(DefinitionHooks)
+
     self._plugins_loaded = False
 
     logger.debug("ModuleManager initialized")
@@ -65,9 +74,10 @@ class ModuleManager:
 
     try:
       # Load plugins dynamically from entry points
-      self._load_model_plugins()
+      self._load_architecture_plugins()
       self._load_deployment_plugins()
       self._load_solver_plugins()
+      self._load_definition_plugins()
 
       self._plugins_loaded = True
       logger.info("All plugins loaded successfully")
@@ -76,29 +86,29 @@ class ModuleManager:
       logger.error(f"Error loading plugins: {e}")
       raise RuntimeError(f"Failed to load plugins: {e}")
 
-  def _load_model_plugins(self) -> None:
-    """Load model plugins from entry points."""
+  def _load_architecture_plugins(self) -> None:
+    """Load architecture plugins from entry points."""
     loaded_count = 0
 
     try:
       # Load plugins from entry points
-      for entry_point in metadata.entry_points().select(group='claia.models'):
+      for entry_point in metadata.entry_points().select(group='claia.architectures'):
         try:
           plugin_class = entry_point.load()
           plugin_instance = plugin_class()
-          self.model_pm.register(plugin_instance)
+          self.architecture_pm.register(plugin_instance)
           loaded_count += 1
-          logger.debug(f"Loaded model plugin: {entry_point.name} from {entry_point.value}")
+          logger.debug(f"Loaded architecture plugin: {entry_point.name} from {entry_point.value}")
         except Exception as e:
-          logger.warning(f"Failed to load model plugin {entry_point.name}: {e}")
+          logger.warning(f"Failed to load architecture plugin {entry_point.name}: {e}")
 
       if loaded_count == 0:
-        raise RuntimeError("No model plugins found in entry points")
+        raise RuntimeError("No architecture plugins found in entry points")
 
-      logger.info(f"Loaded {loaded_count} model plugins from entry points")
+      logger.info(f"Loaded {loaded_count} architecture plugins from entry points")
 
     except Exception as e:
-      logger.error(f"Error loading model plugins from entry points: {e}")
+      logger.error(f"Error loading architecture plugins from entry points: {e}")
       raise
 
   def _load_deployment_plugins(self) -> None:
@@ -151,12 +161,38 @@ class ModuleManager:
       logger.error(f"Error loading solver plugins from entry points: {e}")
       raise
 
-  # Model plugin methods
+  def _load_definition_plugins(self) -> None:
+    """Load definition plugins from entry points."""
+    loaded_count = 0
+
+    try:
+      # Load plugins from entry points
+      for entry_point in metadata.entry_points().select(group='claia.definitions'):
+        try:
+          plugin_class = entry_point.load()
+          plugin_instance = plugin_class()
+          self.definition_pm.register(plugin_instance)
+          loaded_count += 1
+          logger.debug(f"Loaded definition plugin: {entry_point.name} from {entry_point.value}")
+        except Exception as e:
+          logger.warning(f"Failed to load definition plugin {entry_point.name}: {e}")
+
+      if loaded_count == 0:
+        logger.warning("No definition plugins found in entry points")
+      else:
+        logger.info(f"Loaded {loaded_count} definition plugins from entry points")
+
+    except Exception as e:
+      logger.error(f"Error loading definition plugins from entry points: {e}")
+      # Don't raise for definition plugins - they're optional
+      logger.warning("Continuing without definition plugins")
+
+  # Architecture plugin methods
   def get_model_class(self, model_name: str) -> Optional[Type[BaseModel]]:
-    """Get the model class for a specific model."""
+    """Get the model class for a specific model from architecture plugins."""
     self.load_all_plugins()
 
-    results = self.model_pm.hook.get_model_class(model_name=model_name)
+    results = self.architecture_pm.hook.get_model_class(model_name=model_name)
 
     for result in results:
       if result is not None:
@@ -166,32 +202,55 @@ class ModuleManager:
     logger.debug(f"No model class found for {model_name}")
     return None
 
-  def get_supported_models(self) -> Dict[str, ModelInfo]:
-    """Get all models supported by registered model plugins."""
+  def get_supported_models(self) -> Dict[str, ModelDefinition]:
+    """Get all model definitions from registered definition plugins."""
     self.load_all_plugins()
 
-    all_models = {}
-    results = self.model_pm.hook.get_supported_models()
+    all_definitions = {}
+    results = self.definition_pm.hook.get_model_definitions()
 
-    for plugin_models in results:
-      if plugin_models:
-        all_models.update(plugin_models)
+    for plugin_definitions in results:
+      if plugin_definitions:
+        # Merge definitions, allowing later plugins to extend/override
+        for name, definition in plugin_definitions.items():
+          if name in all_definitions:
+            # Merge fields, keeping non-None values from the new definition
+            existing = all_definitions[name]
+            merged = ModelDefinition(
+              name=name,
+              title=definition.title or existing.title,
+              aliases=self._merge_lists(existing.aliases, definition.aliases),
+              company=definition.company or existing.company,
+              deployments=self._merge_lists(existing.deployments, definition.deployments),
+              architectures=self._merge_lists(existing.architectures, definition.architectures),
+              description=definition.description or existing.description,
+              parameters=definition.parameters or existing.parameters,
+              context_length=definition.context_length or existing.context_length,
+              capabilities=self._merge_lists(existing.capabilities, definition.capabilities),
+              license=definition.license or existing.license,
+              url=definition.url or existing.url
+            )
+            all_definitions[name] = merged
+          else:
+            all_definitions[name] = definition
 
-    logger.debug(f"Collected {len(all_models)} supported models")
-    return all_models
+    logger.debug(f"Collected {len(all_definitions)} model definitions")
+    return all_definitions
 
-  def get_model_id(self, model_name: str) -> Optional[str]:
-    """Get the actual model ID/path for a model."""
-    self.load_all_plugins()
+  def _merge_lists(self, list1: Optional[List[str]], list2: Optional[List[str]]) -> Optional[List[str]]:
+    """Merge two optional lists, removing duplicates."""
+    if not list1 and not list2:
+      return None
 
-    results = self.model_pm.hook.get_model_id(model_name=model_name)
+    result = []
+    if list1:
+      result.extend(list1)
+    if list2:
+      for item in list2:
+        if item not in result:
+          result.append(item)
 
-    for result in results:
-      if result is not None:
-        logger.debug(f"Found model ID for {model_name}: {result}")
-        return result
-
-    return None
+    return result if result else None
 
   # Deployment plugin methods
   def get_available_deployments(self) -> Dict[str, DeploymentInfo]:
@@ -236,44 +295,19 @@ class ModuleManager:
     return all_solvers
 
   def get_solver_plugin(self, solver_name: str = None):
-    """Get a specific solver plugin by name, or the best available solver."""
+    """Get a specific solver plugin by name, or the default solver."""
     self.load_all_plugins()
 
-    if solver_name:
-      # Find specific solver
-      for plugin in self.solver_pm.get_plugins():
-        info = plugin.get_solver_info()
-        if info.name == solver_name:
-          return plugin
-    else:
-      # Return highest priority solver
-      best_plugin = None
-      best_priority = float('inf')
+    # Use default solver if none specified
+    if not solver_name:
+      solver_name = DEFAULT_SOLVER
 
-      for plugin in self.solver_pm.get_plugins():
-        info = plugin.get_solver_info()
-        if info.priority < best_priority:
-          best_priority = info.priority
-          best_plugin = plugin
+    # Find the requested solver
+    for plugin in self.solver_pm.get_plugins():
+      info = plugin.get_solver_info()
+      if info.name == solver_name:
+        return plugin
 
-      return best_plugin
-
+    # Return None if not found
+    logger.warning(f"Solver '{solver_name}' not found")
     return None
-
-  def resolve_model_name(self, model_name: str) -> str:
-    """Resolve a model name or alias to its canonical name."""
-    supported_models = self.get_supported_models()
-
-    # Check if it's already a canonical name
-    if model_name in supported_models:
-      return model_name
-
-    # Check aliases
-    for canonical_name, model_info in supported_models.items():
-      if model_info.aliases and model_name in model_info.aliases:
-        logger.debug(f"Resolved alias '{model_name}' to '{canonical_name}'")
-        return canonical_name
-
-    # Return original if not found
-    logger.debug(f"No resolution found for '{model_name}'")
-    return model_name

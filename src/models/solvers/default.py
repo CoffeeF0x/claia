@@ -37,8 +37,7 @@ class DefaultSolverPlugin:
     return SolverInfo(
       name="default",
       title="Default Solver",
-      description="Basic deployment decision logic with sensible defaults",
-      priority=100  # Default priority
+      description="Basic deployment decision logic with sensible defaults"
     )
 
   def can_solve(self, model_name: str, deployment_preference: Optional[str] = None, **kwargs) -> bool:
@@ -51,6 +50,7 @@ class DefaultSolverPlugin:
     model_name: str,
     available_deployments: List[str],
     available_models: Dict[str, Any],
+    cache: Dict[str, Any],
     deployment_preference: Optional[str] = None,
     deployment_method: Optional[str] = None,
     **kwargs

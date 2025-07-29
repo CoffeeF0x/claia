@@ -20,9 +20,6 @@ class DeploymentInfo:
   name: str
   title: str
   description: str
-  supported_model_types: List[str]  # e.g., ['api', 'transformers', 'custom']
-  requires_api_key: bool = False
-  settings: Optional[Dict[str, Any]] = None
 
 
 # Create hookspec decorator
@@ -42,41 +39,18 @@ class DeploymentHooks:
     """
 
   @hookspec
-  def can_deploy_model(self, model_name: str, model_type: str) -> bool:
+  def run(self, model_name: str, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Result:
     """
-    Check if this deployment method can handle the specified model.
+    Deploy (if needed) and run inference on a model.
+
+    This method handles both model deployment/caching and running inference.
+    The deployment plugin manages its own model instances and caching strategies.
 
     Args:
         model_name: Canonical model name
-        model_type: Model type (e.g., 'api', 'transformers')
-
-    Returns:
-        True if this deployment method can handle the model
-    """
-
-  @hookspec
-  def deploy_model(self, model_name: str, model_class: Type, **kwargs) -> Result:
-    """
-    Deploy/initialize a model using this deployment method.
-
-    Args:
-        model_name: Canonical model name
-        model_class: Model class to instantiate
-        **kwargs: Additional deployment parameters (api_keys, device, etc.)
-
-    Returns:
-        Result containing the deployed model instance or error
-    """
-
-  @hookspec
-  def run_model(self, model_instance: Any, conversation: Conversation, **kwargs) -> Result:
-    """
-    Run inference on a deployed model.
-
-    Args:
-        model_instance: The deployed model instance
         conversation: Conversation to process
-        **kwargs: Additional runtime parameters
+        cache: Cache dictionary for model instances (deployment plugin manages this)
+        **kwargs: Additional deployment and runtime parameters
 
     Returns:
         Result containing the model response or error

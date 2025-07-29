@@ -46,60 +46,55 @@ class APIDeploymentPlugin:
     """Check if this deployment method can handle the specified model."""
     return model_type == "api"
 
-  def deploy_model(self, model_name: str, model_class: Type, **kwargs) -> Result:
+  def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Result:
     """
-    Deploy/initialize an API-based model.
+    Deploy (if needed) and run inference on an API-based model.
 
     Args:
         model_name: Canonical model name
-        model_class: Model class to instantiate
-        **kwargs: Additional deployment parameters (api_key, etc.)
-
-    Returns:
-        Result containing the deployed model instance or error
-    """
-    try:
-      logger.debug(f"Deploying API model: {model_name}")
-
-      # Extract API key from kwargs
-      api_key = (
-        kwargs.get('api_key') or
-        kwargs.get('openai_api_key') or
-        kwargs.get('anthropic_api_key') or
-        kwargs.get('google_api_key')
-      )
-
-      if not api_key:
-        return Result.fail(f"API key required for model {model_name}")
-
-      # Create model instance with API key
-      model_instance = model_class(
-        model_name=model_name,
-        api_key=api_key,
-        **kwargs
-      )
-
-      logger.debug(f"Successfully deployed API model: {model_name}")
-      return Result(data=model_instance)
-
-    except Exception as e:
-      logger.error(f"Error deploying API model {model_name}: {str(e)}")
-      return Result.fail(f"Failed to deploy API model: {str(e)}")
-
-  def run_model(self, model_instance: Any, conversation: Conversation, **kwargs) -> Result:
-    """
-    Run inference on an API-based model.
-
-    Args:
-        model_instance: The deployed model instance
         conversation: Conversation to process
-        **kwargs: Additional runtime parameters
+        cache: Cache dictionary for model instances
+        **kwargs: Additional deployment and runtime parameters
 
     Returns:
         Result containing the model response or error
     """
     try:
-      logger.debug(f"Running API model inference")
+      # Create cache key for this deployment method
+      cache_key = f"{model_name}:api"
+
+      # Check cache for existing model instance
+      if cache_key in cache:
+        model_instance = cache[cache_key]
+        logger.debug(f"Using cached API model instance for {cache_key}")
+      else:
+        # Deploy new model instance
+        logger.debug(f"Deploying API model: {model_name}")
+
+        # Extract API key from kwargs
+        api_key = (
+          kwargs.get('api_key') or
+          kwargs.get('openai_api_key') or
+          kwargs.get('anthropic_api_key') or
+          kwargs.get('google_api_key')
+        )
+
+        if not api_key:
+          return Result.fail(f"API key required for model {model_name}")
+
+        # Create model instance with API key
+        model_instance = model_class(
+          model_name=model_name,
+          api_key=api_key,
+          **kwargs
+        )
+
+        # Cache the model instance
+        cache[cache_key] = model_instance
+        logger.debug(f"Successfully deployed and cached API model: {model_name}")
+
+      # Run inference
+      logger.debug(f"Running API model inference: {model_name}")
 
       # API models typically have a generate or run method
       if hasattr(model_instance, 'generate'):
@@ -114,5 +109,5 @@ class APIDeploymentPlugin:
       return result
 
     except Exception as e:
-      logger.error(f"Error running API model: {str(e)}")
+      logger.error(f"Error running API model {model_name}: {str(e)}")
       return Result.fail(f"Failed to run API model: {str(e)}")

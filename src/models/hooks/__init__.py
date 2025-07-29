@@ -7,12 +7,14 @@ This package defines the plugin interfaces for the new architecture:
 - SolverHooks: Deployment solver plugin interface
 """
 
-from .model_hooks import ModelHooks, ModelInfo
+from .architecture_hooks import ArchitectureHooks, ArchitectureInfo
 from .deployment_hooks import DeploymentHooks, DeploymentInfo
 from .solver_hooks import SolverHooks, SolverInfo, DeploymentParams
+from .definition_hooks import DefinitionHooks, ModelDefinition
 
 __all__ = [
-  'ModelHooks', 'ModelInfo',
+  'ArchitectureHooks', 'ArchitectureInfo',
   'DeploymentHooks', 'DeploymentInfo',
-  'SolverHooks', 'SolverInfo', 'DeploymentParams'
+  'SolverHooks', 'SolverInfo', 'DeploymentParams',
+  'DefinitionHooks', 'ModelDefinition'
 ]

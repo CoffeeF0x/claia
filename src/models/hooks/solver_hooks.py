@@ -19,18 +19,14 @@ class SolverInfo:
   name: str
   title: str
   description: str
-  priority: int = 100  # Lower numbers = higher priority
   settings: Optional[Dict[str, Any]] = None
 
 
 @dataclass
-class DeploymentDecision:
-  """Decision made by a solver about how to deploy a model."""
-  deployment_method: str
+class DeploymentParams:
+  """Simplified deployment parameters returned by solver."""
+  deployment_name: str
   model_name: str
-  model_type: str
-  deployment_params: Dict[str, Any]
-  confidence: float = 1.0  # 0.0 to 1.0, higher is more confident
 
 
 # Create hookspec decorator
@@ -69,21 +65,23 @@ class SolverHooks:
     model_name: str,
     available_deployments: List[str],
     available_models: Dict[str, Any],
+    cache: Dict[str, Any],
     deployment_preference: Optional[str] = None,
     deployment_method: Optional[str] = None,
     **kwargs
-  ) -> Result[DeploymentDecision]:
+  ) -> Result[DeploymentParams]:
     """
     Determine the best deployment method and model for the request.
 
     Args:
-        model_name: Canonical model name
+        model_name: Raw model name (may need resolution)
         available_deployments: List of available deployment method names
         available_models: Dict of available models with their info
+        cache: Cache dictionary for model instances
         deployment_preference: Optional deployment preference string
         deployment_method: Optional forced deployment method
         **kwargs: Additional parameters (api keys, device preferences, etc.)
 
     Returns:
-        Result containing DeploymentDecision or error
+        Result containing DeploymentParams or error
     """

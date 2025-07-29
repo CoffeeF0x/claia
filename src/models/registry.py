@@ -5,7 +5,7 @@ Registry -> Solver -> Deployment Method -> Model
 """
 
 import logging
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional, Dict
 
 # Internal dependencies
 from common.results import Result
@@ -17,13 +17,6 @@ from .manager import ModuleManager
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
-
-
-
-########################################################################
-#                              CONSTANTS                               #
-########################################################################
-DEFAULT_SOLVER = "default"
 
 
 
@@ -57,7 +50,7 @@ class ModelRegistry:
     self,
     model_name: str,
     conversation: Conversation,
-    solver: Optional[str] = DEFAULT_SOLVER,
+    solver: Optional[str] = None,
     deployment_method: Optional[str] = None,
     deployment_preference: Optional[str] = None,
     **kwargs
@@ -93,6 +86,7 @@ class ModelRegistry:
         model_name=model_name,
         available_deployments=available_deployments,
         available_models=available_models,
+        cache=self.cache,
         deployment_preference=deployment_preference,
         deployment_method=deployment_method,
         **kwargs
@@ -101,45 +95,19 @@ class ModelRegistry:
       if params_result.is_error():
         return params_result
 
-      params = params_result.data
-      logger.debug(f"Solver result: {params.deployment_name} for {params.model_name}")
+      deployment_params = params_result.data
+      logger.debug(f"Solver result: {deployment_params.deployment_name} for {deployment_params.model_name}")
 
       # Get deployment plugin
-      selected_deployment = self.manager.get_deployment_plugin(params.deployment_name)
+      selected_deployment = self.manager.get_deployment_plugin(deployment_params.deployment_name)
       if not selected_deployment:
-        return Result.fail(f"Deployment method '{params.deployment_name}' not available")
+        return Result.fail(f"Deployment method '{deployment_params.deployment_name}' not available")
 
-      # Check cache for existing model instance
-      cache_key = f"{params.model_name}:{params.deployment_name}"
-      if cache_key in self.cache:
-        model_instance = self.cache[cache_key]
-        logger.debug(f"Using cached model instance for {cache_key}")
-      else:
-        # Get model class
-        model_class = self.manager.get_model_class(params.model_name)
-        if not model_class:
-          return Result.fail(f"No model class found for {params.model_name}")
-
-        # Deploy model
-        deploy_result = selected_deployment.deploy_model(
-          model_name=params.model_name,
-          model_class=model_class,
-          **kwargs
-        )
-
-        if deploy_result.is_error():
-          return deploy_result
-
-        model_instance = deploy_result.data
-
-        # Cache the model instance
-        self.cache[cache_key] = model_instance
-        logger.debug(f"Cached model instance for {cache_key}")
-
-      # Run inference
-      result = selected_deployment.run_model(
-        model_instance=model_instance,
+      # Let deployment plugin handle deployment + inference
+      result = selected_deployment.run(
+        model_name=deployment_params.model_name,
         conversation=conversation,
+        cache=self.cache,
         **kwargs
       )
 
@@ -214,7 +182,3 @@ class ModelRegistry:
       "total_models": len(self.cache),
       "cached_models": list(self.cache.keys())
     }
-
-  def resolve_model_name(self, model_name: str) -> str:
-    """Resolve a model name or alias to its canonical name."""
-    return self.manager.resolve_model_name(model_name)
