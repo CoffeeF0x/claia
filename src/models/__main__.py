@@ -5,17 +5,12 @@ Allows user to select and test different model functionality.
 
 # External dependencies
 import logging
-import uuid
 import os
-import sys
 from datetime import datetime
 
 # Internal dependencies
-from models.config import ModelConfig
 from models.demo import (
-  GemmaTextDemo,
-  GemmaSpecializedDemo,
-  OpenAIAPIDemo
+  RefactorTest
 )
 
 
@@ -28,9 +23,7 @@ DEMOS_SUBDIR = "demos"
 
 # Available demos
 DEMOS = [
-  "Gemma-3-1B-IT Text Demo",
-  "Gemma-3-4B-IT Specialized Demo",
-  "OpenAI API Models Demo"
+  "Refactor Test"
 ]
 
 
@@ -78,23 +71,20 @@ def get_user_selection() -> str:
       return ""
 
 
-def handle_demo_selection(selected_demo: str, session_dir: str, config) -> None:
+def handle_demo_selection(selected_demo: str, session_dir: str) -> None:
   """
   Handle the selected demo by running the appropriate demonstration.
 
   Args:
   selected_demo: The name of the selected demo
   session_dir: The session directory for demo files
-  config: Model configuration
   """
   print(f"\nRunning demo: {selected_demo}")
   print("-" * 50)
 
   # Create demo instances and map
   demo_map = {
-    "Gemma-3-1B-IT Text Demo": lambda: GemmaTextDemo(session_dir, config).run(),
-    "Gemma-3-4B-IT Specialized Demo": lambda: GemmaSpecializedDemo(session_dir, config).run(),
-    "OpenAI API Models Demo": lambda: OpenAIAPIDemo(session_dir, config).run()
+    "Refactor Test": lambda: RefactorTest().run()
   }
 
   if selected_demo in demo_map:
@@ -114,23 +104,17 @@ def main() -> None:
   """Main entry point for models package demo."""
   print("\n🚀 CLAIA Models Package Demo")
   print("=" * 50)
-  
+
   # Create session directory
   session_dir = os.path.join(os.getcwd(), "demo_sessions", f"models_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
   os.makedirs(session_dir, exist_ok=True)
-  
-  # Initialize model configuration
-  config = ModelConfig(models_directory=os.path.join(session_dir, 'models'))
-  logger = logging.getLogger(__name__)
-  print(f"Demo session directory: {session_dir}")
-  logger.info(f"Demo session initialized")
 
   while True:
     display_menu()
     selected_demo = get_user_selection()
 
     if selected_demo:
-      handle_demo_selection(selected_demo, session_dir, config)
+      handle_demo_selection(selected_demo, session_dir)
     else:
       print("\n👋 Goodbye!")
       break
