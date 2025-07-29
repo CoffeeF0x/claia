@@ -1,6 +1,6 @@
-"""Refactored ModelRegistry for the CLAIA application.
+"""Manage models in the CLAIA application.
 
-This module provides a simplified ModelRegistry that follows the new architecture:
+This module provides a ModelRegistry that follows the deployment architecture:
 Registry -> Solver -> Deployment Method -> Model
 """
 
@@ -24,57 +24,45 @@ logger = logging.getLogger(__name__)
 ########################################################################
 class ModelRegistry:
   """
-  Refactored ModelRegistry for managing models in the CLAIA application.
+  Manages models in the CLAIA application.
 
-  This registry follows the new architecture:
+  This registry follows the deployment architecture:
   Registry -> Solver -> Deployment Method -> Model
 
   The registry initializes a cache and loads all modules, then delegates
   deployment decisions to solvers, which call appropriate deployment methods.
   """
-  _instance = None
-
-  def __new__(cls):
-    """Create or return the singleton instance of ModelRegistry."""
-    if cls._instance is None:
-      logger.debug("Creating ModelRegistry singleton instance")
-      cls._instance = super(ModelRegistry, cls).__new__(cls)
-      cls._instance._initialized = False
-    return cls._instance
-
   def __init__(self):
-    """Initialize the ModelRegistry singleton."""
-    if not self._initialized:
-      logger.debug("Initializing Refactored Model Registry")
+    """Initialize the ModelRegistry."""
+    logger.debug("Initializing Model Registry")
 
-      # Initialize module manager and model cache
-      self.manager = ModuleManager()
-      self.cache = {}  # Cache for loaded models
+    # Initialize module manager and model cache
+    self.manager = ModuleManager()
+    self.cache = {}  # Cache for loaded models
 
-      # Load all plugins
-      self.manager.load_all_plugins()
+    # Load all plugins
+    self.manager.load_all_plugins()
 
-      self._initialized = True
-      logger.info("Refactored ModelRegistry initialized successfully")
+    logger.info("ModelRegistry initialized successfully")
 
   def run(
     self,
     model_name: str,
     conversation: Conversation,
-    deployment_preference: Optional[str] = None,
     solver: Optional[str] = None,
     deployment_method: Optional[str] = None,
+    deployment_preference: Optional[str] = None,
     **kwargs
   ) -> Result:
     """
-    Run a model with the given conversation using the new architecture.
+    Pass the request to the solver for processing.
 
     Args:
       model_name: Name or alias of the model
       conversation: Conversation to process
-      deployment_preference: Optional deployment preference string
       solver: Optional specific solver to use
       deployment_method: Optional forced deployment method
+      deployment_preference: Optional deployment preference string
       **kwargs: Additional parameters (API keys, device, etc.)
 
     Returns:
@@ -97,12 +85,12 @@ class ModelRegistry:
         return Result.fail(f"Model '{model_name}' not found in supported models")
 
       # Get solver plugin
-      solver_plugin = self.manager.get_solver_plugin(solver)
-      if not solver_plugin:
+      selected_solver = self.manager.get_solver_plugin(solver)
+      if not selected_solver:
         return Result.fail(f"No solver available (requested: {solver})")
 
       # Let solver determine deployment strategy
-      decision_result = solver_plugin.solve_deployment(
+      decision_result = selected_solver.solve_deployment(
         model_name=model_name,
         available_deployments=available_deployments,
         available_models=available_models,
@@ -118,8 +106,8 @@ class ModelRegistry:
       logger.debug(f"Solver decision: {decision.deployment_method} for {decision.model_name}")
 
       # Get deployment plugin
-      deployment_plugin = self.manager.get_deployment_plugin(decision.deployment_method)
-      if not deployment_plugin:
+      selected_deployment = self.manager.get_deployment_plugin(decision.deployment_method)
+      if not selected_deployment:
         return Result.fail(f"Deployment method '{decision.deployment_method}' not available")
 
       # Check cache for existing model instance
@@ -134,7 +122,7 @@ class ModelRegistry:
           return Result.fail(f"No model class found for {decision.model_name}")
 
         # Deploy model
-        deploy_result = deployment_plugin.deploy_model(
+        deploy_result = selected_deployment.deploy_model(
           model_name=decision.model_name,
           model_class=model_class,
           **decision.deployment_params
@@ -150,7 +138,7 @@ class ModelRegistry:
         logger.debug(f"Cached model instance for {cache_key}")
 
       # Run inference
-      result = deployment_plugin.run_model(
+      result = selected_deployment.run_model(
         model_instance=model_instance,
         conversation=conversation,
         **kwargs

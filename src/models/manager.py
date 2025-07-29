@@ -9,6 +9,7 @@ This module handles loading and coordinating all plugin types:
 
 import pluggy
 import logging
+import importlib.metadata as metadata
 from typing import Optional, Dict, List, Type, Any
 
 # Internal dependencies
@@ -53,75 +54,102 @@ class ModuleManager:
 
     # Caches
     self._model_cache = None
-    self._deployment_cache = None
-    self._solver_cache = None
     self._plugins_loaded = False
 
     logger.debug("ModuleManager initialized")
 
   def load_all_plugins(self) -> None:
-    """Load all built-in plugins."""
+    """Load all plugins from entry points."""
     if self._plugins_loaded:
       return
 
     try:
-      # Load model plugins
+      # Load plugins dynamically from entry points
       self._load_model_plugins()
-
-      # Load deployment plugins
       self._load_deployment_plugins()
-
-      # Load solver plugins
       self._load_solver_plugins()
 
       self._plugins_loaded = True
       logger.info("All plugins loaded successfully")
 
-    except ImportError as e:
-      logger.warning(f"Could not load some plugins: {e}")
+    except Exception as e:
+      logger.error(f"Error loading plugins: {e}")
+      raise RuntimeError(f"Failed to load plugins: {e}")
 
   def _load_model_plugins(self) -> None:
-    """Load model plugins."""
+    """Load model plugins from entry points."""
+    loaded_count = 0
+
     try:
-      from .models.openai_plugin import OpenAIPlugin
-      from .models.anthropic_plugin import AnthropicPlugin
-      from .models.transformers_plugin import TransformersPlugin
+      # Load plugins from entry points
+      for entry_point in metadata.entry_points().select(group='claia.models'):
+        try:
+          plugin_class = entry_point.load()
+          plugin_instance = plugin_class()
+          self.model_pm.register(plugin_instance)
+          loaded_count += 1
+          logger.debug(f"Loaded model plugin: {entry_point.name} from {entry_point.value}")
+        except Exception as e:
+          logger.warning(f"Failed to load model plugin {entry_point.name}: {e}")
 
-      self.model_pm.register(OpenAIPlugin())
-      self.model_pm.register(AnthropicPlugin())
-      self.model_pm.register(TransformersPlugin())
+      if loaded_count == 0:
+        raise RuntimeError("No model plugins found in entry points")
 
-      logger.debug("Model plugins loaded")
-    except ImportError as e:
-      logger.warning(f"Could not load model plugins: {e}")
+      logger.info(f"Loaded {loaded_count} model plugins from entry points")
+
+    except Exception as e:
+      logger.error(f"Error loading model plugins from entry points: {e}")
+      raise
 
   def _load_deployment_plugins(self) -> None:
-    """Load deployment method plugins."""
+    """Load deployment plugins from entry points."""
+    loaded_count = 0
+
     try:
-      from .deployments.local_deployment import LocalDeploymentPlugin
-      from .deployments.api_deployment import APIDeploymentPlugin
-      from .deployments.remote_deployment import RemoteDeploymentPlugin
+      # Load plugins from entry points
+      for entry_point in metadata.entry_points().select(group='claia.deployments'):
+        try:
+          plugin_class = entry_point.load()
+          plugin_instance = plugin_class()
+          self.deployment_pm.register(plugin_instance)
+          loaded_count += 1
+          logger.debug(f"Loaded deployment plugin: {entry_point.name} from {entry_point.value}")
+        except Exception as e:
+          logger.warning(f"Failed to load deployment plugin {entry_point.name}: {e}")
 
-      self.deployment_pm.register(LocalDeploymentPlugin())
-      self.deployment_pm.register(APIDeploymentPlugin())
-      self.deployment_pm.register(RemoteDeploymentPlugin())
+      if loaded_count == 0:
+        raise RuntimeError("No deployment plugins found in entry points")
 
-      logger.debug("Deployment plugins loaded")
-    except ImportError as e:
-      logger.warning(f"Could not load deployment plugins: {e}")
+      logger.info(f"Loaded {loaded_count} deployment plugins from entry points")
+
+    except Exception as e:
+      logger.error(f"Error loading deployment plugins from entry points: {e}")
+      raise
 
   def _load_solver_plugins(self) -> None:
-    """Load solver plugins."""
+    """Load solver plugins from entry points."""
+    loaded_count = 0
+
     try:
-      from .solvers.default_solver import DefaultSolverPlugin
-      from .solvers.preference_solver import PreferenceSolverPlugin
+      # Load plugins from entry points
+      for entry_point in metadata.entry_points().select(group='claia.solvers'):
+        try:
+          plugin_class = entry_point.load()
+          plugin_instance = plugin_class()
+          self.solver_pm.register(plugin_instance)
+          loaded_count += 1
+          logger.debug(f"Loaded solver plugin: {entry_point.name} from {entry_point.value}")
+        except Exception as e:
+          logger.warning(f"Failed to load solver plugin {entry_point.name}: {e}")
 
-      self.solver_pm.register(DefaultSolverPlugin())
-      self.solver_pm.register(PreferenceSolverPlugin())
+      if loaded_count == 0:
+        raise RuntimeError("No solver plugins found in entry points")
 
-      logger.debug("Solver plugins loaded")
-    except ImportError as e:
-      logger.warning(f"Could not load solver plugins: {e}")
+      logger.info(f"Loaded {loaded_count} solver plugins from entry points")
+
+    except Exception as e:
+      logger.error(f"Error loading solver plugins from entry points: {e}")
+      raise
 
   # Model plugin methods
   def get_model_class(self, model_name: str) -> Optional[Type[BaseModel]]:
@@ -140,9 +168,6 @@ class ModuleManager:
 
   def get_supported_models(self) -> Dict[str, ModelInfo]:
     """Get all models supported by registered model plugins."""
-    if self._model_cache is not None:
-      return self._model_cache
-
     self.load_all_plugins()
 
     all_models = {}
@@ -152,7 +177,6 @@ class ModuleManager:
       if plugin_models:
         all_models.update(plugin_models)
 
-    self._model_cache = all_models
     logger.debug(f"Collected {len(all_models)} supported models")
     return all_models
 
@@ -172,9 +196,6 @@ class ModuleManager:
   # Deployment plugin methods
   def get_available_deployments(self) -> Dict[str, DeploymentInfo]:
     """Get all available deployment methods."""
-    if self._deployment_cache is not None:
-      return self._deployment_cache
-
     self.load_all_plugins()
 
     all_deployments = {}
@@ -184,7 +205,6 @@ class ModuleManager:
       if deployment_info:
         all_deployments[deployment_info.name] = deployment_info
 
-    self._deployment_cache = all_deployments
     logger.debug(f"Collected {len(all_deployments)} deployment methods")
     return all_deployments
 
@@ -203,9 +223,6 @@ class ModuleManager:
   # Solver plugin methods
   def get_available_solvers(self) -> Dict[str, SolverInfo]:
     """Get all available deployment solvers."""
-    if self._solver_cache is not None:
-      return self._solver_cache
-
     self.load_all_plugins()
 
     all_solvers = {}
@@ -215,7 +232,6 @@ class ModuleManager:
       if solver_info:
         all_solvers[solver_info.name] = solver_info
 
-    self._solver_cache = all_solvers
     logger.debug(f"Collected {len(all_solvers)} solvers")
     return all_solvers
 

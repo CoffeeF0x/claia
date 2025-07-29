@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Type
 # Internal dependencies
 from common.results import Result
 from ..hooks.model_hooks import ModelInfo
-from ..transformers.gemma3 import Gemma3Model
+from legacy.transformers.gemma3 import Gemma3Model
 
 
 ########################################################################

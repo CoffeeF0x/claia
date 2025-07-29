@@ -12,6 +12,20 @@ requires-python = ">=3.10"
 where = ["src"]
 include = ["*"]
 
+# Entry points for plugin system
+[project.entry-points."claia.models"]
+openai = "claia.src.models.models.openai_plugin:OpenAIPlugin"
+anthropic = "claia.src.models.models.anthropic_plugin:AnthropicPlugin"
+transformers = "claia.src.models.models.transformers_plugin:TransformersPlugin"
+
+[project.entry-points."claia.deployments"]
+api = "claia.src.models.deployments.api_deployment:APIDeploymentPlugin"
+local = "claia.src.models.deployments.local_deployment:LocalDeploymentPlugin"
+remote = "claia.src.models.deployments.remote_deployment:RemoteDeploymentPlugin"
+
+[project.entry-points."claia.solvers"]
+default = "claia.src.models.solvers.default:DefaultSolverPlugin"
+
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
 python_files = ["test_*.py"]

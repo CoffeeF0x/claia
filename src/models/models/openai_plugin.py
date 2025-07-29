@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Type
 # Internal dependencies
 from common.results import Result
 from ..hooks.model_hooks import ModelInfo
-from ..api.openai import OpenAIModel
+from legacy.api.openai import OpenAIModel
 
 
 ########################################################################

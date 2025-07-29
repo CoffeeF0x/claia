@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Type
 # Internal dependencies
 from common.results import Result
 from ..hooks.model_hooks import ModelInfo
-from ..api.anthropic import AnthropicModel
+from legacy.api.anthropic import AnthropicModel
 
 
 ########################################################################
