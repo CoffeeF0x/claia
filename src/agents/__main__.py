@@ -10,7 +10,7 @@ import uuid
 import os
 
 # Internal dependencies
-from .demo import (
+from ._demo import (
   MockAgent1Demo,
   MockAgent2Demo
 )

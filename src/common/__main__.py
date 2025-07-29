@@ -9,7 +9,7 @@ import uuid
 import os
 
 # Internal dependencies
-from common.demo import (
+from common._demo import (
   BaseFileDemo,
   TextFileDemo,
   PromptDemo,
