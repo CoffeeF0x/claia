@@ -8,7 +8,7 @@ import logging
 from typing import Dict
 
 # Internal dependencies
-from ..hooks.definition_hooks import ModelDefinition
+from ..hooks.definition import ModelDefinition
 
 
 ########################################################################
@@ -32,7 +32,7 @@ class AnthropicDefinitionsPlugin:
         aliases=["claude3", "opus"],
         company="Anthropic",
         deployments=["api"],
-        architectures=["AnthropicModel"],
+        architectures=["anthropic"],
         description="Anthropic's most powerful model for complex tasks",
         context_length=200000,
         capabilities=["chat", "reasoning", "analysis", "vision"],
@@ -46,7 +46,7 @@ class AnthropicDefinitionsPlugin:
         aliases=["sonnet"],
         company="Anthropic",
         deployments=["api"],
-        architectures=["AnthropicModel"],
+        architectures=["anthropic"],
         description="Balanced model for most conversational tasks",
         context_length=200000,
         capabilities=["chat", "reasoning", "analysis", "vision"],
@@ -60,7 +60,7 @@ class AnthropicDefinitionsPlugin:
         aliases=["haiku"],
         company="Anthropic",
         deployments=["api"],
-        architectures=["AnthropicModel"],
+        architectures=["anthropic"],
         description="Fast and cost-effective model for simple tasks",
         context_length=200000,
         capabilities=["chat", "reasoning"],

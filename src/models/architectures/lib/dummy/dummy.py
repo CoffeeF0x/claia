@@ -10,7 +10,7 @@ import random
 from typing import Dict, Any
 
 # Internal dependencies
-from .base import BaseModel
+from ..base import BaseModel
 from common.files.conversation import Conversation
 from common.enums.conversation import MessageRole
 

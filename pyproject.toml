@@ -14,21 +14,26 @@ include = ["*"]
 
 # Entry points for plugin system
 [project.entry-points."claia.architectures"]
-openai = "claia.src.models.architectures.openai_plugin:OpenAIPlugin"
-anthropic = "claia.src.models.architectures.anthropic_plugin:AnthropicPlugin"
-transformers = "claia.src.models.architectures.transformers_plugin:TransformersPlugin"
+openai = "claia.src.models.architectures.openai:OpenAIPlugin"
+anthropic = "claia.src.models.architectures.anthropic:AnthropicPlugin"
+transformers_generic = "claia.src.models.architectures.transformers_generic:TransformersGenericPlugin"
+transformers_gemma3 = "claia.src.models.architectures.transformers_gemma3:TransformersGemma3Plugin"
+api_passthrough = "claia.src.models.architectures.api_passthrough:APIPassthroughPlugin"
+dummy = "claia.src.models.architectures.dummy:DummyArchitecturePlugin"
 
 [project.entry-points."claia.deployments"]
-api = "claia.src.models.deployments.api_deployment:APIDeploymentPlugin"
-local = "claia.src.models.deployments.local_deployment:LocalDeploymentPlugin"
-remote = "claia.src.models.deployments.remote_deployment:RemoteDeploymentPlugin"
+api = "claia.src.models.deployments.api:APIDeploymentPlugin"
+local = "claia.src.models.deployments.local:LocalDeploymentPlugin"
+remote = "claia.src.models.deployments.remote:RemoteDeploymentPlugin"
+dummy = "claia.src.models.deployments.dummy:DummyDeploymentPlugin"
 
 [project.entry-points."claia.solvers"]
 default = "claia.src.models.solvers.default:DefaultSolverPlugin"
 
 [project.entry-points."claia.definitions"]
-openai = "claia.src.models.definitions.openai_definitions:OpenAIDefinitionsPlugin"
-anthropic = "claia.src.models.definitions.anthropic_definitions:AnthropicDefinitionsPlugin"
+openai = "claia.src.models.definitions.openai:OpenAIDefinitionsPlugin"
+anthropic = "claia.src.models.definitions.anthropic:AnthropicDefinitionsPlugin"
+legacy = "claia.src.models.definitions.legacy:LegacyDefinitionsPlugin"
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]

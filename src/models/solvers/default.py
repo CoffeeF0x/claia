@@ -10,7 +10,7 @@ from typing import Optional, Dict, List, Any
 
 # Internal dependencies
 from common.results import Result
-from ..hooks.solver_hooks import SolverInfo, DeploymentParams
+from ..hooks.solver import SolverInfo, DeploymentParams
 
 
 ########################################################################

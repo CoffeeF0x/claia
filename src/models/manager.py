@@ -14,7 +14,7 @@ from typing import Optional, Dict, List, Type, Any
 
 # Internal dependencies
 from .hooks import ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHooks
-from .hooks import ArchitectureInfo, DeploymentInfo, SolverInfo, ModelDefinition
+from .hooks import DeploymentInfo, SolverInfo, ModelDefinition
 from .base import BaseModel
 from common.enums.model import ModelCapability
 

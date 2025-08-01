@@ -1,18 +1,20 @@
 """
-Internal model plugins.
+Internal architecture plugins.
 
-This package contains built-in model plugins for different
+This package contains built-in architecture plugins for different
 types of AI models and providers.
 """
 
-# Import model plugins
-from .openai_plugin import OpenAIPlugin
-from .anthropic_plugin import AnthropicPlugin
-from .transformers_plugin import TransformersPlugin
+# Import architecture plugins
+from .openai import OpenAIPlugin
+from .anthropic import AnthropicPlugin
+from .transformers import TransformersPlugin
+from .dummy import DummyArchitecturePlugin
 
 # Export all plugins
 __all__ = [
   'OpenAIPlugin',
   'AnthropicPlugin',
-  'TransformersPlugin'
+  'TransformersPlugin',
+  'DummyArchitecturePlugin'
 ]

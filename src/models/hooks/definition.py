@@ -20,7 +20,7 @@ class ModelDefinition:
   title: Optional[str] = None                  # Human-readable title
   aliases: Optional[List[str]] = None          # Alternative names/aliases
   company: Optional[str] = None                # Company/organization that created the model
-  deployments: Optional[List[str]] = None  # Deployment methods that support this model
+  deployments: Optional[List[str]] = None      # Deployment methods that support this model
   architectures: Optional[List[str]] = None    # Model implementation classes that can handle this
   description: Optional[str] = None            # Description of the model
   parameters: Optional[str] = None             # Parameter count (e.g., "7B", "70B", "175B")

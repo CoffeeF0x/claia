@@ -8,7 +8,7 @@ import logging
 from typing import Dict
 
 # Internal dependencies
-from ..hooks.definition_hooks import ModelDefinition
+from ..hooks.definition import ModelDefinition
 
 
 ########################################################################
@@ -31,7 +31,7 @@ class OpenAIDefinitionsPlugin:
         title="GPT-4",
         company="OpenAI",
         deployments=["api"],
-        architectures=["OpenAIModel"],
+        architectures=["openai"],
         description="OpenAI's most advanced model for complex reasoning tasks",
         parameters="175B+",
         context_length=8192,
@@ -46,7 +46,7 @@ class OpenAIDefinitionsPlugin:
         aliases=["gpt4-turbo"],
         company="OpenAI",
         deployments=["api"],
-        architectures=["OpenAIModel"],
+        architectures=["openai"],
         description="Faster and more efficient version of GPT-4",
         parameters="175B+",
         context_length=128000,
@@ -61,7 +61,7 @@ class OpenAIDefinitionsPlugin:
         aliases=["gpt35", "gpt3.5"],
         company="OpenAI",
         deployments=["api"],
-        architectures=["OpenAIModel"],
+        architectures=["openai"],
         description="Fast and efficient model for most conversational tasks",
         parameters="175B",
         context_length=4096,
@@ -75,7 +75,7 @@ class OpenAIDefinitionsPlugin:
         title="GPT-3.5 Turbo 16K",
         company="OpenAI",
         deployments=["api"],
-        architectures=["OpenAIModel"],
+        architectures=["openai"],
         description="GPT-3.5 Turbo with extended context length",
         parameters="175B",
         context_length=16384,
