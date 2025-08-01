@@ -1,14 +1,15 @@
 """
-SimpleAgent implementation for CLAIA.
+Simple agent plugin for CLAIA.
 A simple agent that directly calls a model for inference.
 """
 
 # External dependencies
 import logging
+from typing import Type
 
 # Internal dependencies
-from .base import BaseAgent
-
+from .lib import BaseAgent, Process
+from .hooks import AgentHooks, AgentInfo
 
 
 ########################################################################
@@ -49,3 +50,28 @@ class SimpleAgent(BaseAgent):
       process.mark_failed(str(e))
 
     return process
+
+
+########################################################################
+#                            PLUGIN HOOKS                              #
+########################################################################
+class SimpleAgentPlugin:
+  """Plugin implementation for the simple agent."""
+
+  def get_agent_class(self, agent_name: str) -> Type[BaseAgent]:
+    """Get the agent class for the simple agent."""
+    if agent_name.lower() == "simple":
+      return SimpleAgent
+    return None
+
+  def get_agent_info(self) -> AgentInfo:
+    """Get information about the simple agent."""
+    return AgentInfo(
+      name="simple",
+      description="A simple agent that directly calls a model for inference",
+      agent_class=SimpleAgent
+    )
+
+
+# Create plugin instance
+simple_agent_plugin = SimpleAgentPlugin()

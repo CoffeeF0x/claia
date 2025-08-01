@@ -8,9 +8,9 @@ import logging
 from typing import List
 
 # Internal dependencies
-from models import model_definitions
+from models import ModelRegistry
 from enums import ModelCapability
-from agents.base import BaseAgent
+from agents.lib import BaseAgent
 
 
 
@@ -53,9 +53,12 @@ class BobAgent(BaseAgent):
       # Get the validated model ID from parameters
       model_id = process.parameters["model_id"]
 
-      # Check if the model has text-to-text capability
-      if model_id in model_definitions:
-        model_def = model_definitions[model_id]
+      # Check if the model has text-to-text capability using the new registry
+      model_registry = ModelRegistry()
+      supported_models = model_registry.get_supported_models()
+      
+      if model_id in supported_models:
+        model_def = supported_models[model_id]
         capabilities = model_def.get("capabilities", [])
 
         if ModelCapability.TTT not in capabilities:

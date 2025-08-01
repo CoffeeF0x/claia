@@ -35,6 +35,9 @@ openai = "claia.src.models.definitions.openai:OpenAIDefinitionsPlugin"
 anthropic = "claia.src.models.definitions.anthropic:AnthropicDefinitionsPlugin"
 legacy = "claia.src.models.definitions.legacy:LegacyDefinitionsPlugin"
 
+[project.entry-points."claia.agents"]
+simple = "claia.src.agents.simple:simple_agent_plugin"
+
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
 python_files = ["test_*.py"]

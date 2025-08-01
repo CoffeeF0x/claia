@@ -154,8 +154,7 @@ class ProcessQueue:
     Returns:
         The number of processes in the queue
     """
-    with self._lock:
-      return len(self._processes)
+    return self._queue.qsize()
 
   def process(self, block=False, timeout=None) -> Optional[Process]:
     """
@@ -168,18 +167,17 @@ class ProcessQueue:
     Returns:
         The processed Process object or None if no process was available
     """
-    # Get the next process from the queue
     process = self.get(block=block, timeout=timeout)
-    if not process or process.status != ProcessStatus.PENDING:
-      return None
+    if process:
+      # Skip cancelled processes
+      if process.status == ProcessStatus.CANCELLED:
+        return None
 
-    # Process the request directly with the Agent class
-    updated_process = Agent.process(process)
-
-    # Update the process in the queue
-    self.update(updated_process)
-
-    return updated_process
+      # Process using the Agent class
+      processed = Agent.process(process)
+      self.update(processed)
+      return processed
+    return None
 
   def process_by_id(self, process_id: str) -> Optional[Process]:
     """
@@ -192,38 +190,25 @@ class ProcessQueue:
         The processed Process object or None if the process wasn't found
         or wasn't in a PENDING state
     """
-    with self._lock:
-      process = self._processes.get(process_id)
-      if not process or process.status != ProcessStatus.PENDING:
-        return process
-
-    # Process the request directly with the Agent class
-    updated_process = Agent.process(process)
-
-    # Update the process in the queue
-    self.update(updated_process)
-
-    return updated_process
+    process = self.get_by_id(process_id)
+    if process and process.status == ProcessStatus.PENDING:
+      processed = Agent.process(process)
+      self.update(processed)
+      return processed
+    return None
 
   def _worker_loop(self):
     """Worker thread function that processes items from the queue."""
-    self._logger.debug("Worker thread started")
     while not self._shutdown.is_set():
       try:
-        # Get next process from queue with a timeout to check shutdown flag periodically
-        process = self.get(block=True, timeout=1.0)
-        if process and process.status == ProcessStatus.PENDING:
-          # Process the request
-          self._logger.debug(f"Worker processing: {process.id}")
-          updated_process = Agent.process(process)
-          self.update(updated_process)
+        # Get and process a single item
+        self.process(block=True, timeout=1.0)
       except Exception as e:
-        self._logger.error(f"Error in worker thread: {str(e)}")
+        self._logger.exception(f"Error in worker thread: {e}")
+        # Continue processing even if one item fails
+        continue
 
-      # Small delay to prevent CPU spinning
-      time.sleep(0.01)
-
-    self._logger.debug("Worker thread stopped")
+    self._logger.debug("Worker thread shutting down")
 
   def start_workers(self, num_workers: int = 1):
     """
@@ -236,13 +221,8 @@ class ProcessQueue:
     self._shutdown.clear()
 
     with self._lock:
-      # Clean up any terminated workers
-      self._workers = [w for w in self._workers if w.is_alive()]
-
-      # Start new workers
-      for _ in range(num_workers):
-        worker = threading.Thread(target=self._worker_loop)
-        worker.daemon = True  # Make thread exit when main thread exits
+      for i in range(num_workers):
+        worker = threading.Thread(target=self._worker_loop, daemon=True, name=f"ProcessQueue-Worker-{i+1}")
         worker.start()
         self._workers.append(worker)
 
