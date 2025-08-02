@@ -5,12 +5,17 @@ This module provides an AgentRegistry that manages agent plugins and processes r
 """
 
 import logging
+import threading
+import time
 from typing import Any, Optional, Dict
 
 # Internal dependencies
 from common.results import Result
-from .lib import Process
+from .lib.process import Process
+from .lib.queue import ProcessQueue
 from .manager import AgentManager
+from models import ModelRegistry
+from common.enums.agent import ProcessStatus
 
 
 
@@ -32,12 +37,27 @@ class AgentRegistry:
   appropriate agent implementation based on the process's agent_type.
   """
 
-  def __init__(self):
-    """Initialize the AgentRegistry."""
+  def __init__(self, model_registry=None, process_queue=None):
+    """Initialize the AgentRegistry.
+
+    Args:
+        model_registry: ModelRegistry instance to inject into agents (optional)
+        process_queue: ProcessQueue instance to use for process management (optional)
+    """
     logger.debug("Initializing Agent Registry")
 
     # Initialize agent manager
     self.manager = AgentManager()
+
+    # Initialize model registry
+    self.model_registry = model_registry or ModelRegistry()
+
+    # Initialize process queue
+    self.process_queue = process_queue or ProcessQueue()
+
+    # Worker management
+    self._workers = []  # List of worker threads
+    self._shutdown = threading.Event()  # Signal for workers to stop
 
     # Load all plugins
     self.manager.load_all_plugins()
@@ -66,9 +86,9 @@ class AgentRegistry:
         process.mark_failed(error_msg)
         return process
 
-      # Process using the agent class
+      # Process using the agent class, injecting model registry
       logger.debug(f"Using agent class {agent_class.__name__} for {process.id}")
-      result = agent_class.process(process)
+      result = agent_class.process(process, model_registry=self.model_registry)
 
       return result
 
@@ -88,3 +108,130 @@ class AgentRegistry:
         The agent class that can handle the specified agent type, or None if not found
     """
     return self.manager.get_agent_class(agent_name)
+
+  def add_process(self, process: Process) -> str:
+    """
+    Add a process to the queue for execution.
+
+    Args:
+        process: The process to add to the queue
+
+    Returns:
+        The ID of the process
+    """
+    return self.process_queue.put(process)
+
+  def process_next(self, block=False, timeout=None) -> Optional[Process]:
+    """
+    Get and process the next process from the queue.
+
+    Args:
+        block: Whether to block until a process is available
+        timeout: How long to wait for a process to become available
+
+    Returns:
+        The processed Process object or None if no process was available
+    """
+    process = self.process_queue.get(block=block, timeout=timeout)
+    if process:
+      # Skip cancelled processes
+      if process.status == ProcessStatus.CANCELLED:
+        return None
+
+      # Process using the agent registry
+      processed = self.process(process)
+      self.process_queue.update(processed)
+      return processed
+    return None
+
+  def process_by_id(self, process_id: str) -> Optional[Process]:
+    """
+    Process a specific process identified by its ID.
+
+    Args:
+        process_id: The ID of the process to process
+
+    Returns:
+        The processed Process object or None if the process wasn't found
+        or wasn't in a PENDING state
+    """
+    process = self.process_queue.get_by_id(process_id)
+    if process and process.status == ProcessStatus.PENDING:
+      processed = self.process(process)
+      self.process_queue.update(processed)
+      return processed
+    return None
+
+  def _worker_loop(self):
+    """Worker thread function that processes items from the queue."""
+    while not self._shutdown.is_set():
+      try:
+        # Get and process a single item
+        self.process_next(block=True, timeout=1.0)
+      except Exception as e:
+        logger.exception(f"Error in worker thread: {e}")
+        # Continue processing even if one item fails
+        continue
+
+    logger.debug("Worker thread shutting down")
+
+  def start_workers(self, num_workers: int = 1):
+    """
+    Start worker threads that process items from the queue.
+
+    Args:
+        num_workers: Number of worker threads to start
+    """
+    logger.info(f"Starting {num_workers} worker threads")
+    self._shutdown.clear()
+
+    for i in range(num_workers):
+      worker = threading.Thread(target=self._worker_loop, daemon=True, name=f"AgentRegistry-Worker-{i+1}")
+      worker.start()
+      self._workers.append(worker)
+
+    logger.debug(f"Started {num_workers} workers, total active: {len(self._workers)}")
+
+  def stop_workers(self, wait: bool = True, timeout: float = 5.0):
+    """
+    Stop all worker threads.
+
+    Args:
+        wait: Whether to wait for workers to stop
+        timeout: How long to wait for workers to stop
+    """
+    logger.info("Stopping worker threads")
+    self._shutdown.set()
+
+    if wait:
+      workers = list(self._workers)
+
+      for worker in workers:
+        worker.join(timeout=timeout / len(workers) if workers else timeout)
+
+      # Clean up worker list
+      self._workers = [w for w in self._workers if w.is_alive()]
+      if self._workers:
+        logger.warning(f"{len(self._workers)} workers still running after timeout")
+      else:
+        logger.debug("All workers stopped successfully")
+
+  def set_worker_count(self, count: int):
+    """
+    Set the number of worker threads for the AgentRegistry.
+
+    If the AgentRegistry already has workers, they will be stopped and
+    new workers started with the updated count.
+
+    Args:
+        count: Number of worker threads to use
+    """
+    # Ensure at least one worker
+    worker_count = max(1, count)
+
+    # Stop existing workers if any
+    self.stop_workers(wait=True, timeout=120.0)
+
+    # Start new workers with updated count
+    self.start_workers(worker_count)
+    logger.debug(f"Updated AgentRegistry to use {worker_count} worker(s)")

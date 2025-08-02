@@ -8,8 +8,8 @@ import logging
 from typing import Type
 
 # Internal dependencies
-from .lib import BaseAgent, Process
-from .hooks import AgentHooks, AgentInfo
+from ..lib import BaseAgent, Process
+from ..hooks import AgentHooks, AgentInfo
 
 
 ########################################################################
@@ -23,12 +23,14 @@ class SimpleAgent(BaseAgent):
   """
 
   @classmethod
-  def process_request(cls, process, **kwargs) -> object:
+  def process_request(cls, process, model_registry=None, **kwargs) -> object:
     """
     Process a model inference request.
 
     Args:
         process: The process to execute
+        model_registry: ModelRegistry instance to use for model operations
+        **kwargs: Additional keyword arguments
 
     Returns:
         The updated process with results or error information
@@ -37,13 +39,13 @@ class SimpleAgent(BaseAgent):
       # Get the model ID from the validated parameters
       model_id = process.parameters["model_id"]
 
-      # Run the model with the conversation using the model registry
-      result = cls.model_registry.run(model_id, process.conversation, settings=process.settings, **kwargs)
+      # Run the model with the conversation using the provided model registry
+      result = model_registry.run(model_id, process.conversation, **kwargs)
 
       if result.is_error():
         raise ValueError(f"Error running model: {result.get_message()}")
 
-      process.mark_completed()
+      process.mark_completed(result.get_result())
 
     except Exception as e:
       logging.exception(f"Error in SimpleAgent for {process.id}: {str(e)}")
@@ -71,7 +73,3 @@ class SimpleAgentPlugin:
       description="A simple agent that directly calls a model for inference",
       agent_class=SimpleAgent
     )
-
-
-# Create plugin instance
-simple_agent_plugin = SimpleAgentPlugin()

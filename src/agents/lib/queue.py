@@ -4,13 +4,12 @@ The ProcessQueue manages processes that need to be executed by agents.
 """
 
 # External dependencies
-import queue, threading, time, logging
-from typing import Optional, List, Dict
+import queue, time, logging, threading
+from typing import Optional
 
 # Internal dependencies
 from .process import Process
-from .agent import Agent
-from enums import ProcessStatus
+from common.enums.agent import ProcessStatus
 
 
 
@@ -22,43 +21,13 @@ class ProcessQueue:
   A thread-safe queue for processes.
 
   This queue is used to manage processes that need to be executed by agents.
-  Processes are processed in FIFO (First In, First Out) order.
-
-  This class is implemented as a singleton to ensure only one instance
-  exists throughout the application.
   """
-  # Class variables for singleton pattern
-  _instance = None
-  _worker_count = 1  # Default number of workers
-  _init_lock = threading.Lock()
-
-  def __new__(cls, *args, **kwargs):
-    """Override __new__ to implement the singleton pattern."""
-    with cls._init_lock:
-      if cls._instance is None:
-        logger = logging.getLogger(__name__)
-        logger.debug("Creating singleton ProcessQueue instance")
-        cls._instance = super(ProcessQueue, cls).__new__(cls)
-        # Mark as uninitialized so we know to call init
-        cls._instance._initialized = False
-      return cls._instance
-
   def __init__(self):
-    """Initialize the ProcessQueue singleton instance."""
-    # Only initialize once
-    if getattr(self, '_initialized', False):
-      return
-
+    """Initialize the ProcessQueue."""
     self._queue = queue.Queue()
     self._lock = threading.Lock()
     self._processes = {}  # id -> Process mapping for quick lookups
-    self._workers = []  # List of worker threads
-    self._shutdown = threading.Event()  # Signal for workers to stop
     self._logger = logging.getLogger(__name__)
-    self._initialized = True
-
-    # Start the default number of workers
-    self.start_workers(self._worker_count)
 
   def put(self, process: Process):
     """
@@ -156,103 +125,7 @@ class ProcessQueue:
     """
     return self._queue.qsize()
 
-  def process(self, block=False, timeout=None) -> Optional[Process]:
-    """
-    Get a process from the queue and process it using the Agent class.
 
-    Args:
-        block: Whether to block until a process is available
-        timeout: How long to wait for a process to become available
-
-    Returns:
-        The processed Process object or None if no process was available
-    """
-    process = self.get(block=block, timeout=timeout)
-    if process:
-      # Skip cancelled processes
-      if process.status == ProcessStatus.CANCELLED:
-        return None
-
-      # Process using the Agent class
-      processed = Agent.process(process)
-      self.update(processed)
-      return processed
-    return None
-
-  def process_by_id(self, process_id: str) -> Optional[Process]:
-    """
-    Process a specific process identified by its ID.
-
-    Args:
-        process_id: The ID of the process to process
-
-    Returns:
-        The processed Process object or None if the process wasn't found
-        or wasn't in a PENDING state
-    """
-    process = self.get_by_id(process_id)
-    if process and process.status == ProcessStatus.PENDING:
-      processed = Agent.process(process)
-      self.update(processed)
-      return processed
-    return None
-
-  def _worker_loop(self):
-    """Worker thread function that processes items from the queue."""
-    while not self._shutdown.is_set():
-      try:
-        # Get and process a single item
-        self.process(block=True, timeout=1.0)
-      except Exception as e:
-        self._logger.exception(f"Error in worker thread: {e}")
-        # Continue processing even if one item fails
-        continue
-
-    self._logger.debug("Worker thread shutting down")
-
-  def start_workers(self, num_workers: int = 1):
-    """
-    Start worker threads that process items from the queue.
-
-    Args:
-        num_workers: Number of worker threads to start
-    """
-    self._logger.info(f"Starting {num_workers} worker threads")
-    self._shutdown.clear()
-
-    with self._lock:
-      for i in range(num_workers):
-        worker = threading.Thread(target=self._worker_loop, daemon=True, name=f"ProcessQueue-Worker-{i+1}")
-        worker.start()
-        self._workers.append(worker)
-
-    self._logger.debug(f"Started {num_workers} workers, total active: {len(self._workers)}")
-
-  def stop_workers(self, wait: bool = True, timeout: float = 5.0):
-    """
-    Stop all worker threads.
-
-    Args:
-        wait: Whether to wait for workers to stop
-        timeout: How long to wait for workers to stop
-    """
-    self._logger.info("Stopping worker threads")
-    self._shutdown.set()
-
-    if wait:
-      with self._lock:
-        workers = list(self._workers)
-
-      for worker in workers:
-        worker.join(timeout=timeout / len(workers))
-
-      with self._lock:
-        # Clean up worker list
-        self._workers = [w for w in self._workers if w.is_alive()]
-        if self._workers:
-          self._logger.warning(f"{len(self._workers)} workers still running after timeout")
-        else:
-          self._logger.debug("All workers stopped successfully")
 
   def wait_for_process(self, process_id: str, timeout: float = None, check_interval: float = 0.1) -> Optional[Process]:
     """
@@ -314,29 +187,6 @@ class ProcessQueue:
     self._logger.warning(f"Timed out waiting for all processes after {timeout} seconds")
     return False
 
-  def set_worker_count(self, count: int):
-    """
-    Set the number of worker threads for the ProcessQueue singleton.
 
-    If the ProcessQueue already has workers, they will be stopped and
-    new workers started with the updated count.
 
-    Args:
-        count: Number of worker threads to use
-    """
-    # Ensure at least one worker
-    worker_count = max(1, count)
 
-    # Update the class variable for future instances
-    ProcessQueue._worker_count = worker_count
-
-    # If already initialized, update workers
-    if hasattr(self, '_initialized') and self._initialized:
-      # Stop existing workers if any
-      self.stop_workers(wait=True, timeout=120.0)
-      # Start new workers with updated count
-      self.start_workers(worker_count)
-      self._logger.debug(f"Updated ProcessQueue to use {worker_count} worker(s)")
-    else:
-      # Set worker count for initialization
-      self._worker_count = worker_count

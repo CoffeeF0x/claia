@@ -10,7 +10,7 @@ from typing import Dict, List, Any
 from .base import Command, command
 from results import Result
 from settings import Settings
-from agents import Agent
+from agents import AgentRegistry
 
 
 

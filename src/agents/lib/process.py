@@ -8,9 +8,8 @@ import uuid, time
 from typing import Optional, Dict, Any
 
 # Internal dependencies
-from enums import ProcessStatus
-from files import Conversation
-from settings import Settings
+from common.enums.agent import ProcessStatus
+from common.files.conversation import Conversation
 
 
 
@@ -28,7 +27,6 @@ class Process:
   def __init__(
     self,
     agent_type: str = "simple",
-    settings: Settings = None,
     conversation: Conversation = None,
     parameters: Dict[str, Any] = None,
     parent_id: Optional[str] = None,
@@ -39,9 +37,8 @@ class Process:
 
     Args:
         agent_type: The type of agent that should handle this process
-        settings: The settings object to use for this process
         conversation: The conversation object to use for this process
-        parameters: Additional parameters for this process
+        parameters: Additional parameters for this process (should include model_id)
         parent_id: The ID of the parent process that created this process
         id: The ID of this process (generated if not provided)
     """
@@ -49,7 +46,6 @@ class Process:
     self.agent_type = agent_type
     self.status = ProcessStatus.PENDING
     self.parent_id = parent_id
-    self.settings = settings
     self.conversation = conversation
     self.parameters = parameters or {}
     self.result = None

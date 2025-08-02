@@ -18,7 +18,6 @@ openai = "claia.src.models.architectures.openai:OpenAIPlugin"
 anthropic = "claia.src.models.architectures.anthropic:AnthropicPlugin"
 transformers_generic = "claia.src.models.architectures.transformers_generic:TransformersGenericPlugin"
 transformers_gemma3 = "claia.src.models.architectures.transformers_gemma3:TransformersGemma3Plugin"
-api_passthrough = "claia.src.models.architectures.api_passthrough:APIPassthroughPlugin"
 dummy = "claia.src.models.architectures.dummy:DummyArchitecturePlugin"
 
 [project.entry-points."claia.deployments"]
@@ -36,7 +35,7 @@ anthropic = "claia.src.models.definitions.anthropic:AnthropicDefinitionsPlugin"
 legacy = "claia.src.models.definitions.legacy:LegacyDefinitionsPlugin"
 
 [project.entry-points."claia.agents"]
-simple = "claia.src.agents.simple:simple_agent_plugin"
+simple = "claia.src.agents.builtin.simple:SimpleAgentPlugin"
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]

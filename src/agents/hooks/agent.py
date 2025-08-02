@@ -8,7 +8,7 @@ from typing import Type
 from dataclasses import dataclass
 
 # Internal dependencies
-from ..lib import BaseAgent
+from ..lib.base import BaseAgent
 
 
 ########################################################################

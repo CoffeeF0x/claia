@@ -11,7 +11,7 @@ from typing import Optional, Dict, List, Type, Any
 
 # Internal dependencies
 from .hooks import AgentHooks, AgentInfo
-from .lib import BaseAgent
+from .base import BaseAgent
 
 
 

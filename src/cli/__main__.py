@@ -38,7 +38,7 @@ import sys
 from commands import CommandRegistry
 from results import Result
 from settings import Settings
-from agents import ProcessQueue, Process
+from agents import ProcessQueue, Process, AgentRegistry
 from enums import SourcePreference, ProcessStatus, MessageRole
 from files import Conversation
 from defaults import initialize_defaults
@@ -131,9 +131,10 @@ def main() -> None:
     logger.debug("Initializing module system")
     initialize_module_system(command_registry, settings.modules_directory)
 
-    # Initialize the process queue
-    logger.debug("Initializing process queue")
-    process_queue = ProcessQueue()
+    # Initialize the agent registry and process queue
+    logger.debug("Initializing agent registry and process queue")
+    agent_registry = AgentRegistry()
+    agent_registry.start_workers(3)  # Start 3 worker threads
 
     # Set up command history with arrow key navigation
     setup_command_history()
@@ -155,7 +156,7 @@ def main() -> None:
 
       # Exit after running the command
       logger.info("CLAIA exiting after CLI command execution")
-      process_queue.stop_workers()
+      agent_registry.stop_workers()
       return
 
     logger.info("CLAIA initialization complete, entering main loop")
@@ -179,8 +180,10 @@ def main() -> None:
       # Process user input as either a command or a query
       if user_input and user_input[0] == COMMAND_CHARACTER:
         logger.debug(f"Processing as command: {user_input[1:]}")
-        result = command_registry.run(user_input[1:].split(), settings)
-        print(result.message)
+        # TODO: Update command processing for new architecture
+        # result = command_registry.run(user_input[1:].split(), settings)
+        # print(result.message)
+        print(f"Command processing temporarily disabled: {user_input[1:]}")
       else:
         # Create a new conversation if one doesn't exist
         if not settings.active_conversation:
@@ -197,7 +200,6 @@ def main() -> None:
 
         process = Process(
           agent_type=settings.active_agent,
-          settings=settings,
           conversation=settings.active_conversation,
           parameters={
             "source_preference": SourcePreference.ANY,
@@ -205,7 +207,7 @@ def main() -> None:
           }
         )
 
-        process_id = process_queue.put(process)
+        process_id = agent_registry.add_process(process)
         logger.debug(f"Process added with ID: {process_id}")
 
         logger.debug(f"Waiting for process to complete: {process.id}")
@@ -256,13 +258,13 @@ def main() -> None:
     logger.info(f"CLAIA application exiting: {result.get_message()}")
 
     # Stop worker threads before exiting
-    process_queue.stop_workers()
+    agent_registry.stop_workers()
 
   except Exception as e:
     logger.critical(f"Unhandled exception in main: {str(e)}", exc_info=True)
     # Try to stop worker threads on error
-    if 'process_queue' in locals():
-      process_queue.stop_workers(wait=False)  # Don't wait on critical error
+    if 'agent_registry' in locals():
+      agent_registry.stop_workers(wait=False)  # Don't wait on critical error
     sys.exit(1)
 
 
