@@ -7,7 +7,7 @@ import os
 import logging
 
 # Internal dependencies
-from .enums.logging import LogLevel, LogFormat
+from common.enums.logging import LogLevel, LogFormat
 
 
 

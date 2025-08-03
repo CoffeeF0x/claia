@@ -35,15 +35,16 @@ import os
 import sys
 
 # Internal dependencies
-from commands import CommandRegistry
-from results import Result
-from settings import Settings
-from agents import ProcessQueue, Process, AgentRegistry
-from enums import SourcePreference, ProcessStatus, MessageRole
-from files import Conversation
-from defaults import initialize_defaults
-from logger import initialize_logging
-from mod import initialize_module_system
+# from commands import CommandRegistry
+from agents import Process, AgentRegistry
+from common.results import Result
+from common.enums.agent import ProcessStatus, SourcePreference
+from common.enums.conversation import MessageRole
+from common.files.conversation import Conversation
+from .settings import Settings
+from .defaults import initialize_defaults
+from .logger import initialize_logging
+# from .mod import initialize_module_system
 
 
 
@@ -125,11 +126,12 @@ def main() -> None:
 
     # Initialize the command registry
     logger.debug("Initializing command registry")
-    command_registry = CommandRegistry()
+    # TODO: Update command registry initialization for new architecture
+    # command_registry = CommandRegistry()
 
     # Initialize the module system (must happen after commands are initialized)
     logger.debug("Initializing module system")
-    initialize_module_system(command_registry, settings.modules_directory)
+    # initialize_module_system(command_registry, settings.modules_directory)
 
     # Initialize the agent registry and process queue
     logger.debug("Initializing agent registry and process queue")
@@ -148,11 +150,14 @@ def main() -> None:
     if settings.extra_args:
       # Process command line arguments using the registry
       logger.info(f"Processing command line arguments: {' '.join(settings.extra_args)}")
-      result = command_registry.run(settings.extra_args, settings)
+      # TODO: Update command processing for new architecture
+      # result = command_registry.run(settings.extra_args, settings)
 
-      # Display the result
-      if result.get_message():
-        print(result.get_message())
+      # if result.get_message():
+      #   print(result.get_message())
+
+      # For now, just print a message that command processing is disabled
+      print(f"Command line processing temporarily disabled: {' '.join(settings.extra_args)}")
 
       # Exit after running the command
       logger.info("CLAIA exiting after CLI command execution")
@@ -188,8 +193,7 @@ def main() -> None:
         # Create a new conversation if one doesn't exist
         if not settings.active_conversation:
           settings.active_conversation = Conversation(
-            settings.files_directory,
-            registry=command_registry
+            settings.files_directory
           )
 
         # Set the active agent if one doesn't exist

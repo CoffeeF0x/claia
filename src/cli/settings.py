@@ -12,7 +12,7 @@ from typing import Dict, Any, List, Tuple
 from dotenv import load_dotenv
 
 # Internal dependencies
-from enums import LogLevel, LogFormat
+from common.enums.logging import LogLevel, LogFormat
 
 
 

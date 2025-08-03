@@ -2,7 +2,7 @@
 Hook system for CLAIA agent plugins.
 """
 
-from .agent_hooks import AgentHooks, AgentInfo
+from .agent import AgentHooks, AgentInfo
 
 __all__ = [
   'AgentHooks',

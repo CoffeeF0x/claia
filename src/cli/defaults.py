@@ -8,8 +8,8 @@ It defines default prompts and other default settings.
 import logging
 
 # Internal dependencies
-from files import Prompt
-from settings import Settings
+from common.files.prompt import Prompt
+from .settings import Settings
 
 
 

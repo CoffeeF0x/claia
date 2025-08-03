@@ -9,14 +9,9 @@ Features a plugin-based architecture for extensibility:
 
 # Main registry with plugin-based architecture
 from .registry import ModelRegistry
-from .config import ModelConfig
-
-# Plugin system components for external developers
-from .plugins import PluginManager, ModelPlugin
+from .manager import ModuleManager
 
 __all__ = [
     'ModelRegistry',        # Plugin-based registry
-    'ModelConfig',
-    'PluginManager',        # Plugin management
-    'ModelPlugin'           # Base class for custom plugins
+    'ModuleManager'         # Module manager for plugin system
 ]

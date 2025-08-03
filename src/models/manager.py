@@ -15,7 +15,7 @@ from typing import Optional, Dict, List, Type, Any
 # Internal dependencies
 from .hooks import ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHooks
 from .hooks import DeploymentInfo, SolverInfo, ModelDefinition
-from .base import BaseModel
+from .architectures.lib.base import BaseModel
 from common.enums.model import ModelCapability
 
 
@@ -70,6 +70,7 @@ class ModuleManager:
   def load_all_plugins(self) -> None:
     """Load all plugins from entry points."""
     if self._plugins_loaded:
+      logger.debug("Plugins already loaded")
       return
 
     try:
