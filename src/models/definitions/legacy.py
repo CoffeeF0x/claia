@@ -5,6 +5,7 @@ Provides comprehensive model definitions for legacy models including GPT, Claude
 """
 
 import logging
+import pluggy
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 
@@ -17,6 +18,7 @@ from common.enums.model import ModelCapability, IOType
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
+hookimpl = pluggy.HookimplMarker("claia_definitions")
 
 
 ########################################################################
@@ -37,6 +39,7 @@ DEFAULT_SETTINGS = {
 class LegacyDefinitionsPlugin:
     """Legacy model definitions plugin containing comprehensive model metadata."""
 
+    @hookimpl
     def get_model_definitions(self) -> Dict[str, ModelDefinition]:
         """Get legacy model definitions."""
         definitions = {

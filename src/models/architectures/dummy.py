@@ -5,6 +5,7 @@ Provides the architecture implementation for the dummy streaming model.
 """
 
 import logging
+import pluggy
 from typing import Optional, Type
 
 # Internal dependencies
@@ -16,6 +17,9 @@ from .lib.dummy import DummyModel
 ########################################################################
 logger = logging.getLogger(__name__)
 
+# Create hookimpl decorator for this plugin namespace
+hookimpl = pluggy.HookimplMarker("claia_architectures")
+
 
 ########################################################################
 #                               CLASSES                                #
@@ -23,6 +27,7 @@ logger = logging.getLogger(__name__)
 class DummyArchitecturePlugin:
   """Dummy architecture plugin for testing purposes."""
 
+  @hookimpl
   def get_model_class(self, model_name: str) -> Optional[Type]:
     """
     Get the model class for dummy models.

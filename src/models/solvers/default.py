@@ -6,6 +6,7 @@ solver is requested or when other solvers cannot handle a request.
 """
 
 import logging
+import pluggy
 from typing import Optional, Dict, List, Any
 
 # Internal dependencies
@@ -17,6 +18,7 @@ from ..hooks.solver import SolverInfo, DeploymentParams
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
+hookimpl = pluggy.HookimplMarker("claia_solvers")
 
 
 ########################################################################
@@ -32,6 +34,7 @@ class DefaultSolverPlugin:
   3. Fall back to remote deployments as needed
   """
 
+  @hookimpl
   def get_solver_info(self) -> SolverInfo:
     """Get information about this solver."""
     return SolverInfo(
@@ -40,11 +43,13 @@ class DefaultSolverPlugin:
       description="Basic deployment decision logic with sensible defaults"
     )
 
+  @hookimpl
   def can_solve(self, model_name: str, deployment_preference: Optional[str] = None, **kwargs) -> bool:
     """Check if this solver can handle the request."""
     # Default solver can handle any request as a fallback
     return True
 
+  @hookimpl
   def solve_deployment(
     self,
     model_name: str,
@@ -54,7 +59,7 @@ class DefaultSolverPlugin:
     deployment_preference: Optional[str] = None,
     deployment_method: Optional[str] = None,
     **kwargs
-  ) -> Result[DeploymentParams]:
+  ) -> Result:
     """
     Determine the best deployment method for the request.
     """

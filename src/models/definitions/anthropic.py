@@ -5,6 +5,7 @@ Provides definitions for Anthropic Claude models.
 """
 
 import logging
+import pluggy
 from typing import Dict
 
 # Internal dependencies
@@ -15,6 +16,7 @@ from ..hooks.definition import ModelDefinition
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
+hookimpl = pluggy.HookimplMarker("claia_definitions")
 
 
 ########################################################################
@@ -23,6 +25,7 @@ logger = logging.getLogger(__name__)
 class AnthropicDefinitionsPlugin:
   """Anthropic model definitions plugin."""
 
+  @hookimpl
   def get_model_definitions(self) -> Dict[str, ModelDefinition]:
     """Get Anthropic model definitions."""
     return {

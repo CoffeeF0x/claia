@@ -5,18 +5,20 @@ Provides deployment capabilities for the dummy model.
 """
 
 import logging
-from typing import Dict, Any, Optional
-from dataclasses import dataclass
+import pluggy
+from typing import Dict, Any, Type
 
 # Internal dependencies
-from ..hooks.deployment import DeploymentInfo, DeploymentStatus
-from ..base import BaseModel
+from common.results import Result
+from common.files.conversation import Conversation
+from ..hooks.deployment import DeploymentInfo
 
 
 ########################################################################
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
+hookimpl = pluggy.HookimplMarker("claia_deployments")
 
 
 ########################################################################
@@ -25,44 +27,63 @@ logger = logging.getLogger(__name__)
 class DummyDeploymentPlugin:
     """Deployment plugin for dummy models."""
 
+    @hookimpl
     def get_deployment_info(self) -> DeploymentInfo:
         """Get deployment information for dummy models."""
         return DeploymentInfo(
             name="dummy",
             title="Dummy Deployment",
-            description="Local deployment for dummy model testing",
-            supported_architectures=["DummyModel"],
-            supported_models=["dummy-model"],
-            deployment_type="local",
-            requirements={},
-            configuration={
-                "words_per_second": {
-                    "type": "integer",
-                    "default": 20,
-                    "description": "Streaming speed in words per second"
-                }
-            }
+            description="Dummy local deployment for testing"
         )
 
-    def get_deployment_status(self, model_name: str, config: Dict[str, Any]) -> DeploymentStatus:
-        """Get deployment status for dummy model."""
-        # Dummy deployment is always available locally
-        return DeploymentStatus(
-            available=True,
-            ready=True,
-            message="Dummy model ready for testing",
-            details={
-                "deployment": "dummy",
-                "location": "local",
-                "type": "test"
-            }
-        )
+    @hookimpl
+    def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Result:
+        """Unified run(): deploy (if needed) and run inference for dummy model."""
+        try:
+            cache_key = f"{model_name}:dummy"
 
-    def deploy_model(self, model_name: str, config: Dict[str, Any]) -> BaseModel:
-        """Deploy the dummy model."""
-        # For dummy deployment, we just return the model instance
-        from ..architectures.dummy_architecture import DummyModel
-        return DummyModel(config)
+            # Use cached instance if available
+            if cache_key in cache:
+                model_instance = cache[cache_key]
+                logger.debug(f"Using cached dummy model instance for {cache_key}")
+            else:
+                logger.debug(f"Deploying dummy model: {model_name}")
+                # DummyModel takes only model_name
+                model_instance = model_class(model_name=model_name)
+                cache[cache_key] = model_instance
+                logger.debug(f"Successfully deployed and cached dummy model: {model_name}")
+
+            # Run inference
+            logger.debug(f"Running dummy model inference: {model_name}")
+            if hasattr(model_instance, 'generate'):
+                output = model_instance.generate(conversation, **kwargs)
+            elif hasattr(model_instance, 'run'):
+                output = model_instance.run(conversation, **kwargs)
+            elif hasattr(model_instance, 'chat'):
+                output = model_instance.chat(conversation, **kwargs)
+            else:
+                return Result.fail("Model instance has no recognized inference method")
+
+            return output if isinstance(output, Result) else Result.ok(output)
+
+        except Exception as e:
+            logger.error(f"Error running dummy model {model_name}: {str(e)}")
+            return Result.fail(f"Failed to run dummy model: {str(e)}")
+
+    def get_deployment_status(self, model_name: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Deprecated: kept for backward compatibility."""
+        logger.warning("get_deployment_status() is deprecated; use run()")
+        return {
+            "available": True,
+            "ready": True,
+            "message": "Dummy model ready for testing",
+            "details": {"deployment": "dummy", "location": "local", "type": "test"}
+        }
+
+    def deploy_model(self, model_name: str, config: Dict[str, Any]):
+        """Deprecated: use run() which handles deployment and caching."""
+        logger.warning("deploy_model() is deprecated; use run()")
+        return Result.fail("deploy_model deprecated; use run()")
 
     def undeploy_model(self, model_name: str) -> bool:
         """Undeploy the dummy model."""

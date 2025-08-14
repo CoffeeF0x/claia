@@ -6,6 +6,7 @@ For models that need specialized handling, use specific architecture plugins.
 """
 
 import logging
+import pluggy
 from typing import Optional, Type
 
 # Internal dependencies
@@ -17,6 +18,9 @@ from .lib.transformers import GenericTransformerModel
 ########################################################################
 logger = logging.getLogger(__name__)
 
+# Create hookimpl decorator for this plugin namespace
+hookimpl = pluggy.HookimplMarker("claia_architectures")
+
 
 ########################################################################
 #                               CLASSES                                #
@@ -24,6 +28,7 @@ logger = logging.getLogger(__name__)
 class TransformersGenericPlugin:
   """Generic transformers architecture plugin for standard transformer models."""
 
+  @hookimpl
   def get_model_class(self, model_name: str) -> Optional[Type]:
     """
     Get the generic model class for transformer models.

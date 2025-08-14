@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -14,28 +14,28 @@ include = ["*"]
 
 # Entry points for plugin system
 [project.entry-points."claia.architectures"]
-openai = "claia.src.models.architectures.openai:OpenAIPlugin"
-anthropic = "claia.src.models.architectures.anthropic:AnthropicPlugin"
-transformers_generic = "claia.src.models.architectures.transformers_generic:TransformersGenericPlugin"
-transformers_gemma3 = "claia.src.models.architectures.transformers_gemma3:TransformersGemma3Plugin"
-dummy = "claia.src.models.architectures.dummy:DummyArchitecturePlugin"
+openai = "models.architectures.openai:OpenAIPlugin"
+anthropic = "models.architectures.anthropic:AnthropicPlugin"
+transformers_generic = "models.architectures.transformers_generic:TransformersGenericPlugin"
+transformers_gemma3 = "models.architectures.transformers_gemma3:TransformersGemma3Plugin"
+dummy = "models.architectures.dummy:DummyArchitecturePlugin"
 
 [project.entry-points."claia.deployments"]
-api = "claia.src.models.deployments.api:APIDeploymentPlugin"
-local = "claia.src.models.deployments.local:LocalDeploymentPlugin"
-remote = "claia.src.models.deployments.remote:RemoteDeploymentPlugin"
-dummy = "claia.src.models.deployments.dummy:DummyDeploymentPlugin"
+api = "models.deployments.api:APIDeploymentPlugin"
+local = "models.deployments.local:LocalDeploymentPlugin"
+remote = "models.deployments.remote:RemoteDeploymentPlugin"
+dummy = "models.deployments.dummy:DummyDeploymentPlugin"
 
 [project.entry-points."claia.solvers"]
-default = "claia.src.models.solvers.default:DefaultSolverPlugin"
+default = "models.solvers.default:DefaultSolverPlugin"
 
 [project.entry-points."claia.definitions"]
-openai = "claia.src.models.definitions.openai:OpenAIDefinitionsPlugin"
-anthropic = "claia.src.models.definitions.anthropic:AnthropicDefinitionsPlugin"
-legacy = "claia.src.models.definitions.legacy:LegacyDefinitionsPlugin"
+openai = "models.definitions.openai:OpenAIDefinitionsPlugin"
+anthropic = "models.definitions.anthropic:AnthropicDefinitionsPlugin"
+legacy = "models.definitions.legacy:LegacyDefinitionsPlugin"
 
 [project.entry-points."claia.agents"]
-simple = "claia.src.agents.builtin.simple:SimpleAgentPlugin"
+simple = "agents.builtin.simple:SimpleAgentPlugin"
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]

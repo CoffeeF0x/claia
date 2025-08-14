@@ -6,6 +6,7 @@ architecture considerations beyond generic transformers handling.
 """
 
 import logging
+import pluggy
 from typing import Optional, Type
 
 # Internal dependencies
@@ -17,6 +18,9 @@ from .lib.transformers import Gemma3Model
 ########################################################################
 logger = logging.getLogger(__name__)
 
+# Create hookimpl decorator for this plugin namespace
+hookimpl = pluggy.HookimplMarker("claia_architectures")
+
 
 ########################################################################
 #                               CLASSES                                #
@@ -24,6 +28,7 @@ logger = logging.getLogger(__name__)
 class TransformersGemma3Plugin:
   """Specialized transformers architecture plugin for Gemma3 models."""
 
+  @hookimpl
   def get_model_class(self, model_name: str) -> Optional[Type]:
     """
     Get the specialized model class for Gemma3 models.

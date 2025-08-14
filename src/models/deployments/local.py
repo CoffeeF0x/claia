@@ -6,19 +6,20 @@ typically transformer models loaded via HuggingFace transformers.
 """
 
 import logging
+import pluggy
 from typing import Optional, Dict, List, Any, Type
 
 # Internal dependencies
 from common.results import Result
 from common.files.conversation import Conversation
-from ..hooks.deployment_hooks import DeploymentInfo
-from ..base import BaseModel
+from ..hooks.deployment import DeploymentInfo
 
 
 ########################################################################
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
+hookimpl = pluggy.HookimplMarker("claia_deployments")
 
 
 ########################################################################
@@ -32,14 +33,13 @@ class LocalDeploymentPlugin:
   user's machine, typically using HuggingFace transformers.
   """
 
+  @hookimpl
   def get_deployment_info(self) -> DeploymentInfo:
     """Get information about this deployment method."""
     return DeploymentInfo(
       name="local",
       title="Local Deployment",
-      description="Deploy models locally using transformers/torch",
-      supported_model_types=["transformers", "custom"],
-      requires_api_key=False
+      description="Deploy models locally using transformers/torch"
     )
 
   def can_deploy_model(self, model_name: str, model_type: str) -> bool:
@@ -113,4 +113,65 @@ class LocalDeploymentPlugin:
 
     except Exception as e:
       logger.error(f"Error running local model: {str(e)}")
+      return Result.fail(f"Failed to run local model: {str(e)}")
+
+  @hookimpl
+  def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Result:
+    """
+    Deploy (if needed) and run inference on a local model using unified interface.
+
+    Args:
+      model_name: Canonical model name
+      model_class: Model class to instantiate
+      conversation: Conversation to process
+      cache: Shared cache for model instances
+      **kwargs: Additional deployment/runtime params (device, model_path, etc.)
+
+    Returns:
+      Result containing model response or error
+    """
+    try:
+      cache_key = f"{model_name}:local"
+
+      # Use cached instance if available
+      if cache_key in cache:
+        model_instance = cache[cache_key]
+        logger.debug(f"Using cached local model instance for {cache_key}")
+      else:
+        # Deploy new local model instance
+        logger.debug(f"Deploying local model: {model_name}")
+
+        device = kwargs.get('device', 'cpu')
+        model_path = kwargs.get('model_path', model_name)
+        defer_loading = kwargs.get('defer_loading', False)
+
+        # Pass through any extra kwargs not explicitly handled above
+        extra_kwargs = {k: v for k, v in kwargs.items() if k not in ['device', 'model_path', 'defer_loading']}
+
+        model_instance = model_class(
+          model_name=model_name,
+          model_path=model_path,
+          defer_loading=defer_loading,
+          device=device,
+          **extra_kwargs
+        )
+
+        cache[cache_key] = model_instance
+        logger.debug(f"Successfully deployed and cached local model: {model_name}")
+
+      # Run inference
+      logger.debug(f"Running local model inference: {model_name}")
+      if hasattr(model_instance, 'generate'):
+        output = model_instance.generate(conversation, **kwargs)
+      elif hasattr(model_instance, 'run'):
+        output = model_instance.run(conversation, **kwargs)
+      elif hasattr(model_instance, 'forward'):
+        output = model_instance.forward(conversation, **kwargs)
+      else:
+        return Result.fail("Model instance has no recognized inference method")
+
+      return output if isinstance(output, Result) else Result.ok(output)
+
+    except Exception as e:
+      logger.error(f"Error running local model {model_name}: {str(e)}")
       return Result.fail(f"Failed to run local model: {str(e)}")

@@ -7,18 +7,19 @@ to services like OpenAI, Anthropic, etc.
 
 import logging
 from typing import Optional, Dict, List, Any, Type
+import pluggy
 
 # Internal dependencies
 from common.results import Result
 from common.files.conversation import Conversation
-from ..hooks.deployment_hooks import DeploymentInfo
-from ..base import BaseModel
+from ..hooks.deployment import DeploymentInfo
 
 
 ########################################################################
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
+hookimpl = pluggy.HookimplMarker("claia_deployments")
 
 
 ########################################################################
@@ -32,20 +33,20 @@ class APIDeploymentPlugin:
   external services like OpenAI, Anthropic, Google, etc.
   """
 
+  @hookimpl
   def get_deployment_info(self) -> DeploymentInfo:
     """Get information about this deployment method."""
     return DeploymentInfo(
       name="api",
       title="API Deployment",
-      description="Deploy models via external API services (OpenAI, Anthropic, etc.)",
-      supported_model_types=["api"],
-      requires_api_key=True
+      description="Deploy models via external API services (OpenAI, Anthropic, etc.)"
     )
 
   def can_deploy_model(self, model_name: str, model_type: str) -> bool:
     """Check if this deployment method can handle the specified model."""
     return model_type == "api"
 
+  @hookimpl
   def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Result:
     """
     Deploy (if needed) and run inference on an API-based model.
@@ -98,15 +99,15 @@ class APIDeploymentPlugin:
 
       # API models typically have a generate or run method
       if hasattr(model_instance, 'generate'):
-        result = model_instance.generate(conversation, **kwargs)
+        output = model_instance.generate(conversation, **kwargs)
       elif hasattr(model_instance, 'run'):
-        result = model_instance.run(conversation, **kwargs)
+        output = model_instance.run(conversation, **kwargs)
       elif hasattr(model_instance, 'chat'):
-        result = model_instance.chat(conversation, **kwargs)
+        output = model_instance.chat(conversation, **kwargs)
       else:
         return Result.fail("Model instance has no recognized inference method")
 
-      return result
+      return output if isinstance(output, Result) else Result.ok(output)
 
     except Exception as e:
       logger.error(f"Error running API model {model_name}: {str(e)}")

@@ -5,11 +5,18 @@ A simple agent that directly calls a model for inference.
 
 # External dependencies
 import logging
+import pluggy
 from typing import Type
 
 # Internal dependencies
 from ..lib import BaseAgent, Process
 from ..hooks import AgentHooks, AgentInfo
+
+
+########################################################################
+#                            INITIALIZATION                            #
+########################################################################
+hookimpl = pluggy.HookimplMarker("claia_agents")
 
 
 ########################################################################
@@ -60,12 +67,14 @@ class SimpleAgent(BaseAgent):
 class SimpleAgentPlugin:
   """Plugin implementation for the simple agent."""
 
+  @hookimpl
   def get_agent_class(self, agent_name: str) -> Type[BaseAgent]:
     """Get the agent class for the simple agent."""
     if agent_name.lower() == "simple":
       return SimpleAgent
     return None
 
+  @hookimpl
   def get_agent_info(self) -> AgentInfo:
     """Get information about the simple agent."""
     return AgentInfo(

@@ -5,6 +5,7 @@ Provides OpenAI API-based models like GPT-4, GPT-3.5-turbo, etc.
 """
 
 import logging
+import pluggy
 from typing import Optional, Type
 
 # Internal dependencies
@@ -16,6 +17,9 @@ from .lib.api import OpenAIModel
 ########################################################################
 logger = logging.getLogger(__name__)
 
+# Create hookimpl decorator for this plugin namespace
+hookimpl = pluggy.HookimplMarker("claia_architectures")
+
 
 ########################################################################
 #                               CLASSES                                #
@@ -23,6 +27,7 @@ logger = logging.getLogger(__name__)
 class OpenAIPlugin:
   """OpenAI architecture plugin providing GPT models via OpenAI API."""
 
+  @hookimpl
   def get_model_class(self, model_name: str) -> Optional[Type]:
     """
     Get the model class for OpenAI models.

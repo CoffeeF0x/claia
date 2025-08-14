@@ -69,7 +69,7 @@ class SolverHooks:
     deployment_preference: Optional[str] = None,
     deployment_method: Optional[str] = None,
     **kwargs
-  ) -> Result[DeploymentParams]:
+  ) -> Result:
     """
     Determine the best deployment method and model for the request.
 

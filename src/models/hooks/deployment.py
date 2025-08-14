@@ -39,7 +39,7 @@ class DeploymentHooks:
     """
 
   @hookspec
-  def run(self, model_name: str, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Result:
+  def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Result:
     """
     Deploy (if needed) and run inference on a model.
 
@@ -48,6 +48,7 @@ class DeploymentHooks:
 
     Args:
         model_name: Canonical model name
+        model_class: Model class to instantiate
         conversation: Conversation to process
         cache: Cache dictionary for model instances (deployment plugin manages this)
         **kwargs: Additional deployment and runtime parameters
