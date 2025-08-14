@@ -3,7 +3,7 @@
 ## Formatting Rules
 
 ### Indentation
-- Use **4 spaces** for indentation (no tabs)
+- Use **2 spaces** for indentation (no tabs)
 - Apply consistently across all files
 
 ### Python Code Style
