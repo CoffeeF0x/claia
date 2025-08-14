@@ -188,6 +188,10 @@ class ModuleManager:
       # Don't raise for definition plugins - they're optional
       logger.warning("Continuing without definition plugins")
 
+  # TODO: currently architectures just return the model class, however the intention
+  #       is for them to return the actual model instance. This function is currently
+  #       getting a class from each architecture plugin and returning the first in
+  #       that list, so it should be changed to return the matching model instance
   # Architecture plugin methods
   def get_model_class(self, model_name: str) -> Optional[Type[BaseModel]]:
     """Get the model class for a specific model from architecture plugins."""
