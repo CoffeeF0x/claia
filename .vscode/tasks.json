@@ -17,7 +17,7 @@
         {
             "label": "Start Debug Container",
             "type": "shell",
-            "command": "docker compose -f docker/docker-compose.debug.yml up -d",
+            "command": "docker compose -f docker/docker-compose.debug.yml up -d --build",
             "problemMatcher": [],
             // "isBackground": true
         },

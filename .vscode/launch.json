@@ -18,7 +18,7 @@
                     "remoteRoot": "/app"
                 }
             ],
-            "preLaunchTask": "Start and Attach Debug Container",
+            "preLaunchTask": "Attach Debug Container",
             "postDebugTask": "Stop Debug Container",
             "justMyCode": false
         }
