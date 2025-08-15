@@ -6,10 +6,11 @@ Provides Anthropic Claude API-based models.
 
 import logging
 import pluggy
-from typing import Optional, Type
+from typing import Type
 
 # Internal dependencies
 from .lib.api import AnthropicModel
+from ..hooks.architecture import ArchitectureInfo
 
 
 ########################################################################
@@ -28,17 +29,14 @@ class AnthropicPlugin:
   """Anthropic architecture plugin providing Claude models via Anthropic API."""
 
   @hookimpl
-  def get_model_class(self, model_name: str) -> Optional[Type]:
-    """
-    Get the model class for Anthropic models.
+  def get_architecture_info(self) -> ArchitectureInfo:
+    return ArchitectureInfo(
+      name="anthropic",
+      title="Anthropic API Architecture",
+      description="Implements Anthropic Claude API-backed models"
+    )
 
-    Args:
-        model_name: Canonical model name
-
-    Returns:
-        AnthropicModel class if this is an Anthropic model, None otherwise
-    """
-    # This plugin only handles models explicitly assigned to it via definitions
-    # The definition file will specify architectures=["anthropic"]
-    logger.debug(f"Providing AnthropicModel class for {model_name}")
+  @hookimpl
+  def get_model_class(self) -> Type:
+    logger.debug("Providing AnthropicModel class for Anthropic architecture")
     return AnthropicModel

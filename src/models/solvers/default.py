@@ -12,6 +12,7 @@ from typing import Optional, Dict, List, Any
 # Internal dependencies
 from common.results import Result
 from ..hooks.solver import SolverInfo, DeploymentParams
+from ..hooks.definition import ModelDefinition
 
 
 
@@ -68,26 +69,31 @@ class DefaultSolverPlugin:
         return Result.fail(f"Model '{model_name}' not found")
 
       # Get model info
-      model_info = available_models.get(resolved_model_name)
+      model_info: ModelDefinition = available_models.get(resolved_model_name)
       if not model_info:
         return Result.fail(f"Model '{resolved_model_name}' not found")
 
-      # Resolve deployment method
+      # Resolve deployment method (treat as list)
+      deployments = model_info.deployments or []
       if deployment_method and deployment_method not in available_deployments:
         return Result.fail(f"Deployment method '{deployment_method}' is not available.")
-      elif deployment_method and not model_info.deployments.get(deployment_method):
-        return Result.fail(f"Deployment method '{deployment_method}' is not available for model '{model_name}'.")
-      elif deployment_method and model_info.deployments.get(deployment_method):
-        resolved_deployment_method = model_info.deployments.get(deployment_method)
-      elif len(model_info.deployments) == 0:
-        return Result.fail(f"No deployment methods available for model '{model_name}'.")
-      else:
-        resolved_deployment_method = model_info.deployments[0]
+      if deployment_method and deployment_method not in deployments:
+        return Result.fail(f"Deployment method '{deployment_method}' is not available for model '{resolved_model_name}'.")
+      if not deployments:
+        return Result.fail(f"No deployment methods available for model '{resolved_model_name}'.")
+      resolved_deployment_method = deployment_method or deployments[0]
 
-      if resolved_deployment_method:
+      # Resolve architecture name from definitions (first if multiple)
+      architectures = model_info.architectures or []
+      if not architectures:
+        return Result.fail(f"No architecture specified for model '{resolved_model_name}'.")
+      architecture_name = architectures[0]
+
+      if resolved_deployment_method and architecture_name:
         return Result(data=DeploymentParams(
           deployment_name=resolved_deployment_method,
-          model_name=resolved_model_name
+          model_name=resolved_model_name,
+          architecture_name=architecture_name
         ))
       else:
         return Result.fail(f"No suitable deployment method found for {model_name}")

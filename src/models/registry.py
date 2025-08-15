@@ -96,12 +96,12 @@ class ModelRegistry:
         return params_result
 
       deployment_params = params_result.data
-      logger.debug(f"Solver result: {deployment_params.deployment_name} for {deployment_params.model_name}")
+      logger.debug(f"Solver result: deployment={deployment_params.deployment_name} model={deployment_params.model_name} arch={deployment_params.architecture_name}")
 
-      # Resolve model class from architecture plugins
-      model_class = self.manager.get_model_class(deployment_params.model_name)
+      # Resolve model class from architecture plugins using architecture name
+      model_class = self.manager.get_model_class(deployment_params.architecture_name)
       if not model_class:
-        return Result.fail(f"No architecture found for model '{deployment_params.model_name}'")
+        return Result.fail(f"No architecture '{deployment_params.architecture_name}' found for model '{deployment_params.model_name}'")
 
       # Get deployment plugin
       selected_deployment = self.manager.get_deployment_plugin(deployment_params.deployment_name)

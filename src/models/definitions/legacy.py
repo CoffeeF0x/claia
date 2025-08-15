@@ -139,7 +139,7 @@ class LegacyDefinitionsPlugin:
                 description="The latest version of Stable Diffusion, with improved text-to-image generation capabilities.",
                 capabilities=["text-to-image", "image-generation"],
                 deployments=["transformers"],
-                architectures=["StableDiffusionModel"],
+                architectures=["transformers_generic"],
                 aliases=["sd-v2", "sd2", "stable-diffusion-2"]
             ),
             "stable-diffusion-v1-5": ModelDefinition(
@@ -148,7 +148,7 @@ class LegacyDefinitionsPlugin:
                 description="A smaller version of Stable Diffusion that requires less VRAM, good for testing or on systems with limited resources.",
                 capabilities=["text-to-image", "image-generation"],
                 deployments=["transformers"],
-                architectures=["StableDiffusionModel"],
+                architectures=["transformers_generic"],
                 aliases=["sd-v1.5", "sd1.5", "stable-diffusion-1.5"]
             ),
             "dummy-model": ModelDefinition(
@@ -157,7 +157,7 @@ class LegacyDefinitionsPlugin:
                 description="A dummy model that returns a predefined story. Used for testing streaming capabilities.",
                 capabilities=["text-generation", "chat"],
                 deployments=["dummy"],
-                architectures=["DummyModel"],
+                architectures=["dummy"],
                 aliases=["dummy"]
             )
         }

@@ -7,10 +7,11 @@ architecture considerations beyond generic transformers handling.
 
 import logging
 import pluggy
-from typing import Optional, Type
+from typing import Type
 
 # Internal dependencies
 from .lib.transformers import Gemma3Model
+from ..hooks.architecture import ArchitectureInfo
 
 
 ########################################################################
@@ -29,20 +30,14 @@ class TransformersGemma3Plugin:
   """Specialized transformers architecture plugin for Gemma3 models."""
 
   @hookimpl
-  def get_model_class(self, model_name: str) -> Optional[Type]:
-    """
-    Get the specialized model class for Gemma3 models.
+  def get_architecture_info(self) -> ArchitectureInfo:
+    return ArchitectureInfo(
+      name="transformers_gemma3",
+      title="Gemma3 Transformers Architecture",
+      description="Specialized implementation for Gemma3 transformer models"
+    )
 
-    This plugin provides specialized handling for Gemma3 models that
-    need specific architecture considerations.
-
-    Args:
-        model_name: Canonical model name
-
-    Returns:
-        Gemma3Model class if this plugin should handle the model, None otherwise
-    """
-    # This plugin only handles models explicitly assigned to it via definitions
-    # The definition file will specify architectures=["transformers_gemma3"]
-    logger.debug(f"Providing Gemma3Model class for specialized Gemma3 handling of {model_name}")
+  @hookimpl
+  def get_model_class(self) -> Type:
+    logger.debug("Providing Gemma3Model class for transformers_gemma3 architecture")
     return Gemma3Model

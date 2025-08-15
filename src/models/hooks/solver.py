@@ -27,6 +27,7 @@ class DeploymentParams:
   """Simplified deployment parameters returned by solver."""
   deployment_name: str
   model_name: str
+  architecture_name: str
 
 
 # Create hookspec decorator

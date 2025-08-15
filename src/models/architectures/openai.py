@@ -6,10 +6,11 @@ Provides OpenAI API-based models like GPT-4, GPT-3.5-turbo, etc.
 
 import logging
 import pluggy
-from typing import Optional, Type
+from typing import Type
 
 # Internal dependencies
 from .lib.api import OpenAIModel
+from ..hooks.architecture import ArchitectureInfo
 
 
 ########################################################################
@@ -28,17 +29,14 @@ class OpenAIPlugin:
   """OpenAI architecture plugin providing GPT models via OpenAI API."""
 
   @hookimpl
-  def get_model_class(self, model_name: str) -> Optional[Type]:
-    """
-    Get the model class for OpenAI models.
+  def get_architecture_info(self) -> ArchitectureInfo:
+    return ArchitectureInfo(
+      name="openai",
+      title="OpenAI API Architecture",
+      description="Implements OpenAI chat/completions API-backed models"
+    )
 
-    Args:
-        model_name: Canonical model name
-
-    Returns:
-        OpenAIModel class if this is an OpenAI model, None otherwise
-    """
-    # This plugin only handles models explicitly assigned to it via definitions
-    # The definition file will specify architectures=["openai"]
-    logger.debug(f"Providing OpenAIModel class for {model_name}")
+  @hookimpl
+  def get_model_class(self) -> Type:
+    logger.debug("Providing OpenAIModel class for OpenAI architecture")
     return OpenAIModel

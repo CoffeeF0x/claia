@@ -15,6 +15,7 @@ from typing import Optional, Dict, List, Type, Any
 # Internal dependencies
 from .hooks import ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHooks
 from .hooks import DeploymentInfo, SolverInfo, ModelDefinition
+from .hooks.architecture import ArchitectureInfo
 from .architectures.lib.base import BaseModel
 from common.enums.model import ModelCapability
 
@@ -188,23 +189,35 @@ class ModuleManager:
       # Don't raise for definition plugins - they're optional
       logger.warning("Continuing without definition plugins")
 
-  # TODO: currently architectures just return the model class, however the intention
-  #       is for them to return the actual model instance. This function is currently
-  #       getting a class from each architecture plugin and returning the first in
-  #       that list, so it should be changed to return the matching model instance
   # Architecture plugin methods
-  def get_model_class(self, model_name: str) -> Optional[Type[BaseModel]]:
-    """Get the model class for a specific model from architecture plugins."""
+  def get_available_architectures(self) -> Dict[str, ArchitectureInfo]:
+    """Get all available architecture plugins and their info keyed by name."""
     self.load_all_plugins()
 
-    results = self.architecture_pm.hook.get_model_class(model_name=model_name)
+    all_arch = {}
+    infos = self.architecture_pm.hook.get_architecture_info()
+    for info in infos:
+      if info:
+        all_arch[info.name] = info
+    logger.debug(f"Collected {len(all_arch)} architectures")
+    return all_arch
 
-    for result in results:
-      if result is not None:
-        logger.debug(f"Found model class for {model_name}")
-        return result
+  def get_model_class(self, architecture_name: str) -> Optional[Type[BaseModel]]:
+    """Get the model class for a specific architecture by name."""
+    self.load_all_plugins()
 
-    logger.debug(f"No model class found for {model_name}")
+    for plugin in self.architecture_pm.get_plugins():
+      try:
+        info = plugin.get_architecture_info()
+        if info and info.name == architecture_name:
+          model_class = plugin.get_model_class()
+          if model_class:
+            logger.debug(f"Found model class for architecture {architecture_name}")
+            return model_class
+      except Exception as e:
+        logger.warning(f"Failed retrieving model class for architecture {architecture_name}: {e}")
+
+    logger.debug(f"No model class found for architecture {architecture_name}")
     return None
 
   def get_supported_models(self) -> Dict[str, ModelDefinition]:

@@ -6,24 +6,39 @@ Architecture plugins implement specific AI model architectures
 """
 
 import pluggy
-from typing import Optional, Type
+from typing import Type
+from dataclasses import dataclass
 
 
 # Create hookspec decorator
 hookspec = pluggy.HookspecMarker("claia_architectures")
 
 
+@dataclass
+class ArchitectureInfo:
+  """Information about an architecture plugin."""
+  name: str
+  title: str
+  description: str
+
+
 class ArchitectureHooks:
   """Hook specifications for architecture plugins."""
 
   @hookspec
-  def get_model_class(self, model_name: str) -> Optional[Type]:
+  def get_architecture_info(self) -> ArchitectureInfo:
     """
-    Get the model class for a specific model.
-
-    Args:
-        model_name: Canonical model name
+    Get information about this architecture plugin.
 
     Returns:
-        Model class if supported, None otherwise
+        ArchitectureInfo describing this plugin
+    """
+
+  @hookspec
+  def get_model_class(self) -> Type:
+    """
+    Get the model class implemented by this architecture plugin.
+
+    Returns:
+        Model class type
     """
