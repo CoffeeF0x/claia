@@ -96,16 +96,11 @@ class APIDeploymentPlugin:
 
       # Run inference
       logger.debug(f"Running API model inference: {model_name}")
-
-      # API models typically have a generate or run method
-      if hasattr(model_instance, 'generate'):
+      try:
         output = model_instance.generate(conversation, **kwargs)
-      elif hasattr(model_instance, 'run'):
-        output = model_instance.run(conversation, **kwargs)
-      elif hasattr(model_instance, 'chat'):
-        output = model_instance.chat(conversation, **kwargs)
-      else:
-        return Result.fail("Model instance has no recognized inference method")
+      except Exception as e:
+        logger.error(f"Error during API model generate(): {e}")
+        return Result.fail(f"API model generate() failed: {e}")
 
       return output if isinstance(output, Result) else Result.ok(output)
 

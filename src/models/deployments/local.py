@@ -98,16 +98,11 @@ class LocalDeploymentPlugin:
     """
     try:
       logger.debug(f"Running local model inference")
-
-      # Local models typically have a generate or run method
-      if hasattr(model_instance, 'generate'):
+      try:
         result = model_instance.generate(conversation, **kwargs)
-      elif hasattr(model_instance, 'run'):
-        result = model_instance.run(conversation, **kwargs)
-      elif hasattr(model_instance, 'forward'):
-        result = model_instance.forward(conversation, **kwargs)
-      else:
-        return Result.fail("Model instance has no recognized inference method")
+      except Exception as e:
+        logger.error(f"Error during local model generate(): {e}")
+        return Result.fail(f"Local model generate() failed: {e}")
 
       return result
 
@@ -161,14 +156,11 @@ class LocalDeploymentPlugin:
 
       # Run inference
       logger.debug(f"Running local model inference: {model_name}")
-      if hasattr(model_instance, 'generate'):
+      try:
         output = model_instance.generate(conversation, **kwargs)
-      elif hasattr(model_instance, 'run'):
-        output = model_instance.run(conversation, **kwargs)
-      elif hasattr(model_instance, 'forward'):
-        output = model_instance.forward(conversation, **kwargs)
-      else:
-        return Result.fail("Model instance has no recognized inference method")
+      except Exception as e:
+        logger.error(f"Error during local model generate(): {e}")
+        return Result.fail(f"Local model generate() failed: {e}")
 
       return output if isinstance(output, Result) else Result.ok(output)
 

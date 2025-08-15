@@ -55,14 +55,11 @@ class DummyDeploymentPlugin:
 
             # Run inference
             logger.debug(f"Running dummy model inference: {model_name}")
-            if hasattr(model_instance, 'generate'):
+            try:
                 output = model_instance.generate(conversation, **kwargs)
-            elif hasattr(model_instance, 'run'):
-                output = model_instance.run(conversation, **kwargs)
-            elif hasattr(model_instance, 'chat'):
-                output = model_instance.chat(conversation, **kwargs)
-            else:
-                return Result.fail("Model instance has no recognized inference method")
+            except Exception as e:
+                logger.error(f"Error during dummy model generate(): {e}")
+                return Result.fail(f"Dummy model generate() failed: {e}")
 
             return output if isinstance(output, Result) else Result.ok(output)
 
@@ -92,4 +89,4 @@ class DummyDeploymentPlugin:
 
     def is_supported(self, model_name: str, architecture: str) -> bool:
         """Check if this deployment supports the given model."""
-        return model_name == "dummy-model" and architecture == "DummyModel"
+        return model_name == "dummy-model" and architecture == "dummy"
