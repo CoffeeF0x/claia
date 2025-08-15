@@ -52,7 +52,7 @@ class SimpleAgent(BaseAgent):
       if result.is_error():
         raise ValueError(f"Error running model: {result.get_message()}")
 
-      process.mark_completed(result.get_result())
+      process.mark_completed(result.data)
 
     except Exception as e:
       logging.exception(f"Error in SimpleAgent for {process.id}: {str(e)}")
