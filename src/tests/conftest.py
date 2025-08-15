@@ -1,165 +1,130 @@
 """
-Global pytest configuration for CLAIA tests.
+Shared pytest fixtures for CLAIA tests.
 """
 
 # External dependencies
 import pytest
-import logging
-import tempfile
-import shutil
-import os
-import base64
-from PIL import Image
+from types import SimpleNamespace
 
 # Internal dependencies
-from files import FileManifest, ImageFile
+from common.results import Result
+from common.files.conversation.conversation import Conversation
+from agents.lib.process import Process
+from common.enums.agent import ProcessStatus
+
+
+# ---------------------------------------------------------------------------
+# Core test fixtures
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def conversation(tmp_path):
+  """Provide a minimal in-memory Conversation object."""
+  return Conversation(base_directory=str(tmp_path), title="Test Conversation")
 
 
 @pytest.fixture
-def temp_dir():
-  """Create a temporary directory for testing."""
-  temp_path = tempfile.mkdtemp()
-  yield temp_path
-  # Cleanup after test
-  if os.path.exists(temp_path):
-    shutil.rmtree(temp_path)
+def process(conversation):
+  """Provide a Process with a dummy model_id and the conversation."""
+  return Process(conversation=conversation, parameters={"model_id": "dummy-model"})
 
 
 @pytest.fixture
-def clean_manifest(temp_dir):
-  """Create a clean test file manifest for each test."""
-  # Reset the singleton to ensure a clean state for each test
-  FileManifest._instance = None
-  return FileManifest(temp_dir)
+def fake_model_registry_ok():
+  """A minimal registry whose run() returns success."""
+  class FakeRegistry:
+    def run(self, model_id, conversation, **kwargs):
+      return Result.ok({"echo_model": model_id})
+  return FakeRegistry()
 
 
 @pytest.fixture
-def test_text_file(temp_dir):
-  """Create a sample text file for testing."""
-  file_path = os.path.join(temp_dir, "sample.txt")
-  with open(file_path, "w") as f:
-    f.write("This is sample text content")
-  return file_path
+def fake_model_registry_error():
+  """A minimal registry whose run() returns an error."""
+  class FakeRegistry:
+    def run(self, model_id, conversation, **kwargs):
+      return Result.fail("model error")
+  return FakeRegistry()
+
+
+# ---------------------------------------------------------------------------
+# Fake ModuleManager for ModelRegistry-focused tests
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def fake_manager():
+  """Provide a fake ModuleManager with just enough surface for ModelRegistry.run()."""
+  class FakeManager:
+    def load_all_plugins(self):
+      return None
+
+    def get_supported_models(self):
+      return {"dummy": {"aliases": ["alias1"]}}
+
+    def get_available_deployments(self):
+      return {"api": object()}
+
+    def get_solver_plugin(self, solver_name=None):
+      class Solver:
+        def get_solver_info(self):
+          class Info:
+            name = "default"
+          return Info()
+
+        def solve_deployment(self, model_name, available_deployments, available_models, cache, deployment_preference=None, deployment_method=None, **kwargs):
+          return Result.ok(SimpleNamespace(
+            deployment_name="api",
+            model_name=model_name,
+            architecture_name="dummy_arch"
+          ))
+      return Solver()
+
+    def get_model_class(self, architecture_name):
+      class DummyModel:
+        pass
+      return DummyModel
+
+    def get_deployment_plugin(self, deployment_name):
+      class Deployment:
+        def get_deployment_info(self):
+          class Info:
+            name = "api"
+          return Info()
+
+        def run(self, model_name, model_class, conversation, cache, **kwargs):
+          return Result.ok(f"deployed {model_name} via {deployment_name}")
+      return Deployment()
+
+  return FakeManager()
 
 
 @pytest.fixture
-def test_image_file(temp_dir):
-  """Create a sample image file for testing."""
-  try:
-    # Create a simple 100x100 red image
-    image_path = os.path.join(temp_dir, "sample.png")
-    img = Image.new('RGB', (100, 100), color='red')
-    img.save(image_path)
-    return image_path
-  except ImportError:
-    pytest.skip("PIL not available, skipping image tests")
+def fake_manager_no_solver():
+  """A fake manager that returns no solver, to exercise error handling path."""
+  class FM:
+    def load_all_plugins(self):
+      return None
+    def get_supported_models(self):
+      return {}
+    def get_available_deployments(self):
+      return {}
+    def get_solver_plugin(self, solver_name=None):
+      return None
+  return FM()
 
 
 @pytest.fixture
-def test_image_path(temp_dir):
-  """
-  Create a simple test image file with specific format.
-
-  This is a very basic 1x1 pixel black image in PNG format.
-  """
-  # Base64 encoded 1x1 pixel black PNG
-  png_data = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFewJ2gP"
-    "W+BAAAAABJRU5ErkJggg=="
-  )
-
-  image_path = os.path.join(temp_dir, "test_image.png")
-  with open(image_path, "wb") as f:
-    f.write(png_data)
-
-  return image_path
+def registry_with_fake_manager(fake_manager, monkeypatch):
+  """ModelRegistry instance wired to the fake manager via monkeypatching."""
+  import models.registry as regmod
+  # Ensure ModelRegistry.__init__ uses our fake manager
+  monkeypatch.setattr(regmod, "ModuleManager", lambda: fake_manager)
+  from models.registry import ModelRegistry
+  return ModelRegistry()
 
 
 @pytest.fixture
-def image_file(temp_dir, test_image_path):
-  """Create an ImageFile instance for testing."""
-  # Create an ImageFile with the test image as a reference file
-  img = ImageFile(
-    base_directory=temp_dir,
-    file_name="test_image.png",
-    source_path=test_image_path,
-    is_reference=True  # Use as reference to ensure file exists
-  )
-  return img
-
-
-@pytest.fixture
-def test_file(temp_dir):
-  """Create a test text file for BaseFile tests."""
-  file_path = os.path.join(temp_dir, "test.txt")
-  with open(file_path, "w") as f:
-    f.write("This is a test file")
-  return file_path
-
-
-@pytest.fixture
-def base_file(temp_dir, test_file):
-  """Create a BaseFile instance for testing."""
-  # Create a file that's not a reference so we can test copying
-  from files import BaseFile
-  file = BaseFile(
-    base_directory=temp_dir,
-    file_name="test.txt",
-    source_path=test_file,
-    is_reference=False
-  )
-  return file
-
-
-@pytest.fixture(autouse=True)
-def disable_logging():
-  """Disable logging during tests to reduce noise."""
-  logging.disable(logging.CRITICAL)
-  yield
-  logging.disable(logging.NOTSET)
-
-
-@pytest.fixture(autouse=True)
-def clean_environment(monkeypatch):
-  """
-  Clean the environment for tests by removing environment variables
-  that might affect test behavior.
-  """
-  variables_to_clean = [
-    # API keys
-    "OPENAI_API_TOKEN",
-    "ANTHROPIC_API_TOKEN",
-    "LOCAL_LLM_API_TOKEN",
-    "RUNPOD_API_TOKEN",
-    "MASSED_COMPUTE_API_TOKEN",
-    "OPENROUTER_API_TOKEN",
-    "HUGGINGFACE_API_TOKEN",
-    "CLOUDFLARE_API_TOKEN",
-
-    # Directories
-    "MODEL_DIRECTORY",
-    "PROMPT_DIRECTORY",
-    "CONVERSATION_DIRECTORY",
-    "MODULES_DIRECTORY",
-    "ARTIFACTS_DIRECTORY",
-    "CONVERSATION_FILES_DIRECTORY",
-    "TEMP_DIRECTORY",
-
-    # Other settings
-    "ACTIVE_MODEL",
-    "ACTIVE_AGENT",
-    "DEFAULT_PROMPT_NAME",
-    "LOG_LEVEL",
-    "LOG_FORMAT",
-    "LOG_FILE",
-  ]
-
-  for var in variables_to_clean:
-    monkeypatch.delenv(var, raising=False)
-
-
-@pytest.fixture(autouse=True)
-def reset_manifest():
-  """Reset the manifest singleton between tests."""
-  FileManifest._instance = None
-  yield
+def registry_with_no_solver(fake_manager_no_solver, monkeypatch):
+  """ModelRegistry instance whose manager returns no solver plugin."""
+  import models.registry as regmod
+  monkeypatch.setattr(regmod, "ModuleManager", lambda: fake_manager_no_solver)
+  from models.registry import ModelRegistry
+  return ModelRegistry()
