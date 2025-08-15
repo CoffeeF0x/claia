@@ -8,12 +8,9 @@ pip install -r requirements.txt --no-cache-dir
 # Build binary
 pyinstaller --onefile \
   --name "${BINARY_NAME}" \
-  --add-data "old/src/models:models" \
-  --add-data "old/src/commands:commands" \
-  --add-data "old/modules:modules" \
-  --add-data "old/src/tools:tools" \
+  --paths src \
   --distpath "${DIST_DIR}" \
-  old/src/main.py
+  src/cli/__main__.py
 
 # --hidden-import "PyQt6.QtGui" \
 

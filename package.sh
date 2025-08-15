@@ -15,8 +15,8 @@ if [ ! -z "$CI_COMMIT_SHA" ]; then
 fi
 
 # Copy source files to temp directory
-cp -r old/src/* "${TEMP_DIR}/"
-cp requirements.txt README.md "${TEMP_DIR}/"
+cp -r src/* "${TEMP_DIR}/"
+cp requirements.txt pyproject.toml README.md "${TEMP_DIR}/"
 
 # Package source code
 cd "${TEMP_DIR}"
