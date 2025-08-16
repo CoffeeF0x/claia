@@ -93,8 +93,8 @@ main_build_and_upload:
   stage: build_and_upload
   script:
     # Build binary
-    - chmod +x build.sh
-    - ./build.sh ${BINARY_NAME}
+    - chmod +x deploy.sh
+    - ./deploy.sh build ${BINARY_NAME}
 
     # Set bucket and credentials for main branch
     - export B2_BUCKET=${MAIN_B2_BUCKET_ID}
@@ -113,8 +113,8 @@ dev_build_and_upload:
   stage: build_and_upload
   script:
     # Build source package
-    - chmod +x package.sh
-    - ./package.sh ${BINARY_NAME}
+    - chmod +x deploy.sh
+    - ./deploy.sh package ${BINARY_NAME}
 
     # Set bucket and credentials for dev branch
     - export B2_BUCKET=${DEV_B2_BUCKET_ID}
