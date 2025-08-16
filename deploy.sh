@@ -19,6 +19,9 @@ if [ "$MODE" = "build" ]; then
   # Install dependencies
   pip install -r requirements.txt --no-cache-dir
 
+  # Build wheel distribution
+  python -m build --wheel --outdir "${WORK_DIR}/${DIST_DIR}"
+
   # Build binary
   pyinstaller --onefile \
     --name "${NAME}" \
@@ -33,6 +36,8 @@ elif [ "$MODE" = "package" ]; then
 
   TEMP_DIR=$(mktemp -d)
   WORK_DIR=$(pwd)
+
+  pip install build --no-cache-dir
 
   # Build wheel distribution
   python -m build --wheel --outdir "${WORK_DIR}/${DIST_DIR}"
