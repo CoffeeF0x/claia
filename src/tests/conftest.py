@@ -7,10 +7,10 @@ import pytest
 from types import SimpleNamespace
 
 # Internal dependencies
-from common.results import Result
-from common.files.conversation.conversation import Conversation
-from agents.lib.process import Process
-from common.enums.agent import ProcessStatus
+from claia.common.results import Result
+from claia.common.files.conversation.conversation import Conversation
+from claia.agents.lib.process import Process
+from claia.common.enums.agent import ProcessStatus
 
 
 # ---------------------------------------------------------------------------

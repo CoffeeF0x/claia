@@ -7,35 +7,64 @@ name = "claia"
 version = "0.1.0"
 description = "CLAIA AI Assistant Framework"
 requires-python = ">=3.10"
+dependencies = [
+  "torch",
+  "diffusers",
+  "transformers>=4.50.0",
+  "accelerate",
+  "scipy",
+  "safetensors",
+  "markdownify",
+  "datamodel_code_generator",
+  "jsonschema",
+  "aia",
+  "beautifulsoup4",
+  "chardet",
+  "runpod",
+  "python-dotenv",
+  "pluggy",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-mock",
+  "pytest-playwright",
+  "playwright",
+  "debugpy",
+]
+build = [
+  "pyinstaller",
+  "build",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["*"]
 
 # Entry points for plugin system
 [project.entry-points."claia.architectures"]
-openai = "models.architectures.openai:OpenAIPlugin"
-anthropic = "models.architectures.anthropic:AnthropicPlugin"
-transformers_generic = "models.architectures.transformers_generic:TransformersGenericPlugin"
-transformers_gemma3 = "models.architectures.transformers_gemma3:TransformersGemma3Plugin"
-dummy = "models.architectures.dummy:DummyArchitecturePlugin"
+openai = "claia.models.architectures.openai:OpenAIPlugin"
+anthropic = "claia.models.architectures.anthropic:AnthropicPlugin"
+transformers_generic = "claia.models.architectures.transformers_generic:TransformersGenericPlugin"
+transformers_gemma3 = "claia.models.architectures.transformers_gemma3:TransformersGemma3Plugin"
+dummy = "claia.models.architectures.dummy:DummyArchitecturePlugin"
 
 [project.entry-points."claia.deployments"]
-api = "models.deployments.api:APIDeploymentPlugin"
-local = "models.deployments.local:LocalDeploymentPlugin"
-remote = "models.deployments.remote:RemoteDeploymentPlugin"
-dummy = "models.deployments.dummy:DummyDeploymentPlugin"
+api = "claia.models.deployments.api:APIDeploymentPlugin"
+local = "claia.models.deployments.local:LocalDeploymentPlugin"
+remote = "claia.models.deployments.remote:RemoteDeploymentPlugin"
+dummy = "claia.models.deployments.dummy:DummyDeploymentPlugin"
 
 [project.entry-points."claia.solvers"]
-default = "models.solvers.default:DefaultSolverPlugin"
+default = "claia.models.solvers.default:DefaultSolverPlugin"
 
 [project.entry-points."claia.definitions"]
-openai = "models.definitions.openai:OpenAIDefinitionsPlugin"
-anthropic = "models.definitions.anthropic:AnthropicDefinitionsPlugin"
-legacy = "models.definitions.legacy:LegacyDefinitionsPlugin"
+openai = "claia.models.definitions.openai:OpenAIDefinitionsPlugin"
+anthropic = "claia.models.definitions.anthropic:AnthropicDefinitionsPlugin"
+legacy = "claia.models.definitions.legacy:LegacyDefinitionsPlugin"
 
 [project.entry-points."claia.agents"]
-simple = "agents.builtin.simple:SimpleAgentPlugin"
+simple = "claia.agents.builtin.simple:SimpleAgentPlugin"
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
