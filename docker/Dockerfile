@@ -13,6 +13,7 @@ RUN pip install -r requirements.txt --no-cache-dir
 COPY src/ src/
 COPY pyproject.toml .
 COPY .env .
+COPY deploy.sh .
 
 # Ensure local packages are installed
 RUN pip install -e .
