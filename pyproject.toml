@@ -11,18 +11,12 @@ dependencies = [
   "torch",
   "diffusers",
   "transformers>=4.50.0",
-  "accelerate",
-  "scipy",
-  "safetensors",
-  "markdownify",
-  "datamodel_code_generator",
-  "jsonschema",
   "aia",
   "beautifulsoup4",
   "chardet",
-  "runpod",
   "python-dotenv",
   "pluggy",
+  "requests",
 ]
 
 [project.optional-dependencies]
