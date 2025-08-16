@@ -1,5 +1,5 @@
 #!/bin/bash
-MODE=${1:-"package"}  # build or package
+MODE=${1:-"package"}  # binary or package
 NAME=${2:-"claia"}
 DIST_DIR=${3:-"dist"}
 
@@ -13,7 +13,7 @@ if [ ! -z "$CI_COMMIT_SHA" ]; then
   echo "${DATE}-${SHORT_HASH}" > "${DIST_DIR}/version.txt"
 fi
 
-if [ "$MODE" = "build" ]; then
+if [ "$MODE" = "binary" ]; then
   echo "Building binary executable..."
 
   # Install dependencies
@@ -58,7 +58,7 @@ elif [ "$MODE" = "package" ]; then
   rm -rf "${TEMP_DIR}"
 
 else
-  echo "Invalid mode: ${MODE}. Use 'build' or 'package'"
+  echo "Invalid mode: ${MODE}. Use 'binary' or 'package'"
   exit 1
 fi
 

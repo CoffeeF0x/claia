@@ -1,0 +1,21 @@
+# Runtime dependencies
+torch
+diffusers
+transformers>=4.50.0
+aia
+beautifulsoup4
+chardet
+python-dotenv
+pluggy
+requests
+
+# Build dependencies
+build
+pyinstaller
+
+# Test dependencies
+pytest
+pytest-mock
+pytest-playwright
+playwright
+debugpy
