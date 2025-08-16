@@ -114,17 +114,17 @@ def fake_manager_no_solver():
 @pytest.fixture
 def registry_with_fake_manager(fake_manager, monkeypatch):
   """ModelRegistry instance wired to the fake manager via monkeypatching."""
-  import models.registry as regmod
+  import claia.models.registry as regmod
   # Ensure ModelRegistry.__init__ uses our fake manager
   monkeypatch.setattr(regmod, "ModuleManager", lambda: fake_manager)
-  from models.registry import ModelRegistry
+  from claia.models.registry import ModelRegistry
   return ModelRegistry()
 
 
 @pytest.fixture
 def registry_with_no_solver(fake_manager_no_solver, monkeypatch):
   """ModelRegistry instance whose manager returns no solver plugin."""
-  import models.registry as regmod
+  import claia.models.registry as regmod
   monkeypatch.setattr(regmod, "ModuleManager", lambda: fake_manager_no_solver)
-  from models.registry import ModelRegistry
+  from claia.models.registry import ModelRegistry
   return ModelRegistry()

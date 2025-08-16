@@ -27,7 +27,7 @@ if [ "$MODE" = "binary" ]; then
     --name "${NAME}" \
     --paths src \
     --distpath "${DIST_DIR}" \
-    src/cli/__main__.py
+    src/claia/__main__.py
 
   # --hidden-import "PyQt6.QtGui" \
 

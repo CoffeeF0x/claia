@@ -8,9 +8,9 @@ from typing import Dict, List, Any
 
 # Internal dependencies
 from .base import Command, command
-from results import Result
-from settings import Settings
-from agents import AgentRegistry
+from claia.common.results import Result
+from claia.cli.settings import Settings
+from claia.agents import AgentRegistry
 
 
 

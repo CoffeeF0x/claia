@@ -14,9 +14,9 @@ from typing import Optional
 from datetime import datetime
 
 # Internal dependencies
-from commands.base import Command, command
-from settings import Settings
-from results import Result
+from claia.commands.base import Command, command
+from claia.cli.settings import Settings
+from claia.common.results import Result
 
 # Internal dependencies
 # from models import run as model_run

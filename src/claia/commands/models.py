@@ -10,9 +10,9 @@ from typing import List, Dict, Any, Optional
 
 # Internal Dependencies
 from .base import Command, command
-from results import Result
-from settings import Settings
-from models import model_definitions, model_sources, ModelRegistry
+from claia.common.results import Result
+from claia.cli.settings import Settings
+from claia.models import model_definitions, model_sources, ModelRegistry
 
 
 

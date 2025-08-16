@@ -35,16 +35,16 @@ import os
 import sys
 
 # Internal dependencies
-# from commands import CommandRegistry
-from agents import Process, AgentRegistry
-from common.results import Result
-from common.enums.agent import ProcessStatus, SourcePreference
-from common.enums.conversation import MessageRole
-from common.files.conversation import Conversation
-from .settings import Settings
-from .defaults import initialize_defaults
-from .logger import initialize_logging
-# from .mod import initialize_module_system
+# from claia.commands import CommandRegistry
+from claia.agents import Process, AgentRegistry
+from claia.common.results import Result
+from claia.common.enums.agent import ProcessStatus, SourcePreference
+from claia.common.enums.conversation import MessageRole
+from claia.common.files.conversation import Conversation
+from claia.cli.settings import Settings
+from claia.cli.defaults import initialize_defaults
+from claia.cli.logger import initialize_logging
+# from claia.cli.mod import initialize_module_system
 
 
 

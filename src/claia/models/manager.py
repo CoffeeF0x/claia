@@ -17,7 +17,7 @@ from .hooks import ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHo
 from .hooks import DeploymentInfo, SolverInfo, ModelDefinition
 from .hooks.architecture import ArchitectureInfo
 from .architectures.lib.base import BaseModel
-from common.enums.model import ModelCapability
+from claia.common.enums.model import ModelCapability
 
 
 

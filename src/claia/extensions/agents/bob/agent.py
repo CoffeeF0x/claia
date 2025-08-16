@@ -8,9 +8,9 @@ import logging
 from typing import List
 
 # Internal dependencies
-from models import ModelRegistry
-from enums import ModelCapability
-from agents.lib import BaseAgent
+from claia.models import ModelRegistry
+from claia.common.enums.model import ModelCapability
+from claia.agents.lib import BaseAgent
 
 
 

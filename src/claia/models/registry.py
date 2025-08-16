@@ -8,8 +8,8 @@ import logging
 from typing import Any, Optional, Dict
 
 # Internal dependencies
-from common.results import Result
-from common.files.conversation import Conversation
+from claia.common.results import Result
+from claia.common.files.conversation import Conversation
 from .manager import ModuleManager
 
 

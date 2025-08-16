@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 # Internal dependencies
 from ..hooks.definition import ModelDefinition
-from common.enums.model import ModelCapability, IOType
+from claia.common.enums.model import ModelCapability, IOType
 
 
 ########################################################################

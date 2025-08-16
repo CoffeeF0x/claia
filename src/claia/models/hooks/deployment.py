@@ -10,8 +10,8 @@ from typing import Optional, Dict, List, Any, Type
 from dataclasses import dataclass
 
 # Internal dependencies
-from common.results import Result
-from common.files.conversation import Conversation
+from claia.common.results import Result
+from claia.common.files.conversation import Conversation
 
 
 @dataclass

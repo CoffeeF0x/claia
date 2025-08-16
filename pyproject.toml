@@ -35,6 +35,9 @@ build = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[project.scripts]
+claia = "claia.cli.__main__:main"
+
 # Entry points for plugin system
 [project.entry-points."claia.architectures"]
 openai = "claia.models.architectures.openai:OpenAIPlugin"

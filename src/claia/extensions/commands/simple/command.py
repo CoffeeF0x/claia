@@ -2,9 +2,9 @@
 Simple example module demonstrating the simplified module loading system.
 """
 
-from commands.base import Command, command
-from settings import Settings
-from results import Result
+from claia.commands.base import Command, command
+from claia.cli.settings import Settings
+from claia.common.results import Result
 
 
 class SimpleCommand(Command):

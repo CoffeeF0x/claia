@@ -10,12 +10,12 @@ import time
 from typing import Any, Optional, Dict
 
 # Internal dependencies
-from common.results import Result
+from claia.common.results import Result
 from .lib.process import Process
 from .lib.queue import ProcessQueue
 from .manager import AgentManager
-from models import ModelRegistry
-from common.enums.agent import ProcessStatus
+from claia.models import ModelRegistry
+from claia.common.enums.agent import ProcessStatus
 
 
 

@@ -10,9 +10,9 @@ import logging
 from typing import Dict, Any, Optional
 
 # Internal dependencies
-from common.results import Result
-from common.files.conversation import Conversation
-from common.enums.conversation import MessageRole
+from claia.common.results import Result
+from claia.common.files.conversation import Conversation
+from claia.common.enums.conversation import MessageRole
 from ..base import APIModel
 
 

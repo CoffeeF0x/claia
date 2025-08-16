@@ -10,7 +10,7 @@ from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 
 # Internal dependencies
-from common.results import Result
+from claia.common.results import Result
 
 
 @dataclass

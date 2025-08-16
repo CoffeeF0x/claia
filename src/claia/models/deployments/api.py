@@ -10,8 +10,8 @@ from typing import Optional, Dict, List, Any, Type
 import pluggy
 
 # Internal dependencies
-from common.results import Result
-from common.files.conversation import Conversation
+from claia.common.results import Result
+from claia.common.files.conversation import Conversation
 from ..hooks.deployment import DeploymentInfo
 
 

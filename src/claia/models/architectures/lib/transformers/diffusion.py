@@ -9,10 +9,10 @@ from diffusers import StableDiffusionPipeline
 
 # Internal dependencies
 from .base import TransformersModel
-from common.files.conversation import Conversation
-from common.files.image import ImageFile
-from common.enums.conversation import MessageRole
-from common.enums.model import ModelCapability
+from claia.common.files.conversation import Conversation
+from claia.common.files.image import ImageFile
+from claia.common.enums.conversation import MessageRole
+from claia.common.enums.model import ModelCapability
 
 
 

@@ -1,0 +1,1 @@
+docker compose -f docker/docker-compose.yml run --rm --build -it -v ./storage:/app/storage -v "C:/.cache/claia/models:/app/models" claia

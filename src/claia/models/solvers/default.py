@@ -10,7 +10,7 @@ import pluggy
 from typing import Optional, Dict, List, Any
 
 # Internal dependencies
-from common.results import Result
+from claia.common.results import Result
 from ..hooks.solver import SolverInfo, DeploymentParams
 from ..hooks.definition import ModelDefinition
 
