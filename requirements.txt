@@ -16,6 +16,7 @@ beautifulsoup4
 chardet
 
 pyinstaller
+build
 
 runpod
 

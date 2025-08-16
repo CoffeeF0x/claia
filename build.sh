@@ -14,6 +14,8 @@ pyinstaller --onefile \
 
 # --hidden-import "PyQt6.QtGui" \
 
+# Build wheel distribution
+python -m build --wheel --outdir "${DIST_DIR}"
 
 # Copy requirements.txt to distribution
 cp requirements.txt "${DIST_DIR}/"

@@ -50,6 +50,8 @@ stages:
         content_type="text/plain"
       elif [[ $file == *.zip ]]; then
         content_type="application/zip"
+      elif [[ $file == *.whl ]]; then
+        content_type="application/zip"
       else
         content_type="application/octet-stream"
       fi
