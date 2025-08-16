@@ -15,6 +15,9 @@ pyinstaller --onefile \
 # --hidden-import "PyQt6.QtGui" \
 
 
+# Copy requirements.txt to distribution
+cp requirements.txt "${DIST_DIR}/"
+
 # Create version file
 if [ ! -z "$CI_COMMIT_SHA" ]; then
   DATE=$(date +%Y%m%d)
