@@ -66,7 +66,7 @@ class LegacyDefinitionsPlugin:
         title="MiniCPM3-4B",
         description="MiniCPM3-4B is the 3rd generation of MiniCPM series with a 32k context window.",
         capabilities=["chat", "text-generation"],
-        deployments=["transformers", "vllm"],
+        deployments=["local"],
         architectures=["transformers_generic"],
         aliases=["minicpm", "minicpm3"]
       ),
@@ -75,7 +75,7 @@ class LegacyDefinitionsPlugin:
         title="Qwen 2.5 32B Instruct",
         description="Qwen 2.5 32B Instruct is a member of the Qwen2 series, a second-generation foundation model developed by Qwen team at Alibaba Cloud.",
         capabilities=["chat", "instruction-following", "reasoning"],
-        deployments=["transformers", "vllm"],
+        deployments=["local"],
         architectures=["transformers_generic"],
         aliases=["qwen2.5", "qwen-32b", "qwen"]
       ),
@@ -84,7 +84,7 @@ class LegacyDefinitionsPlugin:
         title="QwQ-32B",
         description="The official release of QwQ-32B, a reasoning-focused model from the Qwen team. Built on the Qwen2.5-32B-Instruct base, it features improved reasoning capabilities while maintaining strong performance across general tasks.",
         capabilities=["chat", "reasoning", "mathematical-reasoning"],
-        deployments=["transformers", "vllm"],
+        deployments=["local"],
         architectures=["transformers_generic"],
         aliases=["qwq", "qwq32b"]
       ),
@@ -93,7 +93,7 @@ class LegacyDefinitionsPlugin:
         title="Phi-4",
         description="Microsoft's Phi-4 is a state-of-the-art small language model that delivers exceptional performance with high efficiency. It excels at reasoning, coding, and instruction following while maintaining a compact size compared to larger models.",
         capabilities=["chat", "reasoning", "coding", "instruction-following"],
-        deployments=["transformers", "vllm"],
+        deployments=["local"],
         architectures=["transformers_generic"],
         aliases=["phi4", "phi"]
       ),
@@ -102,7 +102,7 @@ class LegacyDefinitionsPlugin:
         title="Gemma 3 1B",
         description="Gemma 3 1B is Google's smallest text-only model in the Gemma 3 family. It features a 32K context window and supports English language only.",
         capabilities=["chat", "text-generation"],
-        deployments=["transformers", "vllm"],
+        deployments=["local"],
         architectures=["transformers_generic"],
         aliases=["gemma3-1b", "gemma-1b", "gemma3-small"]
       ),
@@ -111,7 +111,7 @@ class LegacyDefinitionsPlugin:
         title="Gemma 3 4B",
         description="Gemma 3 4B is a multimodal model from Google's Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages.",
         capabilities=["chat", "text-generation", "image-understanding", "multimodal"],
-        deployments=["transformers", "vllm"],
+        deployments=["local"],
         architectures=["transformers_generic"],
         aliases=["gemma3-4b", "gemma-4b", "gemma3-medium"]
       ),
@@ -120,7 +120,7 @@ class LegacyDefinitionsPlugin:
         title="Gemma 3 12B",
         description="Gemma 3 12B is a multimodal model from Google's Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages.",
         capabilities=["chat", "text-generation", "image-understanding", "multimodal"],
-        deployments=["transformers", "vllm"],
+        deployments=["local"],
         architectures=["transformers_generic"],
         aliases=["gemma3-12b", "gemma-12b", "gemma3-large"]
       ),
@@ -129,7 +129,7 @@ class LegacyDefinitionsPlugin:
         title="Gemma 3 27B",
         description="Gemma 3 27B is Google's largest multimodal model in the Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages. It offers performance comparable to much larger models.",
         capabilities=["chat", "text-generation", "image-understanding", "multimodal"],
-        deployments=["transformers", "vllm"],
+        deployments=["local"],
         architectures=["transformers_generic"],
         aliases=["gemma3-27b", "gemma-27b", "gemma3-xl", "gemma3-xlarge"]
       ),
@@ -138,7 +138,7 @@ class LegacyDefinitionsPlugin:
         title="Stable Diffusion v2",
         description="The latest version of Stable Diffusion, with improved text-to-image generation capabilities.",
         capabilities=["text-to-image", "image-generation"],
-        deployments=["transformers"],
+        deployments=["local"],
         architectures=["transformers_generic"],
         aliases=["sd-v2", "sd2", "stable-diffusion-2"]
       ),
@@ -147,7 +147,7 @@ class LegacyDefinitionsPlugin:
         title="Stable Diffusion v1.5",
         description="A smaller version of Stable Diffusion that requires less VRAM, good for testing or on systems with limited resources.",
         capabilities=["text-to-image", "image-generation"],
-        deployments=["transformers"],
+        deployments=["local"],
         architectures=["transformers_generic"],
         aliases=["sd-v1.5", "sd1.5", "stable-diffusion-1.5"]
       ),
