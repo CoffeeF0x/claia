@@ -43,23 +43,41 @@ class LegacyDefinitionsPlugin:
   def get_model_definitions(self) -> Dict[str, ModelDefinition]:
     """Get legacy model definitions."""
     definitions = {
-      "gpt-4": ModelDefinition(
-        name="gpt-4",
-        title="GPT 4",
-        description="Snapshot of gpt-4 from June 13th 2023 with improved function calling support.",
-        capabilities=["chat", "reasoning", "code"],
-        deployments=["api"],
-        architectures=["openai"],
-        aliases=["gpt4", "gpt-4-0613"]
+      "gemma-3-1b": ModelDefinition(
+        name="gemma-3-1b",
+        title="Gemma 3 1B",
+        description="Gemma 3 1B is Google's smallest text-only model in the Gemma 3 family. It features a 32K context window and supports English language only.",
+        capabilities=["chat", "text-generation"],
+        deployments=["local"],
+        architectures=["transformers_gemma3"],
+        aliases=["gemma3-1b", "gemma-1b", "gemma3-small"]
       ),
-      "claude-3-5-sonnet": ModelDefinition(
-        name="claude-3-5-sonnet",
-        title="Claude 3.5 Sonnet",
-        description="Claude 3.5 Sonnet sets new industry benchmarks for graduate-level reasoning (GPQA), undergraduate-level knowledge (MMLU), and coding proficiency (HumanEval). It shows marked improvement in grasping nuance, humor, and complex instructions, and is exceptional at writing high-quality content with a natural, relatable tone.",
-        capabilities=["chat", "reasoning", "analysis"],
-        deployments=["api"],
-        architectures=["anthropic"],
-        aliases=["claude3.5", "claude-3.5", "claude-3-5"]
+      "gemma-3-4b": ModelDefinition(
+        name="gemma-3-4b",
+        title="Gemma 3 4B",
+        description="Gemma 3 4B is a multimodal model from Google's Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages.",
+        capabilities=["chat", "text-generation", "image-understanding", "multimodal"],
+        deployments=["local"],
+        architectures=["transformers_gemma3"],
+        aliases=["gemma3-4b", "gemma-4b", "gemma3-medium"]
+      ),
+      "gemma-3-12b": ModelDefinition(
+        name="gemma-3-12b",
+        title="Gemma 3 12B",
+        description="Gemma 3 12B is a multimodal model from Google's Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages.",
+        capabilities=["chat", "text-generation", "image-understanding", "multimodal"],
+        deployments=["local"],
+        architectures=["transformers_gemma3"],
+        aliases=["gemma3-12b", "gemma-12b", "gemma3-large"]
+      ),
+      "gemma-3-27b": ModelDefinition(
+        name="gemma-3-27b",
+        title="Gemma 3 27B",
+        description="Gemma 3 27B is Google's largest multimodal model in the Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages. It offers performance comparable to much larger models.",
+        capabilities=["chat", "text-generation", "image-understanding", "multimodal"],
+        deployments=["local"],
+        architectures=["transformers_gemma3"],
+        aliases=["gemma3-27b", "gemma-27b", "gemma3-xl", "gemma3-xlarge"]
       ),
       "minicpm3-4b": ModelDefinition(
         name="minicpm3-4b",
@@ -97,49 +115,13 @@ class LegacyDefinitionsPlugin:
         architectures=["transformers_generic"],
         aliases=["phi4", "phi"]
       ),
-      "gemma-3-1b": ModelDefinition(
-        name="gemma-3-1b",
-        title="Gemma 3 1B",
-        description="Gemma 3 1B is Google's smallest text-only model in the Gemma 3 family. It features a 32K context window and supports English language only.",
-        capabilities=["chat", "text-generation"],
-        deployments=["local"],
-        architectures=["transformers_generic"],
-        aliases=["gemma3-1b", "gemma-1b", "gemma3-small"]
-      ),
-      "gemma-3-4b": ModelDefinition(
-        name="gemma-3-4b",
-        title="Gemma 3 4B",
-        description="Gemma 3 4B is a multimodal model from Google's Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages.",
-        capabilities=["chat", "text-generation", "image-understanding", "multimodal"],
-        deployments=["local"],
-        architectures=["transformers_generic"],
-        aliases=["gemma3-4b", "gemma-4b", "gemma3-medium"]
-      ),
-      "gemma-3-12b": ModelDefinition(
-        name="gemma-3-12b",
-        title="Gemma 3 12B",
-        description="Gemma 3 12B is a multimodal model from Google's Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages.",
-        capabilities=["chat", "text-generation", "image-understanding", "multimodal"],
-        deployments=["local"],
-        architectures=["transformers_generic"],
-        aliases=["gemma3-12b", "gemma-12b", "gemma3-large"]
-      ),
-      "gemma-3-27b": ModelDefinition(
-        name="gemma-3-27b",
-        title="Gemma 3 27B",
-        description="Gemma 3 27B is Google's largest multimodal model in the Gemma 3 family. It supports text and image inputs, has a 128K context window, and works with 140+ languages. It offers performance comparable to much larger models.",
-        capabilities=["chat", "text-generation", "image-understanding", "multimodal"],
-        deployments=["local"],
-        architectures=["transformers_generic"],
-        aliases=["gemma3-27b", "gemma-27b", "gemma3-xl", "gemma3-xlarge"]
-      ),
       "stable-diffusion-v2": ModelDefinition(
         name="stable-diffusion-v2",
         title="Stable Diffusion v2",
         description="The latest version of Stable Diffusion, with improved text-to-image generation capabilities.",
         capabilities=["text-to-image", "image-generation"],
         deployments=["local"],
-        architectures=["transformers_generic"],
+        architectures=[],
         aliases=["sd-v2", "sd2", "stable-diffusion-2"]
       ),
       "stable-diffusion-v1-5": ModelDefinition(
@@ -148,7 +130,7 @@ class LegacyDefinitionsPlugin:
         description="A smaller version of Stable Diffusion that requires less VRAM, good for testing or on systems with limited resources.",
         capabilities=["text-to-image", "image-generation"],
         deployments=["local"],
-        architectures=["transformers_generic"],
+        architectures=[],
         aliases=["sd-v1.5", "sd1.5", "stable-diffusion-1.5"]
       ),
       "dummy-model": ModelDefinition(
