@@ -10,14 +10,12 @@ This module handles loading and coordinating all plugin types:
 import pluggy
 import logging
 import importlib.metadata as metadata
-from typing import Optional, Dict, List, Type, Any
+from typing import Optional, Dict, List, Type
 
 # Internal dependencies
 from .hooks import ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHooks
-from .hooks import DeploymentInfo, SolverInfo, ModelDefinition
-from .hooks.architecture import ArchitectureInfo
+from .hooks import DeploymentInfo, SolverInfo, ModelDefinition, ArchitectureInfo
 from .architectures.lib.base import BaseModel
-from claia.common.enums.model import ModelCapability
 
 
 

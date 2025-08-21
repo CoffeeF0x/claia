@@ -81,6 +81,10 @@ class ModelRegistry:
       if not selected_solver:
         return Result.fail(f"No solver available (requested: {solver})")
 
+      # Filter kwargs for solver based on required_args
+      solver_info = selected_solver.get_solver_info()
+      solver_kwargs = self._filter_kwargs(kwargs, solver_info.required_args)
+
       # Call solver to determine deployment
       params_result = selected_solver.solve_deployment(
         model_name=model_name,
@@ -89,7 +93,7 @@ class ModelRegistry:
         cache=self.cache,
         deployment_preference=deployment_preference,
         deployment_method=deployment_method,
-        **kwargs
+        **solver_kwargs
       )
 
       if params_result.is_error():
@@ -108,13 +112,27 @@ class ModelRegistry:
       if not selected_deployment:
         return Result.fail(f"Deployment method '{deployment_params.deployment_name}' not available")
 
+      # Filter kwargs for deployment based on required_args
+      deployment_info = selected_deployment.get_deployment_info()
+      deployment_kwargs = self._filter_kwargs(kwargs, deployment_info.required_args)
+
+      # Also get architecture kwargs for the model class
+      available_architectures = self.manager.get_available_architectures()
+      architecture_info = available_architectures.get(deployment_params.architecture_name)
+      if architecture_info:
+        architecture_kwargs = self._filter_kwargs(kwargs, architecture_info.required_args)
+        # Merge architecture kwargs with deployment kwargs (deployment takes precedence)
+        combined_kwargs = {**architecture_kwargs, **deployment_kwargs}
+      else:
+        combined_kwargs = deployment_kwargs
+
       # Let deployment plugin handle deployment + inference
       result = selected_deployment.run(
         model_name=deployment_params.model_name,
         model_class=model_class,
         conversation=conversation,
         cache=self.cache,
-        **kwargs
+        **combined_kwargs
       )
 
       return result
@@ -188,3 +206,26 @@ class ModelRegistry:
       "total_models": len(self.cache),
       "cached_models": list(self.cache.keys())
     }
+
+  def _filter_kwargs(self, kwargs: Dict[str, Any], required_args: Optional[list]) -> Dict[str, Any]:
+    """
+    Filter kwargs to only include those specified in required_args.
+
+    Args:
+        kwargs: Dictionary of all available kwargs
+        required_args: List of argument names that are required/allowed, or None to allow all
+
+    Returns:
+        Filtered dictionary containing only the required arguments
+    """
+    if required_args is None:
+      # If no required_args specified, pass through all kwargs
+      return kwargs
+
+    # Filter to only include kwargs that are in the required_args list
+    filtered = {}
+    for arg_name in required_args:
+      if arg_name in kwargs:
+        filtered[arg_name] = kwargs[arg_name]
+
+    return filtered
