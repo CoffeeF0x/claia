@@ -86,9 +86,9 @@ class AgentRegistry:
         process.mark_failed(error_msg)
         return process
 
-      # Process using the agent class, injecting model registry
+      # Process using the agent class, injecting model registry and all parameters as kwargs
       logger.debug(f"Using agent class {agent_class.__name__} for {process.id}")
-      result = agent_class.process(process, model_registry=self.model_registry)
+      result = agent_class.process(process, model_registry=self.model_registry, **process.parameters)
 
       return result
 
