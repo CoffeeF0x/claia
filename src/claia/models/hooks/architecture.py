@@ -6,7 +6,7 @@ Architecture plugins implement specific AI model architectures
 """
 
 import pluggy
-from typing import Type
+from typing import Type, Optional, List
 from dataclasses import dataclass
 
 
@@ -20,6 +20,7 @@ class ArchitectureInfo:
   name: str
   title: str
   description: str
+  required_args: Optional[List[str]] = None  # list of custom args required by the architecture
 
 
 class ArchitectureHooks:

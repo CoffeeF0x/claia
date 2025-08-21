@@ -20,6 +20,7 @@ class DeploymentInfo:
   name: str
   title: str
   description: str
+  required_args: Optional[List[str]] = None # list of custom args required by the deployment method
 
 
 # Create hookspec decorator

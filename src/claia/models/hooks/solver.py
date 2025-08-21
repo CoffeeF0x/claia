@@ -20,6 +20,7 @@ class SolverInfo:
   title: str
   description: str
   settings: Optional[Dict[str, Any]] = None
+  required_args: Optional[List[str]] = None  # list of custom args required by the solver
 
 
 @dataclass
