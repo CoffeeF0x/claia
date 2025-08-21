@@ -202,12 +202,16 @@ def main() -> None:
 
         user_message = settings.active_conversation.add_message(MessageRole.USER, user_input)
 
+        # Get user kwargs from settings
+        user_kwargs = settings.get_user_kwargs()
+
         process = Process(
           agent_type=settings.active_agent,
           conversation=settings.active_conversation,
           parameters={
             "source_preference": SourcePreference.ANY,
-            "model_id": settings.active_model
+            "model_id": settings.active_model,
+            **user_kwargs
           }
         )
 

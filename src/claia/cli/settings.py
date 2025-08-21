@@ -242,3 +242,23 @@ class Settings:
         function_definitions: List of function definitions
     """
     self.function_definitions = function_definitions
+
+
+  def get_user_kwargs(self) -> Dict[str, Any]:
+    """
+    Get all user-supplied configuration values as kwargs.
+
+    Returns:
+        Dict[str, Any]: Dictionary of configuration values that can be passed as kwargs
+    """
+    kwargs = {}
+
+    # Iterate through CONFIG_VARS to get all user-configurable settings
+    for var_name, default, externally_settable, _ in CONFIG_VARS:
+      if externally_settable:
+        value = getattr(self, var_name, default)
+        # Only include values that are not empty/default
+        if value and value != default:
+          kwargs[var_name] = value
+
+    return kwargs
