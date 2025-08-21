@@ -34,7 +34,8 @@ class TransformersGenericPlugin:
     return ArchitectureInfo(
       name="transformers_generic",
       title="Generic Transformers Architecture",
-      description="Generic HF Transformers implementation"
+      description="Generic HF Transformers implementation",
+      required_args=["huggingface_api_token"]
     )
 
   @hookimpl

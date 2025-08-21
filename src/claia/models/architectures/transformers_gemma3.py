@@ -34,7 +34,8 @@ class TransformersGemma3Plugin:
     return ArchitectureInfo(
       name="transformers_gemma3",
       title="Gemma3 Transformers Architecture",
-      description="Specialized implementation for Gemma3 transformer models"
+      description="Specialized implementation for Gemma3 transformer models",
+      required_args=["huggingface_api_token"]
     )
 
   @hookimpl

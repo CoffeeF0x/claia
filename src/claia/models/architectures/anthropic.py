@@ -33,7 +33,8 @@ class AnthropicPlugin:
     return ArchitectureInfo(
       name="anthropic",
       title="Anthropic API Architecture",
-      description="Implements Anthropic Claude API-backed models"
+      description="Implements Anthropic Claude API-backed models",
+      required_args=["anthropic_api_token"]
     )
 
   @hookimpl

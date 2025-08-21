@@ -33,7 +33,8 @@ class OpenAIPlugin:
     return ArchitectureInfo(
       name="openai",
       title="OpenAI API Architecture",
-      description="Implements OpenAI chat/completions API-backed models"
+      description="Implements OpenAI chat/completions API-backed models",
+      required_args=["openai_api_token"]
     )
 
   @hookimpl
