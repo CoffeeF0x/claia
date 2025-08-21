@@ -6,7 +6,7 @@ to services like OpenAI, Anthropic, etc.
 """
 
 import logging
-from typing import Optional, Dict, List, Any, Type
+from typing import Dict, Any, Type
 import pluggy
 
 # Internal dependencies
@@ -15,11 +15,13 @@ from claia.common.files.conversation import Conversation
 from ..hooks.deployment import DeploymentInfo
 
 
+
 ########################################################################
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
 hookimpl = pluggy.HookimplMarker("claia_deployments")
+
 
 
 ########################################################################
@@ -41,10 +43,6 @@ class APIDeploymentPlugin:
       title="API Deployment",
       description="Deploy models via external API services (OpenAI, Anthropic, etc.)"
     )
-
-  def can_deploy_model(self, model_name: str, model_type: str) -> bool:
-    """Check if this deployment method can handle the specified model."""
-    return model_type == "api"
 
   @hookimpl
   def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Result:

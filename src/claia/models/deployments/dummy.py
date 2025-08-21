@@ -14,11 +14,13 @@ from claia.common.files.conversation import Conversation
 from ..hooks.deployment import DeploymentInfo
 
 
+
 ########################################################################
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
 hookimpl = pluggy.HookimplMarker("claia_deployments")
+
 
 
 ########################################################################
@@ -66,27 +68,3 @@ class DummyDeploymentPlugin:
         except Exception as e:
             logger.error(f"Error running dummy model {model_name}: {str(e)}")
             return Result.fail(f"Failed to run dummy model: {str(e)}")
-
-    def get_deployment_status(self, model_name: str, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Deprecated: kept for backward compatibility."""
-        logger.warning("get_deployment_status() is deprecated; use run()")
-        return {
-            "available": True,
-            "ready": True,
-            "message": "Dummy model ready for testing",
-            "details": {"deployment": "dummy", "location": "local", "type": "test"}
-        }
-
-    def deploy_model(self, model_name: str, config: Dict[str, Any]):
-        """Deprecated: use run() which handles deployment and caching."""
-        logger.warning("deploy_model() is deprecated; use run()")
-        return Result.fail("deploy_model deprecated; use run()")
-
-    def undeploy_model(self, model_name: str) -> bool:
-        """Undeploy the dummy model."""
-        # Dummy models don't need explicit cleanup
-        return True
-
-    def is_supported(self, model_name: str, architecture: str) -> bool:
-        """Check if this deployment supports the given model."""
-        return model_name == "dummy-model" and architecture == "dummy"

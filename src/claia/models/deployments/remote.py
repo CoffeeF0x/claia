@@ -7,7 +7,7 @@ cloud VMs, or other distributed systems.
 
 import logging
 import pluggy
-from typing import Optional, Dict, List, Any, Type
+from typing import Dict, Any, Type
 
 # Internal dependencies
 from claia.common.results import Result
@@ -15,11 +15,13 @@ from claia.common.files.conversation import Conversation
 from ..hooks.deployment import DeploymentInfo
 
 
+
 ########################################################################
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
 hookimpl = pluggy.HookimplMarker("claia_deployments")
+
 
 
 ########################################################################
@@ -41,77 +43,6 @@ class RemoteDeploymentPlugin:
       title="Remote Deployment",
       description="Deploy models on remote servers or cloud VMs"
     )
-
-  def can_deploy_model(self, model_name: str, model_type: str) -> bool:
-    """Check if this deployment method can handle the specified model."""
-    # Remote deployment can handle most model types
-    return model_type in ["api", "transformers", "custom"]
-
-  def deploy_model(self, model_name: str, model_class: Type, **kwargs) -> Result:
-    """
-    Deploy/initialize a remote model.
-
-    Args:
-        model_name: Canonical model name
-        model_class: Model class to instantiate
-        **kwargs: Additional deployment parameters (server_url, etc.)
-
-    Returns:
-        Result containing the deployed model instance or error
-    """
-    try:
-      logger.debug(f"Deploying remote model: {model_name}")
-
-      # Extract server configuration
-      server_url = kwargs.get('server_url') or kwargs.get('remote_url')
-      if not server_url:
-        return Result.fail(f"Remote server URL required for model {model_name}")
-
-      # Create model instance with remote configuration
-      model_instance = model_class(
-        model_name=model_name,
-        server_url=server_url,
-        **kwargs
-      )
-
-      # Test remote connection if possible
-      if hasattr(model_instance, 'test_connection'):
-        connection_result = model_instance.test_connection()
-        if isinstance(connection_result, Result) and connection_result.is_error():
-          return connection_result
-
-      logger.debug(f"Successfully deployed remote model: {model_name}")
-      return Result(data=model_instance)
-
-    except Exception as e:
-      logger.error(f"Error deploying remote model {model_name}: {str(e)}")
-      return Result.fail(f"Failed to deploy remote model: {str(e)}")
-
-  def run_model(self, model_instance: Any, conversation: Conversation, **kwargs) -> Result:
-    """
-    Run inference on a remote model.
-
-    Args:
-        model_instance: The deployed model instance
-        conversation: Conversation to process
-        **kwargs: Additional runtime parameters
-
-    Returns:
-        Result containing the model response or error
-    """
-    try:
-      logger.debug(f"Running remote model inference")
-      try:
-        result = model_instance.generate(conversation, **kwargs)
-      except Exception as e:
-        logger.error(f"Error during remote model generate(): {e}")
-        return Result.fail(f"Remote model generate() failed: {e}")
-
-      return result
-
-    except Exception as e:
-      logger.error(f"Error running remote model: {str(e)}")
-      return Result.fail(f"Failed to run remote model: {str(e)}")
 
   @hookimpl
   def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Result:
