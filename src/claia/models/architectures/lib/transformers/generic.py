@@ -119,11 +119,11 @@ class GenericTransformerModel(LocalModel):
     prompt_parts = []
 
     for message in conversation.messages:
-      if message.role == MessageRole.SYSTEM:
+      if message.speaker == MessageRole.SYSTEM:
         prompt_parts.append(f"System: {message.content}")
-      elif message.role == MessageRole.USER:
+      elif message.speaker == MessageRole.USER:
         prompt_parts.append(f"User: {message.content}")
-      elif message.role == MessageRole.ASSISTANT:
+      elif message.speaker == MessageRole.ASSISTANT:
         prompt_parts.append(f"Assistant: {message.content}")
 
     # Add assistant prompt for generation

@@ -86,15 +86,15 @@ class AnthropicModel(APIModel):
     messages = []
 
     for message in conversation.messages:
-      if message.role == MessageRole.SYSTEM:
+      if message.speaker == MessageRole.SYSTEM:
         # Anthropic uses a separate system parameter
         system_message = message.content
-      elif message.role == MessageRole.USER:
+      elif message.speaker == MessageRole.USER:
         messages.append({
           "role": "user",
           "content": message.content
         })
-      elif message.role == MessageRole.ASSISTANT:
+      elif message.speaker == MessageRole.ASSISTANT:
         messages.append({
           "role": "assistant",
           "content": message.content

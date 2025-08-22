@@ -70,7 +70,7 @@ class OpenAIModel(APIModel):
         MessageRole.ASSISTANT: "assistant"
       }
 
-      openai_role = role_mapping.get(message.role, "user")
+      openai_role = role_mapping.get(message.speaker, "user")
       messages.append({
         "role": openai_role,
         "content": message.content
