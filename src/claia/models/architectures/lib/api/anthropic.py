@@ -108,6 +108,8 @@ class AnthropicModel(APIModel):
       response = self.post("messages", request_data, stream=True)
 
       full_response = ""
+      stop_reason = None
+
       for line in response.iter_lines():
         if line:
           line_text = line.decode('utf-8')
@@ -130,11 +132,21 @@ class AnthropicModel(APIModel):
                   full_response += content
                   print(content, end='', flush=True)
               elif data.get('type') == 'message_delta':
-                # Handle message-level deltas if needed
+                # Handle message-level deltas and capture stop_reason
+                delta = data.get('delta', {})
+                if 'stop_reason' in delta:
+                  stop_reason = delta['stop_reason']
+              elif data.get('type') == 'message_stop':
+                # Final message stop event
                 pass
 
             except json.JSONDecodeError:
               continue
+
+      # Handle Claude 4 refusal stop reason
+      if stop_reason == 'refusal':
+        logger.warning("Claude refused to generate content for safety reasons")
+        return full_response + "\n\n[Note: Claude declined to complete this response for safety reasons]"
 
       return full_response
 
@@ -148,7 +160,18 @@ class AnthropicModel(APIModel):
       response = self.post("messages", request_data)
       data = response.json()
 
-      # Anthropic response format
+      # Handle Claude 4 refusal stop reason
+      if data.get('stop_reason') == 'refusal':
+        logger.warning("Claude refused to generate content for safety reasons")
+        # Still return partial content if available
+        content = ""
+        if 'content' in data and len(data['content']) > 0:
+          content_block = data['content'][0]
+          if content_block.get('type') == 'text':
+            content = content_block.get('text', '')
+        return content + "\n\n[Note: Claude declined to complete this response for safety reasons]"
+
+      # Standard response handling
       if 'content' in data and len(data['content']) > 0:
         # Get the first content block (usually text)
         content_block = data['content'][0]
