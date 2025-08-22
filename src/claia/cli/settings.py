@@ -256,9 +256,6 @@ class Settings:
     # Iterate through CONFIG_VARS to get all user-configurable settings
     for var_name, default, externally_settable, _ in CONFIG_VARS:
       if externally_settable:
-        value = getattr(self, var_name, default)
-        # Only include values that are not empty/default
-        if value and value != default:
-          kwargs[var_name] = value
+        kwargs[var_name] = getattr(self, var_name, default)
 
     return kwargs
