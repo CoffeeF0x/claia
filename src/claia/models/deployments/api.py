@@ -70,21 +70,9 @@ class APIDeploymentPlugin:
         # Deploy new model instance
         logger.debug(f"Deploying API model: {model_name}")
 
-        # Extract API key from kwargs
-        api_key = (
-          kwargs.get('api_key') or
-          kwargs.get('openai_api_key') or
-          kwargs.get('anthropic_api_key') or
-          kwargs.get('google_api_key')
-        )
-
-        if not api_key:
-          return Result.fail(f"API key required for model {model_name}")
-
         # Create model instance with API key
         model_instance = model_class(
           model_name=model_name,
-          api_key=api_key,
           **kwargs
         )
 

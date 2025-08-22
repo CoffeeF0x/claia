@@ -28,14 +28,14 @@ logger = logging.getLogger(__name__)
 class AnthropicModel(APIModel):
   """Anthropic Claude API model implementation."""
 
-  def __init__(self, model_name: str, api_key: Optional[str] = None):
+  def __init__(self, model_name: str, anthropic_api_token: Optional[str] = None):
     super().__init__(model_name, "https://api.anthropic.com/v1")
     self.session.headers.update({
       "anthropic-version": "2023-06-01",
       "content-type": "application/json"
     })
-    if api_key:
-      self.set_api_key(api_key)
+    if anthropic_api_token:
+      self.set_api_key(anthropic_api_token)
 
   def set_api_key(self, api_key: str) -> None:
     """Set the API key for Anthropic authentication."""

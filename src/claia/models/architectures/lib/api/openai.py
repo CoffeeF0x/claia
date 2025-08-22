@@ -28,10 +28,10 @@ logger = logging.getLogger(__name__)
 class OpenAIModel(APIModel):
   """OpenAI API model implementation."""
 
-  def __init__(self, model_name: str, api_key: Optional[str] = None):
+  def __init__(self, model_name: str, openai_api_token: Optional[str] = None):
     super().__init__(model_name, "https://api.openai.com/v1")
-    if api_key:
-      self.set_api_key(api_key)
+    if openai_api_token:
+      self.set_api_key(openai_api_token)
 
   def generate(self, conversation: Conversation, **kwargs) -> str:
     """Generate a response using OpenAI's API."""
