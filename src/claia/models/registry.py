@@ -213,14 +213,14 @@ class ModelRegistry:
 
     Args:
         kwargs: Dictionary of all available kwargs
-        required_args: List of argument names that are required/allowed, or None to allow all
+        required_args: List of argument names that are required/allowed, or None if no args needed
 
     Returns:
         Filtered dictionary containing only the required arguments
     """
-    if required_args is None:
-      # If no required_args specified, pass through all kwargs
-      return kwargs
+    if required_args is None or len(required_args) == 0:
+      # If no required_args specified, return empty dict
+      return {}
 
     # Filter to only include kwargs that are in the required_args list
     filtered = {}
