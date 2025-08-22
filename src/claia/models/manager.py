@@ -233,7 +233,6 @@ class ModuleManager:
             # Merge fields, keeping non-None values from the new definition
             existing = all_definitions[name]
             merged = ModelDefinition(
-              name=name,
               title=definition.title or existing.title,
               aliases=self._merge_lists(existing.aliases, definition.aliases),
               company=definition.company or existing.company,
@@ -244,7 +243,8 @@ class ModuleManager:
               context_length=definition.context_length or existing.context_length,
               capabilities=self._merge_lists(existing.capabilities, definition.capabilities),
               license=definition.license or existing.license,
-              url=definition.url or existing.url
+              url=definition.url or existing.url,
+              identifiers=self._merge_dicts(existing.identifiers, definition.identifiers)
             )
             all_definitions[name] = merged
           else:
@@ -267,6 +267,19 @@ class ModuleManager:
           result.append(item)
 
     return result if result else None
+
+  def _merge_dicts(self, dict1: Optional[Dict[str, str]], dict2: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+    """Merge two optional dicts with last-wins on key conflicts."""
+    if not dict1 and not dict2:
+      return None
+
+    merged: Dict[str, str] = {}
+    if dict1:
+      merged.update(dict1)
+    if dict2:
+      merged.update(dict2)  # dict2 overrides dict1 on conflicts
+
+    return merged if merged else None
 
   # Deployment plugin methods
   def get_available_deployments(self) -> Dict[str, DeploymentInfo]:

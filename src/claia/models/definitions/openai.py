@@ -30,7 +30,6 @@ class OpenAIDefinitionsPlugin:
     """Get OpenAI model definitions."""
     return {
       "gpt-4": ModelDefinition(
-        name="gpt-4",
         title="GPT-4",
         company="OpenAI",
         deployments=["api"],
@@ -44,7 +43,6 @@ class OpenAIDefinitionsPlugin:
       ),
 
       "gpt-4-turbo": ModelDefinition(
-        name="gpt-4-turbo",
         title="GPT-4 Turbo",
         aliases=["gpt4-turbo"],
         company="OpenAI",
@@ -59,7 +57,6 @@ class OpenAIDefinitionsPlugin:
       ),
 
       "gpt-3.5-turbo": ModelDefinition(
-        name="gpt-3.5-turbo",
         title="GPT-3.5 Turbo",
         aliases=["gpt35", "gpt3.5"],
         company="OpenAI",
@@ -74,7 +71,6 @@ class OpenAIDefinitionsPlugin:
       ),
 
       "gpt-3.5-turbo-16k": ModelDefinition(
-        name="gpt-3.5-turbo-16k",
         title="GPT-3.5 Turbo 16K",
         company="OpenAI",
         deployments=["api"],

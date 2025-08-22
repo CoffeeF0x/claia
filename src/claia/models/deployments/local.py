@@ -50,7 +50,7 @@ class LocalDeploymentPlugin:
     Deploy (if needed) and run inference on a local model using unified interface.
 
     Args:
-      model_name: Canonical model name
+      model_name: Provider/model identifier to use with the selected architecture
       model_class: Model class to instantiate
       conversation: Conversation to process
       cache: Shared cache for model instances
@@ -71,7 +71,7 @@ class LocalDeploymentPlugin:
         logger.debug(f"Deploying local model: {model_name}")
 
         device = kwargs.get('device', 'cpu')
-        model_path = kwargs.get('model_path', model_name)
+        model_path = kwargs.get('model_path', None)
         defer_loading = kwargs.get('defer_loading', False)
 
         # Pass through any extra kwargs not explicitly handled above

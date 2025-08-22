@@ -16,7 +16,6 @@ from claia.common.results import Result
 @dataclass
 class ModelDefinition:
   """Definition of a model provided by a definition plugin."""
-  name: str                                    # Required: canonical model name
   title: Optional[str] = None                  # Human-readable title
   aliases: Optional[List[str]] = None          # Alternative names/aliases
   company: Optional[str] = None                # Company/organization that created the model
@@ -28,6 +27,7 @@ class ModelDefinition:
   capabilities: Optional[List[str]] = None     # Model capabilities (e.g., ["chat", "code", "vision"])
   license: Optional[str] = None                # Model license
   url: Optional[str] = None                    # Homepage or documentation URL
+  identifiers: Optional[Dict[str, str]] = None # Mapping: architecture_name -> model identifier for that architecture
 
 
 # Create hookspec decorator

@@ -107,6 +107,15 @@ class ModelRegistry:
       if not model_class:
         return Result.fail(f"No architecture '{deployment_params.architecture_name}' found for model '{deployment_params.model_name}'")
 
+      # Resolve provider-specific model identifier for the selected architecture
+      provider_model_name = deployment_params.model_name
+      model_def = available_models.get(deployment_params.model_name)
+      if model_def and getattr(model_def, 'identifiers', None):
+        arch_key = deployment_params.architecture_name
+        if arch_key in model_def.identifiers:
+          provider_model_name = model_def.identifiers[arch_key]
+          logger.debug(f"Resolved provider model name for arch '{arch_key}': {provider_model_name}")
+
       # Get deployment plugin
       selected_deployment = self.manager.get_deployment_plugin(deployment_params.deployment_name)
       if not selected_deployment:
@@ -128,7 +137,7 @@ class ModelRegistry:
 
       # Let deployment plugin handle deployment + inference
       result = selected_deployment.run(
-        model_name=deployment_params.model_name,
+        model_name=provider_model_name,
         model_class=model_class,
         conversation=conversation,
         cache=self.cache,

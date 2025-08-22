@@ -38,16 +38,16 @@ class GenericTransformerModel(LocalModel):
   def load(self) -> None:
     """Load the transformer model and tokenizer."""
     try:
-      logger.info(f"Loading transformer model: {self.model_path}")
+      logger.info(f"Loading transformer model: {self.model_name}")
 
       # Load tokenizer
-      self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, token=self.api_token)
+      self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, token=self.api_token)
       if self.tokenizer.pad_token is None:
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
       # Load model
       self.model = AutoModelForCausalLM.from_pretrained(
-        self.model_path,
+        self.model_name,
         torch_dtype=torch.float16 if self.device != "cpu" else torch.float32,
         device_map="auto" if self.device != "cpu" else None,
         token=self.api_token
