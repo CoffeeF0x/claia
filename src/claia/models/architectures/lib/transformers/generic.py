@@ -28,10 +28,12 @@ logger = logging.getLogger(__name__)
 class GenericTransformerModel(LocalModel):
   """Generic transformer model implementation using Hugging Face transformers."""
 
-  def __init__(self, model_name: str, model_path: str, defer_loading: bool = False, device: str = "cpu"):
-    super().__init__(model_name, model_path, defer_loading, device)
+  def __init__(self, model_name: str, model_path: str, defer_loading: bool = False, device: str = "cpu", huggingface_api_token: Optional[str] = None, **kwargs):
     self.tokenizer = None
     self.model = None
+    self.api_token = huggingface_api_token
+    self.kwargs = kwargs
+    super().__init__(model_name, model_path, defer_loading, device)
 
   def load(self) -> None:
     """Load the transformer model and tokenizer."""
@@ -39,7 +41,7 @@ class GenericTransformerModel(LocalModel):
       logger.info(f"Loading transformer model: {self.model_path}")
 
       # Load tokenizer
-      self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
+      self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, token=self.api_token)
       if self.tokenizer.pad_token is None:
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
@@ -47,7 +49,8 @@ class GenericTransformerModel(LocalModel):
       self.model = AutoModelForCausalLM.from_pretrained(
         self.model_path,
         torch_dtype=torch.float16 if self.device != "cpu" else torch.float32,
-        device_map="auto" if self.device != "cpu" else None
+        device_map="auto" if self.device != "cpu" else None,
+        token=self.api_token
       )
 
       if self.device == "cpu":
@@ -146,11 +149,11 @@ class GenericTransformerModel(LocalModel):
       logger.info(f"Downloading transformer model to: {model_path}")
 
       # Download tokenizer
-      tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+      tokenizer = AutoTokenizer.from_pretrained(self.model_name, token=self.api_token)
       tokenizer.save_pretrained(model_path)
 
       # Download model
-      model = AutoModelForCausalLM.from_pretrained(self.model_name)
+      model = AutoModelForCausalLM.from_pretrained(self.model_name, token=self.api_token)
       model.save_pretrained(model_path)
 
       logger.info(f"Successfully downloaded transformer model: {self.model_name}")

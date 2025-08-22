@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 class Gemma3Model(GenericTransformerModel):
   """Specialized Gemma3 transformer model implementation."""
 
-  def __init__(self, model_name: str, model_path: str, defer_loading: bool = False, device: str = "cpu"):
-    super().__init__(model_name, model_path, defer_loading, device)
+  def __init__(self, model_name: str, model_path: str, defer_loading: bool = False, device: str = "cpu", huggingface_api_token: Optional[str] = None):
+    super().__init__(model_name, model_path, defer_loading, device, huggingface_api_token)
 
     # Gemma3-specific default settings
     self.default_settings.update({
@@ -44,7 +44,6 @@ class Gemma3Model(GenericTransformerModel):
     # Gemma3 uses specific formatting tokens
     for message in conversation.messages:
       if message.role == MessageRole.SYSTEM:
-        # Gemma3 system prompt format
         prompt_parts.append(f"<start_of_turn>system\n{message.content}<end_of_turn>")
       elif message.role == MessageRole.USER:
         prompt_parts.append(f"<start_of_turn>user\n{message.content}<end_of_turn>")
