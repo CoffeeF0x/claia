@@ -107,7 +107,7 @@ class AnthropicDefinitionsPlugin:
         identifiers={"anthropic": "claude-3-5-haiku-20241022"}
       ),
 
-      # Legacy Claude 3 Models (keeping for backward compatibility)
+      # Claude 3 Models
       "claude-3-haiku": ModelDefinition(
         title="Claude Haiku 3",
         aliases=["haiku", "claude-3-haiku"],
@@ -122,33 +122,4 @@ class AnthropicDefinitionsPlugin:
         url="https://www.anthropic.com/claude",
         identifiers={"anthropic": "claude-3-haiku-20240307"}
       ),
-
-      # Backward compatibility aliases for generic names
-      "claude-3-opus": ModelDefinition(
-        title="Claude 3 Opus",
-        aliases=["claude3", "opus"],
-        company="Anthropic",
-        deployments=["api"],
-        architectures=["anthropic"],
-        description="Legacy alias - use claude-opus-4-1-20250805 for latest",
-        context_length=200000,
-        # max_output_tokens=32000,
-        capabilities=["chat", "reasoning", "analysis", "vision"],
-        license="Commercial",
-        url="https://www.anthropic.com/claude"
-      ),
-
-      "claude-3-sonnet": ModelDefinition(
-        title="Claude 3 Sonnet",
-        aliases=["sonnet"],
-        company="Anthropic",
-        deployments=["api"],
-        architectures=["anthropic"],
-        description="Legacy alias - use claude-sonnet-4-20250514 for latest",
-        context_length=200000,
-        # max_output_tokens=64000,
-        capabilities=["chat", "reasoning", "analysis", "vision"],
-        license="Commercial",
-        url="https://www.anthropic.com/claude"
-      )
     }
