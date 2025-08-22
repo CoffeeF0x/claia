@@ -67,6 +67,7 @@ def fake_manager():
         def get_solver_info(self):
           class Info:
             name = "default"
+            required_args = []
           return Info()
 
         def solve_deployment(self, model_name, available_deployments, available_models, cache, deployment_preference=None, deployment_method=None, **kwargs):
@@ -87,11 +88,17 @@ def fake_manager():
         def get_deployment_info(self):
           class Info:
             name = "api"
+            required_args = []
           return Info()
 
         def run(self, model_name, model_class, conversation, cache, **kwargs):
           return Result.ok(f"deployed {model_name} via {deployment_name}")
       return Deployment()
+
+    def get_available_architectures(self):
+      class ArchInfo:
+        required_args = []
+      return {"dummy_arch": ArchInfo()}
 
   return FakeManager()
 
