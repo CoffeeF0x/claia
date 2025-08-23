@@ -106,9 +106,12 @@ class GenericTransformerModel(LocalModel):
       # Decode response
       input_length = inputs["input_ids"].shape[1]
       generated_tokens = outputs[0][input_length:]
-      response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+      response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
 
-      return response.strip()
+      # Add the response to the conversation
+      conversation.add_message(MessageRole.ASSISTANT, response)
+
+      return response
 
     except Exception as e:
       logger.error(f"Error generating response with transformer model {self.model_name}: {e}")
