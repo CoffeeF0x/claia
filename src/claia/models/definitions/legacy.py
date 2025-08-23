@@ -147,6 +147,17 @@ class LegacyDefinitionsPlugin:
         architectures=[],
         aliases=["sd-v1.5", "sd1.5", "stable-diffusion-1.5"]
       ),
+      "llama-3.2-1b": ModelDefinition(
+        title="Llama 3.2 1B",
+        description="Meta's Llama 3.2 1B is a compact text generation model that delivers efficient performance for chat and text generation tasks while maintaining a small footprint.",
+        capabilities=["chat", "text-generation"],
+        deployments=["local"],
+        architectures=["transformers_generic"],
+        aliases=["llama3.2-1b", "llama-1b", "llama3-1b"],
+        identifiers={
+          "transformers_generic": "meta-llama/Llama-3.2-1B"
+        }
+      ),
       "dummy-model": ModelDefinition(
         title="Dummy Model",
         description="A dummy model that returns a predefined story. Used for testing streaming capabilities.",
