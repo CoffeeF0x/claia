@@ -249,6 +249,7 @@ def main() -> None:
               print(remaining_content, flush=True)
           else:
             print(final_message.content, flush=True)
+          print() # Add newline after final message
           process.conversation.save()
         elif process.status == ProcessStatus.FAILED:
           logger.error(f"Process failed: {process.error}")
