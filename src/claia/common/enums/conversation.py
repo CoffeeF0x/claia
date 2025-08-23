@@ -30,6 +30,7 @@ class MessageRole(Enum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
+    INTERNAL = "internal"
 
 
 class TagType(Enum):

@@ -16,10 +16,19 @@ from claia.common.enums.conversation import MessageRole
 from ..base import APIModel
 
 
+
+########################################################################
+#                            CONSTANTS                               #
+########################################################################
+REFUSAL_NOTE = "\n\n[Note: Claude declined to complete this response for safety reasons]"
+
+
+
 ########################################################################
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
+
 
 
 ########################################################################
@@ -72,9 +81,9 @@ class AnthropicModel(APIModel):
       # Make API request
       if settings.get("stream", False):
         request_data["stream"] = True
-        return self._handle_streaming_response(request_data)
+        return self._handle_streaming_response(request_data, conversation)
       else:
-        return self._handle_non_streaming_response(request_data)
+        return self._handle_non_streaming_response(request_data, conversation)
 
     except Exception as e:
       logger.error(f"Error generating response with Anthropic model {self.model_name}: {e}")
@@ -102,13 +111,16 @@ class AnthropicModel(APIModel):
 
     return system_message, messages
 
-  def _handle_streaming_response(self, request_data: Dict[str, Any]) -> str:
+  def _handle_streaming_response(self, request_data: Dict[str, Any], conversation: Conversation) -> str:
     """Handle streaming response from Anthropic API."""
     try:
       response = self.post("messages", request_data, stream=True)
 
       full_response = ""
       stop_reason = None
+
+      # Add a blank assistant message to the conversation that we'll update
+      message = conversation.add_message(MessageRole.ASSISTANT, "")
 
       for line in response.iter_lines():
         if line:
@@ -130,7 +142,7 @@ class AnthropicModel(APIModel):
                 if delta.get('type') == 'text_delta':
                   content = delta.get('text', '')
                   full_response += content
-                  print(content, end='', flush=True)
+                  conversation.stream_message(message.message_id, content, append=True)
               elif data.get('type') == 'message_delta':
                 # Handle message-level deltas and capture stop_reason
                 delta = data.get('delta', {})
@@ -143,10 +155,14 @@ class AnthropicModel(APIModel):
             except json.JSONDecodeError:
               continue
 
+      # Mark the end of the stream
+      conversation.stream_message(message.message_id, "", append=True, end=True)
+
       # Handle Claude 4 refusal stop reason
       if stop_reason == 'refusal':
         logger.warning("Claude refused to generate content for safety reasons")
-        return full_response + "\n\n[Note: Claude declined to complete this response for safety reasons]"
+        conversation.add_message(MessageRole.INTERNAL, REFUSAL_NOTE)
+        return full_response + REFUSAL_NOTE
 
       return full_response
 
@@ -154,31 +170,29 @@ class AnthropicModel(APIModel):
       logger.error(f"Error in streaming response: {e}")
       return f"Streaming error: {str(e)}"
 
-  def _handle_non_streaming_response(self, request_data: Dict[str, Any]) -> str:
+  def _handle_non_streaming_response(self, request_data: Dict[str, Any], conversation: Conversation) -> str:
     """Handle non-streaming response from Anthropic API."""
     try:
       response = self.post("messages", request_data)
       data = response.json()
 
+      # Extract content
+      content = ""
+      if 'content' in data and len(data['content']) > 0:
+        content_block = data['content'][0]
+        if content_block.get('type') == 'text':
+          content = content_block.get('text', '')
+
+      # Add message with content (could be an empty string if no content is returned)
+      conversation.add_message(MessageRole.ASSISTANT, content)
+
       # Handle Claude 4 refusal stop reason
       if data.get('stop_reason') == 'refusal':
         logger.warning("Claude refused to generate content for safety reasons")
-        # Still return partial content if available
-        content = ""
-        if 'content' in data and len(data['content']) > 0:
-          content_block = data['content'][0]
-          if content_block.get('type') == 'text':
-            content = content_block.get('text', '')
-        return content + "\n\n[Note: Claude declined to complete this response for safety reasons]"
+        conversation.add_message(MessageRole.INTERNAL, REFUSAL_NOTE)
+        return content + REFUSAL_NOTE
 
-      # Standard response handling
-      if 'content' in data and len(data['content']) > 0:
-        # Get the first content block (usually text)
-        content_block = data['content'][0]
-        if content_block.get('type') == 'text':
-          return content_block.get('text', '')
-
-      return "No response generated"
+      return content if content else "No response generated"
 
     except Exception as e:
       logger.error(f"Error in non-streaming response: {e}")

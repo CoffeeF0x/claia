@@ -51,9 +51,9 @@ class OpenAIModel(APIModel):
 
       # Make API request
       if settings.get("stream", False):
-        return self._handle_streaming_response(request_data)
+        return self._handle_streaming_response(request_data, conversation)
       else:
-        return self._handle_non_streaming_response(request_data)
+        return self._handle_non_streaming_response(request_data, conversation)
 
     except Exception as e:
       logger.error(f"Error generating response with OpenAI model {self.model_name}: {e}")
@@ -78,12 +78,16 @@ class OpenAIModel(APIModel):
 
     return messages
 
-  def _handle_streaming_response(self, request_data: Dict[str, Any]) -> str:
+  def _handle_streaming_response(self, request_data: Dict[str, Any], conversation: Conversation) -> str:
     """Handle streaming response from OpenAI API."""
     try:
       response = self.post("chat/completions", request_data, stream=True)
 
       full_response = ""
+
+      # Add a blank assistant message to the conversation that we'll update
+      message = conversation.add_message(MessageRole.ASSISTANT, "")
+
       for line in response.iter_lines():
         if line:
           line_text = line.decode('utf-8')
@@ -100,9 +104,12 @@ class OpenAIModel(APIModel):
                 if 'content' in delta:
                   content = delta['content']
                   full_response += content
-                  print(content, end='', flush=True)
+                  conversation.stream_message(message.message_id, content, append=True)
             except json.JSONDecodeError:
               continue
+
+      # Mark the end of the stream
+      conversation.stream_message(message.message_id, "", append=True, end=True)
 
       return full_response
 
@@ -110,16 +117,21 @@ class OpenAIModel(APIModel):
       logger.error(f"Error in streaming response: {e}")
       return f"Streaming error: {str(e)}"
 
-  def _handle_non_streaming_response(self, request_data: Dict[str, Any]) -> str:
+  def _handle_non_streaming_response(self, request_data: Dict[str, Any], conversation: Conversation) -> str:
     """Handle non-streaming response from OpenAI API."""
     try:
       response = self.post("chat/completions", request_data)
       data = response.json()
 
+      # Extract content
+      content = ""
       if 'choices' in data and len(data['choices']) > 0:
-        return data['choices'][0]['message']['content']
-      else:
-        return "No response generated"
+        content = data['choices'][0]['message']['content']
+
+      # Add message with content (could be an empty string if no content is returned)
+      conversation.add_message(MessageRole.ASSISTANT, content)
+
+      return content if content else "No response generated"
 
     except Exception as e:
       logger.error(f"Error in non-streaming response: {e}")
