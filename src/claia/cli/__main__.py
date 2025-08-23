@@ -2,29 +2,27 @@
 # - create an option to enable a server that serves and updates md files, and sync conversations to md files?
 # - Needs a way to filter models (since there are lots) (model list partname?)
 # - perhaps have the model layer compare the capabilities against the sent request, if there's content that the model doesn't support throw a warning, maybe also trim the request to the model's capabilities
-# - model should pass model name from source list in definitions rather than using the model id
 # - create a new image agent that exports the images after generation
-
-# - add ability to rename conversations, and perhaps have ai name conversations automatically
-
-# - add streaming support to models
-# - add conversation settings object to store settings such as enable streaming
-# - add a stream to message function in the conversation that doesn't create a new action every time a message is updated
-
-# - create new prompts or update existing (need to move prompts to json files)
-# - update system command to allow settings updates (and save to .env file?)
-# - prompt doesn't apply to the active conversation (if there's an active conversation, it should apply to it)
-
-# - add a function to check model capabilities in the registry, that will also consider model names that aren't in the definitions table (see bob as the primary use case)
-# - add module imports for agents and migrate bob to be a module
 # - create a vix demo that uses a list off images to show reactions in a conversation, think emojis (this should be a tool call since it's not generating the images, thought it's an idea to train a lora and have images generated)
 
 # - Top level commands no longer show in command help
 # - run commands from cli with optional --flags processing instead of arg=value style, for example: claia transcribe --file <audio-file>
+# - create new prompts or update existing (need to move prompts to json files)
+# - update system command to allow settings updates (and save to .env file?)
+# - prompt doesn't apply to the active conversation (if there's an active conversation, it should apply to it)
 
-# - Legacy conversation_id still referenced in the conversation object?
+# - add ability to rename conversations, and perhaps have ai name conversations automatically
 # - Need to clean input from user and models (set gpt-4 to temperature 2 causing issues)
 # - Add multi-gpu support for transformer models
+# - local models aren't using model path
+
+# - local models should check ram and download size and confirm resource availability?
+# - local models should have flags to select cpu or gpu, or specify certain gpus or memory usage
+# - local models may suggest a quantized version of the model that may fit
+# - (Consider the posibility of a hybrid deployment, where model is loaded into cpu memory, but moved to gpu memory when processing requests to allow several models to run on a single machine)
+# - (or perhaps there's a deployment manager, and the deployment object contains methods to move the model between cpu and gpu as needed)
+
+
 
 # External dependencies
 import readline
