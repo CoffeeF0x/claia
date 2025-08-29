@@ -42,6 +42,7 @@ from claia.common.files.conversation import Conversation
 from claia.cli.settings import Settings
 from claia.cli.defaults import initialize_defaults
 from claia.cli.logger import initialize_logging
+from claia.cli.tool_processor import ToolProcessor
 # from claia.cli.mod import initialize_module_system
 
 
@@ -135,6 +136,10 @@ def main() -> None:
     logger.debug("Initializing agent registry and process queue")
     agent_registry = AgentRegistry()
     agent_registry.start_workers(3)  # Start 3 worker threads
+
+    # Initialize tool processor for decoupled tool calling
+    logger.debug("Initializing tool processor")
+    tool_processor = ToolProcessor()
 
     # Set up command history with arrow key navigation
     setup_command_history()
@@ -248,6 +253,25 @@ def main() -> None:
           else:
             print(final_message.content, flush=True)
           print() # Add newline after final message
+
+          # Check for and process any tool calls in the final message
+          if tool_processor.has_tool_call_tokens(final_message.content, process.conversation):
+            logger.debug("Tool calls detected in final message, processing...")
+            user_kwargs = settings.get_user_kwargs()
+            processed_content = tool_processor.process_message_content(
+              final_message.content,
+              process.conversation,
+              settings=None,
+              **user_kwargs
+            )
+
+            # If content changed, update the message and display the changes
+            if processed_content != final_message.content:
+              print("\n[Processing tool calls...]")
+              print(processed_content[len(final_message.content):], flush=True)
+              # Update the message with processed content
+              process.conversation.update_message(final_message.message_id, content=processed_content)
+
           process.conversation.save()
         elif process.status == ProcessStatus.FAILED:
           logger.error(f"Process failed: {process.error}")

@@ -72,13 +72,12 @@ class Conversation(TextFile):
   - Inherits text file functionality for content operations
   """
 
-  def __init__(self, base_directory: str, registry=None, **kwargs):
+  def __init__(self, base_directory: str, **kwargs):
     """
     Initialize a conversation file.
 
     Args:
         base_directory: Base directory for the file
-        registry: Optional Registry object for direct command execution
         **kwargs: Additional arguments to pass to the parent class
             custom_tag_formats (Optional[Dict[TagType, Tuple[str, str]]]):
                 Overrides for default tag formats. Key is TagType enum,
@@ -87,13 +86,13 @@ class Conversation(TextFile):
     # Extract conversation-specific kwargs
     self.title = kwargs.pop("title", DEFAULT_CONVERSATION_TITLE)
     self.prompt = kwargs.pop("prompt", "")
+    self.tool_calling_prompt = kwargs.pop("tool_calling_prompt", None)
+    self.tool_pattern_name = kwargs.pop("tool_pattern_name", None)
+    self.tool_protocol_name = kwargs.pop("tool_protocol_name", None)
     initial_messages = kwargs.pop("messages", [])
     initial_actions = kwargs.pop("actions", [])
     initial_tools = kwargs.pop("tool_definitions", [])
     self.custom_tag_formats = kwargs.pop("custom_tag_formats", {})
-
-    # Store registry reference if provided
-    self.registry = registry
 
     # Ensure the file has .json extension
     file_name = kwargs.get("file_name")
@@ -150,6 +149,9 @@ class Conversation(TextFile):
       "message_count": len(self.messages),
       "tool_count": len(self.tool_definitions),
       "has_custom_tags": bool(self.custom_tag_formats),
+      "tool_calling_prompt": self.tool_calling_prompt,
+      "tool_pattern_name": self.tool_pattern_name,
+      "tool_protocol_name": self.tool_protocol_name,
       "settings": self.settings.to_dict()
     })
 
@@ -166,6 +168,9 @@ class Conversation(TextFile):
       "message_count": len(self.messages),
       "tool_count": len(self.tool_definitions),
       "has_custom_tags": bool(self.custom_tag_formats),
+      "tool_calling_prompt": self.tool_calling_prompt,
+      "tool_pattern_name": self.tool_pattern_name,
+      "tool_protocol_name": self.tool_protocol_name,
       "settings": self.settings.to_dict()
     })
 
@@ -181,6 +186,9 @@ class Conversation(TextFile):
       "conversation_id": self.file_id,
       "title": self.title,
       "prompt": self.prompt,
+      "tool_calling_prompt": self.tool_calling_prompt,
+      "tool_pattern_name": self.tool_pattern_name,
+      "tool_protocol_name": self.tool_protocol_name,
       "messages": [m.to_dict() for m in self.messages],
       "actions": [a.to_dict() for a in self.actions],
       "tool_definitions": [t.to_dict() for t in self.tool_definitions],
@@ -341,103 +349,70 @@ class Conversation(TextFile):
 
     return found_tags_details
 
-  def process_tool_calls_in_content(self, content: str, settings=None) -> str:
+  def set_tool_calling_prompt(self, prompt: str) -> None:
     """
-    Finds and executes tool calls within the content, replacing tags with results.
-
-    Uses find_tags to locate potential tool calls, then parses, executes via the
-    command registry, and replaces them in the content string.
+    Set the tool calling prompt for this conversation.
 
     Args:
-      content: The text content containing potential tool calls.
-      settings: Optional settings object to pass to tool execution.
+        prompt: The prompt used for tool calling detection/execution
+    """
+    old_prompt = self.tool_calling_prompt
+    self.tool_calling_prompt = prompt
+
+    # Add action to track this change
+    self.add_action(ActionType.CHANGE_PROMPT, {
+      "field": "tool_calling_prompt",
+      "old_value": old_prompt,
+      "new_value": prompt
+    })
+
+  def set_tool_pattern_name(self, pattern_name: str) -> None:
+    """
+    Set the tool pattern name for this conversation.
+
+    Args:
+        pattern_name: Name of the tool pattern extension to use
+    """
+    old_pattern = self.tool_pattern_name
+    self.tool_pattern_name = pattern_name
+
+    # Add action to track this change
+    self.add_action(ActionType.UPDATE_SETTINGS, {
+      "field": "tool_pattern_name",
+      "old_value": old_pattern,
+      "new_value": pattern_name
+    })
+
+  def set_tool_protocol_name(self, protocol_name: str) -> None:
+    """
+    Set the tool protocol name for this conversation.
+
+    Args:
+        protocol_name: Name of the tool protocol extension to use
+    """
+    old_protocol = self.tool_protocol_name
+    self.tool_protocol_name = protocol_name
+
+    # Add action to track this change
+    self.add_action(ActionType.UPDATE_SETTINGS, {
+      "field": "tool_protocol_name",
+      "old_value": old_protocol,
+      "new_value": protocol_name
+    })
+
+  def get_tool_calling_context(self) -> Dict[str, Any]:
+    """
+    Get the tool calling context for this conversation.
 
     Returns:
-      The processed content string with tool call tags replaced by their results
-      or error messages.
+        Dict containing tool calling prompt, pattern name, and protocol name
     """
-    processed_content = content
-    found_tags = self.find_tags(processed_content)
-
-    for tag in reversed(found_tags):
-      if tag['type'] == TagType.TOOL_CALL and tag['status'] == TagStatus.CLOSED:
-        tool_name = "unknown"
-        parameters = {} # Initialize parameters
-        result_message = ""
-        try:
-          # Parse the JSON content inside the tag
-          tool_call_data = json.loads(tag['content'])
-          tool_name = tool_call_data.get("name", "unknown")
-          parameters = tool_call_data.get("parameters", {})
-
-          # Execute the tool function using registry
-          if self.registry:
-            # Convert parameters to command-line format for run method
-            command_args = [tool_name]
-
-            # Add all parameters as key=value pairs
-            for key, value in parameters.items():
-              # Handle different parameter types
-              if isinstance(value, bool):
-                if value:
-                  # For boolean True, just add the flag
-                  command_args.append(f"--{key}")
-              elif value is not None:
-                # For other types, use key=value format
-                command_args.append(f"{key}={value}")
-
-            # Execute the command using run method
-            result = self.registry.run(command_args, settings)
-
-            # Extract message from Result object
-            if result.is_success() and result.get_message():
-              result_message = result.get_message()
-            elif result.is_error():
-              result_message = f"[TOOL RESULT: (ERROR) {result.get_message()}]"
-            elif result.is_exit():
-              result_message = f"[TOOL RESULT: (EXIT) {result.get_message()}]"
-            else:
-              result_message = f"[TOOL RESULT: (UNKNOWN) {result.get_message()}]"
-          else:
-            result_message = f"[TOOL RESULT: (ERROR) No command registry available to execute tool '{tool_name}']"
-            logger.error(f"No registry available to execute tool: {tool_name}")
-
-          # Add action for successful processing
-          self.add_action(ActionType.PROCESS_FUNCTION_CALL, {
-              "tool_name": tool_name,
-              "parameters": parameters,
-              "result_preview": result_message[:100] + "..." if len(result_message) > 100 else result_message
-          })
-
-        except json.JSONDecodeError as e:
-          logger.error(f"Failed to parse JSON for tool call: {e}\nContent: {tag['content']}")
-          result_message = f"[ERROR: Invalid JSON in tool call - {e}]"
-          self.add_action(ActionType.PROCESS_FUNCTION_CALL, {
-              "tool_name": tool_name,
-              "parameters": parameters,
-              "error": "JSONDecodeError",
-              "content_preview": tag['content'][:100] + "..."
-          })
-        except Exception as e:
-          logger.error(f"Unexpected error processing tool call for '{tool_name}': {e}")
-          result_message = f"[ERROR: Failed to process tool '{tool_name}' - {e}]"
-          self.add_action(ActionType.PROCESS_FUNCTION_CALL, {
-              "tool_name": tool_name,
-              "parameters": parameters,
-              "error": str(e),
-              "content_preview": tag['content'][:100] + "..."
-          })
-
-        # Replace the original tag with the result/error
-        if tag['start_index'] is not None and tag['end_index'] is not None:
-            processed_content = processed_content[:tag['start_index']] + result_message + processed_content[tag['end_index']:]
-        else:
-            logger.error(f"Cannot replace tag for tool call '{tool_name}' due to missing indices.")
-
-      elif tag['type'] == TagType.TOOL_CALL and tag['status'] != TagStatus.CLOSED:
-         logger.warning(f"Skipping processing of non-closed/mismatched tool call tag ({tag['status'].name}) starting at {tag['start_index']}.")
-
-    return processed_content
+    return {
+      "tool_calling_prompt": self.tool_calling_prompt,
+      "tool_pattern_name": self.tool_pattern_name,
+      "tool_protocol_name": self.tool_protocol_name,
+      "tool_definitions": self.get_tool_definitions_as_list()
+    }
 
   def apply_substitutions(self, text: str, **kwargs) -> str:
     """
@@ -644,7 +619,8 @@ class Conversation(TextFile):
         return tool
     return None
 
-  def add_message(self, speaker: Union[MessageRole, str], content: str, file_ids: Optional[List[str]] = None) -> Message:
+  def add_message(self, speaker: Union[MessageRole, str], content: str, file_ids: Optional[List[str]] = None,
+                 tool_pattern_name: Optional[str] = None, tool_protocol_name: Optional[str] = None) -> Message:
     """
     Add a message to the conversation.
 
@@ -652,12 +628,24 @@ class Conversation(TextFile):
         speaker: The speaker of the message
         content: The content of the message
         file_ids: Optional list of file IDs attached to the message
+        tool_pattern_name: Optional name of the tool pattern used for this message
+        tool_protocol_name: Optional name of the tool protocol used for this message
 
     Returns:
         Message: The created message
     """
+    # Use conversation defaults if not specified, but keep None if both are None
+    pattern_name = tool_pattern_name if tool_pattern_name is not None else self.tool_pattern_name
+    protocol_name = tool_protocol_name if tool_protocol_name is not None else self.tool_protocol_name
+
     # Create a new message
-    message = Message(speaker=speaker, content=content, file_ids=file_ids or [])
+    message = Message(
+      speaker=speaker,
+      content=content,
+      file_ids=file_ids or [],
+      tool_pattern_name=pattern_name,
+      tool_protocol_name=protocol_name
+    )
 
     # Extract arguments from the message content
     message.extract_inline_args()
@@ -931,7 +919,7 @@ class Conversation(TextFile):
 
   @classmethod
   def create_conversation(cls: Type[T], base_directory: str, title: Optional[str] = None,
-                        prompt: Optional[str] = None, registry=None, **kwargs) -> Optional[T]:
+                        prompt: Optional[str] = None, **kwargs) -> Optional[T]:
     """
     Create a new conversation file.
 
@@ -939,7 +927,6 @@ class Conversation(TextFile):
         base_directory: Base directory for the file
         title: Optional title for the conversation
         prompt: Optional prompt for the conversation
-        registry: Optional Registry object for direct command execution
         **kwargs: Additional arguments to pass to the constructor
 
     Returns:
@@ -961,7 +948,6 @@ class Conversation(TextFile):
       base_directory=base_directory,
       title=title,
       prompt=prompt or "",
-      registry=registry,
       **kwargs
     )
 
@@ -973,14 +959,13 @@ class Conversation(TextFile):
     return conversation
 
   @classmethod
-  def load_conversation(cls: Type[T], conversation_id: str, base_directory: str, registry=None) -> Optional[T]:
+  def load_conversation(cls: Type[T], conversation_id: str, base_directory: str) -> Optional[T]:
     """
     Load a conversation by ID.
 
     Args:
         conversation_id: The ID of the conversation to load
         base_directory: Base directory for file operations
-        registry: Optional Registry object for direct command execution
 
     Returns:
         Optional[T]: The loaded conversation, or None if loading failed
@@ -1017,11 +1002,13 @@ class Conversation(TextFile):
           timestamp=result["metadata"].get("timestamp"),
           title=data.get("title", DEFAULT_CONVERSATION_TITLE),
           prompt=data.get("prompt", ""),
+          tool_calling_prompt=data.get("tool_calling_prompt"),
+          tool_pattern_name=data.get("tool_pattern_name"),
+          tool_protocol_name=data.get("tool_protocol_name"),
           messages=[Message.from_dict(m) for m in data.get("messages", [])],
           actions=[Action.from_dict(a) for a in data.get("actions", [])],
           tool_definitions=[ToolDefinition.from_dict(t) for t in data.get("tool_definitions", [])],
           custom_tag_formats=custom_tag_formats,
-          registry=registry,
           metadata=metadata
         )
 

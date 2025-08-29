@@ -55,7 +55,9 @@ class Message:
                file_ids: Optional[List[str]] = None,
                created_at: Optional[float] = None,
                updated_at: Optional[float] = None,
-               inline_args: Optional[Dict[str, Any]] = None):
+               inline_args: Optional[Dict[str, Any]] = None,
+               tool_pattern_name: Optional[str] = None,
+               tool_protocol_name: Optional[str] = None):
     """
     Initialize a message.
 
@@ -67,6 +69,8 @@ class Message:
         created_at: Optional timestamp for creation time
         updated_at: Optional timestamp for last update time
         inline_args: Optional arguments extracted from the message content
+        tool_pattern_name: Optional name of the tool pattern used for this message
+        tool_protocol_name: Optional name of the tool protocol used for this message
     """
     self.message_id = message_id or str(uuid.uuid4())
     self.speaker = speaker if isinstance(speaker, MessageRole) else MessageRole(speaker)
@@ -75,6 +79,8 @@ class Message:
     self.created_at = created_at or time.time()
     self.updated_at = updated_at or self.created_at
     self.inline_args = inline_args or {}
+    self.tool_pattern_name = tool_pattern_name
+    self.tool_protocol_name = tool_protocol_name
 
   def to_dict(self) -> Dict[str, Any]:
     """Convert the message to a dictionary."""
@@ -85,7 +91,9 @@ class Message:
       "file_ids": self.file_ids,
       "created_at": self.created_at,
       "updated_at": self.updated_at,
-      "inline_args": self.inline_args
+      "inline_args": self.inline_args,
+      "tool_pattern_name": self.tool_pattern_name,
+      "tool_protocol_name": self.tool_protocol_name
     }
 
   @classmethod
@@ -98,7 +106,9 @@ class Message:
       file_ids=data.get("file_ids", []),
       created_at=data.get("created_at"),
       updated_at=data.get("updated_at"),
-      inline_args=data.get("inline_args", {}) or data.get("query_args", {})  # Handle both old and new field names
+      inline_args=data.get("inline_args", {}) or data.get("query_args", {}),  # Handle both old and new field names
+      tool_pattern_name=data.get("tool_pattern_name"),
+      tool_protocol_name=data.get("tool_protocol_name")
     )
 
   def extract_inline_args(self, left_wrapper: str = LEFT_ARG_WRAPPER, right_wrapper: str = RIGHT_ARG_WRAPPER) -> str:

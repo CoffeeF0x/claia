@@ -51,6 +51,17 @@ legacy = "claia.models.definitions.legacy:LegacyDefinitionsPlugin"
 [project.entry-points."claia.agents"]
 simple = "claia.agents.builtin.simple:SimpleAgentPlugin"
 
+# Entry points for tools system
+[project.entry-points."claia.tool_patterns"]
+default = "claia.tools.patterns.default:DefaultToolPatternPlugin"
+
+[project.entry-points."claia.tool_protocols"]
+simple = "claia.tools.protocols.simple:SimpleProtocolPlugin"
+
+[project.entry-points."claia.command_modules"]
+echo = "claia.tools.modules.sample:EchoModulePlugin"
+"time.now" = "claia.tools.modules.sample:TimeNowModulePlugin"
+
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
 python_files = ["test_*.py"]
