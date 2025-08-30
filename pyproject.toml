@@ -59,8 +59,7 @@ default = "claia.tools.patterns.default:DefaultToolPatternPlugin"
 simple = "claia.tools.protocols.simple:SimpleProtocolPlugin"
 
 [project.entry-points."claia.command_modules"]
-echo = "claia.tools.modules.sample:EchoModulePlugin"
-"time.now" = "claia.tools.modules.sample:TimeNowModulePlugin"
+sample = "claia.tools.modules.sample:SampleModulePlugin"
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]

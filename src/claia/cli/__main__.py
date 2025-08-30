@@ -31,10 +31,10 @@ import time
 import logging
 import os
 import sys
+import json
 from typing import Optional, Dict, Any
 
 # Internal dependencies
-# from claia.commands import CommandRegistry
 from claia.agents import Process, AgentRegistry
 from claia.common.results import Result
 from claia.common.enums.agent import ProcessStatus, SourcePreference
@@ -43,9 +43,7 @@ from claia.common.files.conversation import Conversation
 from claia.cli.settings import Settings
 from claia.cli.defaults import initialize_defaults
 from claia.cli.logger import initialize_logging
-from claia.tools.manager import ToolsManager
 from claia.tools.registry import ToolsRegistry
-# from claia.cli.mod import initialize_module_system
 
 
 
@@ -65,9 +63,6 @@ DEFAULT_AGENT = "simple"
 ########################################################################
 logger = logging.getLogger(__name__)
 
-# Inlined tool processing singletons
-tools_manager = ToolsManager()
-tools_registry = ToolsRegistry(tools_manager)
 
 
 
@@ -108,51 +103,38 @@ def get_user_input() -> str:
 ########################################################################
 #                            TOOL FUNCTIONS                            #
 ########################################################################
-def process_final_message_tools(final_message, process: Process, settings: Settings) -> None:
+def process_final_message_tools(final_message, process: Process, settings: Settings, tools_registry: ToolsRegistry) -> None:
   """Process any tool calls in the final message and update the conversation if needed."""
 
   # Step 1: Check if the conversation has a tool pattern configured
-  # Tool patterns define the syntax for tool calls (e.g., XML tags, special tokens)
   if not process.conversation.tool_pattern_name:
     return
 
-  # Step 2: Load all available tool patterns and find the one for this conversation
+  # Step 2: Lightweight precheck using the registry
   try:
-    tools_manager.load_all()
-    pattern_plugin, pattern_info = tools_manager.get_pattern_by_name(process.conversation.tool_pattern_name)
-    if not pattern_plugin or not pattern_info:
-      logger.debug(f"Pattern '{process.conversation.tool_pattern_name}' not found")
-      return
-
-    # Step 3: Check if the message content contains any tool call opening tokens
-    # Opening tokens are the start markers for tool calls (e.g., "<tool>", "```tool")
-    has_tool_tokens = False
-    for token in getattr(pattern_info, 'opening_tokens', []) or []:
-      if token in final_message.content:
-        has_tool_tokens = True
-        break
-
-    # If no tool tokens found, nothing to process
+    has_tool_tokens = tools_registry.contains_tool_tokens(
+      final_message.content,
+      pattern_name=process.conversation.tool_pattern_name
+    )
     if not has_tool_tokens:
       return
-
   except Exception as e:
     logger.warning(f"Error checking for tool call tokens: {e}")
     return
 
   logger.debug("Tool calls detected in final message, processing...")
 
-  # Step 4: Verify conversation has both pattern and protocol configured
+  # Step 3: Verify conversation has both pattern and protocol configured
   # Protocol defines how to execute the tools (e.g., local execution, API calls)
   if not process.conversation.tool_protocol_name:
     logger.debug("No tool protocol configured for conversation")
     return
 
-  # Step 5: Get user configuration parameters to pass to tools
+  # Step 4: Get user configuration parameters to pass to tools
   # This includes API keys, preferences, and other user-specific settings
   user_kwargs = settings.get_user_kwargs()
 
-  # Step 6: Process the tool calls in the message content
+  # Step 5: Process the tool calls in the message content
   try:
     processed_content = tools_registry.process_content(
       process.conversation,
@@ -165,7 +147,7 @@ def process_final_message_tools(final_message, process: Process, settings: Setti
     logger.error(f"Tool processing failed: {e}")
     return
 
-  # Step 7: If content changed after processing, update the message and display changes
+  # Step 6: If content changed after processing, update the message and display changes
   # This happens when tool calls are replaced with their results
   if processed_content != final_message.content:
     print("\n[Processing tool calls...]")
@@ -173,6 +155,15 @@ def process_final_message_tools(final_message, process: Process, settings: Setti
     print(processed_content[len(final_message.content):], flush=True)
     # Update the stored message with the processed content
     process.conversation.update_message(final_message.message_id, content=processed_content)
+
+def parse_kv_args(tokens: list[str]) -> Dict[str, Any]:
+  """Parse a list of key=value tokens into a dict."""
+  params: Dict[str, Any] = {}
+  for tok in tokens:
+    if '=' in tok:
+      k, v = tok.split('=', 1)
+      params[k.strip()] = v.strip()
+  return params
 
 
 
@@ -200,14 +191,10 @@ def main() -> None:
     for arg in settings.extra_args:
       logger.debug(f"Stored extra argument: {arg}")
 
-    # Initialize the command registry
-    logger.debug("Initializing command registry")
-    # TODO: Update command registry initialization for new architecture
-    # command_registry = CommandRegistry()
-
-    # Initialize the module system (must happen after commands are initialized)
-    logger.debug("Initializing module system")
-    # initialize_module_system(command_registry, settings.modules_directory)
+    # Initialize the tools registry
+    logger.debug("Initializing tools registry")
+    tools_registry = ToolsRegistry()
+    _ = tools_registry.get_commands_catalog() # NOTE: Can probably be removed later
 
     # Initialize the agent registry and process queue
     logger.debug("Initializing agent registry and process queue")
@@ -224,16 +211,25 @@ def main() -> None:
 
     # Check for and process command line arguments
     if settings.extra_args:
-      # Process command line arguments using the registry
+      # Process command line arguments using ToolsRegistry
       logger.info(f"Processing command line arguments: {' '.join(settings.extra_args)}")
-      # TODO: Update command processing for new architecture
-      # result = command_registry.run(settings.extra_args, settings)
+      # Ensure there's an active conversation for command execution context
+      if not settings.active_conversation:
+        settings.active_conversation = Conversation(settings.files_directory)
 
-      # if result.get_message():
-      #   print(result.get_message())
+      user_kwargs = settings.get_user_kwargs()
+      cmd = settings.extra_args[0]
+      params = parse_kv_args(settings.extra_args[1:])
+      cmd_result = tools_registry.run_command(cmd, params, settings.active_conversation, **user_kwargs)
 
-      # For now, just print a message that command processing is disabled
-      print(f"Command line processing temporarily disabled: {' '.join(settings.extra_args)}")
+      if cmd_result.is_success():
+        data = cmd_result.get_data()
+        if isinstance(data, (dict, list)):
+          print(json.dumps(data, indent=2))
+        elif data is not None:
+          print(str(data))
+      else:
+        print(f"Error: {cmd_result.get_message()}")
 
       # Exit after running the command
       logger.info("CLAIA exiting after CLI command execution")
@@ -261,16 +257,29 @@ def main() -> None:
       # Process user input as either a command or a query
       if user_input and user_input[0] == COMMAND_CHARACTER:
         logger.debug(f"Processing as command: {user_input[1:]}")
-        # TODO: Update command processing for new architecture
-        # result = command_registry.run(user_input[1:].split(), settings)
-        # print(result.message)
-        print(f"Command processing temporarily disabled: {user_input[1:]}")
+        # Process interactive command using ToolsRegistry
+        tokens = user_input[1:].split()
+        if not tokens:
+          continue
+        cmd = tokens[0]
+        params = parse_kv_args(tokens[1:])
+        # Ensure there is a conversation context
+        if not settings.active_conversation:
+          settings.active_conversation = Conversation(settings.files_directory)
+        user_kwargs = settings.get_user_kwargs()
+        cmd_result = tools_registry.run_command(cmd, params, settings.active_conversation, **user_kwargs)
+        if cmd_result.is_success():
+          data = cmd_result.get_data()
+          if isinstance(data, (dict, list)):
+            print(json.dumps(data, indent=2))
+          elif data is not None:
+            print(str(data))
+        else:
+          print(f"Error: {cmd_result.get_message()}")
       else:
         # Create a new conversation if one doesn't exist
         if not settings.active_conversation:
-          settings.active_conversation = Conversation(
-            settings.files_directory
-          )
+          settings.active_conversation = Conversation(settings.files_directory)
 
         # Set the active agent if one doesn't exist
         if not settings.active_agent:
@@ -328,7 +337,7 @@ def main() -> None:
           print() # Add newline after final message
 
           # Check for and process any tool calls in the final message
-          process_final_message_tools(final_message, process, settings)
+          process_final_message_tools(final_message, process, settings, tools_registry)
 
           process.conversation.save()
         elif process.status == ProcessStatus.FAILED:

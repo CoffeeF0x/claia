@@ -7,6 +7,7 @@ ToolsManager loads and exposes plugin managers for:
 
 import pluggy
 import logging
+import importlib
 import importlib.metadata as metadata
 from typing import Dict, Optional
 
@@ -49,7 +50,24 @@ class ToolsManager:
       except Exception as e:
         logger.warning(f"Failed to load {label} plugin {ep.name}: {e}")
     if loaded == 0:
-      logger.info(f"No {label} plugins found via entry points for group {group}")
+      # Fall back to built-in plugins when running from source without installation
+      fallbacks = {
+        'claia.tool_patterns': [('claia.tools.patterns.default', 'DefaultToolPatternPlugin')],
+        'claia.tool_protocols': [('claia.tools.protocols.simple', 'SimpleProtocolPlugin')],
+        'claia.command_modules': [('claia.tools.modules.sample', 'SampleModulePlugin')],
+      }
+      for mod_path, cls_name in fallbacks.get(group, []):
+        try:
+          mod = importlib.import_module(mod_path)
+          cls = getattr(mod, cls_name)
+          inst = cls()
+          pm.register(inst)
+          loaded += 1
+          logger.debug(f"Loaded built-in {label} plugin: {cls_name} from {mod_path}")
+        except Exception as e:
+          logger.debug(f"No built-in {label} plugin loaded from {mod_path}:{cls_name}: {e}")
+      if loaded == 0:
+        logger.info(f"No {label} plugins found via entry points for group {group}")
 
   def get_protocol_by_name(self, name: str):
     self.load_all()
