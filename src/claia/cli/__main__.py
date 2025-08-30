@@ -108,70 +108,71 @@ def get_user_input() -> str:
 ########################################################################
 #                            TOOL FUNCTIONS                            #
 ########################################################################
-def has_tool_call_tokens(content: str, conversation: Conversation) -> bool:
-  """Check if content contains any opening tool tokens for the conversation's pattern."""
-  if not conversation.tool_pattern_name:
-    return False
+def process_final_message_tools(final_message, process: Process, settings: Settings) -> None:
+  """Process any tool calls in the final message and update the conversation if needed."""
 
+  # Step 1: Check if the conversation has a tool pattern configured
+  # Tool patterns define the syntax for tool calls (e.g., XML tags, special tokens)
+  if not process.conversation.tool_pattern_name:
+    return
+
+  # Step 2: Load all available tool patterns and find the one for this conversation
   try:
     tools_manager.load_all()
-    pattern_plugin, pattern_info = tools_manager.get_pattern_by_name(conversation.tool_pattern_name)
+    pattern_plugin, pattern_info = tools_manager.get_pattern_by_name(process.conversation.tool_pattern_name)
     if not pattern_plugin or not pattern_info:
-      logger.debug(f"Pattern '{conversation.tool_pattern_name}' not found")
-      return False
+      logger.debug(f"Pattern '{process.conversation.tool_pattern_name}' not found")
+      return
+
+    # Step 3: Check if the message content contains any tool call opening tokens
+    # Opening tokens are the start markers for tool calls (e.g., "<tool>", "```tool")
+    has_tool_tokens = False
     for token in getattr(pattern_info, 'opening_tokens', []) or []:
-      if token in content:
-        return True
-    return False
+      if token in final_message.content:
+        has_tool_tokens = True
+        break
+
+    # If no tool tokens found, nothing to process
+    if not has_tool_tokens:
+      return
+
   except Exception as e:
     logger.warning(f"Error checking for tool call tokens: {e}")
-    return False
+    return
 
+  logger.debug("Tool calls detected in final message, processing...")
 
-def process_message_content(content: str, conversation: Conversation, settings=None, **kwargs: Any) -> str:
-  """Process tool calls in content according to the conversation's tool config."""
-  if not conversation.tool_pattern_name or not conversation.tool_protocol_name:
-    logger.debug("No tool pattern or protocol configured for conversation")
-    return content
+  # Step 4: Verify conversation has both pattern and protocol configured
+  # Protocol defines how to execute the tools (e.g., local execution, API calls)
+  if not process.conversation.tool_protocol_name:
+    logger.debug("No tool protocol configured for conversation")
+    return
+
+  # Step 5: Get user configuration parameters to pass to tools
+  # This includes API keys, preferences, and other user-specific settings
+  user_kwargs = settings.get_user_kwargs()
+
+  # Step 6: Process the tool calls in the message content
   try:
-    return tools_registry.process_content(
-      conversation,
-      content,
-      settings=settings,
-      protocol_name=conversation.tool_protocol_name,
-      **kwargs
+    processed_content = tools_registry.process_content(
+      process.conversation,
+      final_message.content,
+      settings=None,
+      protocol_name=process.conversation.tool_protocol_name,
+      **user_kwargs
     )
   except Exception as e:
     logger.error(f"Tool processing failed: {e}")
-    return content
+    return
 
-
-def check_and_process_if_needed(content: str, conversation: Conversation, settings=None, **kwargs: Any) -> str:
-  """Check for tool tokens and process if present; otherwise return content unchanged."""
-  if has_tool_call_tokens(content, conversation):
-    logger.debug("Tool call tokens detected, processing...")
-    return process_message_content(content, conversation, settings, **kwargs)
-  return content
-
-
-def process_final_message_tools(final_message, process: Process, settings: Settings) -> None:
-  """Process any tool calls in the final message and update the conversation if needed."""
-  if has_tool_call_tokens(final_message.content, process.conversation):
-    logger.debug("Tool calls detected in final message, processing...")
-    user_kwargs = settings.get_user_kwargs()
-    processed_content = process_message_content(
-      final_message.content,
-      process.conversation,
-      settings=None,
-      **user_kwargs
-    )
-
-    # If content changed, update the message and display the changes
-    if processed_content != final_message.content:
-      print("\n[Processing tool calls...]")
-      print(processed_content[len(final_message.content):], flush=True)
-      # Update the message with processed content
-      process.conversation.update_message(final_message.message_id, content=processed_content)
+  # Step 7: If content changed after processing, update the message and display changes
+  # This happens when tool calls are replaced with their results
+  if processed_content != final_message.content:
+    print("\n[Processing tool calls...]")
+    # Display only the new content that was added (tool results)
+    print(processed_content[len(final_message.content):], flush=True)
+    # Update the stored message with the processed content
+    process.conversation.update_message(final_message.message_id, content=processed_content)
 
 
 
