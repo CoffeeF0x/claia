@@ -55,6 +55,9 @@ MAX_HISTORY_LEN = 1000
 COMMAND_CHARACTER = ":"
 INPUT_CHARACTER = ":"
 DEFAULT_AGENT = "simple"
+# Default tool-calling configuration
+TOOL_PATTERN_NAME = "default"
+TOOL_PROTOCOL_NAME = "simple"
 
 
 
@@ -156,6 +159,46 @@ def process_final_message_tools(final_message, process: Process, settings: Setti
     # Update the stored message with the processed content
     process.conversation.update_message(final_message.message_id, content=processed_content)
 
+def ensure_tool_prompt(conv: Conversation, tools_registry: ToolsRegistry) -> None:
+  """Ensure the conversation has a tool_calling_prompt set from the active pattern.
+
+  If conv.tool_calling_prompt is empty, try to fetch the selected pattern's
+  prompt_template and assign it. This wires pattern-provided prompts into
+  Conversation.get_system_prompt().
+  """
+  if not conv:
+    return
+  if getattr(conv, 'tool_calling_prompt', None):
+    return
+  pattern_name = getattr(conv, 'tool_pattern_name', None)
+  try:
+    plugin, info = tools_registry.manager.get_pattern_by_name(pattern_name) if pattern_name else (None, None)
+    if not plugin:
+      plugin = tools_registry.manager.get_default_pattern()
+      info = plugin.get_pattern_info() if plugin else None
+  except Exception:
+    plugin, info = None, None
+  prompt = getattr(info, 'prompt_template', None) if info else None
+  if prompt:
+    conv.set_tool_calling_prompt(prompt)
+
+def setup_conversation(settings: Settings, tools_registry: ToolsRegistry) -> None:
+  """Setup or configure the active conversation with tool defaults if needed."""
+  if not settings.active_conversation:
+    settings.active_conversation = Conversation(
+      settings.files_directory,
+      tool_pattern_name=TOOL_PATTERN_NAME,
+      tool_protocol_name=TOOL_PROTOCOL_NAME
+    )
+    ensure_tool_prompt(settings.active_conversation, tools_registry)
+  else:
+    # Backfill defaults if missing
+    if not settings.active_conversation.tool_pattern_name:
+      settings.active_conversation.set_tool_pattern_name(TOOL_PATTERN_NAME)
+    if not settings.active_conversation.tool_protocol_name:
+      settings.active_conversation.set_tool_protocol_name(TOOL_PROTOCOL_NAME)
+    ensure_tool_prompt(settings.active_conversation, tools_registry)
+
 def parse_kv_args(tokens: list[str]) -> Dict[str, Any]:
   """Parse a list of key=value tokens into a dict."""
   params: Dict[str, Any] = {}
@@ -214,8 +257,7 @@ def main() -> None:
       # Process command line arguments using ToolsRegistry
       logger.info(f"Processing command line arguments: {' '.join(settings.extra_args)}")
       # Ensure there's an active conversation for command execution context
-      if not settings.active_conversation:
-        settings.active_conversation = Conversation(settings.files_directory)
+      setup_conversation(settings, tools_registry)
 
       user_kwargs = settings.get_user_kwargs()
       cmd = settings.extra_args[0]
@@ -303,8 +345,7 @@ def main() -> None:
         if pos_args:
           params['__args__'] = pos_args
         # Ensure there is a conversation context
-        if not settings.active_conversation:
-          settings.active_conversation = Conversation(settings.files_directory)
+        setup_conversation(settings, tools_registry)
         user_kwargs = settings.get_user_kwargs()
         cmd_result = tools_registry.run_command(cmd, params, settings.active_conversation, **user_kwargs)
         if cmd_result.is_success():
@@ -317,8 +358,7 @@ def main() -> None:
           print(f"Error: {cmd_result.get_message()}")
       else:
         # Create a new conversation if one doesn't exist
-        if not settings.active_conversation:
-          settings.active_conversation = Conversation(settings.files_directory)
+        setup_conversation(settings, tools_registry)
 
         # Set the active agent if one doesn't exist
         if not settings.active_agent:
