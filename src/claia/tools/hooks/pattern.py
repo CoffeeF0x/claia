@@ -17,6 +17,7 @@ class PatternInfo:
   description: str
   opening_token: str  # Token that starts a tool call
   closing_token: str  # Token that ends a tool call
+  prompt_template: Optional[str] = None  # Optional system/tool prompt template
 
 
 hookspec = pluggy.HookspecMarker("claia_tool_patterns")
