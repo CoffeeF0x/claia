@@ -219,7 +219,12 @@ def main() -> None:
 
       user_kwargs = settings.get_user_kwargs()
       cmd = settings.extra_args[0]
-      params = parse_kv_args(settings.extra_args[1:])
+      # Build params from key=value and collect positionals into __args__
+      tail_tokens = settings.extra_args[1:]
+      params = parse_kv_args(tail_tokens)
+      pos_args = [t for t in tail_tokens if '=' not in t]
+      if pos_args:
+        params['__args__'] = pos_args
       cmd_result = tools_registry.run_command(cmd, params, settings.active_conversation, **user_kwargs)
 
       if cmd_result.is_success():
@@ -259,10 +264,44 @@ def main() -> None:
         logger.debug(f"Processing as command: {user_input[1:]}")
         # Process interactive command using ToolsRegistry
         tokens = user_input[1:].split()
+        # If no command entered, print available modules
         if not tokens:
+          catalog = tools_registry.get_commands_catalog()
+          if not catalog:
+            print("No modules available.")
+          else:
+            print("Available modules:")
+            for mod_name, mod in catalog.items():
+              info = mod.get('module_info')
+              title = getattr(info, 'title', None) if info else None
+              desc = getattr(info, 'description', None) if info else None
+              line = f"  - {mod_name}"
+              if title:
+                line += f" ({title})"
+              if desc:
+                line += f": {desc}"
+              print(line)
           continue
         cmd = tokens[0]
-        params = parse_kv_args(tokens[1:])
+
+        # If only a module name was given, list its commands
+        if '.' not in cmd and len(tokens) == 1:
+          catalog = tools_registry.get_commands_catalog()
+          mod = catalog.get(cmd)
+          if mod:
+            print(f"Module '{cmd}' commands:")
+            for c in mod.get('list_of_commands', []):
+              cname = c.get('command_name')
+              cdesc = c.get('command_description')
+              print(f"  - {cmd}.{cname}: {cdesc}")
+            continue
+
+        # Build params from key=value and collect positionals into __args__
+        tail_tokens = tokens[1:]
+        params = parse_kv_args(tail_tokens)
+        pos_args = [t for t in tail_tokens if '=' not in t]
+        if pos_args:
+          params['__args__'] = pos_args
         # Ensure there is a conversation context
         if not settings.active_conversation:
           settings.active_conversation = Conversation(settings.files_directory)

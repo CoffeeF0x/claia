@@ -149,11 +149,22 @@ class ToolsRegistry:
 
     try:
       if cmd_def and hasattr(cmd_def, 'callable') and callable(cmd_def.callable):
-        data = cmd_def.callable(parameters or {}, conversation, **filtered_kwargs)
+        # Prepare keyword args for the callable based on its command definition
+        call_kwargs = self._prepare_command_kwargs(parameters or {}, cmd_def)
+
+        # Inject conversation only if the module explicitly requires it
+        req = getattr(module_info, 'required_args', None) if module_info else None
+        if req and 'conversation' in req:
+          call_kwargs['conversation'] = conversation
+
+        # Merge any filtered module-level kwargs (e.g., API keys)
+        call_kwargs.update(filtered_kwargs)
+
+        data = cmd_def.callable(**call_kwargs)
       else:
-        # Legacy single-command module
+        # Legacy single-command module keeps legacy signature
         data = plugin.run(parameters or {}, conversation, **filtered_kwargs)
-      return Result.success(data=data)
+      return Result.ok(data=data)
     except Exception as e:
       return Result.fail(str(e))
 
@@ -161,3 +172,66 @@ class ToolsRegistry:
     if not required_args:
       return {}
     return {k: v for k, v in kwargs.items() if k in required_args}
+
+  def _prepare_command_kwargs(self, parameters: Dict[str, Any], cmd_def) -> Dict[str, Any]:
+    """Map CLI-provided parameters to the callable's expected arguments.
+
+    Supports both key=value style and positional tokens provided under
+    the special key '__args__' (a list of raw string tokens).
+    """
+    args_spec = getattr(cmd_def, 'arguments', None) or {}
+    # Preserve insertion order of args_spec (Python 3.7+ dicts are ordered)
+    pos_vals = []
+    if isinstance(parameters, dict) and '__args__' in parameters and isinstance(parameters['__args__'], list):
+      pos_vals = list(parameters['__args__'])
+
+    call_kwargs: Dict[str, Any] = {}
+
+    for name, arg_def in args_spec.items():
+      provided = None
+      # 1) explicit key=value takes precedence
+      if name in parameters:
+        provided = parameters[name]
+      # 2) use positional if available
+      elif pos_vals:
+        provided = pos_vals.pop(0)
+      # 3) default value if present and not provided
+      elif hasattr(arg_def, 'default_value') and getattr(arg_def, 'default_value') is not None:
+        provided = getattr(arg_def, 'default_value')
+
+      # Validate required
+      required = getattr(arg_def, 'required', False)
+      if provided is None and required:
+        raise ValueError(f"Missing required argument: {name}")
+
+      if provided is not None:
+        dtype = getattr(arg_def, 'data_type', 'str')
+        call_kwargs[name] = self._convert_type(provided, dtype)
+
+    return call_kwargs
+
+  def _convert_type(self, value: Any, data_type: str) -> Any:
+    """Convert string value to the requested data type.
+
+    Supports: 'str', 'int', 'float', 'bool'. Falls back to str.
+    """
+    try:
+      if data_type == 'int':
+        return int(value)
+      if data_type == 'float':
+        return float(value)
+      if data_type == 'bool':
+        if isinstance(value, bool):
+          return value
+        v = str(value).strip().lower()
+        if v in ('1', 'true', 't', 'yes', 'y', 'on'):
+          return True
+        if v in ('0', 'false', 'f', 'no', 'n', 'off'):
+          return False
+        # Non-standard bool: treat non-empty as True
+        return bool(v)
+      # default and 'str'
+      return str(value)
+    except Exception:
+      # If conversion fails, return original value
+      return value
