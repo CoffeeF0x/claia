@@ -140,7 +140,8 @@ class Conversation(TextFile):
     if not self.actions:
       self.add_action(ActionType.CREATE_CONVERSATION, {
         "title": self.title,
-        "prompt": self.prompt
+        "system_prompt": self.prompt,
+        "tool_prompt": self.tool_calling_prompt
       })
 
     # Add conversation-specific metadata
@@ -359,11 +360,10 @@ class Conversation(TextFile):
     old_prompt = self.tool_calling_prompt
     self.tool_calling_prompt = prompt
 
-    # Add action to track this change
-    self.add_action(ActionType.CHANGE_PROMPT, {
-      "field": "tool_calling_prompt",
-      "old_value": old_prompt,
-      "new_value": prompt
+    # Add action to track this change (tool prompt specific)
+    self.add_action(ActionType.CHANGE_TOOL_PROMPT, {
+      "old_prompt": old_prompt,
+      "new_prompt": prompt
     })
 
   def set_tool_pattern_name(self, pattern_name: str) -> None:
@@ -845,8 +845,8 @@ class Conversation(TextFile):
     old_prompt = self.prompt
     self.prompt = new_prompt
 
-    # Add an action for this prompt change
-    self.add_action(ActionType.CHANGE_PROMPT, {
+    # Add an action for this system prompt change
+    self.add_action(ActionType.CHANGE_SYSTEM_PROMPT, {
       "old_prompt": old_prompt,
       "new_prompt": new_prompt
     })
@@ -1078,6 +1078,130 @@ class Conversation(TextFile):
         List[ToolDefinition]: List of all tool definitions
     """
     return self.tool_definitions
+
+  def replace_tool_call(self, message_id: str, start: int, end: int, replacement: str) -> bool:
+    """
+    Replace a tool call span within a message by string indices.
+
+    On success, logs ActionType.REPLACE_TOOL_CALL and updates the message content.
+    On failure (message missing, invalid indices), logs ActionType.FAILED_TOOL_CALL.
+
+    Args:
+      message_id: The ID of the message containing the tool call
+      start: Start index (inclusive) of the span in the message content
+      end: End index (exclusive) of the span in the message content
+      replacement: The text to replace the span with
+
+    Returns:
+      bool: True on successful replacement; False otherwise
+    """
+    message = self.get_message(message_id)
+    if not message:
+      self.add_action(ActionType.FAILED_TOOL_CALL, {
+        "message_id": message_id,
+        "start": start,
+        "end": end,
+        "error": "message_not_found"
+      })
+      logger.error(f"replace_tool_call failed: message not found: {message_id}")
+      return False
+
+    content_len = len(message.content or "")
+    if start < 0 or end < 0 or start >= end or end > content_len:
+      self.add_action(ActionType.FAILED_TOOL_CALL, {
+        "message_id": message_id,
+        "start": start,
+        "end": end,
+        "error": "index_out_of_range"
+      })
+      logger.error(
+        f"replace_tool_call failed: invalid indices start={start}, end={end}, len={content_len}"
+      )
+      return False
+
+    new_content = (message.content[:start] if message.content else "") + replacement + (message.content[end:] if message.content else "")
+
+    # Log successful replacement before content update for audit trace
+    self.add_action(ActionType.REPLACE_TOOL_CALL, {
+      "message_id": message_id,
+      "start": start,
+      "end": end,
+      "replacement_preview": (replacement[:100] + "...") if len(replacement) > 100 else replacement
+    })
+
+    # Persist the content change (also records UPDATE_MESSAGE)
+    self.update_message(message_id, content=new_content)
+    return True
+
+  def get_tool_calls(self, message_id: str, start_token: str, end_token: str) -> List[Dict[str, Any]]:
+    """
+    Find tool call spans in a message delimited by the given start/end tokens.
+
+    Tokens are matched literally and non-overlapping, scanning left-to-right.
+
+    Args:
+      message_id: The ID of the message to inspect
+      start_token: The literal start token (e.g., "[TOOL_CALL]")
+      end_token: The literal end token (e.g., "[/TOOL_CALL]")
+
+    Returns:
+      List[Dict]: Each dict contains:
+        {
+          "start_index": int,    # index of the start token
+          "end_index": int,      # index after the end token
+          "content": str,        # text between the tokens
+          "full_text": str       # text including the tokens
+        }
+    """
+    message = self.get_message(message_id)
+    if not message or message.content is None:
+      return []
+
+    text = message.content
+    results: List[Dict[str, Any]] = []
+    search_pos = 0
+
+    while True:
+      s = text.find(start_token, search_pos)
+      if s == -1:
+        break
+      e = text.find(end_token, s + len(start_token))
+      if e == -1:
+        # No closing token; stop scanning to avoid infinite loop
+        break
+
+      end_idx = e + len(end_token)
+      inner = text[s + len(start_token): e]
+      full = text[s: end_idx]
+      results.append({
+        "start_index": s,
+        "end_index": end_idx,
+        "content": inner,
+        "full_text": full
+      })
+
+      search_pos = end_idx
+
+    return results
+
+  def register_failed_tool_call(self, message_id: str, start: Optional[int], end: Optional[int], error: Optional[str] = None) -> None:
+    """
+    Register that a tool call within text failed, by string index range.
+
+    Args:
+      message_id: The ID of the message containing the tool call
+      start: Optional start index (inclusive) of the tool call in the message content
+      end: Optional end index (exclusive) of the tool call in the message content
+      error: Optional error message or reason for failure
+    """
+    metadata = {
+      "message_id": message_id,
+      "start": start,
+      "end": end
+    }
+    if error:
+      metadata["error"] = error
+    self.add_action(ActionType.FAILED_TOOL_CALL, metadata)
 
   def stream_message(self, message_id: str, content: str, append: bool = False, end: bool = False) -> Optional[Message]:
     """

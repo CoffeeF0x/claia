@@ -9,6 +9,8 @@ class ActionType(Enum):
     """Enum for types of actions that can occur in a conversation."""
     CREATE_CONVERSATION    = auto()
     CHANGE_PROMPT          = auto()
+    CHANGE_SYSTEM_PROMPT   = auto()
+    CHANGE_TOOL_PROMPT     = auto()
     CREATE_MESSAGE         = auto()
     UPDATE_MESSAGE         = auto()
     DELETE_MESSAGE         = auto()
@@ -23,6 +25,8 @@ class ActionType(Enum):
     START_STREAM           = auto()
     END_STREAM             = auto()
     UPDATE_SETTINGS        = auto()
+    REPLACE_TOOL_CALL      = auto()
+    FAILED_TOOL_CALL       = auto()
 
 
 class MessageRole(Enum):
