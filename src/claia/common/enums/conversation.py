@@ -39,7 +39,7 @@ class MessageRole(Enum):
 
 class TagType(Enum):
     """Enum for types of tags that can appear in message content."""
-    TOOL_CALL = "[FUNCTION_CALL]"
+    TOOL_CALL = "[TOOL_CALL]"
     THINKING = "[THINKING]"
 
 

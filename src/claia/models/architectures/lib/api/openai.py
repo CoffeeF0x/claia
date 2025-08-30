@@ -63,9 +63,20 @@ class OpenAIModel(APIModel):
     """Convert a Conversation object to OpenAI messages format."""
     messages = []
 
+    # Prepend merged system prompt (includes tool instructions if present)
+    system_prompt = conversation.get_system_prompt()
+    if system_prompt:
+      messages.append({
+        "role": "system",
+        "content": system_prompt
+      })
+
     for message in conversation.messages:
+      # Skip any existing system messages; we already injected a merged system prompt above
+      if message.speaker not in (MessageRole.USER, MessageRole.ASSISTANT):
+        continue
+
       role_mapping = {
-        MessageRole.SYSTEM: "system",
         MessageRole.USER: "user",
         MessageRole.ASSISTANT: "assistant"
       }

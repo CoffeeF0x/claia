@@ -222,7 +222,7 @@ class Conversation(TextFile):
       opening_tag = tag_type.value
       # Basic derivation for closing tag (assumes format like "[TAG]")
       if opening_tag.startswith('[') and opening_tag.endswith(']'):
-        closing_tag = f"[/ {opening_tag[1:-1]}]" # e.g., [/FUNCTION_CALL]
+        closing_tag = f"[/{opening_tag[1:-1]}]" # e.g., [/FUNCTION_CALL]
       else:
         # Fallback if format is unexpected (though less likely with enums)
         closing_tag = f"/{opening_tag}"
@@ -480,6 +480,37 @@ class Conversation(TextFile):
         logger.error(f"Error during text substitution: {e}")
 
     return processed_text
+
+  def get_system_prompt(self, include_tools: bool = True, **kwargs) -> Optional[str]:
+    """
+    Build the effective system prompt to send to models.
+
+    - Starts with the conversation's base `prompt`.
+    - Optionally appends `tool_calling_prompt` when include_tools is True.
+    - Expands placeholders via `apply_substitutions()` so {tool_definitions} and
+      {tool_format} are populated using the conversation's state.
+
+    Args:
+      include_tools: Whether to include tool-calling instructions.
+      **kwargs: Optional substitution values for placeholders.
+
+    Returns:
+      The combined and substituted system prompt, or None if empty.
+    """
+    parts: List[str] = []
+    if self.prompt:
+      parts.append(self.prompt)
+    if include_tools and self.tool_calling_prompt:
+      parts.append(self.tool_calling_prompt)
+
+    if not parts:
+      return None
+
+    combined = "\n\n".join(p.strip() for p in parts if p and p.strip())
+    if not combined:
+      return None
+
+    return self.apply_substitutions(combined, **kwargs)
 
   def add_tool_definition(self, name: str, description: str, parameters: Dict[str, Any], returns: Dict[str, Any] = None) -> ToolDefinition:
     """

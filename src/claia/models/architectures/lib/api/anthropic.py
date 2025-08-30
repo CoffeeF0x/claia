@@ -91,14 +91,13 @@ class AnthropicModel(APIModel):
 
   def _convert_conversation_to_messages(self, conversation: Conversation) -> tuple:
     """Convert a Conversation object to Anthropic messages format."""
-    system_message = None
+    # Use merged system prompt (includes tool instructions if present)
+    system_message = conversation.get_system_prompt()
     messages = []
 
     for message in conversation.messages:
-      if message.speaker == MessageRole.SYSTEM:
-        # Anthropic uses a separate system parameter
-        system_message = message.content
-      elif message.speaker == MessageRole.USER:
+      # Skip explicit system messages; we already injected merged system prompt
+      if message.speaker == MessageRole.USER:
         messages.append({
           "role": "user",
           "content": message.content

@@ -52,11 +52,12 @@ class OpenRouterModel(APIModel):
     """
     messages = []
 
-    # Add system prompt if available
-    if conversation.prompt:
+    # Add merged system prompt (includes tool instructions if present)
+    system_prompt = conversation.get_system_prompt()
+    if system_prompt:
       messages.append({
         "role": "system",
-        "content": conversation.prompt
+        "content": system_prompt
       })
 
     # Convert to OpenAI format
