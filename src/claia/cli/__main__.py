@@ -31,6 +31,7 @@ import time
 import logging
 import os
 import sys
+from typing import Optional, Dict, Any
 
 # Internal dependencies
 # from claia.commands import CommandRegistry
@@ -42,7 +43,8 @@ from claia.common.files.conversation import Conversation
 from claia.cli.settings import Settings
 from claia.cli.defaults import initialize_defaults
 from claia.cli.logger import initialize_logging
-from claia.cli.tool_processor import ToolProcessor
+from claia.tools.manager import ToolsManager
+from claia.tools.registry import ToolsRegistry
 # from claia.cli.mod import initialize_module_system
 
 
@@ -62,6 +64,10 @@ DEFAULT_AGENT = "simple"
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
+
+# Inlined tool processing singletons
+tools_manager = ToolsManager()
+tools_registry = ToolsRegistry(tools_manager)
 
 
 
@@ -96,6 +102,76 @@ def get_user_input() -> str:
   """Get and return user input using a standardized prompt symbol."""
   logger.debug("Waiting for user input")
   return input(INPUT_CHARACTER)
+
+
+
+########################################################################
+#                            TOOL FUNCTIONS                            #
+########################################################################
+def has_tool_call_tokens(content: str, conversation: Conversation) -> bool:
+  """Check if content contains any opening tool tokens for the conversation's pattern."""
+  if not conversation.tool_pattern_name:
+    return False
+
+  try:
+    tools_manager.load_all()
+    pattern_plugin, pattern_info = tools_manager.get_pattern_by_name(conversation.tool_pattern_name)
+    if not pattern_plugin or not pattern_info:
+      logger.debug(f"Pattern '{conversation.tool_pattern_name}' not found")
+      return False
+    for token in getattr(pattern_info, 'opening_tokens', []) or []:
+      if token in content:
+        return True
+    return False
+  except Exception as e:
+    logger.warning(f"Error checking for tool call tokens: {e}")
+    return False
+
+
+def process_message_content(content: str, conversation: Conversation, settings=None, **kwargs: Any) -> str:
+  """Process tool calls in content according to the conversation's tool config."""
+  if not conversation.tool_pattern_name or not conversation.tool_protocol_name:
+    logger.debug("No tool pattern or protocol configured for conversation")
+    return content
+  try:
+    return tools_registry.process_content(
+      conversation,
+      content,
+      settings=settings,
+      protocol_name=conversation.tool_protocol_name,
+      **kwargs
+    )
+  except Exception as e:
+    logger.error(f"Tool processing failed: {e}")
+    return content
+
+
+def check_and_process_if_needed(content: str, conversation: Conversation, settings=None, **kwargs: Any) -> str:
+  """Check for tool tokens and process if present; otherwise return content unchanged."""
+  if has_tool_call_tokens(content, conversation):
+    logger.debug("Tool call tokens detected, processing...")
+    return process_message_content(content, conversation, settings, **kwargs)
+  return content
+
+
+def process_final_message_tools(final_message, process: Process, settings: Settings) -> None:
+  """Process any tool calls in the final message and update the conversation if needed."""
+  if has_tool_call_tokens(final_message.content, process.conversation):
+    logger.debug("Tool calls detected in final message, processing...")
+    user_kwargs = settings.get_user_kwargs()
+    processed_content = process_message_content(
+      final_message.content,
+      process.conversation,
+      settings=None,
+      **user_kwargs
+    )
+
+    # If content changed, update the message and display the changes
+    if processed_content != final_message.content:
+      print("\n[Processing tool calls...]")
+      print(processed_content[len(final_message.content):], flush=True)
+      # Update the message with processed content
+      process.conversation.update_message(final_message.message_id, content=processed_content)
 
 
 
@@ -136,10 +212,6 @@ def main() -> None:
     logger.debug("Initializing agent registry and process queue")
     agent_registry = AgentRegistry()
     agent_registry.start_workers(3)  # Start 3 worker threads
-
-    # Initialize tool processor for decoupled tool calling
-    logger.debug("Initializing tool processor")
-    tool_processor = ToolProcessor()
 
     # Set up command history with arrow key navigation
     setup_command_history()
@@ -255,22 +327,7 @@ def main() -> None:
           print() # Add newline after final message
 
           # Check for and process any tool calls in the final message
-          if tool_processor.has_tool_call_tokens(final_message.content, process.conversation):
-            logger.debug("Tool calls detected in final message, processing...")
-            user_kwargs = settings.get_user_kwargs()
-            processed_content = tool_processor.process_message_content(
-              final_message.content,
-              process.conversation,
-              settings=None,
-              **user_kwargs
-            )
-
-            # If content changed, update the message and display the changes
-            if processed_content != final_message.content:
-              print("\n[Processing tool calls...]")
-              print(processed_content[len(final_message.content):], flush=True)
-              # Update the message with processed content
-              process.conversation.update_message(final_message.message_id, content=processed_content)
+          process_final_message_tools(final_message, process, settings)
 
           process.conversation.save()
         elif process.status == ProcessStatus.FAILED:
