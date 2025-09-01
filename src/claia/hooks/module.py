@@ -8,7 +8,7 @@ This allows a single module to efficiently handle multiple related commands.
 
 import pluggy
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, List
 
 
 @dataclass
@@ -28,6 +28,7 @@ class CommandDefinition:
   description: str
   callable: Callable
   arguments: Dict[str, ArgumentDefinition]
+  required_args: Optional[List[str]] = None
 
 
 @dataclass
