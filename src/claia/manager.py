@@ -19,10 +19,11 @@ from typing import Dict, Optional, List, Type
 
 from .hooks import (
   ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHooks,
-  PatternHooks, ProtocolHooks, CommandModuleHooks,
-  DeploymentInfo, SolverInfo, ModelDefinition, ArchitectureInfo
+  PatternHooks, ProtocolHooks, CommandModuleHooks, AgentHooks,
+  DeploymentInfo, SolverInfo, ModelDefinition, ArchitectureInfo, AgentInfo
 )
 from .model_architectures.lib.base import BaseModel
+from .agents.lib.base import BaseAgent
 
 
 logger = logging.getLogger(__name__)
@@ -35,10 +36,11 @@ DEFAULT_SOLVER = "default"
 class UnifiedManager:
   """
   Unified manager for all CLAIA plugin types.
-  
-  This class coordinates all plugin types for both models and tools:
+
+  This class coordinates all plugin types for models, tools, and agents:
   - Model: Architecture, Deployment, Solver, Definition plugins
   - Tools: Pattern, Protocol, CommandModule plugins
+  - Agents: Agent plugins
   """
 
   def __init__(self):
@@ -66,6 +68,10 @@ class UnifiedManager:
     self.module_pm = pluggy.PluginManager("claia_command_modules")
     self.module_pm.add_hookspecs(CommandModuleHooks)
 
+    # Agent plugin manager
+    self.agent_pm = pluggy.PluginManager("claia_agents")
+    self.agent_pm.add_hookspecs(AgentHooks)
+
     self._plugins_loaded = False
     logger.debug("UnifiedManager initialized")
 
@@ -84,6 +90,9 @@ class UnifiedManager:
 
       # Load tool plugins
       self._load_tool_plugins()
+
+      # Load agent plugins
+      self._load_agent_plugins()
 
       self._plugins_loaded = True
       logger.info("All plugins loaded successfully")
@@ -452,3 +461,41 @@ class UnifiedManager:
     self.load_all_plugins()
     patterns = list(self.pattern_pm.get_plugins())
     return patterns[0] if patterns else None
+
+  # Agent plugin loading and methods
+  def _load_agent_plugins(self) -> None:
+    """Load agent plugins from entry points."""
+    loaded_count = 0
+
+    try:
+      for entry_point in metadata.entry_points().select(group='claia.agents'):
+        try:
+          plugin_class = entry_point.load()
+          plugin_instance = plugin_class()
+          self.agent_pm.register(plugin_instance)
+          loaded_count += 1
+          logger.debug(f"Loaded agent plugin: {entry_point.name} from {entry_point.value}")
+        except Exception as e:
+          logger.warning(f"Failed to load agent plugin {entry_point.name}: {e}")
+
+      if loaded_count == 0:
+        logger.warning("No agent plugins found in entry points, using built-in agents")
+
+      logger.info(f"Loaded {loaded_count} agent plugins from entry points")
+
+    except Exception as e:
+      logger.error(f"Error loading agent plugins from entry points: {e}")
+      raise
+
+  def get_agent_class(self, agent_name: str) -> Optional[Type[BaseAgent]]:
+    """Get the agent class for a specific agent name."""
+    self.load_all_plugins()
+
+    results = self.agent_pm.hook.get_agent_class(agent_name=agent_name)
+    for result in results:
+      if result is not None:
+        logger.debug(f"Found agent class {result.__name__} for {agent_name}")
+        return result
+
+    logger.debug(f"No agent class found for {agent_name}")
+    return None

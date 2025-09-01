@@ -10,7 +10,6 @@ Features a plugin-based architecture for extensibility:
 # Internal dependencies
 from .lib import Process, ProcessQueue, BaseAgent
 from .registry import AgentRegistry
-from .manager import AgentManager
 
 
 __all__ = [
@@ -18,5 +17,4 @@ __all__ = [
     'ProcessQueue',         # Queue for managing processes
     'BaseAgent',            # Base class for agent implementations
     'AgentRegistry',        # Plugin-based registry
-    'AgentManager'          # Plugin management
 ]

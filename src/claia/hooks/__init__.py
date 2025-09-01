@@ -1,9 +1,5 @@
 """
-Hook specifications for the unified CLAIA system.
-
-This package defines the plugin interfaces for both models and tools:
-- Model hooks: ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHooks
-- Tool hooks: PatternHooks, ProtocolHooks, CommandModuleHooks
+Hook system for CLAIA agent plugins.
 """
 
 from .architecture import ArchitectureHooks, ArchitectureInfo
@@ -13,6 +9,7 @@ from .definition import DefinitionHooks, ModelDefinition
 from .pattern import PatternHooks, PatternInfo
 from .protocol import ProtocolHooks, ProtocolInfo
 from .module import CommandModuleHooks, CommandDefinition, ArgumentDefinition
+from .agent import AgentHooks, AgentInfo
 
 __all__ = [
   'ArchitectureHooks', 'ArchitectureInfo',
@@ -21,5 +18,6 @@ __all__ = [
   'DefinitionHooks', 'ModelDefinition',
   'PatternHooks', 'PatternInfo',
   'ProtocolHooks', 'ProtocolInfo',
-  'CommandModuleHooks', 'CommandModuleInfo', 'CommandDefinition', 'ArgumentDefinition'
+  'CommandModuleHooks', 'CommandDefinition', 'ArgumentDefinition',
+  'AgentHooks', 'AgentInfo'
 ]

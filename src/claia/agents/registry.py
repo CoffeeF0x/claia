@@ -13,7 +13,7 @@ from typing import Any, Optional, Dict
 from claia.lib.results import Result
 from .lib.process import Process
 from .lib.queue import ProcessQueue
-from .manager import AgentManager
+from claia.manager import UnifiedManager
 from claia.models_registry import ModelRegistry
 from claia.lib.enums.agent import ProcessStatus
 
@@ -47,7 +47,7 @@ class AgentRegistry:
     logger.debug("Initializing Agent Registry")
 
     # Initialize agent manager
-    self.manager = AgentManager()
+    self.manager = UnifiedManager()
 
     # Initialize model registry
     self.model_registry = model_registry or ModelRegistry()
