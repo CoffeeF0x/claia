@@ -103,34 +103,19 @@ class ToolsManager:
       # Look for specific module
       for plugin in self.module_pm.get_plugins():
         info = plugin.get_module_info()
-        if info and info.name == module_name:
-          # Check if module supports new command structure
-          if hasattr(plugin, 'get_module_commands'):
-            commands = plugin.get_module_commands()
-            if cmd_name in commands:
-              return plugin, commands[cmd_name], info
+        if info and info.name == module_name and hasattr(plugin, 'get_module_commands'):
+          commands = plugin.get_module_commands()
+          if cmd_name in commands:
+            return plugin, commands[cmd_name], info
       return None, None, None
 
     # Search all modules for command name
     for plugin in self.module_pm.get_plugins():
       info = plugin.get_module_info()
-      if info:
-        # Check new command structure first
-        if hasattr(plugin, 'get_module_commands'):
-          commands = plugin.get_module_commands()
-          if command_name in commands:
-            return plugin, commands[command_name], info
-        # Fallback to legacy single-command modules
-        elif info.name == command_name and hasattr(plugin, 'run'):
-          # Create a legacy command definition
-          from .hooks.module import CommandDefinition
-          legacy_cmd = CommandDefinition(
-            name=command_name,
-            description=info.description,
-            callable=plugin.run,
-            arguments={}
-          )
-          return plugin, legacy_cmd, info
+      if info and hasattr(plugin, 'get_module_commands'):
+        commands = plugin.get_module_commands()
+        if command_name in commands:
+          return plugin, commands[command_name], info
 
     return None, None, None
 
@@ -158,7 +143,7 @@ class ToolsManager:
 
     for plugin in self.module_pm.get_plugins():
       info = plugin.get_module_info()
-      if not info:
+      if not info or not hasattr(plugin, 'get_module_commands'):
         continue
 
       module_entry = {
@@ -166,35 +151,25 @@ class ToolsManager:
         "list_of_commands": []
       }
 
-      # Check if module supports new command structure
-      if hasattr(plugin, 'get_module_commands'):
-        commands = plugin.get_module_commands()
-        for cmd_name, cmd_def in commands.items():
-          # Extract argument information from new ArgumentDefinition structure
-          arguments_info = []
-          if cmd_def.arguments:
-            for arg_name, arg_def in cmd_def.arguments.items():
-              arguments_info.append({
-                "name": arg_name,
-                "description": arg_def.description,
-                "data_type": arg_def.data_type,
-                "required": arg_def.required,
-                "default_value": getattr(arg_def, 'default_value', None)
-              })
+      commands = plugin.get_module_commands()
+      for cmd_name, cmd_def in commands.items():
+        # Extract argument information from ArgumentDefinition structure
+        arguments_info = []
+        if cmd_def.arguments:
+          for arg_name, arg_def in cmd_def.arguments.items():
+            arguments_info.append({
+              "name": arg_name,
+              "description": arg_def.description,
+              "data_type": arg_def.data_type,
+              "required": arg_def.required,
+              "default_value": getattr(arg_def, 'default_value', None)
+            })
 
-          module_entry["list_of_commands"].append({
-            "command_name": cmd_name,
-            "command_description": cmd_def.description,
-            "command_callable": cmd_def.callable,
-            "arguments": arguments_info
-          })
-      # Fallback to legacy single-command modules
-      elif hasattr(plugin, 'run'):
         module_entry["list_of_commands"].append({
-          "command_name": info.name,
-          "command_description": info.description,
-          "command_callable": plugin.run,
-          "arguments": []
+          "command_name": cmd_name,
+          "command_description": cmd_def.description,
+          "command_callable": cmd_def.callable,
+          "arguments": arguments_info
         })
 
       result[info.name] = module_entry

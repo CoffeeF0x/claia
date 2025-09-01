@@ -21,82 +21,44 @@ class SimpleProtocolPlugin:
       name="simple",
       title="Simple Local Protocol",
       description="Resolves tool name to a command module plugin and executes it.",
-      required_args=[],
     )
 
   @hookimpl
-  def execute(self, tool_name: str, parameters: Dict[str, Any], conversation, manager, **kwargs) -> Result:
-    # Use the new hierarchical command resolution system
-    module_plugin, command_def, module_info = manager.get_command_by_name(tool_name)
+  def execute(self, tool_name: str, parameters: Dict[str, Any], conversation, commands: Dict[str, Any], **kwargs) -> Result:
+    """Execute a local command resolved from the provided commands catalog.
 
-    if not module_plugin or not command_def:
-      return Result.fail(f"Command '{tool_name}' not found")
+    The registry is responsible for preparing and validating parameters.
+    This protocol simply locates the callable and invokes it.
+    """
+    # Resolve callable from catalog (supports 'module.command' or bare 'command')
+    callable_fn = None
 
-    # Filter kwargs based on module's required_args
-    filtered_kwargs = {}
-    if getattr(module_info, 'required_args', None):
-      for k in module_info.required_args:
-        if k in kwargs:
-          filtered_kwargs[k] = kwargs[k]
-
-    # Validate arguments using ArgumentDefinition structure
-    missing_args = []
-    type_errors = []
-    validated_params = {}
-
-    for arg_name, arg_def in command_def.arguments.items():
-      param_value = (parameters or {}).get(arg_name)
-
-      # Check if required argument is missing
-      if arg_def.required and param_value is None:
-        missing_args.append(f"{arg_name} ({arg_def.description})")
-        continue
-
-      # Use default value if provided and parameter is missing
-      if param_value is None and arg_def.default_value is not None:
-        param_value = arg_def.default_value
-
-      # Skip type validation if parameter is None
-      if param_value is None:
-        validated_params[arg_name] = param_value
-        continue
-
-      # Validate data type
-      try:
-        if arg_def.data_type == "str":
-          validated_params[arg_name] = str(param_value)
-        elif arg_def.data_type == "int":
-          validated_params[arg_name] = int(float(param_value))  # Handle "3.0" -> 3
-        elif arg_def.data_type == "float":
-          validated_params[arg_name] = float(param_value)
-        elif arg_def.data_type == "bool":
-          if isinstance(param_value, bool):
-            validated_params[arg_name] = param_value
-          elif str(param_value).lower() in ("true", "1", "yes", "on"):
-            validated_params[arg_name] = True
-          elif str(param_value).lower() in ("false", "0", "no", "off"):
-            validated_params[arg_name] = False
-          else:
-            raise ValueError(f"Cannot convert '{param_value}' to boolean")
-        else:  # "custom" or other types
-          validated_params[arg_name] = param_value
-      except (ValueError, TypeError) as e:
-        type_errors.append(f"{arg_name}: expected {arg_def.data_type}, got {type(param_value).__name__} ({e})")
-
-    # Report validation errors
-    if missing_args:
-      return Result.fail(f"Missing required arguments for '{tool_name}': {', '.join(missing_args)}")
-    if type_errors:
-      return Result.fail(f"Type validation errors for '{tool_name}': {'; '.join(type_errors)}")
-
-    # Use validated parameters
-    parameters = validated_params
-
-    # Execute the command using its registered callable
     try:
-      # Pass validated parameters as keyword arguments along with filtered_kwargs
-      all_kwargs = {**(parameters or {}), **filtered_kwargs}
-      data = command_def.callable(**all_kwargs)
+      if '.' in tool_name:
+        module_name, cmd_name = tool_name.split('.', 1)
+        mod = commands.get(module_name) if isinstance(commands, dict) else None
+        if mod and isinstance(mod.get('list_of_commands'), list):
+          for entry in mod['list_of_commands']:
+            if entry.get('command_name') == cmd_name:
+              callable_fn = entry.get('command_callable')
+              break
+      else:
+        # Search all modules for the command
+        if isinstance(commands, dict):
+          for _, mod in commands.items():
+            loc = mod.get('list_of_commands') if isinstance(mod, dict) else None
+            if isinstance(loc, list):
+              for entry in loc:
+                if entry.get('command_name') == tool_name:
+                  callable_fn = entry.get('command_callable')
+                  break
+            if callable_fn:
+              break
+
+      if not callable_fn:
+        return Result.fail(f"Command '{tool_name}' not found")
+
+      data = callable_fn(**(parameters or {}))
       return Result.ok(data)
     except Exception as e:
       logger.exception(f"Error executing command '{tool_name}'")

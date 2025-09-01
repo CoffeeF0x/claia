@@ -21,7 +21,6 @@ class SampleModulePlugin:
       name="sample",
       title="Sample Utilities",
       description="Sample module with utility commands for demonstration",
-      required_args=None,
     )
 
   @hookimpl

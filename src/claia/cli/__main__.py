@@ -22,6 +22,7 @@
 # - (Consider the posibility of a hybrid deployment, where model is loaded into cpu memory, but moved to gpu memory when processing requests to allow several models to run on a single machine)
 # - (or perhaps there's a deployment manager, and the deployment object contains methods to move the model between cpu and gpu as needed)
 
+# - add required_arg filtering back for the command modules
 
 
 # External dependencies

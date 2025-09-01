@@ -81,10 +81,13 @@ class ToolsRegistry:
       logger.warning(f"Tool protocol '{protocol_name}' not found; returning content unchanged")
       return content
 
-    # Filter kwargs for protocol if it requests required_args
-    filtered_protocol_kwargs = self._filter_kwargs(kwargs, getattr(protocol_info, 'required_args', None))
+    # Pass kwargs through to protocol unchanged
+    filtered_protocol_kwargs = dict(kwargs)
 
     processed = content
+
+    # Prepare the commands catalog once for the protocol to use for lookup
+    commands_catalog = self.get_commands_catalog()
 
     # Iterate until no more matches are found
     while True:
@@ -95,13 +98,23 @@ class ToolsRegistry:
       # Process matches in order, left-to-right to keep indices consistent
       for m in matches:
         try:
-          exec_result: Result = protocol_plugin.execute(
-            m.tool_name,
-            m.parameters or {},
-            conversation,
-            self.manager,
-            **filtered_protocol_kwargs
-          )
+          # Resolve command definition to prepare arguments
+          plugin, cmd_def, module_info = self.manager.get_command_by_name(m.tool_name)
+          if not plugin or not cmd_def:
+            exec_result = Result.fail(f"Command not found: {m.tool_name}")
+          else:
+            # Extra kwargs can include conversation and user/system kwargs; only mapped if expected by args
+            extra = dict(filtered_protocol_kwargs)
+            extra['conversation'] = conversation
+            prepared_kwargs = self._prepare_command_kwargs(m.parameters or {}, cmd_def, extra_kwargs=extra)
+
+            exec_result: Result = protocol_plugin.execute(
+              m.tool_name,
+              prepared_kwargs,
+              conversation,
+              commands_catalog,
+              **filtered_protocol_kwargs
+            )
         except Exception as e:
           exec_result = Result.fail(str(e))
 
@@ -137,43 +150,27 @@ class ToolsRegistry:
     return processed
 
   def run_command(self, command_name: str, parameters: Dict[str, Any], conversation, **kwargs) -> Result:
-    """Execute a command module by name (for CLI use) with arg filtering."""
+    """Execute a command module by name (for CLI use)."""
     self._ensure_loaded()
 
     plugin, cmd_def, module_info = self.manager.get_command_by_name(command_name)
-    if not plugin or not (cmd_def or hasattr(plugin, 'run')):
+    if not plugin or not cmd_def:
       return Result.fail(f"Command not found: {command_name}")
-
-    # Filter kwargs against module's required args (if any)
-    filtered_kwargs = self._filter_kwargs(kwargs, getattr(module_info, 'required_args', None))
 
     try:
       if cmd_def and hasattr(cmd_def, 'callable') and callable(cmd_def.callable):
         # Prepare keyword args for the callable based on its command definition
-        call_kwargs = self._prepare_command_kwargs(parameters or {}, cmd_def)
-
-        # Inject conversation only if the module explicitly requires it
-        req = getattr(module_info, 'required_args', None) if module_info else None
-        if req and 'conversation' in req:
-          call_kwargs['conversation'] = conversation
-
-        # Merge any filtered module-level kwargs (e.g., API keys)
-        call_kwargs.update(filtered_kwargs)
+        extra = dict(kwargs)
+        # Allow commands to opt-in to receiving conversation by declaring an argument named 'conversation'
+        extra['conversation'] = conversation
+        call_kwargs = self._prepare_command_kwargs(parameters or {}, cmd_def, extra_kwargs=extra)
 
         data = cmd_def.callable(**call_kwargs)
-      else:
-        # Legacy single-command module keeps legacy signature
-        data = plugin.run(parameters or {}, conversation, **filtered_kwargs)
       return Result.ok(data=data)
     except Exception as e:
       return Result.fail(str(e))
 
-  def _filter_kwargs(self, kwargs: Dict[str, Any], required_args: Optional[list]) -> Dict[str, Any]:
-    if not required_args:
-      return {}
-    return {k: v for k, v in kwargs.items() if k in required_args}
-
-  def _prepare_command_kwargs(self, parameters: Dict[str, Any], cmd_def) -> Dict[str, Any]:
+  def _prepare_command_kwargs(self, parameters: Dict[str, Any], cmd_def, extra_kwargs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Map CLI-provided parameters to the callable's expected arguments.
 
     Supports both key=value style and positional tokens provided under
@@ -192,6 +189,9 @@ class ToolsRegistry:
       # 1) explicit key=value takes precedence
       if name in parameters:
         provided = parameters[name]
+      # 2) use value from extra kwargs (e.g., settings, conversation) if available
+      elif extra_kwargs and name in extra_kwargs:
+        provided = extra_kwargs[name]
       # 2) use positional if available
       elif pos_vals:
         provided = pos_vals.pop(0)

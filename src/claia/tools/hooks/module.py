@@ -8,7 +8,7 @@ This allows a single module to efficiently handle multiple related commands.
 
 import pluggy
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable
 
 
 @dataclass
@@ -36,7 +36,6 @@ class CommandModuleInfo:
   name: str
   title: str
   description: str
-  required_args: Optional[List[str]] = None
 
 
 hookspec = pluggy.HookspecMarker("claia_command_modules")
@@ -56,16 +55,4 @@ class CommandModuleHooks:
 
     The key is the command name, value is CommandDefinition.
     This allows a single module to provide multiple commands efficiently.
-    """
-
-  @hookspec
-  def run(self, parameters: Dict[str, Any], conversation, **kwargs) -> Any:
-    """
-    Execute this module with parameters (legacy single-command method).
-
-    Return a string or dict value to be placed into the content, or a structured
-    object the protocol/registry can turn into a string.
-
-    Note: This method is kept for backward compatibility. New modules should
-    implement get_module_commands() instead.
     """
