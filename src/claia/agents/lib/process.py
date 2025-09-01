@@ -8,8 +8,8 @@ import uuid, time
 from typing import Optional, Dict, Any
 
 # Internal dependencies
-from claia.common.enums.agent import ProcessStatus
-from claia.common.files.conversation import Conversation
+from claia.lib.enums.agent import ProcessStatus
+from claia.lib.files.conversation import Conversation
 
 
 

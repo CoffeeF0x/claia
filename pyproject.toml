@@ -28,38 +28,38 @@ claia = "claia.cli.__main__:main"
 
 # Entry points for plugin system
 [project.entry-points."claia.architectures"]
-openai = "claia.models.architectures.openai:OpenAIPlugin"
-anthropic = "claia.models.architectures.anthropic:AnthropicPlugin"
-transformers_generic = "claia.models.architectures.transformers_generic:TransformersGenericPlugin"
-transformers_gemma3 = "claia.models.architectures.transformers_gemma3:TransformersGemma3Plugin"
-dummy = "claia.models.architectures.dummy:DummyArchitecturePlugin"
+openai = "claia.model_architectures.openai:OpenAIPlugin"
+anthropic = "claia.model_architectures.anthropic:AnthropicPlugin"
+transformers_generic = "claia.model_architectures.transformers_generic:TransformersGenericPlugin"
+transformers_gemma3 = "claia.model_architectures.transformers_gemma3:TransformersGemma3Plugin"
+dummy = "claia.model_architectures.dummy:DummyArchitecturePlugin"
 
 [project.entry-points."claia.deployments"]
-api = "claia.models.deployments.api:APIDeploymentPlugin"
-local = "claia.models.deployments.local:LocalDeploymentPlugin"
-remote = "claia.models.deployments.remote:RemoteDeploymentPlugin"
-dummy = "claia.models.deployments.dummy:DummyDeploymentPlugin"
+api = "claia.deployments.api:APIDeploymentPlugin"
+local = "claia.deployments.local:LocalDeploymentPlugin"
+remote = "claia.deployments.remote:RemoteDeploymentPlugin"
+dummy = "claia.deployments.dummy:DummyDeploymentPlugin"
 
 [project.entry-points."claia.solvers"]
-default = "claia.models.solvers.default:DefaultSolverPlugin"
+default = "claia.solvers.default:DefaultSolverPlugin"
 
 [project.entry-points."claia.definitions"]
-openai = "claia.models.definitions.openai:OpenAIDefinitionsPlugin"
-anthropic = "claia.models.definitions.anthropic:AnthropicDefinitionsPlugin"
-legacy = "claia.models.definitions.legacy:LegacyDefinitionsPlugin"
+openai = "claia.model_definitions.openai:OpenAIDefinitionsPlugin"
+anthropic = "claia.model_definitions.anthropic:AnthropicDefinitionsPlugin"
+legacy = "claia.model_definitions.legacy:LegacyDefinitionsPlugin"
 
 [project.entry-points."claia.agents"]
 simple = "claia.agents.builtin.simple:SimpleAgentPlugin"
 
 # Entry points for tools system
 [project.entry-points."claia.tool_patterns"]
-default = "claia.tools.patterns.default:DefaultToolPatternPlugin"
+default = "claia.tool_patterns.default:DefaultToolPatternPlugin"
 
 [project.entry-points."claia.tool_protocols"]
-simple = "claia.tools.protocols.simple:SimpleProtocolPlugin"
+simple = "claia.tool_protocols.simple:SimpleProtocolPlugin"
 
 [project.entry-points."claia.command_modules"]
-sample = "claia.tools.modules.sample:SampleModulePlugin"
+sample = "claia.tool_modules.sample:SampleModulePlugin"
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]

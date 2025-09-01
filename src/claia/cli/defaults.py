@@ -8,7 +8,7 @@ It defines default prompts and other default settings.
 import logging
 
 # Internal dependencies
-from claia.common.files.prompt import Prompt
+from claia.lib.files.prompt import Prompt
 from .settings import Settings
 
 

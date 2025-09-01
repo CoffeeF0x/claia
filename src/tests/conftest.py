@@ -7,10 +7,10 @@ import pytest
 from types import SimpleNamespace
 
 # Internal dependencies
-from claia.common.results import Result
-from claia.common.files.conversation.conversation import Conversation
+from claia.lib.results import Result
+from claia.lib.files.conversation.conversation import Conversation
 from claia.agents.lib.process import Process
-from claia.common.enums.agent import ProcessStatus
+from claia.lib.enums.agent import ProcessStatus
 
 
 # ---------------------------------------------------------------------------
@@ -121,17 +121,17 @@ def fake_manager_no_solver():
 @pytest.fixture
 def registry_with_fake_manager(fake_manager, monkeypatch):
   """ModelRegistry instance wired to the fake manager via monkeypatching."""
-  import claia.models.registry as regmod
+  import claia.models_registry as regmod
   # Ensure ModelRegistry.__init__ uses our fake manager
-  monkeypatch.setattr(regmod, "ModuleManager", lambda: fake_manager)
-  from claia.models.registry import ModelRegistry
+  monkeypatch.setattr(regmod, "UnifiedManager", lambda: fake_manager)
+  from claia.models_registry import ModelRegistry
   return ModelRegistry()
 
 
 @pytest.fixture
 def registry_with_no_solver(fake_manager_no_solver, monkeypatch):
   """ModelRegistry instance whose manager returns no solver plugin."""
-  import claia.models.registry as regmod
-  monkeypatch.setattr(regmod, "ModuleManager", lambda: fake_manager_no_solver)
-  from claia.models.registry import ModelRegistry
+  import claia.models_registry as regmod
+  monkeypatch.setattr(regmod, "UnifiedManager", lambda: fake_manager_no_solver)
+  from claia.models_registry import ModelRegistry
   return ModelRegistry()

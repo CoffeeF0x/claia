@@ -37,14 +37,14 @@ from typing import Optional, Dict, Any
 
 # Internal dependencies
 from claia.agents import Process, AgentRegistry
-from claia.common.results import Result
-from claia.common.enums.agent import ProcessStatus, SourcePreference
-from claia.common.enums.conversation import MessageRole
-from claia.common.files.conversation import Conversation
+from claia.lib.results import Result
+from claia.lib.enums.agent import ProcessStatus, SourcePreference
+from claia.lib.enums.conversation import MessageRole
+from claia.lib.files.conversation import Conversation
 from claia.cli.settings import Settings
 from claia.cli.defaults import initialize_defaults
 from claia.cli.logger import initialize_logging
-from claia.tools.registry import ToolsRegistry
+from claia.tools_registry import ToolsRegistry
 
 
 

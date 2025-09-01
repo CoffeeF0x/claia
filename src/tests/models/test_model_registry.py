@@ -4,9 +4,9 @@
 import pytest
 
 # Internal dependencies
-from claia.models.registry import ModelRegistry
-from claia.common.results import Result
-from claia.common.files.conversation.conversation import Conversation
+from claia.models_registry import ModelRegistry
+from claia.lib.results import Result
+from claia.lib.files.conversation.conversation import Conversation
 
 
 def test_model_registry_run_success(registry_with_fake_manager, tmp_path):

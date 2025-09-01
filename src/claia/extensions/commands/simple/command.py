@@ -4,7 +4,7 @@ Simple example module demonstrating the simplified module loading system.
 
 from claia.commands.base import Command, command
 from claia.cli.settings import Settings
-from claia.common.results import Result
+from claia.lib.results import Result
 
 
 class SimpleCommand(Command):

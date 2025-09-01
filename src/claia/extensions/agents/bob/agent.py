@@ -9,7 +9,7 @@ from typing import List
 
 # Internal dependencies
 from claia.models import ModelRegistry
-from claia.common.enums.model import ModelCapability
+from claia.lib.enums.model import ModelCapability
 from claia.agents.lib import BaseAgent
 
 

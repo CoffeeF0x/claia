@@ -11,7 +11,7 @@ from typing import Callable, TypeVar, Tuple, Any, List, Dict, Optional
 
 # Process queue dependencies
 from claia.agents import Process, ProcessQueue
-from claia.common.enums.agent import ProcessStatus, SourcePreference
+from claia.lib.enums.agent import ProcessStatus, SourcePreference
 
 # Internal dependencies
 from settings import Settings
