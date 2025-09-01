@@ -7,17 +7,11 @@ This module provides commands for interacting with the Zammad ticketing system.
 # External dependencies
 import logging
 import pluggy
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 
-# Internal dependencies
-from ..hooks.module import CommandModuleHooks, CommandModuleInfo, CommandDefinition, ArgumentDefinition
-from ..lib.results import Result
-
-# Zammad-specific dependencies
-from .api import ZammadAPI
-from .constants import ACCOUNT_MANAGEMENT_PROMPT, VERIFICATION_PROMPT, TICKET_QUERIES
-from .utils import require_zammad_config, tag_ticket, untag_ticket, process_account_ticket, find_tickets_by_subject
+# Internal dependencies (absolute imports aligned with project structure)
+from claia.hooks.module import CommandModuleInfo, CommandDefinition, ArgumentDefinition
 
 
 ########################################################################
@@ -26,6 +20,293 @@ from .utils import require_zammad_config, tag_ticket, untag_ticket, process_acco
 hookimpl = pluggy.HookimplMarker("claia_command_modules")
 logger = logging.getLogger(__name__)
 
+
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
+# Available tags list
+TAG_LIST = [
+  "Phishing",
+  "Spam",
+  "Completed",
+  "NetworkHardware",
+  "Jenzabar",
+  "LMS",
+  "Report",
+  "Printers",
+  "Forms",
+  "Adobe",
+  "InfoMaker",
+  "Salesforce",
+  "Classroom",
+  "Login",
+  "Student",
+  "Filter",
+  "Video",
+  "AccountManagement",
+  "NoCategoryFound"
+]
+
+# Predefined ticket queries
+TICKET_QUERIES: Dict[str, str] = {
+  "new-tickets"       : "state_id:1",
+  "open-tickets"      : "state_id:1 OR state_id:2 OR state_id:3",
+  "reminder-tickets"  : "state_id:3",
+  "untagged-tickets"  : "(state_id:1 OR state_id:2 OR state_id:3) AND !(tags:AI-Tagged)",
+  "tagged-tickets"    : "tags:AI-Tagged",
+  "high-priority"     : "priority.name:\"3 high\"",
+  "account-management": "(tags:\"AD & User Account Management\" OR tags:AI-AccountManagement) AND (state_id:1 OR state_id:2 OR state_id:3)"
+}
+
+# Safety limit for pagination
+SAFETY_LIMIT = 500
+
+
+########################################################################
+#                             ZAMMAD API                               #
+########################################################################
+try:
+  from aia import AIASession
+except ImportError:  # pragma: no cover - optional dependency fallback
+  class AIASession:
+    def cadata_from_url(self, url):
+      return ""
+
+import requests
+import urllib.parse
+import re
+from bs4 import BeautifulSoup
+from tempfile import NamedTemporaryFile
+
+
+class ZammadAPI:
+  """Simple client for interacting with the Zammad API."""
+
+  def __init__(self, base_url: str, api_token: str) -> None:
+    logger.debug(f"Initializing ZammadAPI with base_url: {base_url}")
+    self.base_url = base_url
+    self.api_token = api_token
+    self.headers = {
+      "Authorization": f"Token token={self.api_token}",
+      "Content-Type": "application/json"
+    }
+    self.session = AIASession()
+
+  def _make_request(self, method: str, endpoint: str, data=None):
+    url = f"{self.base_url}{endpoint}"
+    cadata = self.session.cadata_from_url(url)
+    with NamedTemporaryFile("w") as pem_file:
+      pem_file.write(cadata)
+      pem_file.flush()
+      if method.lower() == 'get':
+        response = requests.get(url, headers=self.headers, verify=pem_file.name)
+      elif method.lower() == 'post':
+        response = requests.post(url, headers=self.headers, json=data, verify=pem_file.name)
+      elif method.lower() == 'delete':
+        response = requests.delete(url, headers=self.headers, json=data, verify=pem_file.name)
+      else:
+        raise ValueError(f"Unsupported HTTP method: {method}")
+      response.raise_for_status()
+      return response.json() if response.content else None
+
+  def get(self, endpoint: str):
+    return self._make_request('get', endpoint)
+
+  def post(self, endpoint: str, data: dict):
+    return self._make_request('post', endpoint, data)
+
+  def delete(self, endpoint: str, data: dict):
+    return self._make_request('delete', endpoint, data)
+
+  def _clean_html_content(self, text: str) -> str:
+    if not text:
+      return ""
+    soup = BeautifulSoup(text, 'html.parser')
+    clean_text = soup.get_text(separator='\n')
+    clean_text = re.sub(r'\n\s*\n', '\n\n', clean_text.strip())
+    return clean_text
+
+  def _extract_unique_content(self, articles: List[dict]) -> List[dict]:
+    seen_content = set()
+    unique_articles = []
+    for article in articles:
+      clean_body = self._clean_html_content(article.get('body', ''))
+      paragraphs = clean_body.split('\n\n')
+      unique_paragraphs = []
+      for para in paragraphs:
+        normalized_para = re.sub(r'\s+', ' ', para.strip())
+        if len(normalized_para) > 30 and normalized_para not in seen_content:
+          seen_content.add(normalized_para)
+          unique_paragraphs.append(para)
+      if unique_paragraphs:
+        new_article = article.copy()
+        new_article['body'] = '\n\n'.join(unique_paragraphs)
+        unique_articles.append(new_article)
+    return unique_articles
+
+  def list_tickets(self, query_name: str = "open-tickets", limit: int = 100, full_response: bool = False):
+    query = TICKET_QUERIES.get(query_name, query_name)
+    encoded_query = urllib.parse.quote(query)
+    try:
+      page = 1
+      response = self.get(f"tickets/search?query={encoded_query}&page={page}&per_page={limit}&sort_by=updated_at&order_by=asc")
+      ticket_ids = response["tickets"]
+      assets = response["assets"]
+      ticket_count = response["tickets_count"]
+      tickets: List[dict] = []
+      while full_response and response["tickets_count"] > 0 and page * limit < SAFETY_LIMIT:
+        page += 1
+        response = self.get(f"tickets/search?query={encoded_query}&page={page}&per_page={limit}&sort_by=updated_at&order_by=asc")
+        ticket_ids.extend(response["tickets"])
+        assets.extend(response["assets"])
+        ticket_count += response["tickets_count"]
+      for ticket in assets["Ticket"].values():
+        tickets.append(ticket)
+      return tickets
+    except Exception as e:  # pragma: no cover - network errors
+      logger.error(f"Error listing tickets: {str(e)}")
+      return None
+
+  def get_ticket_details(self, ticket_id: str, compact: bool = False) -> str:
+    try:
+      ticket = self.get(f"tickets/{ticket_id}")
+      articles = self.get(f"ticket_articles/by_ticket/{ticket_id}")
+      unique_articles = self._extract_unique_content(articles or [])
+      width = 78
+      response: List[str] = [f"┌{'─' * width}┐"]
+      response.append(f"│ {'TICKET DETAILS':^{width-2}} │")
+      response.append(f"├{'─' * width}┤")
+      response.append(f"│ {'Ticket ID:':<15} {ticket['id']:<{width-18}} │")
+      response.append(f"│ {'Number:':<15} {ticket.get('number', ''):<{width-18}} │")
+      response.append(f"│ {'Title:':<15} {ticket.get('title', ''):<{width-18}} │")
+      response.append(f"│ {'State:':<15} {ticket.get('state', str(ticket.get('state_id', ''))):<{width-18}} │")
+      response.append(f"│ {'Priority:':<15} {ticket.get('priority', str(ticket.get('priority_id', ''))):<{width-18}} │")
+      response.append(f"│ {'Created At:':<15} {ticket.get('created_at', ''):<{width-18}} │")
+      response.append(f"│ {'Updated At:':<15} {ticket.get('updated_at', ''):<{width-18}} │")
+      tags = ticket.get('tags', [])
+      if tags:
+        response.append(f"│ {'Tags:':<15} {', '.join(tags):<{width-18}} │")
+      response.append(f"├{'─' * width}┤")
+      response.append(f"│ {'CONVERSATION HISTORY':^{width-2}} │")
+      response.append(f"├{'─' * width}┤")
+      if not unique_articles:
+        response.append(f"│ {'No conversation history found':^{width-2}} │")
+        response.append(f"└{'─' * width}┘")
+        return "\n".join(response)
+      for i, article in enumerate(unique_articles):
+        response.append(f"│ {'Message #' + str(i+1):^{width-2}} │")
+        response.append(f"├{'─' * width}┤")
+        response.append(f"│ {'From:':<10} {article.get('from', 'Unknown'):<{width-13}} │")
+        if article.get('to'):
+          response.append(f"│ {'To:':<10} {article.get('to', ''):<{width-13}} │")
+        if article.get('cc'):
+          response.append(f"│ {'CC:':<10} {article.get('cc', ''):<{width-13}} │")
+        response.append(f"│ {'Subject:':<10} {article.get('subject', ''):<{width-13}} │")
+        response.append(f"│ {'Date:':<10} {article.get('created_at', ''):<{width-13}} │")
+        response.append(f"├{'─' * width}┤")
+        body = article.get('body', '')
+        if compact:
+          if body:
+            preview = body.replace('\n', ' ').strip()[:100]
+            if len(body) > 100:
+              preview += '...'
+            response.append(f"│ {preview:<{width-2}} │")
+        else:
+          if body:
+            lines: List[str] = []
+            for line in body.split('\n'):
+              while line and len(line) > width-4:
+                break_point = line[:width-4].rfind(' ')
+                if break_point == -1 or break_point < 30:
+                  break_point = width-4
+                lines.append(line[:break_point])
+                line = line[break_point:].lstrip()
+              if line:
+                lines.append(line)
+            for line in lines:
+              response.append(f"│ {line:<{width-2}} │")
+          else:
+            response.append(f"│ {'(No content)':<{width-2}} │")
+        if i < len(unique_articles) - 1:
+          response.append(f"├{'─' * width}┤")
+        else:
+          response.append(f"└{'─' * width}┘")
+      if compact:
+        response.append("\nTo view full message bodies:")
+        response.append(f"claia zammad details {ticket_id}")
+      else:
+        response.append("\nFor a more compact view:")
+        response.append(f"claia zammad details {ticket_id} --compact")
+      return "\n".join(response)
+    except Exception as e:  # pragma: no cover - network errors
+      logger.error(f"Error getting ticket details: {str(e)}")
+      return f"Error getting ticket details: {str(e)}"
+
+  def list_tags(self, ticket_id: int) -> List[str]:
+    try:
+      response = self.get(f"tags?object=Ticket&o_id={ticket_id}")
+      return response.get("tags", []) if isinstance(response, dict) else []
+    except Exception as e:  # pragma: no cover
+      logger.error(f"Error listing tags for ticket {ticket_id}: {str(e)}")
+      return []
+
+  def add_tag(self, ticket_id: int, tag: str) -> bool:
+    data = {"item": tag, "object": "Ticket", "o_id": ticket_id}
+    try:
+      self.post("tags/add", data)
+      return True
+    except Exception as e:  # pragma: no cover
+      logger.error(f"Error adding tag '{tag}' to ticket {ticket_id}: {str(e)}")
+      return False
+
+  def remove_tag(self, ticket_id: int, tag: str) -> bool:
+    data = {"item": tag, "object": "Ticket", "o_id": ticket_id}
+    try:
+      self.delete("tags/remove", data)
+      return True
+    except Exception as e:  # pragma: no cover
+      logger.error(f"Error removing tag '{tag}' from ticket {ticket_id}: {str(e)}")
+      return False
+
+  def delete_ticket(self, ticket_id: int) -> bool:
+    try:
+      self.delete(f"tickets/{ticket_id}", {})
+      return True
+    except Exception as e:  # pragma: no cover
+      logger.error(f"Error deleting ticket with ID {ticket_id}: {str(e)}")
+      return False
+
+
+########################################################################
+#                               HELPERS                                #
+########################################################################
+def untag_ticket(zammad: ZammadAPI, ticket_id: int) -> Tuple[int, List[str]]:
+  """Remove AI-* tags from a single ticket."""
+  tags = zammad.list_tags(ticket_id)
+  ai_tags = [t for t in tags if isinstance(t, str) and t.startswith("AI-")]
+  removed: List[str] = []
+  for tag in ai_tags:
+    if zammad.remove_tag(ticket_id, tag):
+      removed.append(tag)
+  return len(removed), removed
+
+
+def find_tickets_by_subject(zammad: ZammadAPI, subject: str, limit: int = 0) -> List[Dict[str, Any]]:
+  """Find tickets whose title contains subject (case-insensitive)."""
+  all_tickets = zammad.list_tickets("open-tickets", limit=999, full_response=True) or []
+  matches: List[Dict[str, Any]] = []
+  for ticket in all_tickets:
+    title = ticket.get('title', '')
+    if isinstance(title, str) and subject.lower() in title.lower():
+      matches.append({
+        'id': ticket.get('id'),
+        'title': title,
+        'created_at': ticket.get('created_at', 'Unknown'),
+        'customer': ticket.get('customer', 'Unknown')
+      })
+      if limit > 0 and len(matches) >= limit:
+        break
+  return matches
 
 ########################################################################
 #                          ZAMMAD MODULE PLUGIN                        #
@@ -351,27 +632,8 @@ class ZammadModulePlugin:
     """Get details for a specific ticket."""
     try:
       zammad = self._get_zammad_api()
-      ticket = zammad.get_ticket_details(ticket_id)
-
-      if not ticket:
-        return f"Ticket {ticket_id} not found."
-
-      # Format ticket details
-      response = [f"┌{'─' * 78}┐"]
-      response.append(f"│ {'TICKET DETAILS':^76} │")
-      response.append(f"├{'─' * 78}┤")
-      response.append(f"│ ID: {ticket['id']:<71} │")
-      response.append(f"│ Title: {ticket.get('title', 'N/A'):<68} │")
-      response.append(f"│ State: {ticket.get('state', {}).get('name', 'N/A'):<68} │")
-      response.append(f"│ Created: {ticket.get('created_at', 'N/A'):<66} │")
-      response.append(f"│ Updated: {ticket.get('updated_at', 'N/A'):<66} │")
-
-      tags = ticket.get('tags', [])
-      if tags:
-        response.append(f"│ Tags: {', '.join(tags):<69} │")
-
-      response.append(f"└{'─' * 78}┘")
-      return '\n'.join(response)
+      details = zammad.get_ticket_details(ticket_id)
+      return details if details else f"Ticket {ticket_id} not found."
 
     except Exception as e:
       logger.exception(f"Error getting ticket details: {str(e)}")
@@ -381,12 +643,9 @@ class ZammadModulePlugin:
     """Add a tag to a ticket."""
     try:
       zammad = self._get_zammad_api()
-      success = tag_ticket(zammad, ticket_id, tag)
-
-      if success:
+      if zammad.add_tag(ticket_id, tag):
         return f"Successfully added tag '{tag}' to ticket {ticket_id}."
-      else:
-        return f"Failed to add tag '{tag}' to ticket {ticket_id}."
+      return f"Failed to add tag '{tag}' to ticket {ticket_id}."
 
     except Exception as e:
       logger.exception(f"Error adding tag: {str(e)}")
@@ -396,12 +655,9 @@ class ZammadModulePlugin:
     """Remove a tag from a ticket."""
     try:
       zammad = self._get_zammad_api()
-      success = untag_ticket(zammad, ticket_id, tag)
-
-      if success:
+      if zammad.remove_tag(ticket_id, tag):
         return f"Successfully removed tag '{tag}' from ticket {ticket_id}."
-      else:
-        return f"Failed to remove tag '{tag}' from ticket {ticket_id}."
+      return f"Failed to remove tag '{tag}' from ticket {ticket_id}."
 
     except Exception as e:
       logger.exception(f"Error removing tag: {str(e)}")
@@ -410,16 +666,8 @@ class ZammadModulePlugin:
   def _process_single_ticket(self, ticket_id: int, **kwargs) -> str:
     """Process a single ticket and add AI tags."""
     try:
-      zammad = self._get_zammad_api()
-
-      # Get ticket details
-      ticket = zammad.get_ticket_details(ticket_id)
-      if not ticket:
-        return f"Ticket {ticket_id} not found."
-
-      # Process the ticket (implementation from old module)
-      # This would involve AI analysis and tagging
-      return f"Processing ticket {ticket_id} - AI tagging not yet implemented in new system."
+      # Simplified for new architecture - AI tagging pipeline not included here
+      return "Not implemented: AI-based tagging is handled by model pipeline."
 
     except Exception as e:
       logger.exception(f"Error processing ticket: {str(e)}")
@@ -429,19 +677,10 @@ class ZammadModulePlugin:
     """Remove AI tags from a single ticket."""
     try:
       zammad = self._get_zammad_api()
-
-      # Remove AI-generated tags
-      ai_tags = ['ai-account-management', 'ai-technical-support', 'ai-billing', 'ai-general']
-      removed_tags = []
-
-      for tag in ai_tags:
-        if untag_ticket(zammad, ticket_id, tag):
-          removed_tags.append(tag)
-
-      if removed_tags:
-        return f"Removed AI tags from ticket {ticket_id}: {', '.join(removed_tags)}"
-      else:
-        return f"No AI tags found on ticket {ticket_id}."
+      count, tags = untag_ticket(zammad, ticket_id)
+      if count > 0:
+        return f"Removed {count} AI tags from ticket {ticket_id}: {', '.join(tags)}"
+      return f"No AI tags found on ticket {ticket_id}."
 
     except Exception as e:
       logger.exception(f"Error untagging ticket: {str(e)}")
@@ -450,12 +689,7 @@ class ZammadModulePlugin:
   def _process_account_single(self, ticket_id: int, **kwargs) -> str:
     """Process a single account management ticket."""
     try:
-      zammad = self._get_zammad_api()
-
-      # Note: process_account_ticket may need to be updated to not require settings
-      # For now, pass None or update the function signature
-      result = process_account_ticket(zammad, ticket_id, None)
-      return result.message if result.message else "Account ticket processed successfully."
+      return "Not implemented: account processing requires AI model orchestration."
 
     except Exception as e:
       logger.exception(f"Error processing account ticket: {str(e)}")
@@ -464,23 +698,8 @@ class ZammadModulePlugin:
   def _process_tag_tickets(self, limit: int = 0, **kwargs) -> str:
     """Process untagged tickets and add AI tags."""
     try:
-      zammad = self._get_zammad_api()
-
-      # Get untagged tickets
-      tickets = zammad.list_tickets("untagged")
-
-      if not tickets:
-        return "No untagged tickets found."
-
-      if limit > 0:
-        tickets = tickets[:limit]
-
-      processed_count = 0
-      for ticket in tickets:
-        # Process each ticket - AI analysis would go here
-        processed_count += 1
-
-      return f"Processed {processed_count} untagged tickets."
+      # Simplified: this operation depends on AI tagging, which is outside this module now
+      return "Not implemented: use model pipeline to tag tickets."
 
     except Exception as e:
       logger.exception(f"Error processing tickets: {str(e)}")
@@ -490,25 +709,16 @@ class ZammadModulePlugin:
     """Remove AI tags from all tagged tickets."""
     try:
       zammad = self._get_zammad_api()
-
-      # Get tagged tickets
-      tickets = zammad.list_tickets("ai-tagged")
-
+      tickets = zammad.list_tickets("tagged-tickets") or []
       if not tickets:
         return "No AI-tagged tickets found."
-
       if limit > 0:
         tickets = tickets[:limit]
-
-      processed_count = 0
-      ai_tags = ['ai-account-management', 'ai-technical-support', 'ai-billing', 'ai-general']
-
+      processed = 0
       for ticket in tickets:
-        for tag in ai_tags:
-          untag_ticket(zammad, ticket['id'], tag)
-        processed_count += 1
-
-      return f"Removed AI tags from {processed_count} tickets."
+        untag_ticket(zammad, ticket.get('id'))
+        processed += 1
+      return f"Removed AI tags from {processed} tickets."
 
     except Exception as e:
       logger.exception(f"Error untagging tickets: {str(e)}")
@@ -517,34 +727,7 @@ class ZammadModulePlugin:
   def _process_account_tickets(self, output_file: str = "account-list.txt", limit: int = 0, **kwargs) -> str:
     """Process account management tickets and build account list."""
     try:
-      zammad = self._get_zammad_api()
-
-      # Get account management tickets
-      tickets = zammad.list_tickets("account-management")
-
-      if not tickets:
-        return "No account management tickets found."
-
-      if limit > 0:
-        tickets = tickets[:limit]
-
-      processed_count = 0
-      account_list = []
-
-      for ticket in tickets:
-        # Note: process_account_ticket may need to be updated to not require settings
-        result = process_account_ticket(zammad, ticket['id'], None)
-        if result.success and result.data:
-          account_list.extend(result.data)
-        processed_count += 1
-
-      # Save to file
-      if account_list:
-        with open(output_file, 'w') as f:
-          for account in account_list:
-            f.write(f"{account}\n")
-
-      return f"Processed {processed_count} account tickets. Generated {len(account_list)} account entries in {output_file}."
+      return "Not implemented: account processing requires AI model orchestration."
 
     except Exception as e:
       logger.exception(f"Error processing account tickets: {str(e)}")
