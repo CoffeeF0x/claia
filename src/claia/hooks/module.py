@@ -28,7 +28,6 @@ class CommandDefinition:
   description: str
   callable: Callable
   arguments: Dict[str, ArgumentDefinition]
-  required_args: Optional[List[str]] = None
 
 
 @dataclass

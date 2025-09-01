@@ -20,13 +20,14 @@ logger = logging.getLogger(__name__)
 
 
 class ToolsRegistry:
-  def __init__(self, manager: Optional[UnifiedManager] = None):
+  def __init__(self, manager: Optional[UnifiedManager] = None, **kwargs):
     self.manager = manager or UnifiedManager()
     self._commands_catalog: Optional[Dict[str, Dict]] = None
+    self._user_kwargs = kwargs
 
   def _ensure_loaded(self) -> None:
     """Ensure plugins are loaded and commands catalog is built."""
-    self.manager.load_all_plugins()
+    self.manager.load_all_plugins(**self._user_kwargs)
     if self._commands_catalog is None:
       self._commands_catalog = self.manager.get_all_commands()
 
@@ -182,14 +183,8 @@ class ToolsRegistry:
     if isinstance(parameters, dict) and '__args__' in parameters and isinstance(parameters['__args__'], list):
       pos_vals = list(parameters['__args__'])
 
-    # Filter extra_kwargs based on command's required_args
-    filtered_extra = {}
-    if extra_kwargs:
-      required_args = getattr(cmd_def, 'required_args', None)
-      filtered_extra = self._filter_kwargs(extra_kwargs, required_args)
-      # Always preserve conversation if it was in extra_kwargs (commands may need it)
-      if 'conversation' in extra_kwargs:
-        filtered_extra['conversation'] = extra_kwargs['conversation']
+    # Use extra_kwargs directly since modules now store their required settings internally
+    filtered_extra = extra_kwargs or {}
 
     call_kwargs: Dict[str, Any] = {}
 
@@ -218,29 +213,6 @@ class ToolsRegistry:
         call_kwargs[name] = self._convert_type(provided, dtype)
 
     return call_kwargs
-
-  def _filter_kwargs(self, kwargs: Dict[str, Any], required_args: Optional[list]) -> Dict[str, Any]:
-    """
-    Filter kwargs to only include those specified in required_args.
-
-    Args:
-        kwargs: Dictionary of all available kwargs
-        required_args: List of argument names that are required/allowed, or None if no args needed
-
-    Returns:
-        Filtered dictionary containing only the required arguments
-    """
-    if required_args is None or len(required_args) == 0:
-      # If no required_args specified, return empty dict
-      return {}
-
-    # Filter to only include kwargs that are in the required_args list
-    filtered = {}
-    for arg_name in required_args:
-      if arg_name in kwargs:
-        filtered[arg_name] = kwargs[arg_name]
-
-    return filtered
 
   def _convert_type(self, value: Any, data_type: str) -> Any:
     """Convert string value to the requested data type.

@@ -13,7 +13,6 @@ This module handles loading and coordinating all plugin types:
 
 import pluggy
 import logging
-import importlib
 import importlib.metadata as metadata
 from typing import Dict, Optional, List, Type
 
@@ -75,24 +74,26 @@ class UnifiedManager:
     self._plugins_loaded = False
     logger.debug("UnifiedManager initialized")
 
-  def load_all_plugins(self) -> None:
+  def load_all_plugins(self, **kwargs) -> None:
     """Load all plugins from entry points."""
     if self._plugins_loaded:
       logger.debug("Plugins already loaded")
       return
 
     try:
+      # Load definition plugins first (they're optional)
+      self._load_definition_plugins()
+
+      # Load tool plugins (pass in kwargs to process required_args)
+      self._load_tool_plugins(**kwargs)
+
+      # Load agent plugins
+      self._load_agent_plugins()
+
       # Load model plugins
       self._load_architecture_plugins()
       self._load_deployment_plugins()
       self._load_solver_plugins()
-      self._load_definition_plugins()
-
-      # Load tool plugins
-      self._load_tool_plugins()
-
-      # Load agent plugins
-      self._load_agent_plugins()
 
       self._plugins_loaded = True
       logger.info("All plugins loaded successfully")
@@ -200,44 +201,59 @@ class UnifiedManager:
       logger.warning("Continuing without definition plugins")
 
   # Tool plugin loading method
-  def _load_tool_plugins(self) -> None:
+  def _load_tool_plugins(self, **kwargs) -> None:
     """Load all tool plugins."""
-    self._load_group('claia.tool_patterns', self.pattern_pm, 'pattern')
-    self._load_group('claia.tool_protocols', self.protocol_pm, 'protocol')
-    self._load_group('claia.command_modules', self.module_pm, 'module')
+    self._load_group('claia.tool_patterns', self.pattern_pm, 'pattern', **kwargs)
+    self._load_group('claia.tool_protocols', self.protocol_pm, 'protocol', **kwargs)
+    self._load_group('claia.command_modules', self.module_pm, 'module', **kwargs)
 
-  def _load_group(self, group: str, pm: pluggy.PluginManager, label: str) -> None:
+  def _load_group(self, group: str, pm: pluggy.PluginManager, label: str, **kwargs) -> None:
     """Load a group of tool plugins with fallbacks."""
     loaded = 0
     for ep in metadata.entry_points().select(group=group):
       try:
         cls = ep.load()
-        inst = cls()
+
+        # For command modules, pass required_args during initialization
+        if group == 'claia.command_modules':
+          inst = self._create_module_instance(cls, **kwargs)
+        else:
+          inst = cls()
+
         pm.register(inst)
         loaded += 1
         logger.debug(f"Loaded {label} plugin: {ep.name} from {ep.value}")
       except Exception as e:
         logger.warning(f"Failed to load {label} plugin {ep.name}: {e}")
 
-    if loaded == 0:
-      # Fall back to built-in plugins when running from source without installation
-      fallbacks = {
-        'claia.tool_patterns': [('claia.tool_patterns.default', 'DefaultToolPatternPlugin')],
-        'claia.tool_protocols': [('claia.tool_protocols.simple', 'SimpleProtocolPlugin')],
-        'claia.command_modules': [('claia.tool_modules.sample', 'SampleModulePlugin')],
-      }
-      for mod_path, cls_name in fallbacks.get(group, []):
-        try:
-          mod = importlib.import_module(mod_path)
-          cls = getattr(mod, cls_name)
-          inst = cls()
-          pm.register(inst)
-          loaded += 1
-          logger.debug(f"Loaded built-in {label} plugin: {cls_name} from {mod_path}")
-        except Exception as e:
-          logger.debug(f"No built-in {label} plugin loaded from {mod_path}:{cls_name}: {e}")
-      if loaded == 0:
-        logger.info(f"No {label} plugins found via entry points for group {group}")
+  def _create_module_instance(self, cls, **kwargs):
+    """Create a module instance with required_args passed to constructor."""
+    try:
+      # Create a temporary instance to get module info
+      temp_inst = cls()
+      module_info = temp_inst.get_module_info()
+
+      # Get required_args if specified
+      required_args = getattr(module_info, 'required_args', None)
+      if required_args and kwargs:
+        filtered_kwargs = self._filter_kwargs(kwargs, required_args)
+        return cls(**filtered_kwargs)
+      else:
+        return temp_inst
+    except Exception as e:
+      logger.warning(f"Error creating module instance with required_args, falling back to no-args constructor: {e}")
+      return cls()
+
+  def _filter_kwargs(self, kwargs, required_args):
+    """Filter kwargs to only include those specified in required_args."""
+    if required_args is None or len(required_args) == 0:
+      return {}
+
+    filtered = {}
+    for arg_name in required_args:
+      if arg_name in kwargs:
+        filtered[arg_name] = kwargs[arg_name]
+    return filtered
 
   # Model-specific methods
   def get_available_architectures(self) -> Dict[str, ArchitectureInfo]:

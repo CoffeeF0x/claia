@@ -41,8 +41,7 @@ class ZammadModulePlugin:
     return CommandModuleInfo(
       name="zammad",
       title="Zammad Integration",
-      description="Commands for interacting with the Zammad ticketing system",
-      required_args=["zammad_token", "zammad_baseurl"]
+      description="Commands for interacting with the Zammad ticketing system"
     )
 
   @hookimpl
@@ -277,27 +276,16 @@ class ZammadModulePlugin:
     }
 
   # Command implementations with Zammad API integration
-  def _get_zammad_api(self, **kwargs) -> ZammadAPI:
-    """Get configured Zammad API instance from kwargs."""
-    # Get API credentials from kwargs (passed via required_args)
-    token = kwargs.get('zammad_token')
-    baseurl = kwargs.get('zammad_baseurl')
-    
-    if not token or not baseurl:
-      raise ValueError("Zammad API token and base URL must be provided via zammad_token and zammad_baseurl arguments")
-    
-    # Create settings object with provided credentials
+  def _get_zammad_api(self) -> ZammadAPI:
+    """Get configured Zammad API instance."""
     settings = Settings()
     zammad_settings = ZammadSettings(settings)
-    zammad_settings.api_token = token
-    zammad_settings.base_url = baseurl
-    
     return ZammadAPI(zammad_settings)
 
   def _list_tickets(self, query: str = "open-tickets", limit: int = 99, compact: bool = False, **kwargs) -> str:
     """List tickets from Zammad based on a query."""
     try:
-      zammad = self._get_zammad_api(**kwargs)
+      zammad = self._get_zammad_api()
       tickets = zammad.list_tickets(query)
 
       if not tickets:
@@ -359,7 +347,7 @@ class ZammadModulePlugin:
   def _get_ticket_details(self, ticket_id: int, **kwargs) -> str:
     """Get details for a specific ticket."""
     try:
-      zammad = self._get_zammad_api(**kwargs)
+      zammad = self._get_zammad_api()
       ticket = zammad.get_ticket_details(ticket_id)
 
       if not ticket:
@@ -389,7 +377,7 @@ class ZammadModulePlugin:
   def _add_tag(self, ticket_id: int, tag: str, **kwargs) -> str:
     """Add a tag to a ticket."""
     try:
-      zammad = self._get_zammad_api(**kwargs)
+      zammad = self._get_zammad_api()
       success = tag_ticket(zammad, ticket_id, tag)
 
       if success:
@@ -404,7 +392,7 @@ class ZammadModulePlugin:
   def _remove_tag(self, ticket_id: int, tag: str, **kwargs) -> str:
     """Remove a tag from a ticket."""
     try:
-      zammad = self._get_zammad_api(**kwargs)
+      zammad = self._get_zammad_api()
       success = untag_ticket(zammad, ticket_id, tag)
 
       if success:
@@ -419,7 +407,7 @@ class ZammadModulePlugin:
   def _process_single_ticket(self, ticket_id: int, **kwargs) -> str:
     """Process a single ticket and add AI tags."""
     try:
-      zammad = self._get_zammad_api(**kwargs)
+      zammad = self._get_zammad_api()
       settings = Settings()
 
       # Get ticket details
@@ -438,7 +426,7 @@ class ZammadModulePlugin:
   def _untag_single_ticket(self, ticket_id: int, **kwargs) -> str:
     """Remove AI tags from a single ticket."""
     try:
-      zammad = self._get_zammad_api(**kwargs)
+      zammad = self._get_zammad_api()
 
       # Remove AI-generated tags
       ai_tags = ['ai-account-management', 'ai-technical-support', 'ai-billing', 'ai-general']
@@ -460,7 +448,7 @@ class ZammadModulePlugin:
   def _process_account_single(self, ticket_id: int, **kwargs) -> str:
     """Process a single account management ticket."""
     try:
-      zammad = self._get_zammad_api(**kwargs)
+      zammad = self._get_zammad_api()
       settings = Settings()
 
       result = process_account_ticket(zammad, ticket_id, settings)
@@ -473,7 +461,7 @@ class ZammadModulePlugin:
   def _process_tag_tickets(self, limit: int = 0, **kwargs) -> str:
     """Process untagged tickets and add AI tags."""
     try:
-      zammad = self._get_zammad_api(**kwargs)
+      zammad = self._get_zammad_api()
 
       # Get untagged tickets
       tickets = zammad.list_tickets("untagged")
@@ -498,7 +486,7 @@ class ZammadModulePlugin:
   def _process_untag_tickets(self, limit: int = 0, **kwargs) -> str:
     """Remove AI tags from all tagged tickets."""
     try:
-      zammad = self._get_zammad_api(**kwargs)
+      zammad = self._get_zammad_api()
 
       # Get tagged tickets
       tickets = zammad.list_tickets("ai-tagged")
@@ -526,7 +514,7 @@ class ZammadModulePlugin:
   def _process_account_tickets(self, output_file: str = "account-list.txt", limit: int = 0, **kwargs) -> str:
     """Process account management tickets and build account list."""
     try:
-      zammad = self._get_zammad_api(**kwargs)
+      zammad = self._get_zammad_api()
       settings = Settings()
 
       # Get account management tickets
@@ -562,7 +550,7 @@ class ZammadModulePlugin:
   def _find_tickets_by_subject(self, subject: str, limit: int = 0, **kwargs) -> str:
     """Find tickets with a specific subject."""
     try:
-      zammad = self._get_zammad_api(**kwargs)
+      zammad = self._get_zammad_api()
       matching_tickets = find_tickets_by_subject(zammad, subject, limit)
 
       if not matching_tickets:
@@ -584,7 +572,7 @@ class ZammadModulePlugin:
       if not confirm:
         return f"This operation will delete tickets with subject: '{subject}'. Set confirm=True to proceed."
 
-      zammad = self._get_zammad_api(**kwargs)
+      zammad = self._get_zammad_api()
       matching_tickets = find_tickets_by_subject(zammad, subject, limit)
 
       if not matching_tickets:
