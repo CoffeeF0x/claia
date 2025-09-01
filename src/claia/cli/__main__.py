@@ -84,8 +84,7 @@ HISTORY_FILE = ".claia_history"
 MAX_HISTORY_LEN = 1000
 COMMAND_CHARACTER = ":"
 INPUT_CHARACTER = ":"
-DEFAULT_AGENT = "simple"
-# Default tool-calling configuration
+DEFAULT_AGENT = "bob"
 TOOL_PATTERN_NAME = "default"
 TOOL_PROTOCOL_NAME = "simple"
 

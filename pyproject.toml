@@ -61,6 +61,7 @@ simple = "claia.tool_protocols.simple:SimpleProtocolPlugin"
 
 [project.entry-points."claia.command_modules"]
 sample = "claia.tool_modules.sample:SampleModulePlugin"
+zammad = "claia.tool_modules.zammad:ZammadModulePlugin"
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]

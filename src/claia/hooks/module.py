@@ -37,6 +37,7 @@ class CommandModuleInfo:
   name: str
   title: str
   description: str
+  required_args: Optional[List[str]] = None
 
 
 hookspec = pluggy.HookspecMarker("claia_command_modules")

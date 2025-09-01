@@ -10,14 +10,14 @@ from functools import wraps
 from typing import Callable, TypeVar, Tuple, Any, List, Dict, Optional
 
 # Process queue dependencies
-from claia.agents import Process, ProcessQueue
-from claia.lib.enums.agent import ProcessStatus, SourcePreference
+from ..lib import Process
+from ..lib.enums.agent import ProcessStatus, SourcePreference
 
 # Internal dependencies
-from settings import Settings
-from results import Result
-from files import Conversation, TextFile
-from enums import MessageRole
+from ..cli.settings import Settings
+from ..lib.results import Result
+from ..lib.files import Conversation, TextFile
+from ..lib.enums import MessageRole
 
 # Internal module dependencies
 from .api import ZammadAPI
