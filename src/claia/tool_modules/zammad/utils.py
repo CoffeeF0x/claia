@@ -21,7 +21,6 @@ from ..lib.enums import MessageRole
 
 # Internal module dependencies
 from .api import ZammadAPI
-from .settings import ZammadSettings
 from .constants import TAG_LIST, TAG_PROMPT, ACCOUNT_MANAGEMENT_PROMPT, VERIFICATION_PROMPT
 
 
@@ -47,34 +46,14 @@ T = TypeVar('T')
 #                              DECORATORS                              #
 ########################################################################
 def require_zammad_config(func: Callable[..., T]) -> Callable[..., T]:
-
   """
   Decorator to check if Zammad is properly configured before executing a command.
-
-  Args:
-    func: The function to decorate
-
-  Returns:
-    The decorated function that checks for Zammad configuration
+  Note: This decorator is now deprecated since credentials are passed via required_args.
   """
-
   @wraps(func)
-  def wrapper(self, settings: Settings, *args, **kwargs) -> T:
-    # Get Zammad settings
-    zammad_settings = ZammadSettings()
-
-    # Check if Zammad is configured
-    if not zammad_settings.is_configured():
-      result = Result()
-      result.message = f"Zammad is not properly configured. Please set TOKEN_ZAMMAD and ZAMMAD_BASEURL environment variables."
-      result.success = False
-      return result
-
-    # Create Zammad API client and pass it to the function
-    zammad = ZammadAPI(zammad_settings.base_url, zammad_settings.api_token)
-
-    # Call the original function with the API client
-    return func(self, settings, zammad, *args, **kwargs)
+  def wrapper(*args, **kwargs) -> T:
+    # This decorator is no longer needed since credentials are passed during module init
+    return func(*args, **kwargs)
 
   return wrapper
 

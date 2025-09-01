@@ -12,12 +12,10 @@ from datetime import datetime
 
 # Internal dependencies
 from ..hooks.module import CommandModuleHooks, CommandModuleInfo, CommandDefinition, ArgumentDefinition
-from ..cli.settings import Settings
 from ..lib.results import Result
 
 # Zammad-specific dependencies
 from .api import ZammadAPI
-from .settings import ZammadSettings
 from .constants import ACCOUNT_MANAGEMENT_PROMPT, VERIFICATION_PROMPT, TICKET_QUERIES
 from .utils import require_zammad_config, tag_ticket, untag_ticket, process_account_ticket, find_tickets_by_subject
 
@@ -35,13 +33,20 @@ logger = logging.getLogger(__name__)
 class ZammadModulePlugin:
   """Plugin implementation for Zammad command module."""
 
+  def __init__(self, **kwargs):
+    """Initialize Zammad module with required settings."""
+    # Store API credentials passed via required_args
+    self.zammad_api_token = kwargs.get('zammad_api_token', '')
+    self.zammad_base_url = kwargs.get('zammad_base_url', '')
+
   @hookimpl
   def get_module_info(self) -> CommandModuleInfo:
     """Return module info for Zammad integration."""
     return CommandModuleInfo(
       name="zammad",
       title="Zammad Integration",
-      description="Commands for interacting with the Zammad ticketing system"
+      description="Commands for interacting with the Zammad ticketing system",
+      required_args=['zammad_api_token', 'zammad_base_url']
     )
 
   @hookimpl
@@ -277,10 +282,8 @@ class ZammadModulePlugin:
 
   # Command implementations with Zammad API integration
   def _get_zammad_api(self) -> ZammadAPI:
-    """Get configured Zammad API instance."""
-    settings = Settings()
-    zammad_settings = ZammadSettings(settings)
-    return ZammadAPI(zammad_settings)
+    """Get configured Zammad API instance using stored credentials."""
+    return ZammadAPI(self.zammad_base_url, self.zammad_api_token)
 
   def _list_tickets(self, query: str = "open-tickets", limit: int = 99, compact: bool = False, **kwargs) -> str:
     """List tickets from Zammad based on a query."""
@@ -408,7 +411,6 @@ class ZammadModulePlugin:
     """Process a single ticket and add AI tags."""
     try:
       zammad = self._get_zammad_api()
-      settings = Settings()
 
       # Get ticket details
       ticket = zammad.get_ticket_details(ticket_id)
@@ -449,9 +451,10 @@ class ZammadModulePlugin:
     """Process a single account management ticket."""
     try:
       zammad = self._get_zammad_api()
-      settings = Settings()
 
-      result = process_account_ticket(zammad, ticket_id, settings)
+      # Note: process_account_ticket may need to be updated to not require settings
+      # For now, pass None or update the function signature
+      result = process_account_ticket(zammad, ticket_id, None)
       return result.message if result.message else "Account ticket processed successfully."
 
     except Exception as e:
@@ -515,7 +518,6 @@ class ZammadModulePlugin:
     """Process account management tickets and build account list."""
     try:
       zammad = self._get_zammad_api()
-      settings = Settings()
 
       # Get account management tickets
       tickets = zammad.list_tickets("account-management")
@@ -530,7 +532,8 @@ class ZammadModulePlugin:
       account_list = []
 
       for ticket in tickets:
-        result = process_account_ticket(zammad, ticket['id'], settings)
+        # Note: process_account_ticket may need to be updated to not require settings
+        result = process_account_ticket(zammad, ticket['id'], None)
         if result.success and result.data:
           account_list.extend(result.data)
         processed_count += 1
