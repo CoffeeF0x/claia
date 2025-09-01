@@ -36,7 +36,7 @@ import json
 from typing import Optional, Dict, Any
 
 # Internal dependencies
-from claia.agents import Process, AgentRegistry
+from claia.lib import Process
 from claia.lib.results import Result
 from claia.lib.enums.agent import ProcessStatus, SourcePreference
 from claia.lib.enums.conversation import MessageRole
@@ -45,6 +45,7 @@ from claia.cli.settings import Settings
 from claia.cli.defaults import initialize_defaults
 from claia.cli.logger import initialize_logging
 from claia.tools_registry import ToolsRegistry
+from claia.agent_registry import AgentRegistry
 
 
 

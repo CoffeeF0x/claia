@@ -11,8 +11,8 @@ from typing import Any, Optional, Dict
 
 # Internal dependencies
 from claia.lib.results import Result
-from .lib.process import Process
-from .lib.queue import ProcessQueue
+from claia.lib.process import Process
+from claia.lib.queue import ProcessQueue
 from claia.manager import UnifiedManager
 from claia.models_registry import ModelRegistry
 from claia.lib.enums.agent import ProcessStatus

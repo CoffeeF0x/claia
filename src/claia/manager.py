@@ -23,7 +23,7 @@ from .hooks import (
   DeploymentInfo, SolverInfo, ModelDefinition, ArchitectureInfo, AgentInfo
 )
 from .model_architectures.lib.base import BaseModel
-from .agents.lib.base import BaseAgent
+from .lib.base import BaseAgent
 
 
 logger = logging.getLogger(__name__)
