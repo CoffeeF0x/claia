@@ -10,7 +10,7 @@ import pluggy
 from typing import Type
 
 # Internal dependencies
-from .lib.transformers import GenericTransformerModel
+from ..lib.model.transformers import GenericTransformerModel
 from ..hooks.architecture import ArchitectureInfo
 
 

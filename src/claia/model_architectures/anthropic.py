@@ -9,7 +9,7 @@ import pluggy
 from typing import Type
 
 # Internal dependencies
-from .lib.api import AnthropicModel
+from ..lib.model.api import AnthropicModel
 from ..hooks.architecture import ArchitectureInfo
 
 

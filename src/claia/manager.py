@@ -22,8 +22,8 @@ from .hooks import (
   PatternHooks, ProtocolHooks, CommandModuleHooks, AgentHooks,
   DeploymentInfo, SolverInfo, ModelDefinition, ArchitectureInfo, AgentInfo
 )
-from .model_architectures.lib.base import BaseModel
-from .lib.base import BaseAgent
+from claia.lib.model.base import BaseModel
+from .lib import BaseAgent
 
 
 logger = logging.getLogger(__name__)

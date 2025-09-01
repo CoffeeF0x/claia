@@ -9,7 +9,7 @@ import pluggy
 from typing import Type
 
 # Internal dependencies
-from .lib.api import OpenAIModel
+from ..lib.model.api import OpenAIModel
 from ..hooks.architecture import ArchitectureInfo
 
 

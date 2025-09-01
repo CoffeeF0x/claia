@@ -9,7 +9,7 @@ import pluggy
 from typing import Type
 
 # Internal dependencies
-from .lib.dummy import DummyModel
+from ..lib.model.dummy import DummyModel
 from ..hooks.architecture import ArchitectureInfo
 
 

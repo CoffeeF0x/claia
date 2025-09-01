@@ -10,7 +10,7 @@ import pluggy
 from typing import Type
 
 # Internal dependencies
-from .lib.transformers import Gemma3Model
+from ..lib.model.transformers import Gemma3Model
 from ..hooks.architecture import ArchitectureInfo
 
 
