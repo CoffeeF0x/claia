@@ -66,6 +66,10 @@ CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
   ("log_format",                        "",            True,  "Logging format (simple, standard, detailed)"),
   ("log_file",                          "claia.log",   True,  "Log file path (empty for console only)"),
   ("env_file",                          "",            True,  "Path to .env file for configuration"),
+
+  # Zammad Settings
+  ("zammad_base_url",                   "",            True,  "Zammad Base URL"),
+  ("zammad_api_token",                  "",            True,  "Zammad API Token"),
 ]
 
 
