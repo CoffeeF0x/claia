@@ -24,7 +24,7 @@
 
 # - add required_arg filtering back for the command modules
 
-# TODOS from lib:
+# FROM LIB
 # - Refactor to use pluggy for file types?
 # - BASEFILE:
 #   - Add a validate function to the that verifies that everything is as
@@ -250,6 +250,7 @@ def main() -> None:
     settings = Settings()
     settings.root_logger = initialize_logging(settings.log_level, settings.log_format)
     settings = initialize_defaults(settings)
+    user_kwargs = settings.get_user_kwargs()
 
     # Log application startup with version and environment info
     logger.info("CLAIA application starting")
@@ -265,7 +266,7 @@ def main() -> None:
 
     # Initialize the tools registry
     logger.debug("Initializing tools registry")
-    tools_registry = ToolsRegistry()
+    tools_registry = ToolsRegistry(**user_kwargs)
     _ = tools_registry.get_commands_catalog() # NOTE: Can probably be removed later
 
     # Initialize the agent registry and process queue
@@ -288,7 +289,6 @@ def main() -> None:
       # Ensure there's an active conversation for command execution context
       setup_conversation(settings, tools_registry)
 
-      user_kwargs = settings.get_user_kwargs()
       cmd = settings.extra_args[0]
       # Build params from key=value and collect positionals into __args__
       tail_tokens = settings.extra_args[1:]
@@ -375,7 +375,6 @@ def main() -> None:
           params['__args__'] = pos_args
         # Ensure there is a conversation context
         setup_conversation(settings, tools_registry)
-        user_kwargs = settings.get_user_kwargs()
         cmd_result = tools_registry.run_command(cmd, params, settings.active_conversation, **user_kwargs)
         if cmd_result.is_success():
           data = cmd_result.get_data()
@@ -394,9 +393,6 @@ def main() -> None:
           settings.active_agent = DEFAULT_AGENT
 
         user_message = settings.active_conversation.add_message(MessageRole.USER, user_input)
-
-        # Get user kwargs from settings
-        user_kwargs = settings.get_user_kwargs()
 
         process = Process(
           agent_type=settings.active_agent,
