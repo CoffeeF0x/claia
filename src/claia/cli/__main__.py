@@ -72,8 +72,7 @@ from claia.lib.files.conversation import Conversation
 from claia.cli.settings import Settings
 from claia.cli.defaults import initialize_defaults
 from claia.cli.logger import initialize_logging
-from claia.tools_registry import ToolsRegistry
-from claia.agent_registry import AgentRegistry
+from claia.registry import Registry
 
 
 
@@ -135,7 +134,7 @@ def get_user_input() -> str:
 ########################################################################
 #                            TOOL FUNCTIONS                            #
 ########################################################################
-def process_final_message_tools(final_message, process: Process, settings: Settings, tools_registry: ToolsRegistry) -> None:
+def process_final_message_tools(final_message, process: Process, settings: Settings, registry: Registry) -> None:
   """Process any tool calls in the final message and update the conversation if needed."""
 
   # Step 1: Check if the conversation has a tool pattern configured
@@ -144,7 +143,7 @@ def process_final_message_tools(final_message, process: Process, settings: Setti
 
   # Step 2: Lightweight precheck using the registry
   try:
-    has_tool_tokens = tools_registry.contains_tool_tokens(
+    has_tool_tokens = registry.contains_tool_tokens(
       final_message.content,
       pattern_name=process.conversation.tool_pattern_name
     )
@@ -168,7 +167,7 @@ def process_final_message_tools(final_message, process: Process, settings: Setti
 
   # Step 5: Process the tool calls in the message content
   try:
-    processed_content = tools_registry.process_content(
+    processed_content = registry.process_content(
       process.conversation,
       final_message.content,
       settings=None,
@@ -188,7 +187,7 @@ def process_final_message_tools(final_message, process: Process, settings: Setti
     # Update the stored message with the processed content
     process.conversation.update_message(final_message.message_id, content=processed_content)
 
-def ensure_tool_prompt(conv: Conversation, tools_registry: ToolsRegistry) -> None:
+def ensure_tool_prompt(conv: Conversation, registry: Registry) -> None:
   """Ensure the conversation has a tool_calling_prompt set from the active pattern.
 
   If conv.tool_calling_prompt is empty, try to fetch the selected pattern's
@@ -201,9 +200,9 @@ def ensure_tool_prompt(conv: Conversation, tools_registry: ToolsRegistry) -> Non
     return
   pattern_name = getattr(conv, 'tool_pattern_name', None)
   try:
-    plugin, info = tools_registry.manager.get_pattern_by_name(pattern_name) if pattern_name else (None, None)
+    plugin, info = registry.manager.get_pattern_by_name(pattern_name) if pattern_name else (None, None)
     if not plugin:
-      plugin = tools_registry.manager.get_default_pattern()
+      plugin = registry.manager.get_default_pattern()
       info = plugin.get_pattern_info() if plugin else None
   except Exception:
     plugin, info = None, None
@@ -211,7 +210,7 @@ def ensure_tool_prompt(conv: Conversation, tools_registry: ToolsRegistry) -> Non
   if prompt:
     conv.set_tool_calling_prompt(prompt)
 
-def setup_conversation(settings: Settings, tools_registry: ToolsRegistry) -> None:
+def setup_conversation(settings: Settings, registry: Registry) -> None:
   """Setup or configure the active conversation with tool defaults if needed."""
   if not settings.active_conversation:
     settings.active_conversation = Conversation(
@@ -219,14 +218,14 @@ def setup_conversation(settings: Settings, tools_registry: ToolsRegistry) -> Non
       tool_pattern_name=TOOL_PATTERN_NAME,
       tool_protocol_name=TOOL_PROTOCOL_NAME
     )
-    ensure_tool_prompt(settings.active_conversation, tools_registry)
+    ensure_tool_prompt(settings.active_conversation, registry)
   else:
     # Backfill defaults if missing
     if not settings.active_conversation.tool_pattern_name:
       settings.active_conversation.set_tool_pattern_name(TOOL_PATTERN_NAME)
     if not settings.active_conversation.tool_protocol_name:
       settings.active_conversation.set_tool_protocol_name(TOOL_PROTOCOL_NAME)
-    ensure_tool_prompt(settings.active_conversation, tools_registry)
+    ensure_tool_prompt(settings.active_conversation, registry)
 
 def parse_kv_args(tokens: list[str]) -> Dict[str, Any]:
   """Parse a list of key=value tokens into a dict."""
@@ -264,15 +263,11 @@ def main() -> None:
     for arg in settings.extra_args:
       logger.debug(f"Stored extra argument: {arg}")
 
-    # Initialize the tools registry
-    logger.debug("Initializing tools registry")
-    tools_registry = ToolsRegistry(**user_kwargs)
-    _ = tools_registry.get_commands_catalog() # NOTE: Can probably be removed later
-
-    # Initialize the agent registry and process queue
-    logger.debug("Initializing agent registry and process queue")
-    agent_registry = AgentRegistry()
-    agent_registry.start_workers(3)  # Start 3 worker threads
+    # Initialize the unified registry (tools, models, agents)
+    logger.debug("Initializing unified registry")
+    registry = Registry(**user_kwargs)
+    _ = registry.get_commands_catalog() # NOTE: Can probably be removed later
+    registry.start_workers(3)  # Start 3 worker threads
 
     # Set up command history with arrow key navigation
     setup_command_history()
@@ -287,7 +282,7 @@ def main() -> None:
       # Process command line arguments using ToolsRegistry
       logger.info(f"Processing command line arguments: {' '.join(settings.extra_args)}")
       # Ensure there's an active conversation for command execution context
-      setup_conversation(settings, tools_registry)
+      setup_conversation(settings, registry)
 
       cmd = settings.extra_args[0]
       # Build params from key=value and collect positionals into __args__
@@ -296,7 +291,7 @@ def main() -> None:
       pos_args = [t for t in tail_tokens if '=' not in t]
       if pos_args:
         params['__args__'] = pos_args
-      cmd_result = tools_registry.run_command(cmd, params, settings.active_conversation, **user_kwargs)
+      cmd_result = registry.run_command(cmd, params, settings.active_conversation, **user_kwargs)
 
       if cmd_result.is_success():
         data = cmd_result.get_data()
@@ -309,7 +304,7 @@ def main() -> None:
 
       # Exit after running the command
       logger.info("CLAIA exiting after CLI command execution")
-      agent_registry.stop_workers()
+      registry.stop_workers()
       return
 
     logger.info("CLAIA initialization complete, entering main loop")
@@ -337,7 +332,7 @@ def main() -> None:
         tokens = user_input[1:].split()
         # If no command entered, print available modules
         if not tokens:
-          catalog = tools_registry.get_commands_catalog()
+          catalog = registry.get_commands_catalog()
           if not catalog:
             print("No modules available.")
           else:
@@ -357,7 +352,7 @@ def main() -> None:
 
         # If only a module name was given, list its commands
         if '.' not in cmd and len(tokens) == 1:
-          catalog = tools_registry.get_commands_catalog()
+          catalog = registry.get_commands_catalog()
           mod = catalog.get(cmd)
           if mod:
             print(f"Module '{cmd}' commands:")
@@ -374,8 +369,8 @@ def main() -> None:
         if pos_args:
           params['__args__'] = pos_args
         # Ensure there is a conversation context
-        setup_conversation(settings, tools_registry)
-        cmd_result = tools_registry.run_command(cmd, params, settings.active_conversation, **user_kwargs)
+        setup_conversation(settings, registry)
+        cmd_result = registry.run_command(cmd, params, settings.active_conversation, **user_kwargs)
         if cmd_result.is_success():
           data = cmd_result.get_data()
           if isinstance(data, (dict, list)):
@@ -386,7 +381,7 @@ def main() -> None:
           print(f"Error: {cmd_result.get_message()}")
       else:
         # Create a new conversation if one doesn't exist
-        setup_conversation(settings, tools_registry)
+        setup_conversation(settings, registry)
 
         # Set the active agent if one doesn't exist
         if not settings.active_agent:
@@ -404,7 +399,7 @@ def main() -> None:
           }
         )
 
-        process_id = agent_registry.add_process(process)
+        process_id = registry.add_process(process)
         logger.debug(f"Process added with ID: {process_id}")
 
         logger.debug(f"Waiting for process to complete: {process.id}")
@@ -441,7 +436,7 @@ def main() -> None:
           print() # Add newline after final message
 
           # Check for and process any tool calls in the final message
-          process_final_message_tools(final_message, process, settings, tools_registry)
+          process_final_message_tools(final_message, process, settings, registry)
 
           process.conversation.save()
         elif process.status == ProcessStatus.FAILED:
@@ -460,13 +455,13 @@ def main() -> None:
     logger.info(f"CLAIA application exiting: {result.get_message()}")
 
     # Stop worker threads before exiting
-    agent_registry.stop_workers()
+    registry.stop_workers()
 
   except Exception as e:
     logger.critical(f"Unhandled exception in main: {str(e)}", exc_info=True)
     # Try to stop worker threads on error
-    if 'agent_registry' in locals():
-      agent_registry.stop_workers(wait=False)  # Don't wait on critical error
+    if 'registry' in locals():
+      registry.stop_workers(wait=False)  # Don't wait on critical error
     sys.exit(1)
 
 
