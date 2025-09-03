@@ -4,7 +4,7 @@
 import pytest
 
 # Internal dependencies
-from claia.agents.builtin.simple import SimpleAgent
+from claia.agents.simple import SimpleAgent
 from claia.lib.enums.agent import ProcessStatus
 
 
