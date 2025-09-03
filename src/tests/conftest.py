@@ -9,7 +9,7 @@ from types import SimpleNamespace
 # Internal dependencies
 from claia.lib.results import Result
 from claia.lib.files.conversation.conversation import Conversation
-from claia.agents.lib.process import Process
+from claia.lib.process import Process
 from claia.lib.enums.agent import ProcessStatus
 
 
