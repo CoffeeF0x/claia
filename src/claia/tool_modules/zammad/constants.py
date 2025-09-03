@@ -7,11 +7,6 @@ This module defines constants used throughout the Zammad integration.
 ########################################################################
 #                              CONSTANTS                               #
 ########################################################################
-# Environment variable names
-ENV_ZAMMAD_API_TOKEN = "TOKEN_ZAMMAD"
-ENV_ZAMMAD_BASE_URL = "ZAMMAD_BASEURL"
-
-# Available tags list
 TAG_LIST = [
   "Phishing",
   "Spam",
@@ -34,7 +29,6 @@ TAG_LIST = [
   "NoCategoryFound"
 ]
 
-# Predefined ticket queries
 TICKET_QUERIES = {
   "new-tickets"       : "state_id:1",
   "open-tickets"      : "state_id:1 OR state_id:2 OR state_id:3",
@@ -47,6 +41,12 @@ TICKET_QUERIES = {
 
 # Safety limit for pagination
 SAFETY_LIMIT = 500
+
+# Timeout for process queue operations (in seconds)
+TIMEOUT = 120.0
+
+# Default model for AI processing
+ACTIVE_MODEL = "sonnet-4"
 
 
 

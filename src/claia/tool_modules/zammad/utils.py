@@ -11,24 +11,18 @@ from typing import Callable, TypeVar, Tuple, Any, List, Dict, Optional
 
 # Process queue dependencies
 from ..lib import Process
+from ..lib.queue import ProcessQueue
 from ..lib.enums.agent import ProcessStatus, SourcePreference
 
 # Internal dependencies
-from ..cli.settings import Settings
 from ..lib.results import Result
 from ..lib.files import Conversation, TextFile
 from ..lib.enums import MessageRole
 
 # Internal module dependencies
 from .api import ZammadAPI
-from .constants import TAG_LIST, TAG_PROMPT, ACCOUNT_MANAGEMENT_PROMPT, VERIFICATION_PROMPT
+from .constants import TAG_LIST, TAG_PROMPT, ACCOUNT_MANAGEMENT_PROMPT, VERIFICATION_PROMPT, TIMEOUT, ACTIVE_MODEL
 
-
-
-########################################################################
-#                              CONSTANTS                               #
-########################################################################
-TIMEOUT = 120.0
 
 
 
@@ -106,7 +100,7 @@ def extract_tag(response: str) -> Tuple[str, bool]:
 
 
 def tag_ticket(
-  settings: Settings,
+  files_directory: str,
   zammad: ZammadAPI,
   ticket_id: str,
   conversation: Optional[Conversation] = None) -> Tuple[bool, str, str]:
@@ -115,7 +109,7 @@ def tag_ticket(
   Process a single ticket for AI tagging.
 
   Args:
-    settings: Application settings
+    files_directory: Directory for storing conversation files
     zammad: ZammadAPI instance
     ticket_id: The ID of the ticket to tag
     conversation: Optional conversation object to record actions
@@ -135,7 +129,7 @@ def tag_ticket(
 
     # Create blank conversation object to process tag
     tag_conversation = Conversation(
-      settings.files_directory,
+      files_directory,
       prompt=TAG_PROMPT
     )
     tag_conversation.add_message(
@@ -147,11 +141,11 @@ def tag_ticket(
     logger.debug(f"Creating process for ticket {ticket_id}")
     process = Process(
       agent_type="simple",
-      settings=settings,
+      settings=None,
       conversation=tag_conversation,
       parameters={
         "source_preference": SourcePreference.ANY,
-        "model": settings.active_model
+        "model": ACTIVE_MODEL
       }
     )
 
@@ -304,7 +298,7 @@ def find_tickets_by_subject(
 
 
 def process_account_ticket(
-  settings: Settings,
+  files_directory: str,
   zammad: ZammadAPI,
   ticket_id: str,
   file: Optional[TextFile] = None,
@@ -314,7 +308,7 @@ def process_account_ticket(
   Process a single account management ticket and update account list.
 
   Args:
-    settings: Application settings
+    files_directory: Directory for storing conversation files
     zammad: ZammadAPI instance
     ticket_id: The ID of the ticket to process
     file: Optional TextFile instance for the account list
@@ -335,12 +329,12 @@ def process_account_ticket(
 
     # Initialize or load the account list file
     if file is None:
-      file = TextFile(settings.files_directory)
+      file = TextFile(files_directory)
     current_account_list = file.get_content()
 
     # Create account processing conversation
     account_conversation = Conversation(
-      settings.files_directory,
+      files_directory,
       prompt=ACCOUNT_MANAGEMENT_PROMPT
     )
     account_conversation.add_message(
@@ -352,11 +346,11 @@ def process_account_ticket(
     logger.debug(f"Creating process for account ticket {ticket_id}")
     process = Process(
       agent_type="simple",
-      settings=settings,
+      settings=None,
       conversation=account_conversation,
       parameters={
         "source_preference": SourcePreference.ANY,
-        "model": settings.active_model
+        "model": ACTIVE_MODEL
       }
     )
 
@@ -395,7 +389,7 @@ def process_account_ticket(
 
       # Create verification conversation
       verification_conversation = Conversation(
-        settings.files_directory,
+        files_directory,
         prompt=VERIFICATION_PROMPT
       )
       verification_conversation.add_message(
@@ -406,11 +400,11 @@ def process_account_ticket(
       # Create a process for the verification
       verify_process = Process(
         agent_type="simple",
-        settings=settings,
+        settings=None,
         conversation=verification_conversation,
         parameters={
           "source_preference": SourcePreference.ANY,
-          "model": settings.active_model
+          "model": ACTIVE_MODEL
         }
       )
 

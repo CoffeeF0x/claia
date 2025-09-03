@@ -316,9 +316,10 @@ class ZammadModulePlugin:
 
   def __init__(self, **kwargs):
     """Initialize Zammad module with required settings."""
-    # Store API credentials passed via required_args
+    # Store API credentials and files directory passed via required_args
     self.zammad_api_token = kwargs.get('zammad_api_token', '')
     self.zammad_base_url = kwargs.get('zammad_base_url', '')
+    self.files_directory = kwargs.get('files_directory', '')
 
   @hookimpl
   def get_module_info(self) -> CommandModuleInfo:
@@ -327,7 +328,7 @@ class ZammadModulePlugin:
       name="zammad",
       title="Zammad Integration",
       description="Commands for interacting with the Zammad ticketing system",
-      required_args=['zammad_api_token', 'zammad_base_url']
+      required_args=['zammad_api_token', 'zammad_base_url', 'files_directory']
     )
 
   @hookimpl
@@ -561,11 +562,14 @@ class ZammadModulePlugin:
       )
     }
 
-  # Command implementations with Zammad API integration
+
+  # Get Zammad API instance
   def _get_zammad_api(self) -> ZammadAPI:
     """Get configured Zammad API instance using stored credentials."""
     return ZammadAPI(self.zammad_base_url, self.zammad_api_token)
 
+
+  # List tickets from Zammad based on a query
   def _list_tickets(self, query: str = "open-tickets", limit: int = 99, compact: bool = False, **kwargs) -> str:
     """List tickets from Zammad based on a query."""
     try:
@@ -628,6 +632,8 @@ class ZammadModulePlugin:
       logger.exception(f"Error listing tickets: {str(e)}")
       return f"Error listing tickets: {str(e)}"
 
+
+  # Get ticket details
   def _get_ticket_details(self, ticket_id: int, **kwargs) -> str:
     """Get details for a specific ticket."""
     try:
@@ -639,6 +645,8 @@ class ZammadModulePlugin:
       logger.exception(f"Error getting ticket details: {str(e)}")
       return f"Error getting ticket details: {str(e)}"
 
+
+  # Add a tag to a ticket
   def _add_tag(self, ticket_id: int, tag: str, **kwargs) -> str:
     """Add a tag to a ticket."""
     try:
@@ -651,6 +659,8 @@ class ZammadModulePlugin:
       logger.exception(f"Error adding tag: {str(e)}")
       return f"Error adding tag: {str(e)}"
 
+
+  # Remove a tag from a ticket
   def _remove_tag(self, ticket_id: int, tag: str, **kwargs) -> str:
     """Remove a tag from a ticket."""
     try:
@@ -663,6 +673,8 @@ class ZammadModulePlugin:
       logger.exception(f"Error removing tag: {str(e)}")
       return f"Error removing tag: {str(e)}"
 
+
+  # Process a single ticket and add AI tags
   def _process_single_ticket(self, ticket_id: int, **kwargs) -> str:
     """Process a single ticket and add AI tags."""
     try:
@@ -673,6 +685,8 @@ class ZammadModulePlugin:
       logger.exception(f"Error processing ticket: {str(e)}")
       return f"Error processing ticket: {str(e)}"
 
+
+  # Remove AI tags from a single ticket
   def _untag_single_ticket(self, ticket_id: int, **kwargs) -> str:
     """Remove AI tags from a single ticket."""
     try:
@@ -686,6 +700,8 @@ class ZammadModulePlugin:
       logger.exception(f"Error untagging ticket: {str(e)}")
       return f"Error untagging ticket: {str(e)}"
 
+
+  # Process a single account management ticket
   def _process_account_single(self, ticket_id: int, **kwargs) -> str:
     """Process a single account management ticket."""
     try:
@@ -695,6 +711,8 @@ class ZammadModulePlugin:
       logger.exception(f"Error processing account ticket: {str(e)}")
       return f"Error processing account ticket: {str(e)}"
 
+
+  # Process untagged tickets and add AI tags
   def _process_tag_tickets(self, limit: int = 0, **kwargs) -> str:
     """Process untagged tickets and add AI tags."""
     try:
@@ -705,6 +723,8 @@ class ZammadModulePlugin:
       logger.exception(f"Error processing tickets: {str(e)}")
       return f"Error processing tickets: {str(e)}"
 
+
+  # Remove AI tags from all tagged tickets
   def _process_untag_tickets(self, limit: int = 0, **kwargs) -> str:
     """Remove AI tags from all tagged tickets."""
     try:
@@ -724,6 +744,8 @@ class ZammadModulePlugin:
       logger.exception(f"Error untagging tickets: {str(e)}")
       return f"Error untagging tickets: {str(e)}"
 
+
+  # Process account management tickets and build account list
   def _process_account_tickets(self, output_file: str = "account-list.txt", limit: int = 0, **kwargs) -> str:
     """Process account management tickets and build account list."""
     try:
@@ -733,6 +755,8 @@ class ZammadModulePlugin:
       logger.exception(f"Error processing account tickets: {str(e)}")
       return f"Error processing account tickets: {str(e)}"
 
+
+  # Find tickets with a specific subject
   def _find_tickets_by_subject(self, subject: str, limit: int = 0, **kwargs) -> str:
     """Find tickets with a specific subject."""
     try:
@@ -752,6 +776,8 @@ class ZammadModulePlugin:
       logger.exception(f"Error finding tickets: {str(e)}")
       return f"Error finding tickets: {str(e)}"
 
+
+  # Delete tickets with a specific subject
   def _delete_tickets_by_subject(self, subject: str, confirm: bool = False, limit: int = 0, **kwargs) -> str:
     """Delete tickets with a specific subject."""
     try:
