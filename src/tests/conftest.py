@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from claia.lib.results import Result
 from claia.lib.files.conversation.conversation import Conversation
 from claia.lib.process import Process
-from claia.lib.enums.agent import ProcessStatus
+from claia.lib.enums.process import ProcessStatus
 
 
 # ---------------------------------------------------------------------------

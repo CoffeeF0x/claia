@@ -15,7 +15,7 @@ from claia.lib.process import Process
 from claia.lib.queue import ProcessQueue
 from claia.manager import UnifiedManager
 from claia.models_registry import ModelRegistry
-from claia.lib.enums.agent import ProcessStatus
+from claia.lib.enums.process import ProcessStatus
 
 
 

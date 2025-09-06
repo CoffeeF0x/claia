@@ -66,7 +66,8 @@ from typing import Optional, Dict, Any
 # Internal dependencies
 from claia.lib import Process
 from claia.lib.results import Result
-from claia.lib.enums.agent import ProcessStatus, SourcePreference
+from claia.lib.enums.process import ProcessStatus
+from claia.lib.enums.model import SourcePreference
 from claia.lib.enums.conversation import MessageRole
 from claia.lib.files.conversation import Conversation
 from claia.cli.settings import Settings

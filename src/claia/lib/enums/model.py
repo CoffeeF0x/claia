@@ -24,3 +24,10 @@ class IOType(Enum):
   TEXT = ["txt"]
   IMAGE = ["png", "jpg"]
   AUDIO = ["mp3", "wav"]
+
+class SourcePreference(Enum):
+  """Enum for source preferences when deploying models."""
+  ANY = "any"  # Use any available source
+  API = "api"  # Prefer API sources
+  LOCAL = "local"  # Prefer local deployment
+  REMOTE = "remote"  # Prefer remote deployment

@@ -15,7 +15,7 @@ from claia.manager import UnifiedManager
 from claia.lib.results import Result
 from claia.lib.process import Process
 from claia.lib.queue import ProcessQueue
-from claia.lib.enums.agent import ProcessStatus
+from claia.lib.enums.process import ProcessStatus
 from claia.lib.files.conversation import Conversation
 
 

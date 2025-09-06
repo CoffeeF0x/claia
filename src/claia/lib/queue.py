@@ -9,7 +9,7 @@ from typing import Optional
 
 # Internal dependencies
 from .process import Process
-from claia.lib.enums.agent import ProcessStatus
+from claia.lib.enums.process import ProcessStatus
 
 
 

@@ -12,7 +12,8 @@ from typing import Callable, TypeVar, Tuple, Any, List, Dict, Optional
 # Process queue dependencies
 from ..lib import Process
 from ..lib.queue import ProcessQueue
-from ..lib.enums.agent import ProcessStatus, SourcePreference
+from ..lib.enums.process import ProcessStatus
+from ..lib.enums.model import SourcePreference
 
 # Internal dependencies
 from ..lib.results import Result

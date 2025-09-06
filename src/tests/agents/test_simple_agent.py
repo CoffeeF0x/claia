@@ -5,7 +5,7 @@ import pytest
 
 # Internal dependencies
 from claia.agents.simple import SimpleAgent
-from claia.lib.enums.agent import ProcessStatus
+from claia.lib.enums.process import ProcessStatus
 
 
 def test_simple_agent_success(process, fake_model_registry_ok):

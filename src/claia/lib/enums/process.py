@@ -12,11 +12,3 @@ class ProcessStatus(Enum):
   COMPLETED = "completed"
   FAILED = "failed"
   CANCELLED = "cancelled"
-
-
-class SourcePreference(Enum):
-  """Enum for source preferences when deploying models."""
-  ANY = "any"  # Use any available source
-  API = "api"  # Prefer API sources
-  LOCAL = "local"  # Prefer local deployment
-  REMOTE = "remote"  # Prefer remote deployment
