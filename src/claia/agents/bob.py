@@ -43,13 +43,13 @@ class BobAgent(BaseAgent):
   """
 
   @classmethod
-  def process_request(cls, process, model_registry=None, **kwargs) -> object:
+  def process_request(cls, process, registry=None, **kwargs) -> object:
     """
     Process a request using Bob's unique style by applying his system prompt.
 
     Args:
         process: The process to execute
-        model_registry: ModelRegistry instance to use for model operations
+        registry: Registry instance to use for model operations
         **kwargs: Additional keyword arguments
 
     Returns:
@@ -64,7 +64,7 @@ class BobAgent(BaseAgent):
         process.conversation.change_prompt(BOB_SYSTEM_PROMPT)
 
       # Run the model with the conversation using the provided model registry
-      result = model_registry.run(model_id, process.conversation, **kwargs)
+      result = registry.run(model_id, process.conversation, **kwargs)
 
       if result.is_error():
         raise ValueError(f"Bob ran into a problem: {result.get_message()}")

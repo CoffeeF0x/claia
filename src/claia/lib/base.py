@@ -31,13 +31,13 @@ class BaseAgent:
   """
 
   @classmethod
-  def process(cls, process: Process, model_registry=None, **kwargs) -> object:
+  def process(cls, process: Process, registry=None, **kwargs) -> object:
     """
     Process a request and update the process with the result.
 
     Args:
         process: The process to execute
-        model_registry: ModelRegistry instance to use for model operations
+        registry: Registry instance to use for model operations
         **kwargs: Additional keyword arguments
 
     Returns:
@@ -49,11 +49,11 @@ class BaseAgent:
     try:
       # Validate common requirements before proceeding
       logger.debug(f"Validating requirements for process {process.id}")
-      cls.validate_process_requirements(process, model_registry)
+      cls.validate_process_requirements(process, registry)
 
       # Process the request
       logger.debug(f"Executing process_request for {process.id} with agent {cls.__name__}")
-      result = cls.process_request(process, model_registry=model_registry, **kwargs)
+      result = cls.process_request(process, registry=registry, **kwargs)
 
       logger.info(f"Successfully completed process {process.id}")
       return result
@@ -63,14 +63,14 @@ class BaseAgent:
       return process
 
   @classmethod
-  def process_request(cls, process: Process, model_registry=None, **kwargs) -> object:
+  def process_request(cls, process: Process, registry=None, **kwargs) -> object:
     """
     Implement the actual processing logic for this agent type.
     This method should be overridden by specific agent implementations.
 
     Args:
         process: The process to execute
-        model_registry: ModelRegistry instance to use for model operations
+        registry: Registry instance to use for model operations
         **kwargs: Additional keyword arguments
 
     Returns:
@@ -80,13 +80,13 @@ class BaseAgent:
     raise NotImplementedError(f"Agent implementation {cls.__name__} must override process_request")
 
   @classmethod
-  def validate_process_requirements(cls, process: Process, model_registry=None) -> None:
+  def validate_process_requirements(cls, process: Process, registry=None) -> None:
     """
     Validate that the process has all the common requirements needed for processing.
 
     Args:
         process: The process to validate
-        model_registry: ModelRegistry instance to use for validation
+        registry: Registry instance to use for validation
 
     Raises:
         ValueError: If any required component is missing
@@ -105,9 +105,9 @@ class BaseAgent:
       raise ValueError(f"{cls.__name__} requires a model_id in process parameters")
 
     # Check for model registry
-    if not model_registry:
-      logger.error(f"Process {process.id} has no model_registry available")
-      raise ValueError(f"{cls.__name__} requires a model registry to be provided")
+    if not registry:
+      logger.error(f"Process {process.id} has no registry available")
+      raise ValueError(f"{cls.__name__} requires a registry to be provided")
 
     logger.debug(f"Process {process.id} validated successfully with model {model_id}")
 

@@ -30,13 +30,13 @@ class SimpleAgent(BaseAgent):
   """
 
   @classmethod
-  def process_request(cls, process, model_registry=None, **kwargs) -> object:
+  def process_request(cls, process, registry=None, **kwargs) -> object:
     """
     Process a model inference request.
 
     Args:
         process: The process to execute
-        model_registry: ModelRegistry instance to use for model operations
+        registry: Registry instance to use for model operations
         **kwargs: Additional keyword arguments
 
     Returns:
@@ -47,7 +47,7 @@ class SimpleAgent(BaseAgent):
       model_id = process.parameters["model_id"]
 
       # Run the model with the conversation using the provided model registry
-      result = model_registry.run(model_id, process.conversation, **kwargs)
+      result = registry.run(model_id, process.conversation, **kwargs)
 
       if result.is_error():
         raise ValueError(f"Error running model: {result.get_message()}")

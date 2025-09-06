@@ -433,9 +433,9 @@ class Registry:
         process.mark_failed(error_msg)
         return process
 
-      # Process using the agent class, injecting this registry as model_registry and forwarding parameters
+      # Process using the agent class, injecting this registry and forwarding parameters
       logger.debug(f"Using agent class {agent_class.__name__} for {process.id}")
-      result = agent_class.process(process, model_registry=self, **process.parameters)
+      result = agent_class.process(process, registry=self, **process.parameters)
 
       return result
 
