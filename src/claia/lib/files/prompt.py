@@ -226,5 +226,5 @@ class Prompt(TextFile):
           logger.error(f"Failed to parse JSON from prompt file: {file_id}")
           continue
 
-    logger.error(f"Prompt not found: {prompt_name}")
+    logger.warning(f"Prompt not found: {prompt_name}")
     return None
