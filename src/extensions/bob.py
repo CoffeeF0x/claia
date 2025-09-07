@@ -9,8 +9,8 @@ import pluggy
 from typing import Type
 
 # Internal dependencies
-from ..lib import BaseAgent, Process
-from ..hooks import AgentHooks, AgentInfo
+from claia.lib import BaseAgent, Process
+from claia.hooks import AgentHooks, AgentInfo
 
 
 ########################################################################
