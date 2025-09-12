@@ -56,7 +56,7 @@ class ZammadBasicModulePlugin:
       "list": CommandDefinition(
         name="list",
         description="List tickets based on a query",
-        callable=self._list_tickets,
+        callable=self.list_tickets,
         arguments={
           "query": ArgumentDefinition(
             name="query",
@@ -84,7 +84,7 @@ class ZammadBasicModulePlugin:
       "details": CommandDefinition(
         name="details",
         description="Get ticket details by ID",
-        callable=self._get_ticket_details,
+        callable=self.get_ticket_details,
         arguments={
           "ticket_id": ArgumentDefinition(
             name="ticket_id",
@@ -104,7 +104,7 @@ class ZammadBasicModulePlugin:
       "tag_add": CommandDefinition(
         name="tag_add",
         description="Add a tag to a ticket",
-        callable=self._add_tag,
+        callable=self.add_tag,
         arguments={
           "ticket_id": ArgumentDefinition(
             name="ticket_id",
@@ -123,7 +123,7 @@ class ZammadBasicModulePlugin:
       "tag_remove": CommandDefinition(
         name="tag_remove",
         description="Remove a tag from a ticket",
-        callable=self._remove_tag,
+        callable=self.remove_tag,
         arguments={
           "ticket_id": ArgumentDefinition(
             name="ticket_id",
@@ -142,7 +142,7 @@ class ZammadBasicModulePlugin:
       "find_subject": CommandDefinition(
         name="find_subject",
         description="Find tickets with a subject substring",
-        callable=self._find_tickets_by_subject,
+        callable=self.find_tickets_by_subject,
         arguments={
           "subject": ArgumentDefinition(
             name="subject",
@@ -162,7 +162,7 @@ class ZammadBasicModulePlugin:
       "delete_subject": CommandDefinition(
         name="delete_subject",
         description="Delete tickets whose subject contains a substring (requires confirm)",
-        callable=self._delete_tickets_by_subject,
+        callable=self.delete_tickets_by_subject,
         arguments={
           "subject": ArgumentDefinition(
             name="subject",
@@ -189,7 +189,7 @@ class ZammadBasicModulePlugin:
     }
 
   # ---------- Command implementations ----------
-  def _list_tickets(self, query: str = "open-tickets", limit: int = 99, compact: bool = False, **kwargs) -> str:
+  def list_tickets(self, query: str = "open-tickets", limit: int = 99, compact: bool = False, **kwargs) -> str:
     try:
       api = self._get_api()
       utils = self._get_utils()
@@ -199,7 +199,7 @@ class ZammadBasicModulePlugin:
       logger.exception(f"Error listing tickets: {str(e)}")
       return f"Error listing tickets: {str(e)}"
 
-  def _get_ticket_details(self, ticket_id: int, compact: bool = False, **kwargs) -> str:
+  def get_ticket_details(self, ticket_id: int, compact: bool = False, **kwargs) -> str:
     try:
       utils = self._get_utils()
       return utils.format_ticket_details(ticket_id, compact=compact)
@@ -207,7 +207,7 @@ class ZammadBasicModulePlugin:
       logger.exception(f"Error getting ticket details: {str(e)}")
       return f"Error getting ticket details: {str(e)}"
 
-  def _add_tag(self, ticket_id: int, tag: str, **kwargs) -> str:
+  def add_tag(self, ticket_id: int, tag: str, **kwargs) -> str:
     try:
       api = self._get_api()
       if api.add_tag(ticket_id, tag):
@@ -217,7 +217,7 @@ class ZammadBasicModulePlugin:
       logger.exception(f"Error adding tag: {str(e)}")
       return f"Error adding tag: {str(e)}"
 
-  def _remove_tag(self, ticket_id: int, tag: str, **kwargs) -> str:
+  def remove_tag(self, ticket_id: int, tag: str, **kwargs) -> str:
     try:
       api = self._get_api()
       if api.remove_tag(ticket_id, tag):
@@ -227,7 +227,7 @@ class ZammadBasicModulePlugin:
       logger.exception(f"Error removing tag: {str(e)}")
       return f"Error removing tag: {str(e)}"
 
-  def _find_tickets_by_subject(self, subject: str, limit: int = 0, **kwargs) -> str:
+  def find_tickets_by_subject(self, subject: str, limit: int = 0, **kwargs) -> str:
     try:
       utils = self._get_utils()
       matches = utils.find_tickets_by_subject(subject, limit)
@@ -241,7 +241,7 @@ class ZammadBasicModulePlugin:
       logger.exception(f"Error finding tickets: {str(e)}")
       return f"Error finding tickets: {str(e)}"
 
-  def _delete_tickets_by_subject(self, subject: str, confirm: bool = False, limit: int = 0, **kwargs) -> str:
+  def delete_tickets_by_subject(self, subject: str, confirm: bool = False, limit: int = 0, **kwargs) -> str:
     try:
       if not confirm:
         return f"This operation will delete tickets with subject: '{subject}'. Set confirm=True to proceed."

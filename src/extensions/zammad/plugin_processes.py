@@ -54,7 +54,7 @@ class ZammadProcessesModulePlugin:
       "process_single": CommandDefinition(
         name="process_single",
         description="Process a single ticket and add AI tags",
-        callable=self._process_single_ticket,
+        callable=self.process_single_ticket,
         arguments={
           "ticket_id": ArgumentDefinition(
             name="ticket_id",
@@ -67,7 +67,7 @@ class ZammadProcessesModulePlugin:
       "untag_single": CommandDefinition(
         name="untag_single",
         description="Remove AI tags from a single ticket",
-        callable=self._untag_single_ticket,
+        callable=self.untag_single_ticket,
         arguments={
           "ticket_id": ArgumentDefinition(
             name="ticket_id",
@@ -80,7 +80,7 @@ class ZammadProcessesModulePlugin:
       "process_tag": CommandDefinition(
         name="process_tag",
         description="Process untagged tickets and add AI tags",
-        callable=self._process_tag_tickets,
+        callable=self.process_tag_tickets,
         arguments={
           "limit": ArgumentDefinition(
             name="limit",
@@ -94,7 +94,7 @@ class ZammadProcessesModulePlugin:
       "process_untag": CommandDefinition(
         name="process_untag",
         description="Remove AI tags from all tagged tickets",
-        callable=self._process_untag_tickets,
+        callable=self.process_untag_tickets,
         arguments={
           "limit": ArgumentDefinition(
             name="limit",
@@ -108,7 +108,7 @@ class ZammadProcessesModulePlugin:
       "process_account_single": CommandDefinition(
         name="process_account_single",
         description="Process a single account management ticket",
-        callable=self._process_account_single,
+        callable=self.process_account_single,
         arguments={
           "ticket_id": ArgumentDefinition(
             name="ticket_id",
@@ -128,7 +128,7 @@ class ZammadProcessesModulePlugin:
       "process_account": CommandDefinition(
         name="process_account",
         description="Process account management tickets and build account list",
-        callable=self._process_account_tickets,
+        callable=self.process_account_tickets,
         arguments={
           "output_file": ArgumentDefinition(
             name="output_file",
@@ -149,7 +149,7 @@ class ZammadProcessesModulePlugin:
     }
 
   # ---------- Command implementations ----------
-  def _process_single_ticket(self, ticket_id: int, **kwargs) -> str:
+  def process_single_ticket(self, ticket_id: int, **kwargs) -> str:
     try:
       utils = self._get_utils()
       ok, tag_name, err = utils.tag_ticket(self.files_directory, ticket_id)
@@ -160,7 +160,7 @@ class ZammadProcessesModulePlugin:
       logger.exception(f"Error processing ticket: {str(e)}")
       return f"Error processing ticket: {str(e)}"
 
-  def _untag_single_ticket(self, ticket_id: int, **kwargs) -> str:
+  def untag_single_ticket(self, ticket_id: int, **kwargs) -> str:
     try:
       utils = self._get_utils()
       count, tags = utils.untag_ticket(ticket_id)
@@ -171,7 +171,7 @@ class ZammadProcessesModulePlugin:
       logger.exception(f"Error untagging ticket: {str(e)}")
       return f"Error untagging ticket: {str(e)}"
 
-  def _process_tag_tickets(self, limit: int = 0, **kwargs) -> str:
+  def process_tag_tickets(self, limit: int = 0, **kwargs) -> str:
     try:
       api = self._get_api()
       utils = self._get_utils()
@@ -190,7 +190,7 @@ class ZammadProcessesModulePlugin:
       logger.exception(f"Error processing tickets: {str(e)}")
       return f"Error processing tickets: {str(e)}"
 
-  def _process_untag_tickets(self, limit: int = 0, **kwargs) -> str:
+  def process_untag_tickets(self, limit: int = 0, **kwargs) -> str:
     try:
       api = self._get_api()
       utils = self._get_utils()
@@ -208,7 +208,7 @@ class ZammadProcessesModulePlugin:
       logger.exception(f"Error untagging tickets: {str(e)}")
       return f"Error untagging tickets: {str(e)}"
 
-  def _process_account_single(self, ticket_id: int, output_file: str = "account-list.txt", **kwargs) -> str:
+  def process_account_single(self, ticket_id: int, output_file: str = "account-list.txt", **kwargs) -> str:
     try:
       utils = self._get_utils()
       file = TextFile(self.files_directory, file_name=output_file)
@@ -220,7 +220,7 @@ class ZammadProcessesModulePlugin:
       logger.exception(f"Error processing account ticket: {str(e)}")
       return f"Error processing account ticket: {str(e)}"
 
-  def _process_account_tickets(self, output_file: str = "account-list.txt", limit: int = 0, **kwargs) -> str:
+  def process_account_tickets(self, output_file: str = "account-list.txt", limit: int = 0, **kwargs) -> str:
     try:
       api = self._get_api()
       utils = self._get_utils()
