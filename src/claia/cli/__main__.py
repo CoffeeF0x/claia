@@ -23,6 +23,9 @@
 # - (or perhaps there's a deployment manager, and the deployment object contains methods to move the model between cpu and gpu as needed)
 
 # - add required_arg filtering back for the command modules
+# - add arg checking in settings module (add arg checking for required_args before loading extension?)
+# - switch extension loading to be guid based, and show names on console with appended guid if name conflicts, support guid or name loading if no conflicts (select first if conflicts)
+
 
 # FROM LIB
 # - Refactor to use pluggy for file types?
