@@ -4,7 +4,7 @@ Hook specifications for agent plugins.
 
 # External dependencies
 import pluggy
-from typing import Type
+from typing import Type, Optional, List
 from dataclasses import dataclass
 
 # Internal dependencies
@@ -20,6 +20,7 @@ class AgentInfo:
   name: str
   description: str
   agent_class: Type[BaseAgent]
+  required_args: Optional[List[str]] = None  # list of custom args required by the agent
 
 
 ########################################################################

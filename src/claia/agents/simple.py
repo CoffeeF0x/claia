@@ -80,5 +80,6 @@ class SimpleAgentPlugin:
     return AgentInfo(
       name="simple",
       description="A simple agent that directly calls a model for inference",
-      agent_class=SimpleAgent
+      agent_class=SimpleAgent,
+      required_args=None
     )
