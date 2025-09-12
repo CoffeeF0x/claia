@@ -515,3 +515,29 @@ class UnifiedManager:
 
     logger.debug(f"No agent class found for {agent_name}")
     return None
+
+  def get_available_agents(self) -> Dict[str, AgentInfo]:
+    """Get all available agent plugins and their info keyed by name."""
+    self.load_all_plugins()
+    all_agents: Dict[str, AgentInfo] = {}
+    try:
+      infos = self.agent_pm.hook.get_agent_info()
+      for info in infos:
+        if info:
+          all_agents[info.name] = info
+      logger.debug(f"Collected {len(all_agents)} agents")
+    except Exception as e:
+      logger.warning(f"Failed collecting agent info: {e}")
+    return all_agents
+
+  def get_agent_by_name(self, agent_name: str):
+    """Get an agent plugin and its AgentInfo by name."""
+    self.load_all_plugins()
+    for plugin in self.agent_pm.get_plugins():
+      try:
+        info = plugin.get_agent_info()
+        if info and info.name == agent_name:
+          return plugin, info
+      except Exception as e:
+        logger.warning(f"Failed retrieving agent info for plugin {plugin}: {e}")
+    return None, None
