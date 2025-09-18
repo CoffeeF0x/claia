@@ -525,3 +525,11 @@ class Manager:
     except Exception as e:
       logger.warning(f"Failed collecting agent info: {e}")
     return agents
+
+  def get_agent_info_by_name(self, agent_name: str) -> Optional[AgentInfo]:
+    """Get agent info for a specific agent by name."""
+    agents = self.get_agents()
+    for agent_info in agents:
+      if agent_info.name == agent_name:
+        return agent_info
+    return None
