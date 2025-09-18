@@ -31,6 +31,19 @@ from .lib import BaseAgent
 ########################################################################
 DEFAULT_SOLVER = "default"
 
+# Map entry point group -> plugin info method name
+INFO_METHOD_BY_GROUP: Dict[str, Optional[str]] = {
+  'claia.architectures': 'get_architecture_info',
+  'claia.deployments': 'get_deployment_info',
+  'claia.solvers': 'get_solver_info',
+  'claia.definitions': None,          # definitions expose definitions via hook, not a single info
+  'claia.tool_patterns': 'get_pattern_info',
+  'claia.tool_protocols': 'get_protocol_info',
+  'claia.command_modules': 'get_module_info',
+  'claia.agents': 'get_agent_info',   # best-effort; if missing, we won't pass kwargs
+}
+
+
 
 
 ########################################################################
@@ -188,17 +201,7 @@ class Manager:
 
   def _get_info_method_for_group(self, group: str) -> Optional[str]:
     """Return the instance info method name for a given entry point group."""
-    mapping = {
-      'claia.architectures': 'get_architecture_info',
-      'claia.deployments': 'get_deployment_info',
-      'claia.solvers': 'get_solver_info',
-      'claia.definitions': None,          # definitions expose definitions via hook, not a single info
-      'claia.tool_patterns': 'get_pattern_info',
-      'claia.tool_protocols': 'get_protocol_info',
-      'claia.command_modules': 'get_module_info',
-      'claia.agents': 'get_agent_info',   # best-effort; if missing, we won't pass kwargs
-    }
-    return mapping.get(group)
+    return INFO_METHOD_BY_GROUP.get(group)
 
   def _filter_kwargs(self, kwargs, required_args):
     """Filter kwargs to only include those specified in required_args."""
