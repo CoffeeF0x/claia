@@ -123,7 +123,7 @@ def registry_with_fake_manager(fake_manager, monkeypatch):
   """Unified Registry instance wired to the fake manager via monkeypatching."""
   import claia.registry as regmod
   # Ensure Registry.__init__ uses our fake manager
-  monkeypatch.setattr(regmod, "UnifiedManager", lambda: fake_manager)
+  monkeypatch.setattr(regmod, "Manager", lambda: fake_manager)
   from claia.registry import Registry
   return Registry()
 
@@ -132,6 +132,6 @@ def registry_with_fake_manager(fake_manager, monkeypatch):
 def registry_with_no_solver(fake_manager_no_solver, monkeypatch):
   """Unified Registry instance whose manager returns no solver plugin."""
   import claia.registry as regmod
-  monkeypatch.setattr(regmod, "UnifiedManager", lambda: fake_manager_no_solver)
+  monkeypatch.setattr(regmod, "Manager", lambda: fake_manager_no_solver)
   from claia.registry import Registry
   return Registry()

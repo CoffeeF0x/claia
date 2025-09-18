@@ -1,5 +1,5 @@
 """
-Unified manager for the CLAIA system.
+Manager for the CLAIA system.
 
 This module handles loading and coordinating all plugin types:
 - Model architectures (implement specific AI models)
@@ -32,9 +32,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_SOLVER = "default"
 
 
-class UnifiedManager:
+class Manager:
   """
-  Unified manager for all CLAIA plugin types.
+  Manager for all CLAIA plugin types.
 
   This class coordinates all plugin types for models, tools, and agents:
   - Model: Architecture, Deployment, Solver, Definition plugins
@@ -43,7 +43,7 @@ class UnifiedManager:
   """
 
   def __init__(self):
-    """Initialize the unified manager."""
+    """Initialize the manager."""
     # Model plugin managers
     self.architecture_pm = pluggy.PluginManager("claia_architectures")
     self.architecture_pm.add_hookspecs(ArchitectureHooks)
@@ -72,7 +72,7 @@ class UnifiedManager:
     self.agent_pm.add_hookspecs(AgentHooks)
 
     self._plugins_loaded = False
-    logger.debug("UnifiedManager initialized")
+    logger.debug("Manager initialized")
 
   def load_all_plugins(self, **kwargs) -> None:
     """Load all plugins from entry points."""

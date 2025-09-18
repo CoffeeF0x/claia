@@ -3,7 +3,7 @@
 Core package implementing agents, model stack, tool system, and plugin registries.
 
 Key modules:
-- `manager.py` — unified plugin manager (models, tools, agents)
+- `manager.py` — plugin manager (models, tools, agents)
 - `registry.py` — shared registry utilities
 - `agent_registry.py`, `models_registry.py`, `tools_registry.py` — top-level registries
 

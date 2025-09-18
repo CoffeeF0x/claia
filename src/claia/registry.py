@@ -2,7 +2,7 @@
 Unified Registry for CLAIA models, tools, and agents.
 
 This merges the former AgentRegistry, ToolsRegistry, and ModelRegistry into a
-single facade over UnifiedManager. It exposes the union of their public APIs.
+single facade over Manager. It exposes the union of their public APIs.
 """
 
 import logging
@@ -11,7 +11,7 @@ import time
 import json
 from typing import Any, Dict, Optional
 
-from claia.manager import UnifiedManager
+from claia.manager import Manager
 from claia.lib.results import Result
 from claia.lib.process import Process
 from claia.lib.queue import ProcessQueue
@@ -31,9 +31,9 @@ class Registry:
   - Agents API: process queue + worker lifecycle and agent dispatch.
   """
 
-  def __init__(self, manager: Optional[UnifiedManager] = None, process_queue: Optional[ProcessQueue] = None, **kwargs):
+  def __init__(self, manager: Optional[Manager] = None, process_queue: Optional[ProcessQueue] = None, **kwargs):
     # Core manager and caches
-    self.manager = manager or UnifiedManager()
+    self.manager = manager or Manager()
     self.cache: Dict[str, Any] = {}
 
     # Tool-related
