@@ -25,13 +25,25 @@ from claia.lib.model.base import BaseModel
 from .lib import BaseAgent
 
 
-logger = logging.getLogger(__name__)
 
-
-# Constants
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
 DEFAULT_SOLVER = "default"
 
 
+
+########################################################################
+#                              INITIALIZE                              #
+########################################################################
+logger = logging.getLogger(__name__)
+
+
+
+
+########################################################################
+#                               MANAGER                                #
+########################################################################
 class Manager:
   """
   Manager for all CLAIA plugin types.
@@ -82,45 +94,79 @@ class Manager:
 
     try:
       # Load definition plugins first (they're optional)
-      self._load_plugins(group='claia.definitions', pm=self.definition_pm, label='definition', allow_empty=True)
+      self._load_plugins(group='claia.definitions', pm=self.definition_pm, label='definition', allow_empty=True, ctor_kwargs=kwargs)
 
       # Load tool plugins (pass in kwargs to process required_args)
-      self._load_plugins(group='claia.tool_patterns', pm=self.pattern_pm, label='pattern', allow_empty=True)
-      self._load_plugins(group='claia.tool_protocols', pm=self.protocol_pm, label='protocol', allow_empty=True)
-      self._load_plugins(group='claia.command_modules', pm=self.module_pm, label='module', allow_empty=True, factory=lambda cls: self._instantiate_module_with_required_args(cls, **kwargs))
+      self._load_plugins(group='claia.tool_patterns', pm=self.pattern_pm, label='pattern', allow_empty=True, ctor_kwargs=kwargs)
+      self._load_plugins(group='claia.tool_protocols', pm=self.protocol_pm, label='protocol', allow_empty=True, ctor_kwargs=kwargs)
+      self._load_plugins(group='claia.command_modules', pm=self.module_pm, label='module', allow_empty=True, ctor_kwargs=kwargs)
 
       # Load agent plugins (optional)
-      self._load_plugins(group='claia.agents', pm=self.agent_pm, label='agent', allow_empty=True)
+      self._load_plugins(group='claia.agents', pm=self.agent_pm, label='agent', allow_empty=True, ctor_kwargs=kwargs)
 
       # Load model plugins (required)
-      self._load_plugins(group='claia.architectures', pm=self.architecture_pm, label='architecture', allow_empty=False)
-      self._load_plugins(group='claia.deployments', pm=self.deployment_pm, label='deployment', allow_empty=False)
-      self._load_plugins(group='claia.solvers', pm=self.solver_pm, label='solver', allow_empty=False)
+      self._load_plugins(group='claia.architectures', pm=self.architecture_pm, label='architecture', allow_empty=False, ctor_kwargs=kwargs)
+      self._load_plugins(group='claia.deployments', pm=self.deployment_pm, label='deployment', allow_empty=False, ctor_kwargs=kwargs)
+      self._load_plugins(group='claia.solvers', pm=self.solver_pm, label='solver', allow_empty=False, ctor_kwargs=kwargs)
 
       self._plugins_loaded = True
-      logger.info("All plugins loaded successfully")
+      logger.info("All plugins loaded")
 
     except Exception as e:
       logger.error(f"Error loading plugins: {e}")
       raise RuntimeError(f"Failed to load plugins: {e}")
 
-  # Generic plugin loading helper
-  def _load_plugins(self, group: str, pm: pluggy.PluginManager, label: str, allow_empty: bool = False, factory: Optional[Callable[[Type[Any]], Any]] = None) -> None:
-    """Load plugins from an entry point group into the provided pluggy manager.
 
-    Parameters:
-      - group: entry points group name
-      - pm: target pluggy.PluginManager
-      - label: label for logging (e.g., 'solver')
-      - allow_empty: if False, raise when no entries are loaded
-      - factory: optional callable to instantiate plugin given its class
+  ######################################################################
+  #                               UTILS                                #
+  ######################################################################
+  # Generic plugin loading helper
+  def _load_plugins(self, group: str, pm: pluggy.PluginManager, label: str, allow_empty: bool = False, ctor_kwargs: Optional[Dict[str, Any]] = None) -> None:
+    """Load plugins securely by filtering ctor kwargs based on required_args.
+
+    We instantiate each plugin twice at most:
+      1) Create a temporary no-arg instance to introspect its info and required_args
+      2) If required_args is present, re-instantiate with only filtered kwargs
+         Otherwise, register the temporary instance
     """
     loaded_count = 0
     try:
       for ep in metadata.entry_points().select(group=group):
         try:
           cls = ep.load()
-          inst = factory(cls) if factory else cls()
+          inst = None
+
+          # Step 1: always try to build a temporary instance without kwargs
+          try:
+            temp = cls()
+          except Exception as e:
+            logger.warning(f"Failed to instantiate {label} plugin {ep.name} without kwargs: {e}")
+            # As a last resort, do not pass full ctor_kwargs (security); skip this plugin
+            continue
+
+          # Step 2: if the plugin exposes an info method with required_args, filter
+          info_method = self._get_info_method_for_group(group)
+          filtered_kwargs: Dict[str, Any] = {}
+          if info_method and hasattr(temp, info_method):
+            try:
+              info_obj = getattr(temp, info_method)()
+              req = getattr(info_obj, 'required_args', None)
+              if req and ctor_kwargs:
+                filtered_kwargs = self._filter_kwargs(ctor_kwargs, req)
+            except Exception as e:
+              logger.debug(f"Could not inspect required_args for {label} plugin {ep.name}: {e}")
+
+          # If we have any filtered kwargs to pass, re-instantiate with them
+          if filtered_kwargs:
+            try:
+              inst = cls(**filtered_kwargs)
+            except Exception as e:
+              logger.debug(f"Re-instantiating {label} plugin {ep.name} with filtered kwargs failed, using temp instance: {e}")
+              inst = temp
+          else:
+            # No required args or none provided — register temp instance (no secrets)
+            inst = temp
+
           pm.register(inst)
           loaded_count += 1
           logger.debug(f"Loaded {label} plugin: {ep.name} from {ep.value}")
@@ -140,23 +186,19 @@ class Manager:
       if not allow_empty:
         raise
 
-  def _instantiate_module_with_required_args(self, cls, **kwargs):
-    """Create a command module instance with required_args passed to constructor when available."""
-    try:
-      # Create a temporary instance to introspect module info
-      temp_inst = cls()
-      module_info = temp_inst.get_module_info()
-
-      # Get required_args if specified
-      required_args = getattr(module_info, 'required_args', None)
-      if required_args and kwargs:
-        filtered_kwargs = self._filter_kwargs(kwargs, required_args)
-        return cls(**filtered_kwargs)
-      else:
-        return temp_inst
-    except Exception as e:
-      logger.warning(f"Error creating module instance with required_args, falling back to no-args constructor: {e}")
-      return cls()
+  def _get_info_method_for_group(self, group: str) -> Optional[str]:
+    """Return the instance info method name for a given entry point group."""
+    mapping = {
+      'claia.architectures': 'get_architecture_info',
+      'claia.deployments': 'get_deployment_info',
+      'claia.solvers': 'get_solver_info',
+      'claia.definitions': None,          # definitions expose definitions via hook, not a single info
+      'claia.tool_patterns': 'get_pattern_info',
+      'claia.tool_protocols': 'get_protocol_info',
+      'claia.command_modules': 'get_module_info',
+      'claia.agents': 'get_agent_info',   # best-effort; if missing, we won't pass kwargs
+    }
+    return mapping.get(group)
 
   def _filter_kwargs(self, kwargs, required_args):
     """Filter kwargs to only include those specified in required_args."""
@@ -199,7 +241,35 @@ class Manager:
       logger.warning(f"Failed collecting items via hook {hook_name}: {e}")
     return all_items
 
-  # Model-specific methods
+  def _merge_lists(self, list1: Optional[List[str]], list2: Optional[List[str]]) -> Optional[List[str]]:
+    """Merge two optional lists, removing duplicates."""
+    if not list1 and not list2:
+      return None
+    result = []
+    if list1:
+      result.extend(list1)
+    if list2:
+      for item in list2:
+        if item not in result:
+          result.append(item)
+    return result if result else None
+
+  def _merge_dicts(self, dict1: Optional[Dict[str, str]], dict2: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+    """Merge two optional dicts with last-wins on key conflicts."""
+    if not dict1 and not dict2:
+      return None
+    merged: Dict[str, str] = {}
+    if dict1:
+      merged.update(dict1)
+    if dict2:
+      merged.update(dict2)  # dict2 overrides dict1 on conflicts
+    return merged if merged else None
+
+
+  ######################################################################
+  #                              GETTERS                               #
+  ######################################################################
+  # MODELS
   def get_available_architectures(self) -> Dict[str, ArchitectureInfo]:
     """Get all available architecture plugins and their info keyed by name."""
     self.load_all_plugins()
@@ -257,30 +327,6 @@ class Manager:
     logger.debug(f"Collected {len(all_definitions)} model definitions")
     return all_definitions
 
-  def _merge_lists(self, list1: Optional[List[str]], list2: Optional[List[str]]) -> Optional[List[str]]:
-    """Merge two optional lists, removing duplicates."""
-    if not list1 and not list2:
-      return None
-    result = []
-    if list1:
-      result.extend(list1)
-    if list2:
-      for item in list2:
-        if item not in result:
-          result.append(item)
-    return result if result else None
-
-  def _merge_dicts(self, dict1: Optional[Dict[str, str]], dict2: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
-    """Merge two optional dicts with last-wins on key conflicts."""
-    if not dict1 and not dict2:
-      return None
-    merged: Dict[str, str] = {}
-    if dict1:
-      merged.update(dict1)
-    if dict2:
-      merged.update(dict2)  # dict2 overrides dict1 on conflicts
-    return merged if merged else None
-
   def get_available_deployments(self) -> Dict[str, DeploymentInfo]:
     """Get all available deployment methods."""
     self.load_all_plugins()
@@ -312,7 +358,8 @@ class Manager:
     logger.warning(f"Solver '{solver_name}' not found")
     return None
 
-  # Tool-specific methods
+
+  # TOOLS
   def get_protocol_by_name(self, name: str):
     """Get a tool protocol plugin by name."""
     self.load_all_plugins()
@@ -395,6 +442,7 @@ class Manager:
     return patterns[0] if patterns else None
 
 
+  # AGENTS
   def get_agent_class(self, agent_name: str) -> Optional[Type[BaseAgent]]:
     """Get the agent class for a specific agent name."""
     self.load_all_plugins()
