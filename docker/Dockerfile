@@ -6,7 +6,8 @@ RUN apt update && apt install -y \
   zip \
   nano \
   sshpass \
-  git
+  git \
+  htop
 
 COPY build/ build/
 RUN pip install -r build/requirements.txt --no-cache-dir
