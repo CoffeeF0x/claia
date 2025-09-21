@@ -26,6 +26,8 @@
 # - add arg checking in settings module (add arg checking for required_args before loading extension?)
 # - switch extension loading to be guid based, and show names on console with appended guid if name conflicts, support guid or name loading if no conflicts (select first if conflicts)
 
+# - make command input separate from actual text and scrolling (think vim) to allow interacting with AI while it's processing (things like commands to show multiple agent workers at once)
+
 
 # FROM LIB
 # - Refactor to use pluggy for file types?
@@ -65,6 +67,8 @@ import os
 import sys
 import json
 from typing import Optional, Dict, Any
+import shutil
+import importlib.metadata as importlib_metadata
 
 # Internal dependencies
 from claia.lib import Process
@@ -132,6 +136,51 @@ def get_user_input() -> str:
   logger.debug("Waiting for user input")
   return input(INPUT_CHARACTER)
 
+
+
+########################################################################
+#                             UI/UX HELPERS                            #
+########################################################################
+def _get_app_version() -> str:
+  """Attempt to retrieve the installed package version; fallback to 'dev'."""
+  try:
+    return importlib_metadata.version("claia")
+  except importlib_metadata.PackageNotFoundError:
+    return "dev"
+  except Exception:
+    return "dev"
+
+
+def print_header(settings: Settings) -> None:
+  """Print a friendly startup banner for the interactive CLI.
+
+  Shows application name, version, Python version, website, and quick tips.
+  Uses Unicode box drawing for aesthetics; falls back to sensible widths.
+  """
+  try:
+    cols = shutil.get_terminal_size(fallback=(80, 20)).columns
+  except Exception:
+    cols = 80
+  width = max(60, min(100, cols))
+
+  def line(text: str) -> str:
+    inner = text[:width - 4].ljust(width - 4)
+    return f"║ {inner} ║"
+
+  title = "CLAIA"
+  subtitle = "AI Framework for Agents, Models, and Tools"
+  ver = _get_app_version()
+  pyver = sys.version.split()[0]
+
+  print()
+  print("╔" + ("═" * (width - 2)) + "╗")
+  print(line(title.center(width - 4)))
+  print(line(subtitle))
+  print(line(f"Version v{ver} • Python {pyver} • https://claia.dev"))
+  print(line(f"Prompt prefix: '{COMMAND_CHARACTER}' for commands"))
+  print(line("Type ':' then Enter to list modules. Ctrl+C to exit."))
+  print("╚" + ("═" * (width - 2)) + "╝")
+  print()
 
 
 ########################################################################
@@ -311,6 +360,8 @@ def main() -> None:
       return
 
     logger.info("CLAIA initialization complete, entering main loop")
+    # Show a friendly header only for interactive mode
+    print_header(settings)
 
     # Main application loop
     result = Result()
