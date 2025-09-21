@@ -14,7 +14,7 @@ This guide explains the package layout, how to add a model, create an agent, add
     - `files/` — file, prompt, and conversation types
     - `model/` — model layer (API, transformers, dummy, base classes)
     - `process.py`, `queue.py`, `results.py` — orchestration utilities
-  - `model_architectures/` — architecture plugins that map to model classes
+  - `architectures/` — architecture plugins that map to model classes
   - `definitions/` — definitions that name and describe models
   - `solvers/` — select model per process
   - `tool_modules/` — concrete tool command modules
@@ -31,7 +31,7 @@ See `pyproject.toml` for current built-in registrations.
 
 You add models by providing:
 1) A model class in `claia/lib/model/...`
-2) An architecture plugin in `claia/model_architectures/`
+2) An architecture plugin in `claia/architectures/`
 3) (Optional) a definitions plugin in `claia/definitions/`
 4) An entry point in `pyproject.toml`
 
@@ -41,7 +41,7 @@ Step 1: Implement or reuse a model class
 - Base interfaces live in `claia/lib/model/base/`.
 
 Step 2: Create an architecture plugin
-Create `claia/model_architectures/my_provider.py` that returns the model class and declares `required_args` for safe kwarg filtering.
+Create `claia/architectures/my_provider.py` that returns the model class and declares `required_args` for safe kwarg filtering.
 
 ```python
 import pluggy
@@ -73,7 +73,7 @@ Step 4: Register entry points in `pyproject.toml`
 
 ```toml
 [project.entry-points."claia.architectures"]
-my_provider = "claia.model_architectures.my_provider:MyProviderPlugin"
+my_provider = "claia.architectures.my_provider:MyProviderPlugin"
 
 # Optional: definitions
 [project.entry-points."claia.definitions"]

@@ -5,7 +5,6 @@ Core package implementing agents, model stack, tool system, and plugin registrie
 Key modules:
 - `manager.py` — plugin manager (models, tools, agents)
 - `registry.py` — shared registry utilities
-- `agent_registry.py`, `models_registry.py`, `tools_registry.py` — top-level registries
 
 Subpackages:
 - `agents/` — agent implementations
@@ -13,7 +12,7 @@ Subpackages:
 - `deployments/` — runtime backends (api, local, remote, dummy)
 - `hooks/` — plugin hook contracts
 - `lib/` — shared runtime library (files, process/queue, model abstractions)
-- `model_architectures/` — architecture adapters
+- `architectures/` — architecture adapters
 - `definitions/` — model metadata/definitions
 - `solvers/` — solver strategies
 - `tool_modules/` — concrete tool integrations

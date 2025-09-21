@@ -50,11 +50,11 @@ claia = "claia.cli.__main__:main"
 
 # Entry points for plugin system
 [project.entry-points."claia.architectures"]
-openai = "claia.model_architectures.openai:OpenAIPlugin"
-anthropic = "claia.model_architectures.anthropic:AnthropicPlugin"
-transformers_generic = "claia.model_architectures.transformers_generic:TransformersGenericPlugin"
-transformers_gemma3 = "claia.model_architectures.transformers_gemma3:TransformersGemma3Plugin"
-dummy = "claia.model_architectures.dummy:DummyArchitecturePlugin"
+openai = "claia.architectures.openai:OpenAIPlugin"
+anthropic = "claia.architectures.anthropic:AnthropicPlugin"
+transformers_generic = "claia.architectures.transformers_generic:TransformersGenericPlugin"
+transformers_gemma3 = "claia.architectures.transformers_gemma3:TransformersGemma3Plugin"
+dummy = "claia.architectures.dummy:DummyArchitecturePlugin"
 
 [project.entry-points."claia.deployments"]
 api = "claia.deployments.api:APIDeploymentPlugin"
