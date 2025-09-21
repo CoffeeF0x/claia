@@ -26,7 +26,7 @@ class OpenAIDefinitionsPlugin:
   """OpenAI model definitions plugin."""
 
   @hookimpl
-  def get_model_definitions(self) -> Dict[str, ModelDefinition]:
+  def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get OpenAI model definitions."""
     return {
       "gpt-4": ModelDefinition(

@@ -26,7 +26,7 @@ class AnthropicDefinitionsPlugin:
   """Anthropic model definitions plugin."""
 
   @hookimpl
-  def get_model_definitions(self) -> Dict[str, ModelDefinition]:
+  def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get Anthropic model definitions."""
     return {
       # Claude 4 Models

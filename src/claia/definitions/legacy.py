@@ -40,7 +40,7 @@ class LegacyDefinitionsPlugin:
   """Legacy model definitions plugin containing comprehensive model metadata."""
 
   @hookimpl
-  def get_model_definitions(self) -> Dict[str, ModelDefinition]:
+  def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get legacy model definitions."""
     definitions = {
       "gemma-3-1b": ModelDefinition(

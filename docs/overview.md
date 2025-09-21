@@ -15,7 +15,7 @@ This guide explains the package layout, how to add a model, create an agent, add
     - `model/` — model layer (API, transformers, dummy, base classes)
     - `process.py`, `queue.py`, `results.py` — orchestration utilities
   - `model_architectures/` — architecture plugins that map to model classes
-  - `model_definitions/` — definitions that name and describe models
+  - `definitions/` — definitions that name and describe models
   - `solvers/` — select model per process
   - `tool_modules/` — concrete tool command modules
   - `tool_patterns/` — patterns that define tool prompts/format
@@ -32,7 +32,7 @@ See `pyproject.toml` for current built-in registrations.
 You add models by providing:
 1) A model class in `claia/lib/model/...`
 2) An architecture plugin in `claia/model_architectures/`
-3) (Optional) a definitions plugin in `claia/model_definitions/`
+3) (Optional) a definitions plugin in `claia/definitions/`
 4) An entry point in `pyproject.toml`
 
 Step 1: Implement or reuse a model class
@@ -67,7 +67,7 @@ class MyProviderPlugin:
 ```
 
 Step 3 (optional): Add model definitions
-If you want human-friendly IDs and metadata, provide `claia/model_definitions/my_provider.py` with a definitions plugin that enumerates supported models.
+If you want human-friendly IDs and metadata, provide `claia/definitions/my_provider.py` with a definitions plugin that enumerates supported models.
 
 Step 4: Register entry points in `pyproject.toml`
 
@@ -77,7 +77,7 @@ my_provider = "claia.model_architectures.my_provider:MyProviderPlugin"
 
 # Optional: definitions
 [project.entry-points."claia.definitions"]
-my_provider = "claia.model_definitions.my_provider:MyProviderDefinitionsPlugin"
+my_provider = "claia.definitions.my_provider:MyProviderDefinitionsPlugin"
 ```
 
 Credentials and config are provided via CLI flags or env vars (see CLI section). The registry forwards only the `required_args` declared by the plugin.

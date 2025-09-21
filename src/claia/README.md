@@ -14,7 +14,7 @@ Subpackages:
 - `hooks/` — plugin hook contracts
 - `lib/` — shared runtime library (files, process/queue, model abstractions)
 - `model_architectures/` — architecture adapters
-- `model_definitions/` — model metadata/definitions
+- `definitions/` — model metadata/definitions
 - `solvers/` — solver strategies
 - `tool_modules/` — concrete tool integrations
 - `tool_patterns/` — high-level tool invocation patterns

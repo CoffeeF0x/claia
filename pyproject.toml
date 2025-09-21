@@ -66,9 +66,9 @@ dummy = "claia.deployments.dummy:DummyDeploymentPlugin"
 default = "claia.solvers.default:DefaultSolverPlugin"
 
 [project.entry-points."claia.definitions"]
-openai = "claia.model_definitions.openai:OpenAIDefinitionsPlugin"
-anthropic = "claia.model_definitions.anthropic:AnthropicDefinitionsPlugin"
-legacy = "claia.model_definitions.legacy:LegacyDefinitionsPlugin"
+openai = "claia.definitions.openai:OpenAIDefinitionsPlugin"
+anthropic = "claia.definitions.anthropic:AnthropicDefinitionsPlugin"
+legacy = "claia.definitions.legacy:LegacyDefinitionsPlugin"
 
 [project.entry-points."claia.agents"]
 simple = "claia.agents.simple:SimpleAgentPlugin"

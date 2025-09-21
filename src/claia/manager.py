@@ -301,7 +301,7 @@ class Manager:
     """Get all model definitions from registered definition plugins."""
     self.load_all_plugins()
     all_definitions = {}
-    results = self.definition_pm.hook.get_model_definitions()
+    results = self.definition_pm.hook.get_definitions()
 
     for plugin_definitions in results:
       if plugin_definitions:

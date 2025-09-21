@@ -38,7 +38,7 @@ class DefinitionHooks:
   """Hook specifications for model definition plugins."""
 
   @hookspec
-  def get_model_definitions(self) -> Dict[str, ModelDefinition]:
+  def get_definitions(self) -> Dict[str, ModelDefinition]:
     """
     Get model definitions provided by this plugin.
 
