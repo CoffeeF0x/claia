@@ -161,11 +161,12 @@ publish_testpypi:
     TWINE_USERNAME: "gitlab-ci-token"
     TWINE_PASSWORD: "${CI_JOB_TOKEN}"
     TWINE_REPOSITORY_URL: "https://test.pypi.org/legacy/"
+    GITLAB_REPOSITORY_URL: ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi
   script:
     - python -m pip install --upgrade pip
     - pip install build twine
     - python -m build
     - python -m twine check dist/*
-    - python -m twine upload dist/* --repository-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi --verbose
+    - python -m twine upload dist/* --repository-url ${TWINE_REPOSITORY_URL} --verbose
   only:
     - dev
