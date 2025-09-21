@@ -6,16 +6,23 @@ variables:
   B2_PATH: "" # path inside the bucket to upload to, leave empty for root bucket path
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
   PYTHONPATH: "$CI_PROJECT_DIR"
+  SKIP_EXISTING_MAIN: "1"
+  SKIP_EXISTING_DEV: "0"
 
 stages:
   - test
   - build_and_upload
+  - publish
 
+
+########################################################################
+#                            COMMON ANCHORS                            #
+########################################################################
 .setup_dependencies:
   before_script:
     - apt-get update && apt-get install -y build-essential curl jq zip git
 
-# YAML anchors for reusable script blocks
+
 .b2_auth: &b2_auth
   # B2 Authentication
   - >
@@ -25,6 +32,7 @@ stages:
     export B2_API_URL=$(curl -s -u "${B2_APPLICATION_KEY_ID}:${B2_APPLICATION_KEY}" \
       https://api.backblazeb2.com/b2api/v2/b2_authorize_account | jq -r .apiUrl)
 
+
 .b2_get_upload_url: &b2_get_upload_url
   # Get upload URL and auth token
   - >
@@ -33,6 +41,7 @@ stages:
       -d "{\"bucketId\":\"${B2_BUCKET}\"}")
   - export UPLOAD_URL=$(echo $UPLOAD_AUTH | jq -r .uploadUrl)
   - export UPLOAD_AUTH_TOKEN=$(echo $UPLOAD_AUTH | jq -r .authorizationToken)
+
 
 .b2_upload_files: &b2_upload_files
   # Upload files
@@ -67,6 +76,7 @@ stages:
         ${UPLOAD_URL}
     done
 
+
 .common_job_config: &common_job_config
   extends:
     - .setup_dependencies
@@ -75,6 +85,10 @@ stages:
     paths:
       - .pip-cache/
 
+
+########################################################################
+#                                 ALL                                  #
+########################################################################
 test:
   <<: *common_job_config
   stage: test
@@ -88,6 +102,10 @@ test:
     expire_in: 1 week
   coverage: '/(?i)total.*? (100(?:\.0+)?|[1-9]?\d(?:\.\d+)?)%/'
 
+
+########################################################################
+#                                 MAIN                                 #
+########################################################################
 main_build_and_upload:
   <<: *common_job_config
   stage: build_and_upload
@@ -108,6 +126,29 @@ main_build_and_upload:
   only:
     - main
 
+
+publish_pypi:
+  <<: *common_job_config
+  stage: publish
+  script:
+    - python -m pip install --upgrade pip
+    - pip install build twine
+    - python -m build
+    - python -m twine check dist/*
+    - |
+        if [ "${SKIP_EXISTING_MAIN}" = "1" ]; then
+          SKIP_FLAG="--skip-existing";
+        else
+          SKIP_FLAG="";
+        fi
+        TWINE_USERNAME=__token__ TWINE_PASSWORD=${PYPI_TOKEN} python -m twine upload dist/* ${SKIP_FLAG}
+  only:
+    - main
+
+
+########################################################################
+#                                 DEV                                  #
+########################################################################
 dev_build_and_upload:
   <<: *common_job_config
   stage: build_and_upload
@@ -125,5 +166,24 @@ dev_build_and_upload:
     - *b2_auth
     - *b2_get_upload_url
     - *b2_upload_files
+  only:
+    - dev
+
+
+publish_testpypi:
+  <<: *common_job_config
+  stage: publish
+  script:
+    - python -m pip install --upgrade pip
+    - pip install build twine
+    - python -m build
+    - python -m twine check dist/*
+    - |
+        if [ "${SKIP_EXISTING_DEV}" = "1" ]; then
+          SKIP_FLAG="--skip-existing";
+        else
+          SKIP_FLAG="";
+        fi
+        TWINE_REPOSITORY_URL=https://test.pypi.org/legacy/ TWINE_USERNAME=__token__ TWINE_PASSWORD=${TEST_PYPI_TOKEN} python -m twine upload dist/* ${SKIP_FLAG}
   only:
     - dev
