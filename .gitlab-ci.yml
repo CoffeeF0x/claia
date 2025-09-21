@@ -162,6 +162,6 @@ publish_testpypi:
     - pip install build twine
     - python -m build
     - python -m twine check dist/*
-    - TWINE_REPOSITORY_URL=https://test.pypi.org/legacy/ TWINE_USERNAME=gitlab-ci-token TWINE_PASSWORD=${CI_JOB_TOKEN} python -m twine upload dist/*
+    - TWINE_REPOSITORY_URL=https://test.pypi.org/legacy/ TWINE_USERNAME=gitlab-ci-token TWINE_PASSWORD=${CI_JOB_TOKEN} python -m twine upload dist/* --verbose
   only:
     - dev
