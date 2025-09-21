@@ -4,12 +4,6 @@ Claia is a CLI project for using and testing AI usecases. This project is primar
 
 To get started, create a .env file from the .env-sample and fill in the required, or desired fields (requirements will be noted in the sample .env file). If not using docker, these can be set as environment variables or as cli arguments preceded by `--` and swapping env variable underscores for dashes (ex, `TOKEN_OPENAI` would become `--token-openai`).
 
-The docker compose file also includes filebrowser, since some usecases may require running claia on a remote server.
-- https://github.com/filebrowser/filebrowser
-- https://filebrowser.org/
-
-~~Any audio streaming will be handled by a pulseaudio server.~~
-
 ## Design Goals
 
 Claia's name is, almost a portmanteu. It combines the terms for CLI and AI Agent into a single word. This is also the focus of the program itself, while it may incorparate various hardware, it is at it's root a cli application. It will be designed to be used as a standalone CLI application or integrate into other projects as a library.
