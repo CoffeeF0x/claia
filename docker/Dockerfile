@@ -16,7 +16,7 @@ COPY src/ src/
 COPY pyproject.toml .
 COPY .env .
 
-RUN /app/build/deploy.sh package claia /app/dist
+RUN /app/build/deploy.sh --exclude-binary --name claia --dist-dir /app/dist
 RUN pip install -e .
 
 CMD [ "python", "-m", "claia" ]

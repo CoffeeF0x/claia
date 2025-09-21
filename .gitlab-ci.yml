@@ -112,7 +112,7 @@ main_build_and_upload:
   script:
     # Build binary
     - chmod +x ./build/deploy.sh
-    - ./build/deploy.sh binary ${BINARY_NAME}
+    - ./build/deploy.sh --name ${BINARY_NAME}
 
     # Set bucket and credentials for main branch
     - export B2_BUCKET=${MAIN_B2_BUCKET_ID}
@@ -155,7 +155,7 @@ dev_build_and_upload:
   script:
     # Build source package
     - chmod +x ./build/deploy.sh
-    - ./build/deploy.sh package ${BINARY_NAME}
+    - ./build/deploy.sh --exclude-binary --name ${BINARY_NAME}
 
     # Set bucket and credentials for dev branch
     - export B2_BUCKET=${DEV_B2_BUCKET_ID}

@@ -1,65 +1,111 @@
 #!/bin/bash
-MODE=${1:-"package"}  # binary or package
-NAME=${2:-"claia"}
-DIST_DIR=${3:-"dist"}
+set -euo pipefail
 
-# Create dist directory if it doesn't exist
-mkdir -p "${DIST_DIR}"
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
+NAME="claia"
 
-# Create version file
-if [ ! -z "$CI_COMMIT_SHA" ]; then
+# Directories
+DIST_DIR="dist"
+WHL_DIR="whl"
+BIN_DIR="bin"
+EXPORT_DIR="export"
+TEMP_DIR=$(mktemp -d)
+WORK_DIR=$(pwd)
+
+# Action flags (exclusive)
+DO_WHL=0
+DO_BIN=0
+DO_EXPORT=0
+
+
+########################################################################
+#                                SETUP                                 #
+########################################################################
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --build-whl)
+      DO_WHL=1; shift ;;
+    --build-ubuntu-bin)
+      DO_BIN=1; shift ;;
+    --export)
+      DO_EXPORT=1; shift ;;
+    --dist-dir|-d)
+      DIST_DIR="$2"; shift 2 ;;
+    --help|-h)
+      echo "Usage: $0 [--build-whl | --build-ubuntu-bin | --export] [--dist-dir DIR]"
+      exit 0 ;;
+    *)
+      echo "Unknown option: $1" >&2
+      echo "Usage: $0 [--build-whl | --build-ubuntu-bin | --export] [--dist-dir DIR]" >&2
+      exit 2 ;;
+  esac
+done
+
+# Enforce exactly one action
+ACTION_COUNT=$((DO_WHL + DO_BIN + DO_EXPORT))
+if [[ $ACTION_COUNT -ne 1 ]]; then
+  echo "Specify exactly one action: --build-whl | --build-ubuntu-bin | --export" >&2
+  exit 2
+fi
+
+# Create version file in dist root (if CI_COMMIT_SHA present)
+if [ -n "${CI_COMMIT_SHA:-}" ]; then
+  mkdir -p "${DIST_DIR}"
   DATE=$(date +%Y%m%d)
   SHORT_HASH=${CI_COMMIT_SHA:0:7}
   echo "${DATE}-${SHORT_HASH}" > "${DIST_DIR}/version.txt"
 fi
 
-if [ "$MODE" = "binary" ]; then
-  echo "Building binary executable..."
+# Create build paths
+WHL_PATH="${DIST_DIR}/${WHL_DIR}"
+BIN_PATH="${DIST_DIR}/${BIN_DIR}"
+EXPORT_PATH="${DIST_DIR}/${EXPORT_DIR}"
 
-  # Install dependencies
-  pip install -r requirements.txt --no-cache-dir
 
-  # Build wheel distribution
-  python -m build --wheel --outdir "${WORK_DIR}/${DIST_DIR}"
+########################################################################
+#                             BUILD WHEEL                              #
+########################################################################
+if [[ $DO_WHL -eq 1 ]]; then
+  echo "Building wheel distribution..."
+  mkdir -p "${WHL_PATH}"
+  pip install --no-cache-dir build
+  python -m build --wheel --outdir "${WHL_PATH}"
 
-  # Build binary
+
+########################################################################
+#                         BUILD UBUNTU BINARY                          #
+########################################################################
+elif [[ $DO_BIN -eq 1 ]]; then
+  echo "Building Ubuntu binary (PyInstaller)..."
+  mkdir -p "${BIN_PATH}"
+  pip install --no-cache-dir build pyinstaller
+  pip install --no-cache-dir .
   pyinstaller --onefile \
     --name "${NAME}" \
     --paths src \
-    --distpath "${DIST_DIR}" \
+    --distpath "${BIN_PATH}" \
     src/claia/__main__.py
 
-  # --hidden-import "PyQt6.QtGui" \
 
-elif [ "$MODE" = "package" ]; then
-  echo "Creating package distribution..."
-
-  TEMP_DIR=$(mktemp -d)
-  WORK_DIR=$(pwd)
-
-  pip install build --no-cache-dir
-
-  # Build wheel distribution
-  python -m build --wheel --outdir "${WORK_DIR}/${DIST_DIR}"
-
-  # Copy requirements.txt to distribution
-  cp requirements.txt "${WORK_DIR}/${DIST_DIR}/"
-
-  # Copy source files to temp directory
+########################################################################
+#                              EXPORT ZIP                              #
+########################################################################
+elif [[ $DO_EXPORT -eq 1 ]]; then
+  echo "Exporting source package..."
+  mkdir -p "${EXPORT_PATH}"
   cp -r src/* "${TEMP_DIR}/"
-  cp requirements.txt pyproject.toml README.md "${TEMP_DIR}/"
-
-  # Package source code
+  cp pyproject.toml README.md "${TEMP_DIR}/"
   cd "${TEMP_DIR}"
-  zip -r "${WORK_DIR}/${DIST_DIR}/${NAME}.zip" . -x "**/__pycache__/**" "**/*.pyc"
+  zip -r "${WORK_DIR}/${EXPORT_PATH}/${NAME}.zip" . -x "**/__pycache__/**" "**/*.pyc"
   cd "${WORK_DIR}"
-
-  # Clean up
   rm -rf "${TEMP_DIR}"
-
-else
-  echo "Invalid mode: ${MODE}. Use 'binary' or 'package'"
-  exit 1
 fi
 
+
+########################################################################
+#                               CLEANUP                                #
+########################################################################
 echo "Done! Output in ${DIST_DIR}/"
