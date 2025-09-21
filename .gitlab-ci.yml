@@ -123,8 +123,8 @@ publish_pypi:
     - python -m pip install --upgrade pip
     - pip install build twine
     - python -m build
-    - python -m twine check ${ARTIFACT_PATH}/${WHL_DIR}/*
-    - TWINE_USERNAME=gitlab-ci-token TWINE_PASSWORD=${CI_JOB_TOKEN} python -m twine upload ${ARTIFACT_PATH}/${WHL_DIR}/* --skip-existing
+    - python -m twine check dist/*
+    - TWINE_USERNAME=gitlab-ci-token TWINE_PASSWORD=${CI_JOB_TOKEN} python -m twine upload dist/* --skip-existing
   only:
     - main
 
@@ -161,7 +161,7 @@ publish_testpypi:
     - python -m pip install --upgrade pip
     - pip install build twine
     - python -m build
-    - python -m twine check ${ARTIFACT_PATH}/${WHL_DIR}/*
-    - TWINE_REPOSITORY_URL=https://test.pypi.org/legacy/ TWINE_USERNAME=gitlab-ci-token TWINE_PASSWORD=${CI_JOB_TOKEN} python -m twine upload ${ARTIFACT_PATH}/${WHL_DIR}/*
+    - python -m twine check dist/*
+    - TWINE_REPOSITORY_URL=https://test.pypi.org/legacy/ TWINE_USERNAME=gitlab-ci-token TWINE_PASSWORD=${CI_JOB_TOKEN} python -m twine upload dist/*
   only:
     - dev
