@@ -3,6 +3,7 @@ image: python:3.12-slim
 variables:
   BINARY_NAME: "claia"
   ARTIFACT_PATH: "dist"
+  WHL_DIR: "whl"
   B2_PATH: "" # path inside the bucket to upload to, leave empty for root bucket path
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
   PYTHONPATH: "$CI_PROJECT_DIR"
@@ -21,8 +22,8 @@ stages:
     - apt-get update && apt-get install -y build-essential curl jq zip git
 
 
+# Authenticate with Backblaze B2
 .b2_auth: &b2_auth
-  # B2 Authentication
   - >
     export B2_AUTH_TOKEN=$(curl -s -u "${B2_APPLICATION_KEY_ID}:${B2_APPLICATION_KEY}" \
       https://api.backblazeb2.com/b2api/v2/b2_authorize_account | jq -r .authorizationToken)
@@ -31,8 +32,8 @@ stages:
       https://api.backblazeb2.com/b2api/v2/b2_authorize_account | jq -r .apiUrl)
 
 
+# Get upload URL and auth token
 .b2_get_upload_url: &b2_get_upload_url
-  # Get upload URL and auth token
   - >
     export UPLOAD_AUTH=$(curl -s -H "Authorization: ${B2_AUTH_TOKEN}" \
       ${B2_API_URL}/b2api/v2/b2_get_upload_url \
@@ -41,34 +42,23 @@ stages:
   - export UPLOAD_AUTH_TOKEN=$(echo $UPLOAD_AUTH | jq -r .authorizationToken)
 
 
+# Upload artifacts to Backblaze B2 object storage
 .b2_upload_files: &b2_upload_files
-  # Upload files
   - >
-    for file in ${ARTIFACT_PATH}/*; do
-      if [ ! -f "$file" ]; then
-        echo "No files found in ${ARTIFACT_PATH}"
-        exit 1
-      fi
-
-      filename=$(basename $file)
-
-      # Set content type based on file extension
-      if [[ $file == *.txt ]]; then
-        content_type="text/plain"
-      elif [[ $file == *.zip ]]; then
-        content_type="application/zip"
-      elif [[ $file == *.whl ]]; then
-        content_type="application/zip"
-      else
-        content_type="application/octet-stream"
-      fi
-
-      sha1=$(sha1sum $file | awk '{print $1}')
-
-      # Use -T for efficient file upload
+    if [ -z "$(find "${ARTIFACT_PATH}" -type f -print -quit)" ]; then
+      echo "No files found in ${ARTIFACT_PATH}"; exit 1; fi
+    find "${ARTIFACT_PATH}" -type f -print0 | while IFS= read -r -d '' file; do
+      rel_path=${file#${ARTIFACT_PATH}/}
+      case "$file" in
+        *.txt) content_type="text/plain" ;;
+        *.zip) content_type="application/zip" ;;
+        *.whl) content_type="application/zip" ;;
+        *)     content_type="application/octet-stream" ;;
+      esac
+      sha1=$(sha1sum "$file" | awk '{print $1}')
       curl -s -T "$file" -X POST \
         -H "Authorization: ${UPLOAD_AUTH_TOKEN}" \
-        -H "X-Bz-File-Name: ${B2_PATH}${filename}" \
+        -H "X-Bz-File-Name: ${B2_PATH}${rel_path}" \
         -H "Content-Type: ${content_type}" \
         -H "X-Bz-Content-Sha1: $sha1" \
         ${UPLOAD_URL}
@@ -107,12 +97,11 @@ test:
 main_build_and_upload:
   <<: *common_job_config
   stage: build_and_upload
-  variables:
-    ARTIFACT_PATH: "dist/bin"
   script:
     # Build binary
     - chmod +x ./build/deploy.sh
     - ./build/deploy.sh --build-ubuntu-bin
+    - ./build/deploy.sh --build-whl
 
     # Set bucket and credentials for main branch
     - export B2_BUCKET=${MAIN_B2_BUCKET_ID}
@@ -134,8 +123,8 @@ publish_pypi:
     - python -m pip install --upgrade pip
     - pip install build twine
     - python -m build
-    - python -m twine check dist/*
-    - TWINE_USERNAME=gitlab-ci-token TWINE_PASSWORD=${CI_JOB_TOKEN} python -m twine upload dist/* --skip-existing
+    - python -m twine check ${ARTIFACT_PATH}/${WHL_DIR}/*
+    - TWINE_USERNAME=gitlab-ci-token TWINE_PASSWORD=${CI_JOB_TOKEN} python -m twine upload ${ARTIFACT_PATH}/${WHL_DIR}/* --skip-existing
   only:
     - main
 
@@ -146,11 +135,10 @@ publish_pypi:
 dev_build_and_upload:
   <<: *common_job_config
   stage: build_and_upload
-  variables:
-    ARTIFACT_PATH: "dist/export"
   script:
     # Build source package
     - chmod +x ./build/deploy.sh
+    - ./build/deploy.sh --build-whl
     - ./build/deploy.sh --export
 
     # Set bucket and credentials for dev branch
@@ -173,7 +161,7 @@ publish_testpypi:
     - python -m pip install --upgrade pip
     - pip install build twine
     - python -m build
-    - python -m twine check dist/*
-    - TWINE_REPOSITORY_URL=https://test.pypi.org/legacy/ TWINE_USERNAME=gitlab-ci-token TWINE_PASSWORD=${CI_JOB_TOKEN} python -m twine upload dist/*
+    - python -m twine check ${ARTIFACT_PATH}/${WHL_DIR}/*
+    - TWINE_REPOSITORY_URL=https://test.pypi.org/legacy/ TWINE_USERNAME=gitlab-ci-token TWINE_PASSWORD=${CI_JOB_TOKEN} python -m twine upload ${ARTIFACT_PATH}/${WHL_DIR}/*
   only:
     - dev
