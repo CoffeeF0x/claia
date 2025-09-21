@@ -158,8 +158,10 @@ publish_testpypi:
   <<: *common_job_config
   stage: publish
   variables:
-    TWINE_USERNAME: "gitlab-ci-token"
-    TWINE_PASSWORD: "${CI_JOB_TOKEN}"
+    # TWINE_USERNAME: "gitlab-ci-token"
+    # TWINE_PASSWORD: "${CI_JOB_TOKEN}"
+    TWINE_USERNAME: __token__
+    TWINE_PASSWORD: ${DEV_TWINE_TOKEN}
     TWINE_REPOSITORY_URL: "https://test.pypi.org/legacy/"
     GITLAB_REPOSITORY_URL: ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi
   script:
