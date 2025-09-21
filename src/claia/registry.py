@@ -19,9 +19,17 @@ from claia.lib.enums.process import ProcessStatus
 from claia.lib.files.conversation import Conversation
 
 
+
+########################################################################
+#                              INITIALIZE                              #
+########################################################################
 logger = logging.getLogger(__name__)
 
 
+
+########################################################################
+#                               REGISTRY                               #
+########################################################################
 class Registry:
   """
   Unified registry coordinating tools, models, and agents.
@@ -49,7 +57,10 @@ class Registry:
     self.manager.load_all_plugins(**self._user_kwargs)
     logger.info("Registry initialized successfully")
 
-  # ----------------------------- Tools API ----------------------------- #
+
+  ######################################################################
+  #                             TOOLS API                              #
+  ######################################################################
   def _ensure_loaded(self) -> None:
     """Ensure plugins are loaded and commands catalog is built."""
     self.manager.load_all_plugins(**self._user_kwargs)
@@ -257,7 +268,10 @@ class Registry:
       # If conversion fails, return original value
       return value
 
-  # ----------------------------- Models API ---------------------------- #
+
+  ######################################################################
+  #                             MODELS API                             #
+  ######################################################################
   def run(
     self,
     model_name: str,
@@ -416,7 +430,10 @@ class Registry:
 
     return filtered
 
-  # ----------------------------- Agents API ---------------------------- #
+
+  ######################################################################
+  #                             AGENTS API                             #
+  ######################################################################
   def process(self, process: Process) -> Process:
     """
     Dispatch the given process to the appropriate agent implementation.
