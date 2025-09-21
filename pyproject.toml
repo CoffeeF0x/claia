@@ -6,6 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "claia"
 version = "0.1.0"
 description = "CLAIA Framework"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Lloyd Bower" },
+  { name = "ExoFox, LLC" }
+]
 requires-python = ">=3.12"
 dependencies = [
   "torch",
@@ -19,9 +25,25 @@ dependencies = [
   "requests",
   "pyreadline3",
 ]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://claia.dev"
+Repository = "https://gitlab.com/exofox/projects/claia.git"
+Issues = "https://gitlab.com/exofox/projects/claia/-/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools]
+license-files = ["LICENSE", "NOTICE*"]
 
 [project.scripts]
 claia = "claia.cli.__main__:main"
