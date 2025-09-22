@@ -27,6 +27,7 @@
 # - switch extension loading to be guid based, and show names on console with appended guid if name conflicts, support guid or name loading if no conflicts (select first if conflicts)
 
 # - make command input separate from actual text and scrolling (think vim) to allow interacting with AI while it's processing (things like commands to show multiple agent workers at once)
+# - throw error if agent required_args aren't found, but don't filter (agents need to pass kwargs to models). Otherwise, find a way to create some kind of secret store (singleton?) to pull args from
 
 
 # FROM LIB
