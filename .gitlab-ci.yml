@@ -19,7 +19,7 @@ stages:
 ########################################################################
 .setup_dependencies:
   before_script:
-    - apt-get update && apt-get install -y build-essential curl jq zip git
+    - apt-get update && apt-get install -y build-essential curl jq zip git dpkg-dev
 
 
 # Authenticate with Backblaze B2
@@ -101,6 +101,7 @@ main_build_and_upload:
     # Build binary
     - chmod +x ./build/deploy.sh
     - ./build/deploy.sh --build-ubuntu-bin
+    - ./build/deploy.sh --build-deb
     - ./build/deploy.sh --build-whl
 
     # Set bucket and credentials for main branch
