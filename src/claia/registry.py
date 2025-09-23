@@ -456,12 +456,12 @@ class Registry:
       # Combine process parameters with user kwargs from registry initialization
       combined_kwargs = {**self._user_kwargs, **process.parameters}
 
-      # Filter kwargs based on agent's required_args
-      if agent_info and hasattr(agent_info, 'required_args'):
+      # Filter kwargs based on agent's required_args (only if a non-empty list is provided)
+      if agent_info and getattr(agent_info, 'required_args', None):
         filtered_kwargs = self._filter_kwargs(combined_kwargs, agent_info.required_args)
       else:
-        # If no agent info or no required_args, use process parameters as-is
-        filtered_kwargs = process.parameters
+        # If no agent info or no required_args, pass through all combined kwargs
+        filtered_kwargs = combined_kwargs
 
       # Process using the agent class, injecting this registry and filtered parameters
       logger.debug(f"Using agent class {agent_class.__name__} for {process.id}")
