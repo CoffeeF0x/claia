@@ -8,13 +8,13 @@ import logging
 from typing import Dict
 import pluggy
 
-from claia.hooks.module import CommandModuleInfo, CommandDefinition, ArgumentDefinition
+from claia.hooks.tool import ToolModuleInfo, ToolDefinition, ArgumentDefinition
 from claia.lib.files import TextFile
 from .api import ZammadAPI
 from .utils import ZammadUtils
 
 
-hookimpl = pluggy.HookimplMarker("claia_command_modules")
+hookimpl = pluggy.HookimplMarker("claia_tool_modules")
 logger = logging.getLogger(__name__)
 
 
@@ -40,8 +40,8 @@ class ZammadProcessesModulePlugin:
     return self._utils
 
   @hookimpl
-  def get_module_info(self) -> CommandModuleInfo:
-    return CommandModuleInfo(
+  def get_module_info(self) -> ToolModuleInfo:
+    return ToolModuleInfo(
       name="zammad_processes",
       title="Zammad Processes",
       description="AI-assisted workflows for Zammad (tagging, account processing)",
@@ -49,9 +49,9 @@ class ZammadProcessesModulePlugin:
     )
 
   @hookimpl
-  def get_module_commands(self) -> Dict[str, CommandDefinition]:
+  def get_module_tools(self) -> Dict[str, ToolDefinition]:
     return {
-      "process_single": CommandDefinition(
+      "process_single": ToolDefinition(
         name="process_single",
         description="Process a single ticket and add AI tags",
         callable=self.process_single_ticket,
@@ -64,7 +64,7 @@ class ZammadProcessesModulePlugin:
           ),
         },
       ),
-      "untag_single": CommandDefinition(
+      "untag_single": ToolDefinition(
         name="untag_single",
         description="Remove AI tags from a single ticket",
         callable=self.untag_single_ticket,
@@ -77,7 +77,7 @@ class ZammadProcessesModulePlugin:
           ),
         },
       ),
-      "process_tag": CommandDefinition(
+      "process_tag": ToolDefinition(
         name="process_tag",
         description="Process untagged tickets and add AI tags",
         callable=self.process_tag_tickets,
@@ -91,7 +91,7 @@ class ZammadProcessesModulePlugin:
           ),
         },
       ),
-      "process_untag": CommandDefinition(
+      "process_untag": ToolDefinition(
         name="process_untag",
         description="Remove AI tags from all tagged tickets",
         callable=self.process_untag_tickets,
@@ -105,7 +105,7 @@ class ZammadProcessesModulePlugin:
           ),
         },
       ),
-      "process_account_single": CommandDefinition(
+      "process_account_single": ToolDefinition(
         name="process_account_single",
         description="Process a single account management ticket",
         callable=self.process_account_single,
@@ -125,7 +125,7 @@ class ZammadProcessesModulePlugin:
           ),
         },
       ),
-      "process_account": CommandDefinition(
+      "process_account": ToolDefinition(
         name="process_account",
         description="Process account management tickets and build account list",
         callable=self.process_account_tickets,

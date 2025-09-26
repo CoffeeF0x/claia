@@ -22,8 +22,8 @@ class ArgumentDefinition:
 
 
 @dataclass
-class CommandDefinition:
-  """Defines a command within a module."""
+class ToolDefinition:
+  """Defines a tool within a module."""
   name: str
   description: str
   callable: Callable
@@ -31,29 +31,29 @@ class CommandDefinition:
 
 
 @dataclass
-class CommandModuleInfo:
-  """Metadata for a command module."""
+class ToolModuleInfo:
+  """Metadata for a tool module."""
   name: str
   title: str
   description: str
   required_args: Optional[List[str]] = None
 
 
-hookspec = pluggy.HookspecMarker("claia_command_modules")
+hookspec = pluggy.HookspecMarker("claia_tool_modules")
 
 
-class CommandModuleHooks:
-  """Hook specs for command module plugins."""
+class ToolModuleHooks:
+  """Hook specs for tool module plugins."""
 
   @hookspec
-  def get_module_info(self) -> CommandModuleInfo:
+  def get_module_info(self) -> ToolModuleInfo:
     """Return module info for registration and dispatch."""
 
   @hookspec
-  def get_module_commands(self) -> Dict[str, CommandDefinition]:
+  def get_module_tools(self) -> Dict[str, ToolDefinition]:
     """
-    Return a dictionary of available commands in this module.
+    Return a dictionary of available tools in this module.
 
-    The key is the command name, value is CommandDefinition.
-    This allows a single module to provide multiple commands efficiently.
+    The key is the tool name, value is ToolDefinition.
+    This allows a single module to provide multiple tools efficiently.
     """

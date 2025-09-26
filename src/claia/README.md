@@ -15,7 +15,7 @@ Subpackages:
 - `architectures/` — architecture adapters
 - `definitions/` — model metadata/definitions
 - `solvers/` — solver strategies
-- `tool_modules/` — concrete tool integrations
+- `tools/` — concrete tool integrations
 - `tool_patterns/` — high-level tool invocation patterns
 - `tool_protocols/` — protocols for executing tool commands
 

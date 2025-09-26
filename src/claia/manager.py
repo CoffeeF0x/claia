@@ -39,7 +39,7 @@ INFO_METHOD_BY_GROUP: Dict[str, Optional[str]] = {
   'claia.definitions': None,          # definitions expose definitions via hook, not a single info
   'claia.tool_patterns': 'get_pattern_info',
   'claia.tool_protocols': 'get_protocol_info',
-  'claia.command_modules': 'get_module_info',
+  'claia.tool_modules': 'get_module_info',
   'claia.agents': 'get_agent_info',   # best-effort; if missing, we won't pass kwargs
 }
 
@@ -87,7 +87,7 @@ class Manager:
     self.protocol_pm = pluggy.PluginManager("claia_tool_protocols")
     self.protocol_pm.add_hookspecs(ProtocolHooks)
 
-    self.module_pm = pluggy.PluginManager("claia_command_modules")
+    self.module_pm = pluggy.PluginManager("claia_tool_modules")
     self.module_pm.add_hookspecs(CommandModuleHooks)
 
     # Agent plugin manager
@@ -110,7 +110,7 @@ class Manager:
       # Load tool plugins (pass in kwargs to process required_args)
       self._load_plugins(group='claia.tool_patterns', pm=self.pattern_pm, label='pattern', allow_empty=True, ctor_kwargs=kwargs)
       self._load_plugins(group='claia.tool_protocols', pm=self.protocol_pm, label='protocol', allow_empty=True, ctor_kwargs=kwargs)
-      self._load_plugins(group='claia.command_modules', pm=self.module_pm, label='module', allow_empty=True, ctor_kwargs=kwargs)
+      self._load_plugins(group='claia.tool_modules', pm=self.module_pm, label='module', allow_empty=True, ctor_kwargs=kwargs)
 
       # Load agent plugins (optional)
       self._load_plugins(group='claia.agents', pm=self.agent_pm, label='agent', allow_empty=True, ctor_kwargs=kwargs)

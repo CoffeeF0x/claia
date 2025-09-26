@@ -82,8 +82,8 @@ default = "claia.tool_patterns.default:DefaultToolPatternPlugin"
 [project.entry-points."claia.tool_protocols"]
 simple = "claia.tool_protocols.simple:SimpleProtocolPlugin"
 
-[project.entry-points."claia.command_modules"]
-sample = "claia.tool_modules.sample:SampleModulePlugin"
+[project.entry-points."claia.tool_modules"]
+sample = "claia.tools.sample:SampleModulePlugin"
 zammad = "extensions.zammad.plugin_basic:ZammadBasicModulePlugin"
 zammad_processes = "extensions.zammad.plugin_processes:ZammadProcessesModulePlugin"
 

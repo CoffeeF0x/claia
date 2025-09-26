@@ -8,13 +8,13 @@ import logging
 from typing import Dict
 import pluggy
 
-from claia.hooks.module import CommandModuleInfo, CommandDefinition, ArgumentDefinition
+from claia.hooks.tool import ToolModuleInfo, ToolDefinition, ArgumentDefinition
 from .api import ZammadAPI
 from .utils import ZammadUtils
 from .constants import TICKET_QUERIES
 
 
-hookimpl = pluggy.HookimplMarker("claia_command_modules")
+hookimpl = pluggy.HookimplMarker("claia_tool_modules")
 logger = logging.getLogger(__name__)
 
 
@@ -42,8 +42,8 @@ class ZammadBasicModulePlugin:
     return self._utils
 
   @hookimpl
-  def get_module_info(self) -> CommandModuleInfo:
-    return CommandModuleInfo(
+  def get_module_info(self) -> ToolModuleInfo:
+    return ToolModuleInfo(
       name="zammad",
       title="Zammad Integration",
       description="Basic commands for interacting with Zammad",
@@ -51,9 +51,9 @@ class ZammadBasicModulePlugin:
     )
 
   @hookimpl
-  def get_module_commands(self) -> Dict[str, CommandDefinition]:
+  def get_module_tools(self) -> Dict[str, ToolDefinition]:
     return {
-      "list": CommandDefinition(
+      "list": ToolDefinition(
         name="list",
         description="List tickets based on a query",
         callable=self.list_tickets,
@@ -81,7 +81,7 @@ class ZammadBasicModulePlugin:
           ),
         },
       ),
-      "details": CommandDefinition(
+      "details": ToolDefinition(
         name="details",
         description="Get ticket details by ID",
         callable=self.get_ticket_details,
@@ -101,7 +101,7 @@ class ZammadBasicModulePlugin:
           ),
         },
       ),
-      "tag_add": CommandDefinition(
+      "tag_add": ToolDefinition(
         name="tag_add",
         description="Add a tag to a ticket",
         callable=self.add_tag,
@@ -120,7 +120,7 @@ class ZammadBasicModulePlugin:
           ),
         },
       ),
-      "tag_remove": CommandDefinition(
+      "tag_remove": ToolDefinition(
         name="tag_remove",
         description="Remove a tag from a ticket",
         callable=self.remove_tag,
@@ -139,7 +139,7 @@ class ZammadBasicModulePlugin:
           ),
         },
       ),
-      "find_subject": CommandDefinition(
+      "find_subject": ToolDefinition(
         name="find_subject",
         description="Find tickets with a subject substring",
         callable=self.find_tickets_by_subject,
@@ -159,7 +159,7 @@ class ZammadBasicModulePlugin:
           ),
         },
       ),
-      "delete_subject": CommandDefinition(
+      "delete_subject": ToolDefinition(
         name="delete_subject",
         description="Delete tickets whose subject contains a substring (requires confirm)",
         callable=self.delete_tickets_by_subject,

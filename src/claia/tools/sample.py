@@ -7,34 +7,34 @@ from datetime import datetime
 from typing import Dict, Any
 import pluggy
 
-from claia.hooks.module import CommandModuleHooks, CommandModuleInfo, CommandDefinition, ArgumentDefinition
+from claia.hooks.tool import ToolModuleHooks, ToolModuleInfo, ToolDefinition, ArgumentDefinition
 
-hookimpl = pluggy.HookimplMarker("claia_command_modules")
+hookimpl = pluggy.HookimplMarker("claia_tool_modules")
 
 
 class SampleModulePlugin:
-  """Sample module implementing multiple utility commands."""
+  """Sample module implementing multiple utility tools."""
 
   @hookimpl
-  def get_module_info(self) -> CommandModuleInfo:
-    return CommandModuleInfo(
+  def get_module_info(self) -> ToolModuleInfo:
+    return ToolModuleInfo(
       name="sample",
       title="Sample Utilities",
-      description="Sample module with utility commands for demonstration",
+      description="Sample module with utility tools for demonstration",
     )
 
   @hookimpl
-  def get_module_commands(self) -> Dict[str, CommandDefinition]:
-    """Return all available commands in this module."""
+  def get_module_tools(self) -> Dict[str, ToolDefinition]:
+    """Return all available tools in this module."""
     return {
-      "current_time": CommandDefinition(
+      "current_time": ToolDefinition(
         name="current_time",
         description="Get the current UTC time in ISO format",
         callable=self._current_time,
         arguments={}
       ),
 
-      "add": CommandDefinition(
+      "add": ToolDefinition(
         name="add",
         description="Add two numbers together",
         callable=self._add,
@@ -54,7 +54,7 @@ class SampleModulePlugin:
         }
       ),
 
-      "subtract": CommandDefinition(
+      "subtract": ToolDefinition(
         name="subtract",
         description="Subtract the second number from the first",
         callable=self._subtract,
@@ -74,7 +74,7 @@ class SampleModulePlugin:
         }
       ),
 
-      "echo": CommandDefinition(
+      "echo": ToolDefinition(
         name="echo",
         description="Echo back the provided message",
         callable=self._echo,

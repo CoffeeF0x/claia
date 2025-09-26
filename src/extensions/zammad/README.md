@@ -24,4 +24,4 @@ The following prompt templates are defined in `constants.py` and used by `Zammad
 - `extensions.zammad.plugin_basic:ZammadBasicModulePlugin` → module name `zammad`
 - `extensions.zammad.plugin_processes:ZammadProcessesModulePlugin` → module name `zammad_processes`
 
-This replaces the old `claia.tool_modules.zammad` module.
+This replaces the old `claia.tools.zammad` module.

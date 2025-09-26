@@ -17,13 +17,13 @@ This guide explains the package layout, how to add a model, create an agent, add
   - `architectures/` — architecture plugins that map to model classes
   - `definitions/` — definitions that name and describe models
   - `solvers/` — select model per process
-  - `tool_modules/` — concrete tool command modules
+  - `tools/` — concrete tool command modules
   - `tool_patterns/` — patterns that define tool prompts/format
   - `tool_protocols/` — protocols that execute commands from a catalog
 
 Plugin registration uses Python entry points declared in `pyproject.toml` under:
 - `claia.architectures`, `claia.definitions`, `claia.deployments`, `claia.solvers`, `claia.agents`
-- `claia.command_modules`, `claia.tool_patterns`, `claia.tool_protocols`
+- `claia.tool_modules`, `claia.tool_patterns`, `claia.tool_protocols`
 
 See `pyproject.toml` for current built-in registrations.
 
@@ -127,23 +127,23 @@ Pick it at runtime with `--default-agent my_agent` or interactively in the CLI.
 
 Tool commands are provided by command modules. The registry validates/serializes arguments and passes prepared kwargs to the protocol. Protocols execute commands from a commands catalog (not the full manager).
 
-Implement a module in `claia/tool_modules/my_module.py`:
+Implement a module in `claia/tools/my_module.py`:
 
 ```python
 import pluggy
-from claia.hooks.module import CommandModuleInfo, CommandDefinition, ArgumentDefinition
+from claia.hooks.tool import ToolModuleInfo, ToolDefinition, ArgumentDefinition
 
-hookimpl = pluggy.HookimplMarker("claia_command_modules")
+hookimpl = pluggy.HookimplMarker("claia_tool_modules")
 
 class MyModulePlugin:
   @hookimpl
-  def get_module_info(self) -> CommandModuleInfo:
-    return CommandModuleInfo(name="my", title="My Tools", description="Demo tools")
+  def get_module_info(self) -> ToolModuleInfo:
+    return ToolModuleInfo(name="my", title="My Tools", description="Demo tools")
 
   @hookimpl
-  def get_module_commands(self):
+  def get_module_tools(self):
     return {
-      "echo": CommandDefinition(
+      "echo": ToolDefinition(
         name="echo",
         description="Echo a message",
         callable=lambda message, **kw: str(message),
@@ -157,8 +157,8 @@ class MyModulePlugin:
 Register it in `pyproject.toml`:
 
 ```toml
-[project.entry-points."claia.command_modules"]
-my = "claia.tool_modules.my_module:MyModulePlugin"
+[project.entry-points."claia.tool_modules"]
+my = "claia.tools.my_module:MyModulePlugin"
 ```
 
 Notes:
