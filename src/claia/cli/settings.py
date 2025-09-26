@@ -87,9 +87,6 @@ class Settings:
     self.loaded_local_models: Dict[str, Any] = {}
 
     self.prompt_store = []
-    self.command_modules = []
-    self.function_modules = []
-    self.function_definitions = []
     self.extra_args = []
 
     self.active_model = None
@@ -216,36 +213,6 @@ class Settings:
       self.log_format = DEFAULT_LOG_FORMAT.name
 
     return True
-
-
-  def has_command_modules(self) -> bool:
-    """
-    Check if there are any available command modules.
-
-    Returns:
-      bool: True if there are available command modules, False otherwise
-    """
-    return len(self.command_modules) > 0
-
-
-  def has_function_modules(self) -> bool:
-    """
-    Check if there are any available function modules.
-
-    Returns:
-      bool: True if there are available function modules, False otherwise
-    """
-    return len(self.function_modules) > 0
-
-
-  def set_function_definitions(self, function_definitions: List[Dict[str, Any]]) -> None:
-    """
-    Set the function definitions for function calling.
-
-    Args:
-        function_definitions: List of function definitions
-    """
-    self.function_definitions = function_definitions
 
 
   def get_user_kwargs(self) -> Dict[str, Any]:
