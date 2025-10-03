@@ -5,6 +5,12 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python Debugger: Module",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "claia"
+        },
+        {
             "name": "Python Debugger: Main",
             "type": "debugpy",
             "request": "attach",
