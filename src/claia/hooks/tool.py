@@ -2,7 +2,7 @@
 Hook specifications for command module plugins.
 
 A command module can implement multiple commands and exposes them through
-a get_module_commands() method that returns a dictionary of CommandDefinition objects.
+a get_module_tools() method that returns a dictionary of ToolDefinition objects.
 This allows a single module to efficiently handle multiple related commands.
 """
 

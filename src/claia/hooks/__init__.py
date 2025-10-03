@@ -8,7 +8,7 @@ from .solver import SolverHooks, SolverInfo, DeploymentParams
 from .definition import DefinitionHooks, ModelDefinition
 from .pattern import PatternHooks, PatternInfo
 from .protocol import ProtocolHooks, ProtocolInfo
-from .module import CommandModuleHooks, CommandDefinition, ArgumentDefinition
+from .tool import ToolModuleHooks, ToolDefinition, ArgumentDefinition
 from .agent import AgentHooks, AgentInfo
 
 __all__ = [
@@ -18,6 +18,6 @@ __all__ = [
   'DefinitionHooks', 'ModelDefinition',
   'PatternHooks', 'PatternInfo',
   'ProtocolHooks', 'ProtocolInfo',
-  'CommandModuleHooks', 'CommandDefinition', 'ArgumentDefinition',
+  'ToolModuleHooks', 'ToolDefinition', 'ArgumentDefinition',
   'AgentHooks', 'AgentInfo'
 ]

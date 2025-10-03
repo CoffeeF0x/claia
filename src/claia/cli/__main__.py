@@ -405,15 +405,15 @@ def main() -> None:
           continue
         cmd = tokens[0]
 
-        # If only a module name was given, list its commands
+        # If only a module name was given, list its tools
         if '.' not in cmd and len(tokens) == 1:
           catalog = registry.get_commands_catalog()
           mod = catalog.get(cmd)
           if mod:
-            print(f"Module '{cmd}' commands:")
-            for c in mod.get('list_of_commands', []):
-              cname = c.get('command_name')
-              cdesc = c.get('command_description')
+            print(f"Module '{cmd}' tools:")
+            for c in mod.get('list_of_tools', []):
+              cname = c.get('tool_name')
+              cdesc = c.get('tool_description')
               print(f"  - {cmd}.{cname}: {cdesc}")
             continue
 

@@ -18,7 +18,7 @@ from typing import Dict, Optional, List, Type, Any, Callable, Tuple
 
 from .hooks import (
   ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHooks,
-  PatternHooks, ProtocolHooks, CommandModuleHooks, AgentHooks,
+  PatternHooks, ProtocolHooks, ToolModuleHooks, AgentHooks,
   DeploymentInfo, SolverInfo, ModelDefinition, ArchitectureInfo, AgentInfo
 )
 from claia.lib.model.base import BaseModel
@@ -39,7 +39,7 @@ INFO_METHOD_BY_GROUP: Dict[str, Optional[str]] = {
   'claia.definitions': None,          # definitions expose definitions via hook, not a single info
   'claia.tool_patterns': 'get_pattern_info',
   'claia.tool_protocols': 'get_protocol_info',
-  'claia.tool_modules': 'get_module_info',
+  'claia.tool_modules': 'get_tool_info',
   'claia.agents': 'get_agent_info',   # best-effort; if missing, we won't pass kwargs
 }
 
@@ -88,7 +88,7 @@ class Manager:
     self.protocol_pm.add_hookspecs(ProtocolHooks)
 
     self.module_pm = pluggy.PluginManager("claia_tool_modules")
-    self.module_pm.add_hookspecs(CommandModuleHooks)
+    self.module_pm.add_hookspecs(ToolModuleHooks)
 
     # Agent plugin manager
     self.agent_pm = pluggy.PluginManager("claia_agents")
@@ -371,24 +371,24 @@ class Manager:
     self.load_all_plugins()
     return self._find_plugin_by_name(self.module_pm, 'get_module_info', name)
 
-  def get_command_by_name(self, command_name: str):
-    """Find a command by name across all loaded modules."""
+  def get_tool_by_name(self, command_name: str):
+    """Find a tool by name across all loaded modules."""
     self.load_all_plugins()
 
     if '.' in command_name:
       module_name, cmd_name = command_name.split('.', 1)
       for plugin in self.module_pm.get_plugins():
         info = plugin.get_module_info()
-        if info and info.name == module_name and hasattr(plugin, 'get_module_commands'):
-          commands = plugin.get_module_commands()
+        if info and info.name == module_name and hasattr(plugin, 'get_module_tools'):
+          commands = plugin.get_module_tools()
           if cmd_name in commands:
             return plugin, commands[cmd_name], info
       return None, None, None
 
     for plugin in self.module_pm.get_plugins():
       info = plugin.get_module_info()
-      if info and hasattr(plugin, 'get_module_commands'):
-        commands = plugin.get_module_commands()
+      if info and hasattr(plugin, 'get_module_tools'):
+        commands = plugin.get_module_tools()
         if command_name in commands:
           return plugin, commands[command_name], info
     return None, None, None
@@ -400,15 +400,15 @@ class Manager:
 
     for plugin in self.module_pm.get_plugins():
       info = plugin.get_module_info()
-      if not info or not hasattr(plugin, 'get_module_commands'):
+      if not info or not hasattr(plugin, 'get_module_tools'):
         continue
 
       module_entry = {
         "module_info": info,
-        "list_of_commands": []
+        "list_of_tools": []
       }
 
-      commands = plugin.get_module_commands()
+      commands = plugin.get_module_tools()
       for cmd_name, cmd_def in commands.items():
         arguments_info = []
         if cmd_def.arguments:
@@ -421,10 +421,10 @@ class Manager:
               "default_value": getattr(arg_def, 'default_value', None)
             })
 
-        module_entry["list_of_commands"].append({
-          "command_name": cmd_name,
-          "command_description": cmd_def.description,
-          "command_callable": cmd_def.callable,
+        module_entry["list_of_tools"].append({
+          "tool_name": cmd_name,
+          "tool_description": cmd_def.description,
+          "tool_callable": cmd_def.callable,
           "arguments": arguments_info
         })
 

@@ -136,9 +136,9 @@ class Registry:
       for m in matches:
         try:
           # Resolve command definition to prepare arguments
-          plugin, cmd_def, module_info = self.manager.get_command_by_name(m.tool_name)
+          plugin, cmd_def, module_info = self.manager.get_tool_by_name(m.tool_name)
           if not plugin or not cmd_def:
-            exec_result = Result.fail(f"Command not found: {m.tool_name}")
+            exec_result = Result.fail(f"Tool not found: {m.tool_name}")
           else:
             # Extra kwargs can include conversation and user/system kwargs; only mapped if expected by args
             extra = dict(filtered_protocol_kwargs)
@@ -180,9 +180,9 @@ class Registry:
     """Execute a command module by name (for CLI use)."""
     self._ensure_loaded()
 
-    plugin, cmd_def, module_info = self.manager.get_command_by_name(command_name)
+    plugin, cmd_def, module_info = self.manager.get_tool_by_name(command_name)
     if not plugin or not cmd_def:
-      return Result.fail(f"Command not found: {command_name}")
+      return Result.fail(f"Tool not found: {command_name}")
 
     try:
       if not (cmd_def and hasattr(cmd_def, 'callable') and callable(cmd_def.callable)):

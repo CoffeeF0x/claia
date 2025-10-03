@@ -84,6 +84,7 @@ simple = "claia.tool_protocols.simple:SimpleProtocolPlugin"
 
 [project.entry-points."claia.tool_modules"]
 sample = "claia.tools.sample:SampleModulePlugin"
+system = "claia.tools.system:SystemModulePlugin"
 zammad = "extensions.zammad.plugin_basic:ZammadBasicModulePlugin"
 zammad_processes = "extensions.zammad.plugin_processes:ZammadProcessesModulePlugin"
 
