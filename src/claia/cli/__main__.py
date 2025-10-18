@@ -70,6 +70,7 @@ import json
 from typing import Optional, Dict, Any
 import shutil
 import importlib.metadata as importlib_metadata
+import pyfiglet
 
 # Internal dependencies
 from claia.lib import Process
@@ -174,8 +175,12 @@ def print_header(settings: Settings) -> None:
   pyver = sys.version.split()[0]
 
   print()
+  # Render big-letter title above the border
+  art = pyfiglet.figlet_format(title)
+  for art_line in art.rstrip("\n").splitlines():
+    print(art_line.center(width))
+
   print("╔" + ("═" * (width - 2)) + "╗")
-  print(line(title.center(width - 4)))
   print(line(subtitle))
   print(line(f"Version v{ver} • Python {pyver} • https://claia.dev"))
   print(line(f"Prompt prefix: '{COMMAND_CHARACTER}' for commands"))
