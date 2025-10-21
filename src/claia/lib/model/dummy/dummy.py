@@ -11,7 +11,7 @@ from typing import Dict, Any
 
 # Internal dependencies
 from ..base import BaseModel
-from claia.lib.files.conversation import Conversation
+from claia.lib.conversation import Conversation
 from claia.lib.enums.conversation import MessageRole
 
 

@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any
 
 # Internal dependencies
 from claia.lib.enums.process import ProcessStatus
-from claia.lib.files.conversation import Conversation
+from claia.lib.conversation import Conversation
 
 
 

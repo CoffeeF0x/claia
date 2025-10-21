@@ -16,7 +16,7 @@ from claia.lib.results import Result
 from claia.lib.process import Process
 from claia.lib.queue import ProcessQueue
 from claia.lib.enums.process import ProcessStatus
-from claia.lib.files.conversation import Conversation
+from claia.lib.conversation import Conversation
 
 
 

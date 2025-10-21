@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any
 
 # Internal dependencies
-from claia.lib.files.conversation import Conversation
+from claia.lib.conversation import Conversation
 
 
 ########################################################################

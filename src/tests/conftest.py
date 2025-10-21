@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 # Internal dependencies
 from claia.lib.results import Result
-from claia.lib.files.conversation.conversation import Conversation
+from claia.lib.conversation import Conversation
 from claia.lib.process import Process
 from claia.lib.enums.process import ProcessStatus
 
@@ -19,7 +19,7 @@ from claia.lib.enums.process import ProcessStatus
 @pytest.fixture
 def conversation(tmp_path):
   """Provide a minimal in-memory Conversation object."""
-  return Conversation(base_directory=str(tmp_path), title="Test Conversation")
+  return Conversation(title="Test Conversation")
 
 
 @pytest.fixture

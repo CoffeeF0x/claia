@@ -4,7 +4,7 @@ import json
 
 # Internal dependencies
 from ..base import APIModel
-from claia.lib.files.conversation import Conversation
+from claia.lib.conversation import Conversation
 from claia.lib.enums.conversation import MessageRole
 
 

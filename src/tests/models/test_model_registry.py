@@ -6,11 +6,11 @@ import pytest
 # Internal dependencies
 from claia.registry import Registry
 from claia.lib.results import Result
-from claia.lib.files.conversation.conversation import Conversation
+from claia.lib.conversation import Conversation
 
 
 def test_model_registry_run_success(registry_with_fake_manager, tmp_path):
-  conv = Conversation(base_directory=str(tmp_path), title="T")
+  conv = Conversation(title="T")
   reg: Registry = registry_with_fake_manager
   res: Result = reg.run("dummy", conv)
   assert res.is_success()
@@ -19,7 +19,7 @@ def test_model_registry_run_success(registry_with_fake_manager, tmp_path):
 
 
 def test_model_registry_no_solver(registry_with_no_solver, tmp_path):
-  conv = Conversation(base_directory=str(tmp_path), title="T")
+  conv = Conversation(title="T")
   reg: Registry = registry_with_no_solver
   res: Result = reg.run("dummy", conv)
   assert res.is_error()

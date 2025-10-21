@@ -1,7 +1,8 @@
 """
-Conversation package for CLAIA.
+Conversation data models.
 
-This package contains classes for managing conversations and related functionality.
+Pure Python data models representing conversations, messages, actions, tools,
+and settings. These models are independent of persistence mechanisms.
 """
 
 from .conversation import Conversation
@@ -15,5 +16,6 @@ __all__ = [
     "Message",
     "Action",
     "ToolDefinition",
-    "ConversationSettings"
+    "ConversationSettings",
 ]
+

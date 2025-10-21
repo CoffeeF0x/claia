@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 # Internal dependencies
 from claia.lib.results import Result
-from claia.lib.files.conversation import Conversation
+from claia.lib.conversation import Conversation
 
 
 @dataclass

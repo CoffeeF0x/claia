@@ -19,13 +19,13 @@ except Exception:
   pass
 
 # Re-export conversation package symbols for convenience
-from .conversation import (
-  Conversation,
-  Message,
-  Action,
-  ToolDefinition,
-  ConversationSettings,
-)
+# from .conversation import (
+#   Conversation,
+#   Message,
+#   Action,
+#   ToolDefinition,
+#   ConversationSettings,
+# )
 
 __all__ = [
   "BaseFile",
