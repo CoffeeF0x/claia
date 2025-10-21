@@ -8,7 +8,7 @@ It defines default prompts and other default settings.
 import logging
 
 # Internal dependencies
-from claia.lib.files.prompt import Prompt
+from claia.lib.media import Prompt, FileRepository
 from .settings import Settings
 
 
@@ -90,30 +90,43 @@ def initialize_default_prompts(settings: Settings) -> None:
   """
   Initialize default prompts if they don't exist.
 
-  This function checks for each prompt in DEFAULT_PROMPTS, and if it doesn't
-  exist, creates it and adds it to the settings.prompt_store list.
+  This function creates prompt objects from DEFAULT_PROMPTS and adds them to
+  the settings.prompt_store list. The prompts are created in memory and can be
+  persisted to disk via the repository if needed.
 
   Args:
       settings: The application settings object
   """
   logger.info("Initializing default prompts")
 
+  # Create file repository for managing prompts
+  file_repo = FileRepository.create_file_system(settings.files_directory)
+
+  # Create prompt objects from defaults
   for prompt_data in DEFAULT_PROMPTS:
-    # Get the prompt if it exists in the base directory
-    prompt = Prompt.load_prompt(prompt_data["name"], settings.files_directory)
-
-    # If the prompt doesn't exist, create it
-    if not prompt:
-      logger.debug(f"Creating default prompt '{prompt_data['name']}'")
-      new_prompt = Prompt.create_prompt(
-        base_directory=settings.files_directory,
-        prompt_name=prompt_data["name"],
-        prompt_text=prompt_data["prompt_text"]
+    prompt_name = prompt_data["name"]
+    validated_name = Prompt.validate_prompt_name(prompt_name)
+    
+    logger.debug(f"Creating prompt '{prompt_name}'")
+    
+    try:
+      # Create the prompt with content using the repository pattern
+      new_prompt = Prompt.from_content(
+        content=prompt_data["prompt_text"],
+        prompt_name=validated_name,
+        prompt_type="text"
       )
-
-      # If created successfully, add to prompt store
-      if new_prompt:
-        settings.prompt_store.append(new_prompt)
+      
+      # Save to repository (repository handles directory creation and file management)
+      file_repo.save(new_prompt)
+      
+      # Add to prompt store for in-memory access
+      settings.prompt_store.append(new_prompt)
+      
+      logger.debug(f"Successfully initialized prompt '{prompt_name}' (ID: {new_prompt.id})")
+      
+    except Exception as e:
+      logger.error(f"Failed to create prompt '{prompt_name}': {e}")
 
   return settings
 

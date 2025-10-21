@@ -6,8 +6,8 @@ using different backends (files, memory, databases, etc.).
 """
 
 from .base import ConversationRepository
-from .file_repository import FileConversationRepository
-from .memory_repository import MemoryRepository
+from .file_system import FileConversationRepository
+from .memory import MemoryRepository
 
 __all__ = [
     "ConversationRepository",

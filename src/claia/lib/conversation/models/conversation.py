@@ -840,6 +840,69 @@ class Conversation:
         """
         return self.settings
 
+    # File management convenience methods
+
+    def load_message_files(self, message_id: str, file_repo, load_content: bool = False) -> List:
+        """
+        Load all files attached to a message.
+
+        Generic method that works with any file type (ImageFile, TextFile, etc.).
+
+        Args:
+            message_id: The ID of the message
+            file_repo: FileRepository instance for loading files
+            load_content: Whether to pre-load file content
+
+        Returns:
+            List[BaseFile]: List of files attached to the message
+        """
+        message = self.get_message(message_id)
+        if not message:
+            logger.warning(f"Message not found: {message_id}")
+            return []
+
+        if not message.file_ids:
+            return []
+
+        files = file_repo.load_multiple(message.file_ids, load_content=load_content)
+
+        return files
+
+    def load_all_files(self, file_repo, load_content: bool = False) -> Dict[str, List]:
+        """
+        Load all files for all messages in the conversation.
+
+        Generic method that works with any file type.
+
+        Args:
+            file_repo: FileRepository instance for loading files
+            load_content: Whether to pre-load file content
+
+        Returns:
+            Dict[str, List[BaseFile]]: Dictionary mapping message_id -> list of files
+        """
+        result = {}
+
+        for message in self.messages:
+            if message.file_ids:
+                files = file_repo.load_multiple(message.file_ids, load_content=load_content)
+                if files:
+                    result[message.message_id] = files
+
+        return result
+
+    def get_all_file_ids(self) -> List[str]:
+        """
+        Get all file IDs referenced in this conversation.
+
+        Returns:
+            List[str]: List of all unique file IDs
+        """
+        file_ids = set()
+        for message in self.messages:
+            file_ids.update(message.file_ids)
+        return list(file_ids)
+
     # Action tracking for audit trail
 
     def add_action(self, action_type: ActionType, metadata: Optional[Dict[str, Any]] = None) -> Action:
