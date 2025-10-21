@@ -78,7 +78,7 @@ from claia.lib.results import Result
 from claia.lib.enums.process import ProcessStatus
 from claia.lib.enums.model import SourcePreference
 from claia.lib.enums.conversation import MessageRole
-from claia.lib.files.conversation import Conversation
+from claia.lib.conversation import Conversation, FileConversationRepository
 from claia.cli.settings import Settings
 from claia.cli.defaults import initialize_defaults
 from claia.cli.logger import initialize_logging
@@ -195,94 +195,60 @@ def print_header(settings: Settings) -> None:
 def process_final_message_tools(final_message, process: Process, settings: Settings, registry: Registry) -> None:
   """Process any tool calls in the final message and update the conversation if needed."""
 
-  # Step 1: Check if the conversation has a tool pattern configured
-  if not process.conversation.tool_pattern_name:
-    return
-
-  # Step 2: Lightweight precheck using the registry
-  try:
-    has_tool_tokens = registry.contains_tool_tokens(
-      final_message.content,
-      pattern_name=process.conversation.tool_pattern_name
-    )
-    if not has_tool_tokens:
-      return
-  except Exception as e:
-    logger.warning(f"Error checking for tool call tokens: {e}")
-    return
-
-  logger.debug("Tool calls detected in final message, processing...")
-
-  # Step 3: Verify conversation has both pattern and protocol configured
-  # Protocol defines how to execute the tools (e.g., local execution, API calls)
-  if not process.conversation.tool_protocol_name:
-    logger.debug("No tool protocol configured for conversation")
-    return
-
-  # Step 4: Get user configuration parameters to pass to tools
-  # This includes API keys, preferences, and other user-specific settings
+  # Note: Tool pattern/protocol configuration is now handled by the registry extensions
+  # We simply try to process the content and let the registry handle detection
+  
+  # Get user configuration parameters to pass to tools
   user_kwargs = settings.get_user_kwargs()
 
-  # Step 5: Process the tool calls in the message content
+  # Try to process tool calls in the message content
   try:
     processed_content = registry.process_content(
       process.conversation,
       final_message.content,
       settings=None,
-      protocol_name=process.conversation.tool_protocol_name,
       **user_kwargs
     )
   except Exception as e:
-    logger.error(f"Tool processing failed: {e}")
+    logger.debug(f"No tool processing needed or failed: {e}")
     return
 
-  # Step 6: If content changed after processing, update the message and display changes
-  # This happens when tool calls are replaced with their results
+  # If content changed after processing, update the message and display changes
   if processed_content != final_message.content:
     print("\n[Processing tool calls...]")
     # Display only the new content that was added (tool results)
     print(processed_content[len(final_message.content):], flush=True)
-    # Update the stored message with the processed content
+    # Update the stored message with the processed content (thread-safe)
     process.conversation.update_message(final_message.message_id, content=processed_content)
 
 def ensure_tool_prompt(conv: Conversation, registry: Registry) -> None:
   """Ensure the conversation has a tool_calling_prompt set from the active pattern.
 
-  If conv.tool_calling_prompt is empty, try to fetch the selected pattern's
+  If conv.tool_calling_prompt is empty, try to fetch the default pattern's
   prompt_template and assign it. This wires pattern-provided prompts into
   Conversation.get_system_prompt().
   """
   if not conv:
     return
-  if getattr(conv, 'tool_calling_prompt', None):
+  if conv.tool_calling_prompt:
     return
-  pattern_name = getattr(conv, 'tool_pattern_name', None)
   try:
-    plugin, info = registry.manager.get_pattern_by_name(pattern_name) if pattern_name else (None, None)
-    if not plugin:
-      plugin = registry.manager.get_default_pattern()
-      info = plugin.get_pattern_info() if plugin else None
-  except Exception:
-    plugin, info = None, None
-  prompt = getattr(info, 'prompt_template', None) if info else None
-  if prompt:
-    conv.set_tool_calling_prompt(prompt)
+    plugin = registry.manager.get_default_pattern()
+    info = plugin.get_pattern_info() if plugin else None
+    prompt = getattr(info, 'prompt_template', None) if info else None
+    if prompt:
+      conv.set_tool_calling_prompt(prompt)
+  except Exception as e:
+    logger.debug(f"Could not set tool calling prompt: {e}")
 
 def setup_conversation(settings: Settings, registry: Registry) -> None:
-  """Setup or configure the active conversation with tool defaults if needed."""
+  """Setup or configure the active conversation."""
   if not settings.active_conversation:
-    settings.active_conversation = Conversation(
-      settings.files_directory,
-      tool_pattern_name=TOOL_PATTERN_NAME,
-      tool_protocol_name=TOOL_PROTOCOL_NAME
-    )
+    # Create a new conversation (pure data model)
+    settings.active_conversation = Conversation()
     ensure_tool_prompt(settings.active_conversation, registry)
   else:
-    # Backfill defaults if missing
-    if not settings.active_conversation.tool_pattern_name:
-      settings.active_conversation.set_tool_pattern_name(TOOL_PATTERN_NAME)
-    if not settings.active_conversation.tool_protocol_name:
-      settings.active_conversation.set_tool_protocol_name(TOOL_PROTOCOL_NAME)
+    # Ensure tool prompt is set
     ensure_tool_prompt(settings.active_conversation, registry)
 
 def parse_kv_args(tokens: list[str]) -> Dict[str, Any]:
@@ -326,6 +292,9 @@ def main() -> None:
     registry = Registry(**user_kwargs)
     _ = registry.get_commands_catalog() # NOTE: Can probably be removed later
     registry.start_workers(3)  # Start 3 worker threads
+
+    # Initialize conversation repository
+    conversation_repo = FileConversationRepository(settings.files_directory)
 
     # Set up command history with arrow key navigation
     setup_command_history()
@@ -498,7 +467,9 @@ def main() -> None:
           # Check for and process any tool calls in the final message
           process_final_message_tools(final_message, process, settings, registry)
 
-          process.conversation.save()
+          # Save conversation using repository
+          if not conversation_repo.save(process.conversation):
+            logger.error("Failed to save conversation")
         elif process.status == ProcessStatus.FAILED:
           logger.error(f"Process failed: {process.error}")
           print(f"Error: {process.error}")
