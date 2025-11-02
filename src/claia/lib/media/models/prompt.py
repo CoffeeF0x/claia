@@ -67,6 +67,11 @@ class Prompt(TextFile):
         name = file_name.replace('.json', '')
         return self.validate_prompt_name(name)
 
+    def get_file_type(self):
+        """Override to return PROMPT file type instead of TEXT."""
+        from ...enums.file import FileSubdirectory
+        return FileSubdirectory.PROMPT
+
     @staticmethod
     def validate_prompt_name(name: str) -> str:
         """

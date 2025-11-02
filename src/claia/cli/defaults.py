@@ -90,9 +90,9 @@ def initialize_default_prompts(settings: Settings) -> None:
   """
   Initialize default prompts if they don't exist.
 
-  This function creates prompt objects from DEFAULT_PROMPTS and adds them to
-  the settings.prompt_store list. The prompts are created in memory and can be
-  persisted to disk via the repository if needed.
+  This function loads existing prompts from disk and adds them to the
+  settings.prompt_store list. It only creates new prompts for defaults
+  that don't already exist.
 
   Args:
       settings: The application settings object
@@ -102,12 +102,34 @@ def initialize_default_prompts(settings: Settings) -> None:
   # Create file repository for managing prompts
   file_repo = FileRepository.create_file_system(settings.files_directory)
 
-  # Create prompt objects from defaults
+  # Load existing prompts from repository
+  existing_prompts_metadata = file_repo.list_all(file_type='prompts')
+  existing_prompt_names = {metadata.get('prompt_name') for metadata in existing_prompts_metadata}
+  
+  logger.debug(f"Found {len(existing_prompts_metadata)} existing prompts")
+  
+  # Load existing prompts and add to prompt store
+  for metadata in existing_prompts_metadata:
+    try:
+      prompt_id = metadata.get('id')
+      existing_prompt = file_repo.load(prompt_id, load_content=True)
+      if existing_prompt:
+        settings.prompt_store.append(existing_prompt)
+        logger.debug(f"Loaded existing prompt '{existing_prompt.prompt_name}' (ID: {existing_prompt.id})")
+    except Exception as e:
+      logger.error(f"Failed to load existing prompt {prompt_id}: {e}")
+
+  # Create prompt objects from defaults that don't exist yet
   for prompt_data in DEFAULT_PROMPTS:
     prompt_name = prompt_data["name"]
     validated_name = Prompt.validate_prompt_name(prompt_name)
     
-    logger.debug(f"Creating prompt '{prompt_name}'")
+    # Skip if prompt already exists
+    if validated_name in existing_prompt_names:
+      logger.debug(f"Prompt '{prompt_name}' already exists, skipping creation")
+      continue
+    
+    logger.debug(f"Creating new prompt '{prompt_name}'")
     
     try:
       # Create the prompt with content using the repository pattern
@@ -123,7 +145,7 @@ def initialize_default_prompts(settings: Settings) -> None:
       # Add to prompt store for in-memory access
       settings.prompt_store.append(new_prompt)
       
-      logger.debug(f"Successfully initialized prompt '{prompt_name}' (ID: {new_prompt.id})")
+      logger.debug(f"Successfully created prompt '{prompt_name}' (ID: {new_prompt.id})")
       
     except Exception as e:
       logger.error(f"Failed to create prompt '{prompt_name}': {e}")
