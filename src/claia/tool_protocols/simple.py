@@ -29,6 +29,11 @@ class SimpleProtocolPlugin:
 
     The registry is responsible for preparing and validating parameters.
     This protocol simply locates the callable and invokes it.
+    
+    Tool callables must return either:
+    - A Result object (used as-is)
+    - A string (wrapped in Result.ok)
+    - Otherwise an error is returned
     """
     # Resolve callable from catalog (supports 'module.command' or bare 'command')
     callable_fn = None
@@ -58,8 +63,18 @@ class SimpleProtocolPlugin:
       if not callable_fn:
         return Result.fail(f"Tool '{tool_name}' not found")
 
-      data = callable_fn(**(parameters or {}))
-      return Result.ok(data)
+      result = callable_fn(**(parameters or {}))
+      
+      # Handle different return types from tool callables
+      if isinstance(result, Result):
+        # Tool returned a Result object, use it directly
+        return result
+      elif isinstance(result, str):
+        # Tool returned a string, wrap it in Result.ok
+        return Result.ok(result)
+      else:
+        # Invalid return type
+        return Result.fail(f"Tool '{tool_name}' returned invalid type: {type(result).__name__}. Tools must return Result or str.")
     except Exception as e:
       logger.exception(f"Error executing tool '{tool_name}'")
       return Result.fail(str(e))

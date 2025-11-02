@@ -7,6 +7,7 @@ from typing import Dict
 import pluggy
 
 from claia.hooks.tool import ToolModuleInfo, ToolDefinition, ArgumentDefinition
+from claia.lib.results import Result
 
 
 hookimpl = pluggy.HookimplMarker("claia_tool_modules")
@@ -50,6 +51,6 @@ class SystemModulePlugin:
       os.system("cls" if os.name == "nt" else "clear")
     return ""
 
-  def _exit(self, **kwargs) -> Dict[str, str]:
-    # Return a structured signal; CLI should interpret and exit gracefully
-    return {"action": "exit", "message": "Goodbye"}
+  def _exit(self, **kwargs) -> Result:
+    # Return a Result with exit flag set so CLI can handle gracefully
+    return Result.shutdown(message="Goodbye", exit=True, exit_code=0)

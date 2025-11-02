@@ -329,6 +329,12 @@ def main() -> None:
       else:
         print(f"Error: {cmd_result.get_message()}")
 
+      # Check if command requested exit
+      if cmd_result.is_exit():
+        logger.info(f"CLAIA exiting: {cmd_result.get_message()}")
+        registry.stop_workers()
+        sys.exit(cmd_result.get_exit_code())
+
       # Exit after running the command
       logger.info("CLAIA exiting after CLI command execution")
       registry.stop_workers()
@@ -408,6 +414,10 @@ def main() -> None:
             print(str(data))
         else:
           print(f"Error: {cmd_result.get_message()}")
+        
+        # Check if command requested exit and terminate the main loop
+        if cmd_result.is_exit():
+          result = cmd_result
       else:
         # Create a new conversation if one doesn't exist
         setup_conversation(settings, registry)

@@ -177,7 +177,13 @@ class Registry:
     return processed
 
   def run_command(self, command_name: str, parameters: Dict[str, Any], conversation, **kwargs) -> Result:
-    """Execute a command module by name (for CLI use)."""
+    """Execute a command module by name (for CLI use).
+    
+    Tool callables must return either:
+    - A Result object (used as-is)
+    - A string (wrapped in Result.ok)
+    - Otherwise an error is returned
+    """
     self._ensure_loaded()
 
     plugin, cmd_def, module_info = self.manager.get_tool_by_name(command_name)
@@ -194,8 +200,18 @@ class Registry:
       extra['conversation'] = conversation
       call_kwargs = self._prepare_command_kwargs(parameters or {}, cmd_def, extra_kwargs=extra)
 
-      data = cmd_def.callable(**call_kwargs)
-      return Result.ok(data=data)
+      result = cmd_def.callable(**call_kwargs)
+      
+      # Handle different return types from tool callables
+      if isinstance(result, Result):
+        # Tool returned a Result object, use it directly
+        return result
+      elif isinstance(result, str):
+        # Tool returned a string, wrap it in Result.ok
+        return Result.ok(data=result)
+      else:
+        # Invalid return type
+        return Result.fail(f"Tool '{command_name}' returned invalid type: {type(result).__name__}. Tools must return Result or str.")
     except Exception as e:
       return Result.fail(str(e))
 

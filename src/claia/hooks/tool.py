@@ -23,7 +23,14 @@ class ArgumentDefinition:
 
 @dataclass
 class ToolDefinition:
-  """Defines a tool within a module."""
+  """Defines a tool within a module.
+  
+  The callable must return either:
+  - A Result object (from claia.lib.results) - used as-is
+  - A string - wrapped in Result.ok(data=string)
+  
+  Any other return type will result in an error.
+  """
   name: str
   description: str
   callable: Callable
