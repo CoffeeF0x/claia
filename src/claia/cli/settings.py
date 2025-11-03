@@ -8,6 +8,7 @@ and loads settings from various sources (environment variables and command-line 
 # External dependencies
 import os
 import argparse
+import json
 from typing import Dict, Any, List, Tuple
 from dotenv import load_dotenv
 
@@ -22,6 +23,7 @@ from claia.lib.enums.logging import LogLevel, LogFormat
 DEFAULT_LOG_LEVEL  = LogLevel.WARNING
 DEFAULT_LOG_FORMAT = LogFormat.STANDARD
 DEFAULT_ENV_FILE = ".env"
+DEFAULT_SETTINGS_FILE = "settings.json"
 ENV_PREFIX = "CLAIA_"
 
 # Format: (variable_name, default_value, externally_settable, help_text)
@@ -100,12 +102,15 @@ class Settings:
     # Load configuration
     self._load_config()
     self.validate()
+    
+    # Save settings to file after loading (creates file if doesn't exist, updates if values changed)
+    self._save_settings_to_file()
 
 
   def _load_config(self):
     """
     Load configuration from command line arguments, .env file, and environment variables
-    Priority: Command line args > .env file > Environment variables > Defaults
+    Priority: Command line args > .env file > Environment variables > settings.json > Defaults
     """
     parser = argparse.ArgumentParser(description='CLAIA Settings')
 
@@ -139,13 +144,18 @@ class Settings:
     self.extra_args = unknown
 
     # Load .env file if it exists (get env_file from args or use default)
-    env_file = self._get_config_value("env_file", DEFAULT_ENV_FILE, args, True)
+    env_file = self._get_config_value("env_file", DEFAULT_ENV_FILE, args, True, {})
     if os.path.exists(env_file):
       load_dotenv(env_file, override=True)
 
+    # Load settings from settings.json file first (lowest priority after defaults)
+    # Need to get files_directory first to know where to look for settings.json
+    files_dir = self._get_config_value("files_directory", "storage", args, True, {})
+    json_settings = self._load_settings_from_file(files_dir)
+
     # Build config dictionary using helper function
     config_dict = {
-      var_name: self._get_config_value(var_name, default, args, externally_settable)
+      var_name: self._get_config_value(var_name, default, args, externally_settable, json_settings)
       for var_name, default, externally_settable, _ in CONFIG_VARS
     }
 
@@ -154,15 +164,18 @@ class Settings:
       setattr(self, key, value)
 
 
-  def _get_config_value(self, var_name: str, default: Any, args: argparse.Namespace, externally_settable: bool) -> Any:
+  def _get_config_value(self, var_name: str, default: Any, args: argparse.Namespace, externally_settable: bool, json_settings: Dict[str, Any]) -> Any:
     """
-    Helper function to get configuration value from CLI args or environment variables
+    Helper function to get configuration value from CLI args, environment variables, or settings.json
 
     Args:
         var_name: The base variable name in snake_case
         default: Default value if no other source sets it
         args: Parsed command line arguments
         externally_settable: Whether this setting can be set from outside the application
+        json_settings: Settings loaded from settings.json file
+    
+    Priority: CLI args > .env file > Environment variables > settings.json > Defaults
     """
     # If not externally settable, just return the default
     if not externally_settable:
@@ -183,6 +196,10 @@ class Settings:
     # If prefixed environment variable is None, try unprefixed environment variable
     if value is None:
       value = os.getenv(env_name)
+
+    # If still None, try settings.json
+    if value is None and var_name in json_settings:
+      value = json_settings[var_name]
 
     # Strip quotes if present
     if value and isinstance(value, str) and value[0] == value[-1] and value[0] in ('"', "'"):
@@ -230,3 +247,61 @@ class Settings:
         kwargs[var_name] = getattr(self, var_name, default)
 
     return kwargs
+
+
+  def _load_settings_from_file(self, files_directory: str) -> Dict[str, Any]:
+    """
+    Load settings from settings.json file in the files directory.
+
+    Args:
+        files_directory: The directory where settings.json should be located
+
+    Returns:
+        Dict[str, Any]: Dictionary of settings loaded from file, or empty dict if file doesn't exist
+    """
+    settings_path = os.path.join(files_directory, DEFAULT_SETTINGS_FILE)
+    
+    if not os.path.exists(settings_path):
+      return {}
+    
+    try:
+      with open(settings_path, 'r') as f:
+        return json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+      print(f"Warning: Could not load settings from {settings_path}: {e}")
+      return {}
+
+
+  def _save_settings_to_file(self) -> None:
+    """
+    Save current settings to settings.json file in the files directory.
+    Only saves externally settable configuration values.
+    Creates the file if it doesn't exist, updates if values have changed.
+    """
+    settings_path = os.path.join(self.files_directory, DEFAULT_SETTINGS_FILE)
+    
+    # Ensure the directory exists
+    os.makedirs(self.files_directory, exist_ok=True)
+    
+    # Build dictionary of current settings
+    current_settings = {}
+    for var_name, default, externally_settable, _ in CONFIG_VARS:
+      if externally_settable:
+        current_settings[var_name] = getattr(self, var_name, default)
+    
+    # Load existing settings to compare
+    existing_settings = {}
+    if os.path.exists(settings_path):
+      try:
+        with open(settings_path, 'r') as f:
+          existing_settings = json.load(f)
+      except (json.JSONDecodeError, IOError):
+        pass  # If we can't read it, we'll overwrite it
+    
+    # Only write if settings have changed or file doesn't exist
+    if current_settings != existing_settings:
+      try:
+        with open(settings_path, 'w') as f:
+          json.dump(current_settings, f, indent=2)
+      except IOError as e:
+        print(f"Warning: Could not save settings to {settings_path}: {e}")
