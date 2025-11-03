@@ -101,27 +101,30 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                              FUNCTIONS                               #
 ########################################################################
-def setup_command_history() -> None:
+def setup_command_history(settings: Settings) -> None:
   """Initialize readline for command history with arrow key navigation."""
   logger.debug("Setting up command history")
   try:
-    # Ensure the history file directory exists only if needed
-    history_dir = os.path.dirname(HISTORY_FILE)
+    # Create history file path in the files directory
+    history_file = os.path.join(settings.files_directory, HISTORY_FILE)
+    
+    # Ensure the history file directory exists
+    history_dir = os.path.dirname(history_file)
     if history_dir and not os.path.exists(history_dir):
       logger.debug(f"Creating history directory: {history_dir}")
       os.makedirs(history_dir, exist_ok=True)
 
     # Try to read the history file
-    logger.debug(f"Reading history from file: {HISTORY_FILE}")
-    readline.read_history_file(HISTORY_FILE)
+    logger.debug(f"Reading history from file: {history_file}")
+    readline.read_history_file(history_file)
     readline.set_history_length(MAX_HISTORY_LEN)
     logger.debug(f"Command history initialized with max length: {MAX_HISTORY_LEN}")
   except FileNotFoundError:
-    logger.debug(f"History file not found, will create on exit: {HISTORY_FILE}")
+    logger.debug(f"History file not found, will create on exit: {history_file}")
   except Exception as e:
     logger.error(f"Error setting up command history: {e}")
 
-  atexit.register(readline.write_history_file, HISTORY_FILE)
+  atexit.register(readline.write_history_file, history_file)
   logger.debug("Registered history file write on exit")
 
 
@@ -289,7 +292,7 @@ def main() -> None:
     file_repo = FileSystemRepository(settings.files_directory)
 
     # Set up command history with arrow key navigation
-    setup_command_history()
+    setup_command_history(settings)
 
     # Log active model, agent, and prompt information
     logger.debug(f"Active model: {settings.active_model}")
@@ -346,11 +349,6 @@ def main() -> None:
 
       # Wait for user input
       user_input = get_user_input()
-
-      # Populate command history if input is not empty
-      if user_input.strip():
-        logger.debug("Adding user input to history")
-        readline.add_history(user_input)
 
       # Process user input as either a command or a query
       if user_input and user_input[0] == COMMAND_CHARACTER:
