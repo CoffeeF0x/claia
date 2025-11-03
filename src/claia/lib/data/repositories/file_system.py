@@ -15,7 +15,7 @@ from typing import Optional, List, Dict, Any
 
 # Internal dependencies
 from .base import FileRepository
-from ..models import BaseFile, TextFile, ImageFile, AudioFile, Prompt
+from ..models import BaseFile, TextFile, ImageFile, AudioFile, Prompt, Conversation
 
 
 ########################################################################
@@ -32,7 +32,7 @@ class FileSystemRepository(FileRepository):
     File system implementation of FileRepository.
 
     Storage structure:
-        files/
+        base_directory/
           ├── texts/
           │   ├── {file_id}.json     (metadata + small content inline)
           ├── images/
@@ -41,11 +41,13 @@ class FileSystemRepository(FileRepository):
           ├── audio/
           │   ├── {file_id}.json
           │   └── {file_id}.mp3
-          └── prompts/
+          ├── prompts/
+          │   └── {file_id}.json
+          └── conversations/
               └── {file_id}.json
 
     Strategy:
-    - Small files (text, prompts): inline content in JSON
+    - Small files (text, prompts, conversations): inline content in JSON
     - Large files (images, audio): separate data files
     """
 
@@ -60,23 +62,23 @@ class FileSystemRepository(FileRepository):
             base_directory: Base directory for storing files
         """
         self.base_directory = base_directory
-        self.files_dir = os.path.join(base_directory, "files")
         
         # Ensure base directory exists
-        os.makedirs(self.files_dir, exist_ok=True)
+        os.makedirs(self.base_directory, exist_ok=True)
 
     def _get_type_directory(self, file: BaseFile) -> str:
         """Get the subdirectory for a file type."""
         type_dirs = {
-            'texts': os.path.join(self.files_dir, 'texts'),
-            'images': os.path.join(self.files_dir, 'images'),
-            'audio': os.path.join(self.files_dir, 'audio'),
-            'prompts': os.path.join(self.files_dir, 'prompts'),
+            'text': os.path.join(self.base_directory, 'texts'),
+            'images': os.path.join(self.base_directory, 'images'),
+            'audio': os.path.join(self.base_directory, 'audio'),
+            'prompts': os.path.join(self.base_directory, 'prompts'),
+            'conversations': os.path.join(self.base_directory, 'conversations'),
         }
         
         # Determine directory based on file type
         file_type = file.get_file_type().value
-        dir_path = type_dirs.get(file_type, os.path.join(self.files_dir, file_type))
+        dir_path = type_dirs.get(file_type, os.path.join(self.base_directory, file_type))
         
         # Ensure directory exists
         os.makedirs(dir_path, exist_ok=True)
@@ -107,8 +109,10 @@ class FileSystemRepository(FileRepository):
 
     def _should_inline_content(self, file: BaseFile) -> bool:
         """Determine if content should be inlined in JSON."""
-        # Always inline for text files and prompts if small enough
-        if isinstance(file, (TextFile, Prompt)):
+        # Always inline for prompts or conversations and if small enough, text files
+        if isinstance(file, (Prompt, Conversation)):
+            return True
+        elif isinstance(file, TextFile):
             return file.size < self.INLINE_THRESHOLD
         
         # Never inline for binary files
@@ -235,11 +239,11 @@ class FileSystemRepository(FileRepository):
     def _find_metadata_file(self, file_id: str) -> Optional[str]:
         """Find metadata file across all type directories."""
         # Check all subdirectories (including any that might have been created)
-        if not os.path.exists(self.files_dir):
+        if not os.path.exists(self.base_directory):
             return None
         
-        for entry in os.listdir(self.files_dir):
-            entry_path = os.path.join(self.files_dir, entry)
+        for entry in os.listdir(self.base_directory):
+            entry_path = os.path.join(self.base_directory, entry)
             if os.path.isdir(entry_path):
                 metadata_path = os.path.join(entry_path, f"{file_id}.json")
                 if os.path.exists(metadata_path):
@@ -251,7 +255,9 @@ class FileSystemRepository(FileRepository):
         """Create appropriate file instance from metadata."""
         file_type = metadata.get('file_type', 'texts')
         
-        if file_type == 'prompts' or metadata.get('prompt_name'):
+        if file_type == 'conversations':
+            return Conversation.from_dict(metadata)
+        elif file_type == 'prompts' or metadata.get('prompt_name'):
             return Prompt.from_dict(metadata)
         elif file_type == 'images':
             return ImageFile.from_dict(metadata)
@@ -367,10 +373,10 @@ class FileSystemRepository(FileRepository):
             if file_type:
                 subdirs = [file_type]
             else:
-                subdirs = ['texts', 'images', 'audio', 'prompts']
+                subdirs = ['texts', 'images', 'audio', 'prompts', 'conversations']
             
             for subdir in subdirs:
-                dir_path = os.path.join(self.files_dir, subdir)
+                dir_path = os.path.join(self.base_directory, subdir)
                 if not os.path.exists(dir_path):
                     continue
                 

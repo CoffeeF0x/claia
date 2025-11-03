@@ -11,6 +11,7 @@ This package provides a clean separation between conversation data models and th
 - **Thread Safety**: Concurrent streaming and tool processing
 - **Database Ready**: Pure models can be mapped to any ORM
 - **Audit Trail**: Complete action history for debugging
+- **Code Reuse**: Conversation extends TextFile to eliminate duplication
 
 ## Architecture
 
@@ -198,9 +199,40 @@ for action in conversation.actions:
     print(f"  Metadata: {action.metadata}")
 ```
 
-## Migration from Old Structure
+## Architecture Details
 
-The conversation models have been refactored from file-based classes to pure data models. Key changes:
+### Inheritance Structure
+
+The `Conversation` class now extends `TextFile`, following the same pattern as `Prompt`:
+
+```python
+# Inheritance hierarchy:
+BaseFile (abstract)
+└── TextFile
+    ├── Prompt       # Overrides get_file_type() → FileSubdirectory.PROMPT
+    └── Conversation # Overrides get_file_type() → FileSubdirectory.CONVERSATION
+```
+
+**Benefits:**
+- Eliminates code duplication (serialization, timestamps, ID management)
+- Consistent file handling across the system
+- Inherits all TextFile functionality (encoding, content management, etc.)
+- Simplified save/load logic through unified file structure
+
+**Key Methods:**
+```python
+# Conversation automatically inherits from TextFile:
+conv = Conversation(title="Test")
+conv.file_name          # "abc-123.json"
+conv.mime_type          # "application/json"
+conv.get_file_type()    # FileSubdirectory.CONVERSATION
+conv.content            # JSON serialization of conversation
+conv.to_dict()          # Dictionary with all conversation data
+```
+
+### Migration from Old Structure
+
+The conversation models have been refactored to extend TextFile. Key changes:
 
 ### Removed Fields
 - `tool_pattern_name` - Now handled by registry extensions
@@ -209,13 +241,15 @@ The conversation models have been refactored from file-based classes to pure dat
 - `find_tags()` method - Use registry for tool detection
 
 ### Changed Fields
-- `file_id` → `id` - Conversations now use `id` as primary identifier
-- No longer inherits from `TextFile` or `BaseFile`
+- Now inherits from `TextFile` (previously standalone)
+- `id` is now the primary identifier (same as `file_id` in BaseFile)
+- Automatic file naming based on conversation ID
 
 ### New Features
 - Thread-safe message operations
 - Repository-based persistence
 - Cleaner separation of concerns
+- Unified file handling with other media types
 
 ### Backward Compatibility
 

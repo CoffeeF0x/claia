@@ -16,7 +16,8 @@ import time
 import uuid
 
 # Internal dependencies
-from ...enums.conversation import ActionType, MessageRole
+from ....enums.conversation import ActionType, MessageRole
+from ..text import TextFile
 from .tool_definition import ToolDefinition
 from .action import Action
 from .message import Message
@@ -49,9 +50,13 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                             CONVERSATION                             #
 ########################################################################
-class Conversation:
+class Conversation(TextFile):
     """
     Pure data model for conversations.
+
+    Extends TextFile to store conversation as JSON files, following the same
+    pattern as Prompt. This eliminates code duplication and enables consistent
+    file handling across the system.
 
     Represents a conversation with messages, tool definitions, settings,
     and an audit trail of actions. This is a pure Python object without
@@ -67,7 +72,7 @@ class Conversation:
     """
 
     def __init__(self,
-                 conversation_id: Optional[str] = None,
+                 id: Optional[str] = None,
                  title: str = DEFAULT_CONVERSATION_TITLE,
                  prompt: str = "",
                  tool_calling_prompt: Optional[str] = None,
@@ -76,12 +81,13 @@ class Conversation:
                  tool_definitions: Optional[List[Union[ToolDefinition, Dict[str, Any]]]] = None,
                  settings: Optional[Union[ConversationSettings, Dict[str, Any]]] = None,
                  created_at: Optional[float] = None,
-                 updated_at: Optional[float] = None):
+                 updated_at: Optional[float] = None,
+                 **kwargs):
         """
         Initialize a conversation.
 
         Args:
-            conversation_id: Optional ID for the conversation (generated if not provided)
+            id: Optional ID for the conversation (generated if not provided)
             title: Title of the conversation
             prompt: System prompt for the conversation
             tool_calling_prompt: Optional prompt for tool calling instructions
@@ -91,13 +97,28 @@ class Conversation:
             settings: Optional conversation settings
             created_at: Optional creation timestamp
             updated_at: Optional last update timestamp
+            **kwargs: Additional arguments for TextFile (file_name handled by repository)
         """
-        self.id = conversation_id or str(uuid.uuid4())
+        # Initialize TextFile - BaseFile handles ID generation and file naming
+        # The file_name is primarily for persistence; repositories can override it
+        super().__init__(
+            file_name=kwargs.pop('file_name', f"conversation-{id or 'new'}"),
+            file_id=id,  # BaseFile generates UUID if None
+            mime_type='application/json',
+            encoding='utf-8',
+            created_at=created_at,
+            updated_at=updated_at,
+            **kwargs
+        )
+        
+        # Conversation-specific fields
         self.title = title
         self.prompt = prompt
         self.tool_calling_prompt = tool_calling_prompt
-        self.created_at = created_at or time.time()
-        self.updated_at = updated_at or self.created_at
+        
+        # Store conversation metadata in the file metadata
+        self.metadata['title'] = title
+        self.metadata['conversation_type'] = 'conversation'
 
         # Initialize messages
         self.messages: List[Message] = []
@@ -142,6 +163,11 @@ class Conversation:
                 "tool_prompt": self.tool_calling_prompt
             })
 
+    def get_file_type(self):
+        """Override to return CONVERSATION file type."""
+        from ....enums.file import FileSubdirectory
+        return FileSubdirectory.CONVERSATION
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert the conversation to a dictionary.
@@ -149,8 +175,11 @@ class Conversation:
         Returns:
             Dict containing all conversation data for serialization
         """
-        return {
-            "id": self.id,
+        # Get base file data
+        data = super().to_dict()
+        
+        # Add conversation-specific fields
+        data.update({
             "title": self.title,
             "prompt": self.prompt,
             "tool_calling_prompt": self.tool_calling_prompt,
@@ -158,9 +187,9 @@ class Conversation:
             "actions": [a.to_dict() for a in self.actions],
             "tool_definitions": [t.to_dict() for t in self.tool_definitions],
             "settings": self.settings.to_dict(),
-            "created_at": self.created_at,
-            "updated_at": self.updated_at
-        }
+        })
+        
+        return data
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Conversation':
@@ -174,7 +203,7 @@ class Conversation:
             Conversation: New conversation instance
         """
         return cls(
-            conversation_id=data.get("id") or data.get("conversation_id"),  # Support both field names
+            id=data.get("id"),
             title=data.get("title", DEFAULT_CONVERSATION_TITLE),
             prompt=data.get("prompt", ""),
             tool_calling_prompt=data.get("tool_calling_prompt"),
@@ -183,8 +212,87 @@ class Conversation:
             tool_definitions=data.get("tool_definitions", []),
             settings=data.get("settings"),
             created_at=data.get("created_at"),
-            updated_at=data.get("updated_at")
+            updated_at=data.get("updated_at"),
+            file_name=data.get("file_name"),
+            is_reference=data.get("is_reference", False),
+            source_path=data.get("source_path"),
+            metadata=data.get("metadata", {})
         )
+
+    def load_content(self) -> str:
+        """
+        Load conversation content as JSON string.
+        
+        Returns:
+            str: JSON serialization of conversation data
+        """
+        if self._content_loaded and self._content is not None:
+            return self._content
+        
+        # Generate content from current conversation state
+        return self.content
+
+    @property
+    def content(self) -> str:
+        """
+        Get conversation content as JSON string.
+        
+        Returns:
+            str: JSON serialization of conversation data
+        """
+        return json.dumps(self.to_dict(), indent=2)
+    
+    def set_content(self, content: str) -> None:
+        """
+        Set conversation content from JSON string.
+        
+        Args:
+            content: JSON string containing conversation data
+        """
+        data = json.loads(content)
+        
+        # Update conversation fields from data
+        self.title = data.get("title", self.title)
+        self.prompt = data.get("prompt", self.prompt)
+        self.tool_calling_prompt = data.get("tool_calling_prompt", self.tool_calling_prompt)
+        
+        # Update messages
+        self.messages = []
+        for message_data in data.get("messages", []):
+            if isinstance(message_data, Message):
+                self.messages.append(message_data)
+            else:
+                self.messages.append(Message.from_dict(message_data))
+        
+        # Update actions
+        self.actions = []
+        for action_data in data.get("actions", []):
+            if isinstance(action_data, Action):
+                self.actions.append(action_data)
+            else:
+                self.actions.append(Action.from_dict(action_data))
+        
+        # Update tool definitions
+        self.tool_definitions = []
+        for tool_data in data.get("tool_definitions", []):
+            if isinstance(tool_data, ToolDefinition):
+                self.tool_definitions.append(tool_data)
+            else:
+                self.tool_definitions.append(ToolDefinition.from_dict(tool_data))
+        
+        # Update settings
+        settings_data = data.get("settings")
+        if settings_data:
+            if isinstance(settings_data, ConversationSettings):
+                self.settings = settings_data
+            else:
+                self.settings = ConversationSettings.from_dict(settings_data)
+        
+        # Mark content as loaded
+        self._content = content
+        self._content_loaded = True
+        self.size = len(content.encode(self.encoding))
+        self.updated_at = time.time()
 
     # Message management methods
 

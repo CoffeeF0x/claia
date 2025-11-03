@@ -15,7 +15,7 @@ import re
 import threading
 
 # Internal dependencies
-from ...enums.conversation import MessageRole
+from ....enums.conversation import MessageRole
 
 
 ########################################################################

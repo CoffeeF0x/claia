@@ -70,7 +70,7 @@ from claia.lib.results import Result
 from claia.lib.enums.process import ProcessStatus
 from claia.lib.enums.model import SourcePreference
 from claia.lib.enums.conversation import MessageRole
-from claia.lib.conversation import Conversation, FileConversationRepository
+from claia.lib.data import Conversation, FileSystemRepository
 from claia.cli.settings import Settings
 from claia.cli.defaults import initialize_defaults
 from claia.cli.logger import initialize_logging
@@ -285,8 +285,8 @@ def main() -> None:
     _ = registry.get_commands_catalog() # NOTE: Can probably be removed later
     registry.start_workers(3)  # Start 3 worker threads
 
-    # Initialize conversation repository
-    conversation_repo = FileConversationRepository(settings.files_directory)
+    # Initialize file system repository
+    file_repo = FileSystemRepository(settings.files_directory)
 
     # Set up command history with arrow key navigation
     setup_command_history()
@@ -469,8 +469,8 @@ def main() -> None:
           # Check for and process any tool calls in the final message
           process_final_message_tools(final_message, process, settings, registry)
 
-          # Save conversation using repository
-          if not conversation_repo.save(process.conversation):
+          # Save all files (including conversation) using repository
+          if not file_repo.save(process.conversation):
             logger.error("Failed to save conversation")
         elif process.status == ProcessStatus.FAILED:
           logger.error(f"Process failed: {process.error}")

@@ -10,6 +10,13 @@ from .text import TextFile
 from .image import ImageFile
 from .audio import AudioFile
 from .prompt import Prompt
+from .conversation import (
+    Conversation,
+    Message,
+    Action,
+    ToolDefinition,
+    ConversationSettings,
+)
 
 __all__ = [
     "BaseFile",
@@ -17,5 +24,10 @@ __all__ = [
     "ImageFile",
     "AudioFile",
     "Prompt",
+    "Conversation",
+    "Message",
+    "Action",
+    "ToolDefinition",
+    "ConversationSettings",
 ]
 

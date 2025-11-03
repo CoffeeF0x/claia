@@ -12,7 +12,7 @@ import time
 import uuid
 
 # Internal dependencies
-from ...enums.conversation import ActionType
+from ....enums.conversation import ActionType
 
 
 ########################################################################

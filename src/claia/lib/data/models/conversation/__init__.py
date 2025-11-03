@@ -1,8 +1,8 @@
 """
-Conversation data models.
+Conversation models.
 
-Pure Python data models representing conversations, messages, actions, tools,
-and settings. These models are independent of persistence mechanisms.
+All conversation-related data models including the main Conversation class
+and its supporting models (messages, actions, tool definitions, settings).
 """
 
 from .conversation import Conversation

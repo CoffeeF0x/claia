@@ -2,8 +2,8 @@
 Media package for CLAIA.
 
 Provides pure data models and repository interfaces for managing media files
-(text, images, audio, prompts). Models are independent of persistence, and
-repositories provide pluggable storage backends.
+(text, images, audio, prompts, conversations). Models are independent of 
+persistence, and repositories provide pluggable storage backends.
 
 Main exports:
     Models:
@@ -12,6 +12,11 @@ Main exports:
         - ImageFile: Image file model
         - AudioFile: Audio file model
         - Prompt: Prompt template model
+        - Conversation: Conversation model
+        - Message: Conversation message model
+        - Action: Conversation action/audit model
+        - ToolDefinition: Conversation tool definition
+        - ConversationSettings: Conversation settings
 
     Repositories:
         - FileRepository: Abstract base repository
@@ -30,6 +35,11 @@ from .models import (
     ImageFile,
     AudioFile,
     Prompt,
+    Conversation,
+    Message,
+    Action,
+    ToolDefinition,
+    ConversationSettings,
 )
 
 # Export repositories
@@ -49,6 +59,11 @@ __all__ = [
     "ImageFile",
     "AudioFile",
     "Prompt",
+    "Conversation",
+    "Message",
+    "Action",
+    "ToolDefinition",
+    "ConversationSettings",
     # Repositories
     "FileRepository",
     "FileSystemRepository",

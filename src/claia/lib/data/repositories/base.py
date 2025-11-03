@@ -183,28 +183,27 @@ class FileRepository(ABC):
             # Default to text file for unknown types
             return TextFile.from_url(url, is_reference=is_reference, file_name=file_name, **kwargs)
 
-    @classmethod
-    def create_file_system(cls, base_directory: str) -> 'FileRepository':
-        """
-        Factory method to create a file system repository.
+    # @classmethod
+    # def create_file_system(cls, base_directory: str) -> 'FileRepository':
+    #     """
+    #     Factory method to create a file system repository.
 
-        Args:
-            base_directory: Base directory for file storage
+    #     Args:
+    #         base_directory: Base directory for file storage
 
-        Returns:
-            FileRepository: File system repository instance
-        """
-        from .file_system import FileSystemRepository
-        return FileSystemRepository(base_directory)
+    #     Returns:
+    #         FileRepository: File system repository instance
+    #     """
+    #     from .file_system import FileSystemRepository
+    #     return FileSystemRepository(base_directory)
 
-    @classmethod
-    def create_memory(cls) -> 'FileRepository':
-        """
-        Factory method to create a memory repository.
+    # @classmethod
+    # def create_memory(cls) -> 'FileRepository':
+    #     """
+    #     Factory method to create a memory repository.
 
-        Returns:
-            FileRepository: Memory repository instance
-        """
-        from .memory import MemoryRepository
-        return MemoryRepository()
-
+    #     Returns:
+    #         FileRepository: Memory repository instance
+    #     """
+    #     from .memory import MemoryRepository
+    #     return MemoryRepository()

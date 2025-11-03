@@ -10,7 +10,7 @@ from typing import Dict, Any, Type
 
 # Internal dependencies
 from claia.lib.results import Result
-from claia.lib.conversation import Conversation
+from claia.lib.data import Conversation
 from ..hooks.deployment import DeploymentInfo
 
 
