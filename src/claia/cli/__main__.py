@@ -29,33 +29,25 @@
 # - make command input separate from actual text and scrolling (think vim) to allow interacting with AI while it's processing (things like commands to show multiple agent workers at once)
 # - throw error if agent required_args aren't found, but don't filter (agents need to pass kwargs to models). Otherwise, find a way to create some kind of secret store (singleton?) to pull args from
 
+# - use pluggy for file types?
+# - double check metadata updates when adding new content to files
 
-# FROM LIB
-# - Refactor to use pluggy for file types?
+# - overhaul the image resize method
+# - review conversation saving setup. Is it properly handled if storing in memory or db?
+# - Attaching a file in the conversation should just send the path or url along with whether or not
+#   it's a reference (optional), then identify and call the correct object
+#   to attach the file. If a file id is passed, then validate and identify the type
+
 # - BASEFILE:
 #   - Add a validate function to the that verifies that everything is as
-#     expected (correct subfolder, mime type, reference, exists, etc)
-#   - Add subfolder validation? (loop through each item in subfolder and validate)
+#     expected (correct subfolder, mime type, reference, exists, etc)?
 #   - Make the base file more cohesive with our state emuns (Local, External/Reference, Empty, etc)
-#   - Add streaming support to our save method
-# - PROMPT:
-#   - Double check the save method. If content is passed, is the metadata inconsistent?
-#   - Move save override stuff to post save hook
+#   - Add streaming support to our save method?
 # - IMAGE:
-#   - Overhaul the resize method
 #   - Make format function more robust and the output consistent
 #   - Make all format metadata setting use the format method
 #   - Is format metadata even needed since we have mime type?
 #   - Make mime type rely on our enum
-# - CONVERSATION:
-#   - Attach a file should just send the path or url along with whether or not
-#     it's a reference (optional), then identify and call the correct object
-#     to attach the file. If a file id is passed, then validate and identify the type
-#   - Consider redesign so that an external file load is not required (ie, stored fully
-#     in memory except on saves and loads)
-#   - Update the function definition to match our commands structure
-#   - Remove the settings object from tool calls?
-#   - Make sure tools still work after load (ie, are the references stored correctly?)
 
 
 
@@ -93,7 +85,7 @@ HISTORY_FILE = ".claia_history"
 MAX_HISTORY_LEN = 1000
 COMMAND_CHARACTER = ":"
 INPUT_CHARACTER = ":"
-DEFAULT_AGENT = "bob"
+DEFAULT_AGENT = "simple"
 TOOL_PATTERN_NAME = "default"
 TOOL_PROTOCOL_NAME = "simple"
 
