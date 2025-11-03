@@ -6,7 +6,6 @@ report.xml
 claia.log
 *.egg-info/
 
-data/
 history/
 pulseaudio/
 __pycache__/
