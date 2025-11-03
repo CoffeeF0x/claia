@@ -94,6 +94,9 @@ class Manager:
     self.agent_pm = pluggy.PluginManager("claia_agents")
     self.agent_pm.add_hookspecs(AgentHooks)
 
+    # Programmatically registered agents
+    self._registered_agents: Dict[str, AgentInfo] = {}
+
     self._plugins_loaded = False
     logger.debug("Manager initialized")
 
@@ -444,31 +447,107 @@ class Manager:
 
 
   # AGENTS
-  def get_agent_class(self, agent_name: str) -> Optional[Type[BaseAgent]]:
-    """Get the agent class for a specific agent name."""
-    self.load_all_plugins()
+  def register_agent(
+    self,
+    agent_class: Type[BaseAgent],
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    required_args: Optional[List[str]] = None
+  ) -> None:
+    """
+    Register an agent class programmatically without using pluggy.
+    
+    This allows developers to register custom agents directly:
+        registry.register(MyCustomAgent, name="my_agent", description="My custom agent")
+    
+    Args:
+        agent_class: The agent class to register (must inherit from BaseAgent)
+        name: The name to register the agent under (defaults to class name)
+        description: Description of the agent (defaults to class docstring)
+        required_args: Optional list of required arguments for the agent
+    
+    Raises:
+        ValueError: If the agent class is invalid or name is already registered
+    """
+    # Validate that the agent class inherits from BaseAgent
+    if not issubclass(agent_class, BaseAgent):
+      raise ValueError(f"Agent class {agent_class.__name__} must inherit from BaseAgent")
+    
+    # Use class name if no name provided
+    if name is None:
+      name = agent_class.__name__
+    
+    # Use class docstring if no description provided
+    if description is None:
+      description = agent_class.get_description()
+    
+    # Check if name is already registered
+    if name in self._registered_agents:
+      logger.warning(f"Agent '{name}' is already registered, overwriting")
+    
+    # Create AgentInfo and store it
+    agent_info = AgentInfo(
+      name=name,
+      description=description,
+      agent_class=agent_class,
+      required_args=required_args
+    )
+    
+    self._registered_agents[name] = agent_info
+    logger.info(f"Registered agent '{name}' ({agent_class.__name__})")
 
-    results = self.agent_pm.hook.get_agent_class(agent_name=agent_name)
-    for result in results:
-      if result is not None:
-        logger.debug(f"Found agent class {result.__name__} for {agent_name}")
-        return result
+  def get_agent_class(self, agent_name: str) -> Optional[Type[BaseAgent]]:
+    """Get the agent class for a specific agent name.
+    
+    Programmatically registered agents take priority over pluggy agents
+    when the same name is used.
+    """
+    # Load all agents from all sources
+    all_agents = self.get_agents()
+    
+    # Search through all agents (programmatic ones are listed first, giving them priority)
+    for agent_info in all_agents:
+      if agent_info.name == agent_name:
+        logger.debug(f"Found agent class {agent_info.agent_class.__name__} for {agent_name}")
+        return agent_info.agent_class
 
     logger.debug(f"No agent class found for {agent_name}")
     return None
 
   def get_agents(self) -> List[AgentInfo]:
-    """Get all available agent plugins and their info."""
+    """Get all available agents from all sources.
+    
+    Returns both programmatically registered agents and pluggy-based agents.
+    Programmatically registered agents are listed first, giving them priority
+    when multiple agents share the same name.
+    """
     self.load_all_plugins()
     agents = []
+    
+    # Add programmatically registered agents first (priority)
+    agents.extend(self._registered_agents.values())
+    
+    # Add pluggy agents
     try:
-      agents = self.agent_pm.hook.get_agent_info()
+      pluggy_agents = self.agent_pm.hook.get_agent_info()
+      # Only add pluggy agents that don't conflict with programmatic ones
+      programmatic_names = set(self._registered_agents.keys())
+      for agent_info in pluggy_agents:
+        if agent_info.name not in programmatic_names:
+          agents.append(agent_info)
+        else:
+          logger.debug(f"Pluggy agent '{agent_info.name}' shadowed by programmatic registration")
     except Exception as e:
       logger.warning(f"Failed collecting agent info: {e}")
     return agents
 
   def get_agent_info_by_name(self, agent_name: str) -> Optional[AgentInfo]:
-    """Get agent info for a specific agent by name."""
+    """Get agent info for a specific agent by name.
+    
+    Searches through all available agents (both programmatic and pluggy).
+    Programmatically registered agents take priority over pluggy agents
+    when the same name is used.
+    """
     agents = self.get_agents()
     for agent_info in agents:
       if agent_info.name == agent_name:

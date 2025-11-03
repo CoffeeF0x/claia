@@ -5,7 +5,6 @@
 # - create a new image agent that exports the images after generation
 # - create a vix demo that uses a list off images to show reactions in a conversation, think emojis (this should be a tool call since it's not generating the images, thought it's an idea to train a lora and have images generated)
 
-# - Top level commands no longer show in command help
 # - run commands from cli with optional --flags processing instead of arg=value style, for example: claia transcribe --file <audio-file>
 # - create new prompts or update existing (need to move prompts to json files)
 # - update system command to allow settings updates (and save to .env file?)
@@ -48,6 +47,13 @@
 #   - Make all format metadata setting use the format method
 #   - Is format metadata even needed since we have mime type?
 #   - Make mime type rely on our enum
+
+# BIG TODO: 
+# - Add a way to notify the user if no ai can be run because no keys are set (onboarding and config setup guiding)
+# - Check for and fix any regressions
+# - Finish migrating tools and create tools for updating/creating prompts, updating settings, and creating new conversations (and generating a title for the existing conversation)
+# - Check extension loading and update zammad extension
+# - Finish cleaning up conversation object (removing tool calling functionality and possibly conversation settings, the conversation object should wholly focus on messages, prompts, and updates to those)
 
 
 

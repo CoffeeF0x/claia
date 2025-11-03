@@ -450,6 +450,55 @@ class Registry:
   ######################################################################
   #                             AGENTS API                             #
   ######################################################################
+  def register(
+    self,
+    agent_class,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    required_args: Optional[list] = None
+  ) -> None:
+    """
+    Register a custom agent class programmatically.
+    
+    This allows developers to register agents without creating pluggy extensions.
+    The agent class must inherit from BaseAgent and implement the process_request method.
+    
+    Example:
+        from claia.lib import BaseAgent
+        from claia import registry
+        
+        class MyCustomAgent(BaseAgent):
+            '''My custom agent implementation.'''
+            
+            @classmethod
+            def process_request(cls, process, registry=None, **kwargs):
+                # Your custom logic here
+                process.mark_completed(result="Done!")
+                return process
+        
+        # Register the agent
+        registry.register(MyCustomAgent, name="my_agent")
+        
+        # Now you can use it
+        process = Process(agent_type="my_agent", ...)
+        registry.process(process)
+    
+    Args:
+        agent_class: The agent class to register (must inherit from BaseAgent)
+        name: The name to register the agent under (defaults to class name)
+        description: Description of the agent (defaults to class docstring)
+        required_args: Optional list of required arguments for the agent
+    
+    Raises:
+        ValueError: If the agent class is invalid
+    """
+    self.manager.register_agent(
+      agent_class=agent_class,
+      name=name,
+      description=description,
+      required_args=required_args
+    )
+
   def process(self, process: Process) -> Process:
     """
     Dispatch the given process to the appropriate agent implementation.
