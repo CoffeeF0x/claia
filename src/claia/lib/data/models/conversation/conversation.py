@@ -18,7 +18,6 @@ import uuid
 # Internal dependencies
 from ....enums.conversation import ActionType, MessageRole
 from ..text import TextFile
-from .tool_definition import ToolDefinition
 from .action import Action
 from .message import Message
 from .conversation_settings import ConversationSettings
@@ -28,17 +27,6 @@ from .conversation_settings import ConversationSettings
 #                              CONSTANTS                               #
 ########################################################################
 DEFAULT_CONVERSATION_TITLE = "New Conversation"
-
-# Default tool format placeholder
-DEFAULT_TOOL_FORMAT = """
-[TOOL_CALL]{
-"name": "tool_name",
-"parameters": {
-  "param1": "value1",
-  "param2": "value2"
-}
-}[/TOOL_CALL]
-"""
 
 
 ########################################################################
@@ -58,27 +46,47 @@ class Conversation(TextFile):
     pattern as Prompt. This eliminates code duplication and enables consistent
     file handling across the system.
 
-    Represents a conversation with messages, tool definitions, settings,
-    and an audit trail of actions. This is a pure Python object without
-    file or database dependencies - persistence is handled by Repository classes.
+    Represents a conversation with messages, settings, and an audit trail of 
+    actions. This is a pure Python object without file or database dependencies - 
+    persistence is handled by Repository classes.
 
     Features:
     - Message management (add, update, delete, search)
-    - Tool definition management
     - Settings management
     - Action tracking for audit trail
-    - System prompt generation with tool instructions
+    - System prompt generation with substitutions
     - Streaming support via thread-safe message updates
     """
+
+    @staticmethod
+    def _format_prompt(prompt: Optional[Union[str, Dict[str, str]]]) -> Dict[str, str]:
+        """
+        Format prompt to ensure it's a dictionary with a 'system' key.
+        
+        Handles backward compatibility by converting string prompts to dictionary format.
+        
+        Args:
+            prompt: Prompt as string, dictionary, or None
+            
+        Returns:
+            Dict[str, str]: Properly formatted prompt dictionary with 'system' key
+        """
+        if prompt is None:
+            return {"system": ""}
+        elif isinstance(prompt, str):
+            return {"system": prompt}
+        elif isinstance(prompt, dict):
+            return prompt
+        else:
+            # Fallback for unexpected types
+            return {"system": str(prompt)}
 
     def __init__(self,
                  id: Optional[str] = None,
                  title: str = DEFAULT_CONVERSATION_TITLE,
-                 prompt: str = "",
-                 tool_calling_prompt: Optional[str] = None,
+                 prompt: Optional[Union[str, Dict[str, str]]] = None,
                  messages: Optional[List[Union[Message, Dict[str, Any]]]] = None,
                  actions: Optional[List[Union[Action, Dict[str, Any]]]] = None,
-                 tool_definitions: Optional[List[Union[ToolDefinition, Dict[str, Any]]]] = None,
                  settings: Optional[Union[ConversationSettings, Dict[str, Any]]] = None,
                  created_at: Optional[float] = None,
                  updated_at: Optional[float] = None,
@@ -89,11 +97,9 @@ class Conversation(TextFile):
         Args:
             id: Optional ID for the conversation (generated if not provided)
             title: Title of the conversation
-            prompt: System prompt for the conversation
-            tool_calling_prompt: Optional prompt for tool calling instructions
+            prompt: System prompt dictionary for the conversation (will be converted to dict with 'system' key)
             messages: Optional list of initial messages
             actions: Optional list of initial actions
-            tool_definitions: Optional list of tool definitions
             settings: Optional conversation settings
             created_at: Optional creation timestamp
             updated_at: Optional last update timestamp
@@ -113,8 +119,7 @@ class Conversation(TextFile):
         
         # Conversation-specific fields
         self.title = title
-        self.prompt = prompt
-        self.tool_calling_prompt = tool_calling_prompt
+        self.prompt = self._format_prompt(prompt)
         
         # Store conversation metadata in the file metadata
         self.metadata['title'] = title
@@ -138,15 +143,6 @@ class Conversation(TextFile):
                 else:
                     self.actions.append(Action.from_dict(action_data))
 
-        # Initialize tool definitions
-        self.tool_definitions: List[ToolDefinition] = []
-        if tool_definitions:
-            for tool_data in tool_definitions:
-                if isinstance(tool_data, ToolDefinition):
-                    self.tool_definitions.append(tool_data)
-                else:
-                    self.tool_definitions.append(ToolDefinition.from_dict(tool_data))
-
         # Initialize settings
         if settings is None:
             self.settings = ConversationSettings()
@@ -159,8 +155,7 @@ class Conversation(TextFile):
         if not self.actions:
             self.add_action(ActionType.CREATE_CONVERSATION, {
                 "title": self.title,
-                "system_prompt": self.prompt,
-                "tool_prompt": self.tool_calling_prompt
+                "system_prompt": self.prompt.get("system", "")
             })
 
     def get_file_type(self):
@@ -182,10 +177,8 @@ class Conversation(TextFile):
         data.update({
             "title": self.title,
             "prompt": self.prompt,
-            "tool_calling_prompt": self.tool_calling_prompt,
             "messages": [m.to_dict() for m in self.messages],
             "actions": [a.to_dict() for a in self.actions],
-            "tool_definitions": [t.to_dict() for t in self.tool_definitions],
             "settings": self.settings.to_dict(),
         })
         
@@ -205,11 +198,9 @@ class Conversation(TextFile):
         return cls(
             id=data.get("id"),
             title=data.get("title", DEFAULT_CONVERSATION_TITLE),
-            prompt=data.get("prompt", ""),
-            tool_calling_prompt=data.get("tool_calling_prompt"),
+            prompt=data.get("prompt"),  # _format_prompt will handle conversion in __init__
             messages=data.get("messages", []),
             actions=data.get("actions", []),
-            tool_definitions=data.get("tool_definitions", []),
             settings=data.get("settings"),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
@@ -253,8 +244,7 @@ class Conversation(TextFile):
         
         # Update conversation fields from data
         self.title = data.get("title", self.title)
-        self.prompt = data.get("prompt", self.prompt)
-        self.tool_calling_prompt = data.get("tool_calling_prompt", self.tool_calling_prompt)
+        self.prompt = self._format_prompt(data.get("prompt", self.prompt))
         
         # Update messages
         self.messages = []
@@ -271,14 +261,6 @@ class Conversation(TextFile):
                 self.actions.append(action_data)
             else:
                 self.actions.append(Action.from_dict(action_data))
-        
-        # Update tool definitions
-        self.tool_definitions = []
-        for tool_data in data.get("tool_definitions", []):
-            if isinstance(tool_data, ToolDefinition):
-                self.tool_definitions.append(tool_data)
-            else:
-                self.tool_definitions.append(ToolDefinition.from_dict(tool_data))
         
         # Update settings
         settings_data = data.get("settings")
@@ -601,200 +583,27 @@ class Conversation(TextFile):
 
         return True
 
-    # Tool definition management methods
-
-    def add_tool_definition(self, name: str, description: str, parameters: Dict[str, Any], 
-                          returns: Dict[str, Any] = None) -> ToolDefinition:
-        """
-        Add a tool definition to the conversation.
-
-        Args:
-            name: The name of the tool
-            description: The description of the tool
-            parameters: The parameters of the tool
-            returns: The return value schema of the tool (default: {"type": "string"})
-
-        Returns:
-            ToolDefinition: The created tool definition
-        """
-        # First check if a tool with the same name already exists
-        for tool in self.tool_definitions:
-            if tool.name == name:
-                logger.warning(f"Tool with name '{name}' already exists. Use update_tool_definition instead.")
-                return tool
-
-        # Create a new tool definition
-        tool_def = ToolDefinition(name=name, description=description, parameters=parameters, returns=returns)
-        self.tool_definitions.append(tool_def)
-        self.updated_at = time.time()
-
-        # Add an action for this tool addition
-        self.add_action(ActionType.ADD_TOOL_DEFINITION, {
-            "tool_id": tool_def.tool_id,
-            "name": name,
-            "description": description[:50] + "..." if len(description) > 50 else description
-        })
-
-        return tool_def
-
-    def update_tool_definition(self, tool_id: str, name: Optional[str] = None,
-                             description: Optional[str] = None,
-                             parameters: Optional[Dict[str, Any]] = None,
-                             returns: Optional[Dict[str, Any]] = None) -> Optional[ToolDefinition]:
-        """
-        Update a tool definition in the conversation.
-
-        Args:
-            tool_id: The ID of the tool to update
-            name: Optional new name for the tool
-            description: Optional new description for the tool
-            parameters: Optional new parameters for the tool
-            returns: Optional new return value schema for the tool
-
-        Returns:
-            Optional[ToolDefinition]: The updated tool definition, or None if not found
-        """
-        # Find the tool
-        for tool in self.tool_definitions:
-            if tool.tool_id == tool_id:
-                # Update tool properties if provided
-                old_name = tool.name
-
-                if name is not None:
-                    tool.name = name
-                if description is not None:
-                    tool.description = description
-                if parameters is not None:
-                    tool.parameters = parameters
-                if returns is not None:
-                    tool.returns = returns
-
-                # Update timestamp
-                tool.updated_at = time.time()
-                self.updated_at = time.time()
-
-                # Add an action for this update
-                self.add_action(ActionType.UPDATE_TOOL_DEFINITION, {
-                    "tool_id": tool_id,
-                    "old_name": old_name,
-                    "new_name": tool.name,
-                    "description": tool.description[:50] + "..." if len(tool.description) > 50 else tool.description
-                })
-
-                return tool
-
-        logger.error(f"Tool definition not found for update: {tool_id}")
-        return None
-
-    def remove_tool_definition(self, tool_id: str) -> bool:
-        """
-        Remove a tool definition from the conversation.
-
-        Args:
-            tool_id: The ID of the tool to remove
-
-        Returns:
-            bool: True if the tool was removed, False otherwise
-        """
-        # Find the tool
-        for i, tool in enumerate(self.tool_definitions):
-            if tool.tool_id == tool_id:
-                # Remove the tool
-                removed_tool = self.tool_definitions.pop(i)
-                self.updated_at = time.time()
-
-                # Add an action for this removal
-                self.add_action(ActionType.REMOVE_TOOL_DEFINITION, {
-                    "tool_id": tool_id,
-                    "name": removed_tool.name
-                })
-
-                return True
-
-        logger.error(f"Tool definition not found for removal: {tool_id}")
-        return False
-
-    def get_tool_definition(self, tool_id: str) -> Optional[ToolDefinition]:
-        """
-        Get a tool definition by ID.
-
-        Args:
-            tool_id: The ID of the tool to get
-
-        Returns:
-            Optional[ToolDefinition]: The tool definition, or None if not found
-        """
-        for tool in self.tool_definitions:
-            if tool.tool_id == tool_id:
-                return tool
-        return None
-
-    def get_tool_definition_by_name(self, name: str) -> Optional[ToolDefinition]:
-        """
-        Get a tool definition by name.
-
-        Args:
-            name: The name of the tool to get
-
-        Returns:
-            Optional[ToolDefinition]: The tool definition, or None if not found
-        """
-        for tool in self.tool_definitions:
-            if tool.name == name:
-                return tool
-        return None
-
-    def get_tool_definitions_as_list(self) -> List[Dict[str, Any]]:
-        """
-        Get all tool definitions as a list of dictionaries.
-
-        This is useful for compatibility with systems expecting the old format.
-
-        Returns:
-            List[Dict[str, Any]]: List of tool definitions as dictionaries
-        """
-        return [
-            {
-                "name": t.name,
-                "description": t.description,
-                "parameters": t.parameters,
-                "returns": t.returns
-            }
-            for t in self.tool_definitions
-        ]
-
     # Prompt and settings management
 
-    def get_system_prompt(self, include_tools: bool = True, **kwargs) -> Optional[str]:
+    def get_system_prompt(self, **kwargs) -> Optional[str]:
         """
         Build the effective system prompt to send to models.
 
-        - Starts with the conversation's base `prompt`.
-        - Optionally appends `tool_calling_prompt` when include_tools is True.
-        - Expands placeholders via `apply_substitutions()` so {tool_definitions} and
-          {tool_format} are populated using the conversation's state.
+        - Gets the 'system' prompt from the prompt dictionary.
+        - Expands placeholders via `apply_substitutions()`.
 
         Args:
-            include_tools: Whether to include tool-calling instructions.
             **kwargs: Optional substitution values for placeholders.
 
         Returns:
-            The combined and substituted system prompt, or None if empty.
+            The substituted system prompt, or None if empty.
         """
-        parts: List[str] = []
-        if self.prompt:
-            parts.append(self.prompt)
-        if include_tools and self.tool_calling_prompt:
-            parts.append(self.tool_calling_prompt)
-
-        if not parts:
+        system_prompt = self.prompt.get("system", "")
+        
+        if not system_prompt or not system_prompt.strip():
             return None
 
-        combined = "\n\n".join(p.strip() for p in parts if p and p.strip())
-        if not combined:
-            return None
-
-        return self.apply_substitutions(combined, **kwargs)
+        return self.apply_substitutions(system_prompt, **kwargs)
 
     def apply_substitutions(self, text: str, **kwargs) -> str:
         """
@@ -806,11 +615,8 @@ class Conversation(TextFile):
         - Message content
         - Custom templates
 
-        The substitution system handles:
-        1. Simple placeholders like {name} or {date}
-        2. Tool definition placeholders {tool_definitions}
-        3. Tool format placeholders {tool_format}
-        4. Any other placeholders passed via kwargs
+        The substitution system handles simple placeholders like {name} or {date}
+        and any other placeholders passed via kwargs.
 
         Args:
             text: The text containing placeholders to replace
@@ -821,25 +627,6 @@ class Conversation(TextFile):
         """
         # Make a copy of the text to avoid modifying the original
         processed_text = text
-
-        # Handle tool definitions placeholder
-        if "{tool_definitions}" in processed_text and "tool_definitions" not in kwargs:
-            # Use the stored tool definitions
-            if self.tool_definitions:
-                tool_defs_list = [
-                    {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.parameters,
-                        "returns": t.returns
-                    }
-                    for t in self.tool_definitions
-                ]
-                kwargs["tool_definitions"] = json.dumps(tool_defs_list, indent=2)
-
-        # Handle tool format placeholder
-        if "{tool_format}" in processed_text and "tool_format" not in kwargs:
-            kwargs["tool_format"] = DEFAULT_TOOL_FORMAT
 
         # Only attempt formatting if there are placeholders to replace
         if kwargs and any(f"{{{key}}}" in processed_text for key in kwargs):
@@ -869,38 +656,21 @@ class Conversation(TextFile):
             "new_title": new_title
         })
 
-    def change_prompt(self, new_prompt: str) -> None:
+    def change_prompt(self, new_prompt: Union[str, Dict[str, str]]) -> None:
         """
         Change the conversation prompt.
 
         Args:
-            new_prompt: The new prompt for the conversation
+            new_prompt: The new prompt for the conversation (string or dictionary)
         """
-        old_prompt = self.prompt
-        self.prompt = new_prompt
+        old_prompt = self.prompt.get("system", "")
+        self.prompt = self._format_prompt(new_prompt)
         self.updated_at = time.time()
 
         # Add an action for this system prompt change
         self.add_action(ActionType.CHANGE_SYSTEM_PROMPT, {
             "old_prompt": old_prompt,
-            "new_prompt": new_prompt
-        })
-
-    def set_tool_calling_prompt(self, prompt: str) -> None:
-        """
-        Set the tool calling prompt for this conversation.
-
-        Args:
-            prompt: The prompt used for tool calling detection/execution
-        """
-        old_prompt = self.tool_calling_prompt
-        self.tool_calling_prompt = prompt
-        self.updated_at = time.time()
-
-        # Add action to track this change (tool prompt specific)
-        self.add_action(ActionType.CHANGE_TOOL_PROMPT, {
-            "old_prompt": old_prompt,
-            "new_prompt": prompt
+            "new_prompt": self.prompt.get("system", "")
         })
 
     def update_settings(self, settings: ConversationSettings) -> None:
@@ -1028,4 +798,3 @@ class Conversation(TextFile):
         action = Action(action_type=action_type, metadata=metadata or {})
         self.actions.append(action)
         return action
-

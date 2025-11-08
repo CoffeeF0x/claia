@@ -14,7 +14,6 @@ from .conversation import (
     Conversation,
     Message,
     Action,
-    ToolDefinition,
     ConversationSettings,
 )
 
@@ -27,7 +26,6 @@ __all__ = [
     "Conversation",
     "Message",
     "Action",
-    "ToolDefinition",
     "ConversationSettings",
 ]
 

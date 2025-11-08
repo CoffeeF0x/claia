@@ -15,7 +15,6 @@ Main exports:
         - Conversation: Conversation model
         - Message: Conversation message model
         - Action: Conversation action/audit model
-        - ToolDefinition: Conversation tool definition
         - ConversationSettings: Conversation settings
 
     Repositories:
@@ -38,7 +37,6 @@ from .models import (
     Conversation,
     Message,
     Action,
-    ToolDefinition,
     ConversationSettings,
 )
 
@@ -62,7 +60,6 @@ __all__ = [
     "Conversation",
     "Message",
     "Action",
-    "ToolDefinition",
     "ConversationSettings",
     # Repositories
     "FileRepository",

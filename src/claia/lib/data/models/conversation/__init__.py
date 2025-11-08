@@ -2,20 +2,18 @@
 Conversation models.
 
 All conversation-related data models including the main Conversation class
-and its supporting models (messages, actions, tool definitions, settings).
+and its supporting models (messages, actions, settings).
 """
 
 from .conversation import Conversation
 from .message import Message
 from .action import Action
-from .tool_definition import ToolDefinition
 from .conversation_settings import ConversationSettings
 
 __all__ = [
     "Conversation",
     "Message",
     "Action",
-    "ToolDefinition",
     "ConversationSettings",
 ]
 

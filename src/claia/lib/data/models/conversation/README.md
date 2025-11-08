@@ -21,7 +21,6 @@ conversation/
 │   ├── conversation.py  # Main conversation model
 │   ├── message.py       # Message model with thread-safe operations
 │   ├── action.py        # Action/event for audit trail
-│   ├── tool_definition.py
 │   └── conversation_settings.py
 ├── repositories/        # Persistence layer
 │   ├── base.py         # Abstract repository interface
@@ -45,13 +44,6 @@ conversation = Conversation(title="My Conversation")
 # Add messages
 conversation.add_message(MessageRole.USER, "Hello!")
 conversation.add_message(MessageRole.ASSISTANT, "Hi there!")
-
-# Add tool definitions
-conversation.add_tool_definition(
-    name="get_weather",
-    description="Get the current weather",
-    parameters={"location": {"type": "string"}}
-)
 ```
 
 ### Using Repositories
@@ -76,8 +68,7 @@ all_convs = repo.list_all()
 # Find by criteria
 recent = repo.find_by_criteria(
     title="weather",
-    created_after=1234567890,
-    has_tools=True
+    created_after=1234567890
 )
 ```
 

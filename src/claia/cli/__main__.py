@@ -222,35 +222,12 @@ def process_final_message_tools(final_message, process: Process, settings: Setti
     # Update the stored message with the processed content (thread-safe)
     process.conversation.update_message(final_message.message_id, content=processed_content)
 
-def ensure_tool_prompt(conv: Conversation, registry: Registry) -> None:
-  """Ensure the conversation has a tool_calling_prompt set from the active pattern.
-
-  If conv.tool_calling_prompt is empty, try to fetch the default pattern's
-  prompt_template and assign it. This wires pattern-provided prompts into
-  Conversation.get_system_prompt().
-  """
-  if not conv:
-    return
-  if conv.tool_calling_prompt:
-    return
-  try:
-    plugin = registry.manager.get_default_pattern()
-    info = plugin.get_pattern_info() if plugin else None
-    prompt = getattr(info, 'prompt_template', None) if info else None
-    if prompt:
-      conv.set_tool_calling_prompt(prompt)
-  except Exception as e:
-    logger.debug(f"Could not set tool calling prompt: {e}")
 
 def setup_conversation(settings: Settings, registry: Registry) -> None:
   """Setup or configure the active conversation."""
   if not settings.active_conversation:
     # Create a new conversation (pure data model)
     settings.active_conversation = Conversation()
-    ensure_tool_prompt(settings.active_conversation, registry)
-  else:
-    # Ensure tool prompt is set
-    ensure_tool_prompt(settings.active_conversation, registry)
 
 def parse_kv_args(tokens: list[str]) -> Dict[str, Any]:
   """Parse a list of key=value tokens into a dict."""

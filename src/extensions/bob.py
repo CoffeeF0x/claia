@@ -60,7 +60,7 @@ class BobAgent(BaseAgent):
       model_id = process.parameters["model_id"]
 
       # Set Bob's system prompt if it's different
-      if process.conversation.prompt != BOB_SYSTEM_PROMPT:
+      if process.conversation.prompt.get("system", "") != BOB_SYSTEM_PROMPT:
         process.conversation.change_prompt(BOB_SYSTEM_PROMPT)
 
       # Run the model with the conversation using the provided model registry
