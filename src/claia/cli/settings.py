@@ -85,6 +85,7 @@ CONFIG_VARS: List[Tuple[str, Any, bool, SettingCategory, str]] = [
   ("log_format",                        "",            True,  SettingCategory.APPLICATION,  "Logging format (simple, standard, detailed)"),
   ("log_file",                          "claia.log",   True,  SettingCategory.APPLICATION,  "Log file path (empty for console only)"),
   ("env_file",                          "",            True,  SettingCategory.APPLICATION,  "Path to .env file for configuration"),
+  ("suppress_setup_notice",             False,         True,  SettingCategory.APPLICATION,  "Suppress API key setup notice on startup"),
 
   # Zammad Settings
   ("zammad_base_url",                   "",            True,  SettingCategory.INTEGRATION,  "Zammad Base URL"),
@@ -341,3 +342,22 @@ class Settings:
           json.dump(current_settings, f, indent=2)
       except IOError as e:
         print(f"Warning: Could not save settings to {settings_path}: {e}")
+
+
+  def get_unset_api_keys(self) -> List[Tuple[str, str]]:
+    """
+    Get a list of API tokens that are not set (empty or default value).
+
+    Returns:
+        List of tuples containing (var_name, help_text) for unset API tokens
+    """
+    unset_keys = []
+    
+    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+      # Only check API tokens
+      if category == SettingCategory.API and externally_settable:
+        value = getattr(self, var_name, default)
+        if not value or value == default:
+          unset_keys.append((var_name, help_text))
+    
+    return unset_keys

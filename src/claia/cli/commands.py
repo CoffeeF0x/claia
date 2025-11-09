@@ -36,6 +36,7 @@ COMMAND_SPECS: List[Tuple[List[str], List[str], str, str]] = [
   (['-t', '--tool'],           ['tool'],              '_cmd_tool',    'Execute a tool command explicitly'                              ),
   (['-g', '--get'],            ['get'],               '_cmd_get',     'View current settings (optionally specify setting name)'        ),
   (['-s', '--set'],            ['set'],               '_cmd_set',     'Update a setting (usage: set <key> <value> or key=value)'       ),
+  (['--setup'],                ['setup'],             '_cmd_setup',   'Interactive setup wizard for API keys and configuration'        ),
 ]
 
 
@@ -546,4 +547,100 @@ class Commands:
       print(output)
       logger.error(f"Error saving settings: {e}", exc_info=True)
       return Result(success=False, message=output)
+
+
+  def _cmd_setup(self) -> Result:
+    """
+    Handle setup command - interactive wizard for configuring API keys.
+
+    Returns:
+        Result indicating success/failure
+    """
+    logger.debug("Setup command received")
+    
+    print("\n" + "="*70)
+    print("CLAIA SETUP WIZARD".center(70))
+    print("="*70 + "\n")
+    
+    # Get list of unset API keys
+    unset_keys = self.settings.get_unset_api_keys()
+    
+    if not unset_keys:
+      print("✓ All API keys are configured!")
+      print("\nYou can still update any settings using:")
+      print("  :set <key> <value>  or  :get <key>\n")
+      return Result(success=True, message="All API keys already configured")
+    
+    print("The following API keys are not configured:\n")
+    for i, (var_name, help_text) in enumerate(unset_keys, 1):
+      print(f"  {i}. {help_text} ({var_name})")
+    
+    print("\n" + "-"*70)
+    print("\nYou can configure API keys in several ways:")
+    print("  1. Interactively now (recommended for getting started)")
+    print("  2. Using the ':set' command (e.g., :set openai_api_token YOUR_KEY)")
+    print("  3. Setting environment variables (e.g., CLAIA_OPENAI_API_TOKEN)")
+    print("  4. Adding them to your .env file")
+    print("\n" + "-"*70)
+    
+    # Ask if user wants to configure keys now
+    try:
+      response = input("\nWould you like to configure API keys now? [y/N]: ").strip().lower()
+      
+      if response not in ('y', 'yes'):
+        print("\nSetup cancelled. You can run ':setup' again anytime.")
+        print("To suppress this notice on startup, run:")
+        print("  :set suppress_setup_notice true\n")
+        return Result(success=True, message="Setup cancelled by user")
+      
+      print()
+      configured_count = 0
+      
+      # Iterate through each unset key and prompt for value
+      for var_name, help_text in unset_keys:
+        print(f"\n{help_text} ({var_name}):")
+        print("  (Press Enter to skip)")
+        
+        try:
+          value = input("  Value: ").strip()
+          
+          if value:
+            # Set the value using the existing set logic
+            old_value = getattr(self.settings, var_name, "")
+            setattr(self.settings, var_name, value)
+            
+            # Remove from CLI sourced settings if present
+            if var_name in self.settings._cli_sourced_settings:
+              self.settings._cli_sourced_settings.remove(var_name)
+            
+            # Mask display for security
+            display_value = "***" + value[-4:] if len(value) > 4 else "***"
+            print(f"  ✓ Set {var_name} to {display_value}")
+            configured_count += 1
+          else:
+            print(f"  ⊘ Skipped {var_name}")
+            
+        except (KeyboardInterrupt, EOFError):
+          print("\n\nSetup interrupted.")
+          break
+      
+      # Save all configured settings
+      if configured_count > 0:
+        try:
+          self.settings._save_settings_to_file()
+          print(f"\n✓ Successfully configured {configured_count} API key(s)!")
+        except Exception as e:
+          print(f"\n✗ Error saving settings: {e}")
+          logger.error(f"Error saving settings during setup: {e}", exc_info=True)
+          return Result(success=False, message="Failed to save settings")
+      
+      print("\n" + "="*70)
+      print("Setup complete! You can now use CLAIA with your configured APIs.")
+      print("="*70 + "\n")
+      
+      return Result(success=True, message=f"Configured {configured_count} API key(s)")
+      
+    except (KeyboardInterrupt, EOFError):
+      print("\n\nSetup cancelled.")
+      return Result(success=True, message="Setup cancelled by user")
 

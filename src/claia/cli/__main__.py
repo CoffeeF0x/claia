@@ -191,6 +191,16 @@ def print_header(settings: Settings) -> None:
   print(line(f"Version v{ver} • Python {pyver} • https://claia.dev"))
   print(line(f"Prompt prefix: '{COMMAND_CHARACTER}' for commands"))
   print(line("Type ':' then Enter to list modules. Ctrl+C to exit."))
+  
+  # Check for unset API keys and show notice if not suppressed
+  if not settings.suppress_setup_notice:
+    unset_keys = settings.get_unset_api_keys()
+    if unset_keys:
+      print("╟" + ("─" * (width - 2)) + "╢")
+      print(line("⚠ Notice: Some API keys are not configured"))
+      print(line(f"  Run ':setup' to configure {len(unset_keys)} API key(s)"))
+      print(line("  Or use ':set suppress_setup_notice true' to hide this"))
+  
   print("╚" + ("═" * (width - 2)) + "╝")
   print()
 
