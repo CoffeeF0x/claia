@@ -37,6 +37,10 @@
 #   it's a reference (optional), then identify and call the correct object
 #   to attach the file. If a file id is passed, then validate and identify the type
 
+# - Add an end value to message object to indicate the end of the message (for streaming)
+# - Swap prompt inside of conversation to the actual prompt object (should be a reference?)
+# - Add dictionary support to the prompt object
+
 # - BASEFILE:
 #   - Add a validate function to the that verifies that everything is as
 #     expected (correct subfolder, mime type, reference, exists, etc)?
@@ -78,6 +82,7 @@ from claia.lib.enums.model import SourcePreference
 from claia.lib.enums.conversation import MessageRole
 from claia.lib.data import Conversation, FileSystemRepository
 from claia.cli.settings import Settings
+from claia.cli.commands import Commands
 from claia.cli.defaults import initialize_defaults
 from claia.cli.logger import initialize_logging
 from claia.registry import Registry
@@ -229,15 +234,6 @@ def setup_conversation(settings: Settings, registry: Registry) -> None:
     # Create a new conversation (pure data model)
     settings.active_conversation = Conversation()
 
-def parse_kv_args(tokens: list[str]) -> Dict[str, Any]:
-  """Parse a list of key=value tokens into a dict."""
-  params: Dict[str, Any] = {}
-  for tok in tokens:
-    if '=' in tok:
-      k, v = tok.split('=', 1)
-      params[k.strip()] = v.strip()
-  return params
-
 
 
 ########################################################################
@@ -271,6 +267,10 @@ def main() -> None:
     _ = registry.get_commands_catalog() # NOTE: Can probably be removed later
     registry.start_workers(3)  # Start 3 worker threads
 
+    # Initialize command processor
+    logger.debug("Initializing command processor")
+    commands = Commands(registry, settings)
+
     # Initialize file system repository
     file_repo = FileSystemRepository(settings.files_directory)
 
@@ -284,25 +284,20 @@ def main() -> None:
 
     # Check for and process command line arguments
     if settings.extra_args:
-      # Process command line arguments using ToolsRegistry
+      # Process command line arguments using Commands processor
       logger.info(f"Processing command line arguments: {' '.join(settings.extra_args)}")
       # Ensure there's an active conversation for command execution context
       setup_conversation(settings, registry)
 
-      cmd = settings.extra_args[0]
-      # Build params from key=value and collect positionals into __args__
-      tail_tokens = settings.extra_args[1:]
-      params = parse_kv_args(tail_tokens)
-      pos_args = [t for t in tail_tokens if '=' not in t]
-      if pos_args:
-        params['__args__'] = pos_args
-      cmd_result = registry.run_command(cmd, params, settings.active_conversation, **user_kwargs)
+      # Execute the command using the Commands processor
+      cmd_result = commands.run(settings.extra_args, settings.active_conversation, is_interactive=False)
 
       if cmd_result.is_success():
         data = cmd_result.get_data()
         if isinstance(data, (dict, list)):
           print(json.dumps(data, indent=2))
-        elif data is not None:
+        elif data is not None and not isinstance(data, str):
+          # Don't print string data as it's already displayed by the command
           print(str(data))
       else:
         print(f"Error: {cmd_result.get_message()}")
@@ -336,8 +331,9 @@ def main() -> None:
       # Process user input as either a command or a query
       if user_input and user_input[0] == COMMAND_CHARACTER:
         logger.debug(f"Processing as command: {user_input[1:]}")
-        # Process interactive command using ToolsRegistry
+        # Process interactive command using Commands processor
         tokens = user_input[1:].split()
+        
         # If no command entered, print available modules
         if not tokens:
           catalog = registry.get_commands_catalog()
@@ -356,6 +352,7 @@ def main() -> None:
                 line += f": {desc}"
               print(line)
           continue
+        
         cmd = tokens[0]
 
         # If only a module name was given, list its tools
@@ -370,20 +367,18 @@ def main() -> None:
               print(f"  - {cmd}.{cname}: {cdesc}")
             continue
 
-        # Build params from key=value and collect positionals into __args__
-        tail_tokens = tokens[1:]
-        params = parse_kv_args(tail_tokens)
-        pos_args = [t for t in tail_tokens if '=' not in t]
-        if pos_args:
-          params['__args__'] = pos_args
         # Ensure there is a conversation context
         setup_conversation(settings, registry)
-        cmd_result = registry.run_command(cmd, params, settings.active_conversation, **user_kwargs)
+        
+        # Execute the command using the Commands processor
+        cmd_result = commands.run(tokens, settings.active_conversation, is_interactive=True)
+        
         if cmd_result.is_success():
           data = cmd_result.get_data()
           if isinstance(data, (dict, list)):
             print(json.dumps(data, indent=2))
-          elif data is not None:
+          elif data is not None and not isinstance(data, str):
+            # Don't print string data as it's already displayed by the command
             print(str(data))
         else:
           print(f"Error: {cmd_result.get_message()}")
@@ -448,7 +443,7 @@ def main() -> None:
           print() # Add newline after final message
 
           # Check for and process any tool calls in the final message
-          process_final_message_tools(final_message, process, settings, registry)
+          # process_final_message_tools(final_message, process, settings, registry)
 
           # Save all files (including conversation) using repository
           if not file_repo.save(process.conversation):
