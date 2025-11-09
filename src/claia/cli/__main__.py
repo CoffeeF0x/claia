@@ -40,6 +40,7 @@
 # - Add an end value to message object to indicate the end of the message (for streaming)
 # - Swap prompt inside of conversation to the actual prompt object (should be a reference?)
 # - Add dictionary support to the prompt object
+# - Clean up onboarding
 
 # - BASEFILE:
 #   - Add a validate function to the that verifies that everything is as
@@ -53,11 +54,9 @@
 #   - Make mime type rely on our enum
 
 # BIG TODO: 
-# - Add a way to notify the user if no ai can be run because no keys are set (onboarding and config setup guiding)
-# - Check for and fix any regressions
+# - Verify that required_args are being passed to all extensions
 # - Finish migrating tools and create tools for updating/creating prompts, updating settings, and creating new conversations (and generating a title for the existing conversation)
 # - Check extension loading and update zammad extension
-# - Finish cleaning up conversation object (removing tool calling functionality and possibly conversation settings, the conversation object should wholly focus on messages, prompts, and updates to those)
 
 
 
@@ -69,7 +68,6 @@ import logging
 import os
 import sys
 import json
-from typing import Optional, Dict, Any
 import shutil
 import importlib.metadata as importlib_metadata
 import pyfiglet
@@ -85,6 +83,7 @@ from claia.cli.settings import Settings
 from claia.cli.commands import Commands
 from claia.cli.defaults import initialize_defaults
 from claia.cli.logger import initialize_logging
+from claia.cli.agents import register_cli_agents
 from claia.registry import Registry
 
 
@@ -275,6 +274,11 @@ def main() -> None:
     logger.debug("Initializing unified registry")
     registry = Registry(**user_kwargs)
     _ = registry.get_commands_catalog() # NOTE: Can probably be removed later
+    
+    # Register CLI-specific agents using the programmatic registration API
+    logger.debug("Registering CLI-specific agents")
+    register_cli_agents(registry)
+    
     registry.start_workers(3)  # Start 3 worker threads
 
     # Initialize command processor
