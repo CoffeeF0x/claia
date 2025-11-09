@@ -406,7 +406,7 @@ def main() -> None:
 
         # Set the active agent if one doesn't exist
         if not settings.active_agent:
-          settings.active_agent = DEFAULT_AGENT
+          settings.active_agent = settings.default_agent or DEFAULT_AGENT
 
         user_message = settings.active_conversation.add_message(MessageRole.USER, user_input)
 
