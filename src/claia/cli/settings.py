@@ -99,6 +99,9 @@ class Settings:
 
     self.root_logger = None
 
+    # Track which settings came from CLI (to avoid saving them to file)
+    self._cli_sourced_settings = set()
+
     # Load configuration
     self._load_config()
     self.validate()
@@ -142,6 +145,14 @@ class Settings:
     # Parse known args, and store unknown args for later command processing
     args, unknown = parser.parse_known_args()
     self.extra_args = unknown
+
+    # Track which settings were explicitly provided via CLI
+    for var_name, default, externally_settable, _ in CONFIG_VARS:
+      if externally_settable:
+        cli_name = var_name.lower()
+        cli_value = getattr(args, cli_name, None)
+        if cli_value is not None:
+          self._cli_sourced_settings.add(var_name)
 
     # Load .env file if it exists (get env_file from args or use default)
     env_file = self._get_config_value("env_file", DEFAULT_ENV_FILE, args, True, {})
@@ -276,6 +287,7 @@ class Settings:
     """
     Save current settings to settings.json file in the files directory.
     Only saves externally settable configuration values.
+    Excludes settings that were provided via CLI arguments (they should not persist).
     Creates the file if it doesn't exist, updates if values have changed.
     """
     settings_path = os.path.join(self.files_directory, DEFAULT_SETTINGS_FILE)
@@ -283,13 +295,7 @@ class Settings:
     # Ensure the directory exists
     os.makedirs(self.files_directory, exist_ok=True)
     
-    # Build dictionary of current settings
-    current_settings = {}
-    for var_name, default, externally_settable, _ in CONFIG_VARS:
-      if externally_settable:
-        current_settings[var_name] = getattr(self, var_name, default)
-    
-    # Load existing settings to compare
+    # Load existing settings to preserve CLI-sourced values that were previously saved
     existing_settings = {}
     if os.path.exists(settings_path):
       try:
@@ -297,6 +303,19 @@ class Settings:
           existing_settings = json.load(f)
       except (json.JSONDecodeError, IOError):
         pass  # If we can't read it, we'll overwrite it
+    
+    # Build dictionary of current settings (excluding CLI-sourced ones)
+    current_settings = {}
+    for var_name, default, externally_settable, _ in CONFIG_VARS:
+      if externally_settable:
+        # If this setting came from CLI, preserve the existing file value (if any)
+        if var_name in self._cli_sourced_settings:
+          if var_name in existing_settings:
+            current_settings[var_name] = existing_settings[var_name]
+          # Otherwise skip it - don't save CLI values to file
+        else:
+          # Save non-CLI settings normally
+          current_settings[var_name] = getattr(self, var_name, default)
     
     # Only write if settings have changed or file doesn't exist
     if current_settings != existing_settings:
