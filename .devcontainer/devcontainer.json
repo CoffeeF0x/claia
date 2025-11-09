@@ -18,6 +18,14 @@
   "mounts": [
     "source=C:/.cache/claia/models,target=${containerWorkspaceFolder}/models,type=bind,consistency=cached"
   ],
-  "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && pip install -r build/requirements.txt",
+  "postCreateCommand": [
+    "/bin/sh",
+    "-c",
+    "git config --global --add safe.directory ${containerWorkspaceFolder}",
+    "&&",
+    "pip install -r build/requirements.txt",
+    "&&",
+    "alias claia=\"/usr/local/bin/python -m claia\""
+  ],
   "remoteUser": "vscode"
 }
