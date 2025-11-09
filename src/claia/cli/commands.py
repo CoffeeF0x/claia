@@ -34,6 +34,8 @@ COMMAND_SPECS: List[Tuple[List[str], List[str], str, str]] = [
   (['-h', '--help'],           ['h', 'help'],         '_cmd_help',    'Show help information including commands, modules, and settings'),
   (['-v', '--version'],        ['v', 'version'],      '_cmd_version', 'Show version information'                                       ),
   (['-t', '--tool'],           ['tool'],              '_cmd_tool',    'Execute a tool command explicitly'                              ),
+  (['-g', '--get'],            ['get'],               '_cmd_get',     'View current settings (optionally specify setting name)'        ),
+  (['-s', '--set'],            ['set'],               '_cmd_set',     'Update a setting (usage: set <key> <value> or key=value)'       ),
 ]
 
 
@@ -124,11 +126,17 @@ class Commands:
       handler_name, _ = self._cli_command_map[cmd]
       handler = getattr(self, handler_name)
       
-      # Special handling for tool command which needs args
+      # Special handling for commands that need args
       if handler_name == '_cmd_tool':
         if not args:
           return Result(success=False, message="No tool command provided")
         return handler(args, conversation)
+      elif handler_name == '_cmd_set':
+        if not args:
+          return Result(success=False, message="No setting provided. Usage: set <key> <value> or key=value")
+        return handler(args)
+      elif handler_name == '_cmd_get':
+        return handler(args)
       
       return handler()
 
@@ -154,11 +162,17 @@ class Commands:
       handler_name, _ = self._interactive_command_map[cmd_lower]
       handler = getattr(self, handler_name)
       
-      # Special handling for tool command which needs args
+      # Special handling for commands that need args
       if handler_name == '_cmd_tool':
         if not args:
           return Result(success=False, message="No tool command provided")
         return handler(args, conversation)
+      elif handler_name == '_cmd_set':
+        if not args:
+          return Result(success=False, message="No setting provided. Usage: set <key> <value> or key=value")
+        return handler(args)
+      elif handler_name == '_cmd_get':
+        return handler(args)
       
       return handler()
 
@@ -366,4 +380,170 @@ class Commands:
 
     print(version_text)
     return Result(success=True, data=version_text)
+
+
+  def _cmd_get(self, args: List[str]) -> Result:
+    """
+    Handle get command - displays current settings.
+
+    Args:
+        args: Optional list containing setting name to display
+
+    Returns:
+        Result with setting information
+    """
+    logger.debug("Get command received")
+    
+    # Build a dict of all valid setting names for validation
+    valid_settings = {var_name for var_name, _, externally_settable, _, _ in CONFIG_VARS if externally_settable}
+    
+    if args:
+      # Get specific setting
+      setting_name = args[0].lower().replace('-', '_')
+      
+      if setting_name not in valid_settings:
+        output = f"Unknown setting: {setting_name}\n"
+        output += f"Use ':help' or '--help' to see available settings."
+        print(output)
+        return Result(success=False, message=output)
+      
+      value = getattr(self.settings, setting_name, None)
+      
+      # Find the help text for this setting
+      help_text = ""
+      for var_name, default, externally_settable, category, help_desc in CONFIG_VARS:
+        if var_name == setting_name:
+          help_text = help_desc
+          break
+      
+      output = f"\n{setting_name}: {value}"
+      if help_text:
+        output += f"\n  ({help_text})"
+      
+      print(output)
+      return Result(success=True, data={setting_name: value})
+    
+    else:
+      # Display all settings grouped by category
+      output_lines = []
+      output_lines.append("\n" + "="*70)
+      output_lines.append("CURRENT SETTINGS".center(70))
+      output_lines.append("="*70 + "\n")
+      
+      # Group settings by category
+      categorized = defaultdict(list)
+      for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+        if externally_settable:
+          value = getattr(self.settings, var_name, default)
+          # Mask sensitive values (tokens)
+          display_value = value
+          if 'token' in var_name.lower() or 'password' in var_name.lower():
+            if value and value != "":
+              display_value = "***" + value[-4:] if len(value) > 4 else "***"
+          
+          categorized[category].append((var_name, display_value, help_text))
+      
+      # Display settings by category
+      for category in SettingCategory:
+        if category in categorized:
+          output_lines.append(f"{category.value}:")
+          output_lines.append("-" * 70)
+          for var_name, value, help_text in categorized[category]:
+            output_lines.append(f"  {var_name:30s} = {value}")
+          output_lines.append("")
+      
+      output_lines.append("="*70)
+      output = "\n".join(output_lines)
+      print(output)
+      return Result(success=True, data=output)
+
+
+  def _cmd_set(self, args: List[str]) -> Result:
+    """
+    Handle set command - updates a setting and saves to file.
+
+    Args:
+        args: List of arguments (either ["key=value"] or ["key", "value"])
+
+    Returns:
+        Result indicating success/failure
+    """
+    logger.debug("Set command received")
+    
+    # Build a dict of all valid setting names for validation
+    valid_settings = {}
+    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+      if externally_settable:
+        valid_settings[var_name] = (default, help_text)
+    
+    # Parse the arguments
+    if len(args) == 1 and '=' in args[0]:
+      # Format: key=value
+      key, value = args[0].split('=', 1)
+      key = key.strip().lower().replace('-', '_')
+      value = value.strip()
+    elif len(args) >= 2:
+      # Format: key value (value may contain spaces)
+      key = args[0].lower().replace('-', '_')
+      value = ' '.join(args[1:])
+    else:
+      output = "Invalid syntax. Usage: set <key> <value> or set key=value"
+      print(output)
+      return Result(success=False, message=output)
+    
+    # Validate setting name
+    if key not in valid_settings:
+      output = f"Unknown setting: {key}\n"
+      output += f"Use ':help' or '--help' to see available settings."
+      print(output)
+      return Result(success=False, message=output)
+    
+    # Get the default value to determine type
+    default_value, help_text = valid_settings[key]
+    
+    # Type conversion
+    try:
+      if isinstance(default_value, bool):
+        value = value.lower() in ('true', '1', 'yes', 'on')
+      elif isinstance(default_value, int):
+        value = int(value)
+      # Otherwise keep as string
+    except (ValueError, AttributeError) as e:
+      output = f"Invalid value for {key}: {value}"
+      print(output)
+      return Result(success=False, message=output)
+    
+    # Set the value on the settings object
+    old_value = getattr(self.settings, key, None)
+    setattr(self.settings, key, value)
+    
+    # Remove from CLI sourced settings if present (so it will be saved to file)
+    if key in self.settings._cli_sourced_settings:
+      self.settings._cli_sourced_settings.remove(key)
+    
+    # Save to settings file
+    try:
+      self.settings._save_settings_to_file()
+      
+      # Display confirmation
+      display_value = value
+      if 'token' in key.lower() or 'password' in key.lower():
+        if value and value != "":
+          display_value = "***" + value[-4:] if len(value) > 4 else "***"
+      
+      output = f"\nSetting updated and saved:"
+      output += f"\n  {key}: {old_value} -> {display_value}"
+      if help_text:
+        output += f"\n  ({help_text})"
+      
+      print(output)
+      return Result(success=True, message=f"Setting '{key}' updated successfully", data={key: value})
+      
+    except Exception as e:
+      # Revert the change if save failed
+      setattr(self.settings, key, old_value)
+      output = f"Failed to save setting: {str(e)}"
+      print(output)
+      logger.error(f"Error saving settings: {e}", exc_info=True)
+      return Result(success=False, message=output)
 
