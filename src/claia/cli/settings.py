@@ -9,12 +9,29 @@ and loads settings from various sources (environment variables and command-line 
 import os
 import argparse
 import json
+from enum import Enum
 from typing import Dict, Any, List, Tuple
 from dotenv import load_dotenv
 
 # Internal dependencies
 from claia.lib.enums.logging import LogLevel, LogFormat
 
+
+
+########################################################################
+#                               ENUMS                                  #
+########################################################################
+class SettingCategory(Enum):
+  """Categories for grouping configuration settings."""
+  API = "API Credentials"
+  ENDPOINT = "Endpoints & URLs"
+  DIRECTORY = "Directories"
+  MODEL = "Model Settings"
+  PROMPT = "Prompt Settings"
+  AGENT = "Agent Settings"
+  VLLM = "VLLM Settings"
+  APPLICATION = "Application Settings"
+  INTEGRATION = "External Integrations"
 
 
 ########################################################################
@@ -26,52 +43,52 @@ DEFAULT_ENV_FILE = ".env"
 DEFAULT_SETTINGS_FILE = "settings.json"
 ENV_PREFIX = "CLAIA_"
 
-# Format: (variable_name, default_value, externally_settable, help_text)
-CONFIG_VARS: List[Tuple[str, Any, bool, str]] = [
+# Format: (variable_name, default_value, externally_settable, category, help_text)
+CONFIG_VARS: List[Tuple[str, Any, bool, SettingCategory, str]] = [
   # API Tokens
-  ("openai_api_token",                  "",            True,  "OpenAI API Token"),
-  ("anthropic_api_token",               "",            True,  "Anthropic API Token"),
-  ("local_llm_api_token",               "",            True,  "LocalLLM API Token"),
-  ("runpod_api_token",                  "",            True,  "RunPod API Token"),
-  ("massed_compute_api_token",          "",            True,  "Massed Compute API Token"),
-  ("openrouter_api_token",              "",            True,  "OpenRouter API Token"),
-  ("huggingface_api_token",             "",            True,  "Hugging Face API Token"),
-  ("cloudflare_api_token",              "",            True,  "Cloudflare API Token"),
+  ("openai_api_token",                  "",            True,  SettingCategory.API,          "OpenAI API Token"),
+  ("anthropic_api_token",               "",            True,  SettingCategory.API,          "Anthropic API Token"),
+  ("local_llm_api_token",               "",            True,  SettingCategory.API,          "LocalLLM API Token"),
+  ("runpod_api_token",                  "",            True,  SettingCategory.API,          "RunPod API Token"),
+  ("massed_compute_api_token",          "",            True,  SettingCategory.API,          "Massed Compute API Token"),
+  ("openrouter_api_token",              "",            True,  SettingCategory.API,          "OpenRouter API Token"),
+  ("huggingface_api_token",             "",            True,  SettingCategory.API,          "Hugging Face API Token"),
+  ("cloudflare_api_token",              "",            True,  SettingCategory.API,          "Cloudflare API Token"),
 
   # URLs and Endpoints
-  ("local_llm_base_url",                "",            True,  "LocalLLM Base URL"),
+  ("local_llm_base_url",                "",            True,  SettingCategory.ENDPOINT,     "LocalLLM Base URL"),
 
   # Directories
-  ("files_directory",                   "storage",     True,  "Directory for generated, converted, or imported files"),
-  ("modules_directory",                 "modules",     True,  "Directory for claia modules"),
-  ("models_directory",                  "models",      True,  "Directory for model files"),
+  ("files_directory",                   "storage",     True,  SettingCategory.DIRECTORY,    "Directory for generated, converted, or imported files"),
+  ("modules_directory",                 "modules",     True,  SettingCategory.DIRECTORY,    "Directory for claia modules"),
+  ("models_directory",                  "models",      True,  SettingCategory.DIRECTORY,    "Directory for model files"),
 
   # Model Settings
-  ("default_model",                     "",            True,  "Default model name"),
-  ("default_model_source",              "",            True,  "Default model source"),
+  ("default_model",                     "",            True,  SettingCategory.MODEL,        "Default model name"),
+  ("default_model_source",              "",            True,  SettingCategory.MODEL,        "Default model source"),
 
   # Prompt Settings
-  ("default_prompt",                    "",            True,  "Default prompt name to use"),
+  ("default_prompt",                    "",            True,  SettingCategory.PROMPT,       "Default prompt name to use"),
 
   # Agent Settings
-  ("default_agent",                     "",            True,  "Default agent type"),
+  ("default_agent",                     "",            True,  SettingCategory.AGENT,        "Default agent type"),
 
   # VLLM Settings
-  ("vllm_zone",                         "",            True,  "VLLM Zone"),
-  ("vllm_email",                        "",            True,  "VLLM Email"),
-  ("vllm_subdomain",                    "",            True,  "VLLM Subdomain"),
-  ("vllm_eab_kid",                      "",            True,  "VLLM EAB Kid"),
-  ("vllm_eab_hmac_encoded",             "",            True,  "VLLM EAB HMAC Encoded"),
+  ("vllm_zone",                         "",            True,  SettingCategory.VLLM,         "VLLM Zone"),
+  ("vllm_email",                        "",            True,  SettingCategory.VLLM,         "VLLM Email"),
+  ("vllm_subdomain",                    "",            True,  SettingCategory.VLLM,         "VLLM Subdomain"),
+  ("vllm_eab_kid",                      "",            True,  SettingCategory.VLLM,         "VLLM EAB Kid"),
+  ("vllm_eab_hmac_encoded",             "",            True,  SettingCategory.VLLM,         "VLLM EAB HMAC Encoded"),
 
   # Application Settings
-  ("log_level",                         "",            True,  "Logging level"),
-  ("log_format",                        "",            True,  "Logging format (simple, standard, detailed)"),
-  ("log_file",                          "claia.log",   True,  "Log file path (empty for console only)"),
-  ("env_file",                          "",            True,  "Path to .env file for configuration"),
+  ("log_level",                         "",            True,  SettingCategory.APPLICATION,  "Logging level"),
+  ("log_format",                        "",            True,  SettingCategory.APPLICATION,  "Logging format (simple, standard, detailed)"),
+  ("log_file",                          "claia.log",   True,  SettingCategory.APPLICATION,  "Log file path (empty for console only)"),
+  ("env_file",                          "",            True,  SettingCategory.APPLICATION,  "Path to .env file for configuration"),
 
   # Zammad Settings
-  ("zammad_base_url",                   "",            True,  "Zammad Base URL"),
-  ("zammad_api_token",                  "",            True,  "Zammad API Token"),
+  ("zammad_base_url",                   "",            True,  SettingCategory.INTEGRATION,  "Zammad Base URL"),
+  ("zammad_api_token",                  "",            True,  SettingCategory.INTEGRATION,  "Zammad API Token"),
 ]
 
 
@@ -118,7 +135,7 @@ class Settings:
     parser = argparse.ArgumentParser(description='CLAIA Settings')
 
     # Add arguments based on CONFIG_VARS, but only for externally settable ones
-    for var_name, default, externally_settable, help_text in CONFIG_VARS:
+    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
       if externally_settable:
         cli_name = f"--{var_name.replace('_', '-')}"
 
@@ -147,7 +164,7 @@ class Settings:
     self.extra_args = unknown
 
     # Track which settings were explicitly provided via CLI
-    for var_name, default, externally_settable, _ in CONFIG_VARS:
+    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
       if externally_settable:
         cli_name = var_name.lower()
         cli_value = getattr(args, cli_name, None)
@@ -167,7 +184,7 @@ class Settings:
     # Build config dictionary using helper function
     config_dict = {
       var_name: self._get_config_value(var_name, default, args, externally_settable, json_settings)
-      for var_name, default, externally_settable, _ in CONFIG_VARS
+      for var_name, default, externally_settable, category, help_text in CONFIG_VARS
     }
 
     # Set all configuration values as instance attributes
@@ -253,7 +270,7 @@ class Settings:
     kwargs = {}
 
     # Iterate through CONFIG_VARS to get all user-configurable settings
-    for var_name, default, externally_settable, _ in CONFIG_VARS:
+    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
       if externally_settable:
         kwargs[var_name] = getattr(self, var_name, default)
 
@@ -306,7 +323,7 @@ class Settings:
     
     # Build dictionary of current settings (excluding CLI-sourced ones)
     current_settings = {}
-    for var_name, default, externally_settable, _ in CONFIG_VARS:
+    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
       if externally_settable:
         # If this setting came from CLI, preserve the existing file value (if any)
         if var_name in self._cli_sourced_settings:

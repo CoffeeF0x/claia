@@ -11,10 +11,12 @@ import sys
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 import importlib.metadata as importlib_metadata
+from collections import defaultdict
 
 # Internal dependencies
 from claia.lib.results import Result
 from claia.registry import Registry
+from claia.cli.settings import CONFIG_VARS, SettingCategory
 
 
 ########################################################################
@@ -247,43 +249,50 @@ class Commands:
     """
     logger.debug("Help command received")
 
-    # Import CONFIG_VARS to show available settings
-    from claia.cli.settings import CONFIG_VARS
+    # Import CONFIG_VARS and SettingCategory from settings
+
 
     help_text = []
-    help_text.append("\n=== CLAIA Help ===\n")
-
+    help_text.append("\n" + "="*70)
+    help_text.append("CLAIA HELP".center(70))
+    help_text.append("="*70 + "\n")
+ 
     # Built-in Commands - generated from COMMAND_SPECS
-    help_text.append("Built-in Commands:")
-    help_text.append("  Interactive Mode (use after ':'):")
+    help_text.append("BUILT-IN COMMANDS")
+    help_text.append("-" * 70)
+    help_text.append("  Interactive Mode (prefix with ':'):")
     for cli_aliases, interactive_aliases, handler_name, help_desc in COMMAND_SPECS:
       # Format interactive aliases nicely
       aliases_str = ', '.join(interactive_aliases)
-      help_text.append(f"    {aliases_str:25s} - {help_desc}")
-    help_text.append("    <module>.<tool> [args]      - Execute a specific tool")
+      help_text.append(f"    :{aliases_str:24s} - {help_desc}")
+    help_text.append("    :<module>.<tool> [args]    - Execute a specific tool")
     help_text.append("")
     
-    help_text.append("  CLI Mode (use as arguments):")
+    help_text.append("  CLI Mode (command line arguments):")
     for cli_aliases, interactive_aliases, handler_name, help_desc in COMMAND_SPECS:
       # Format CLI aliases nicely
       aliases_str = ', '.join(cli_aliases)
       help_text.append(f"    {aliases_str:25s} - {help_desc}")
     help_text.append("")
 
-    # Available Modules/Tools
-    help_text.append("Available Modules:")
+    # Available Modules/Tools - MORE PROMINENT
+    help_text.append("AVAILABLE TOOLS & MODULES")
+    help_text.append("-" * 70)
     catalog = self.registry.get_commands_catalog()
     if catalog:
+      total_tools = 0
       for mod_name, mod in catalog.items():
         info = mod.get('module_info')
         title = getattr(info, 'title', None) if info else None
         desc = getattr(info, 'description', None) if info else None
-        line = f"  {mod_name}"
+        
+        # Module header
+        line = f"  [{mod_name}]"
         if title:
-          line += f" ({title})"
-        if desc:
-          line += f": {desc}"
+          line += f" {title}"
         help_text.append(line)
+        if desc:
+          help_text.append(f"    {desc}")
 
         # List tools in this module
         tools = mod.get('list_of_tools', [])
@@ -291,31 +300,45 @@ class Commands:
           for tool in tools:
             tool_name = tool.get('tool_name')
             tool_desc = tool.get('tool_description', '')
-            help_text.append(f"    - {mod_name}.{tool_name}: {tool_desc}")
+            help_text.append(f"    • {mod_name}.{tool_name:20s} - {tool_desc}")
+            total_tools += 1
+        else:
+          help_text.append(f"    (no tools available)")
+        help_text.append("")
+      
+      help_text.append(f"  Total: {len(catalog)} module(s), {total_tools} tool(s)")
     else:
       help_text.append("  No modules loaded")
     help_text.append("")
 
-    # Configuration Settings
-    help_text.append("Configuration Settings:")
+    # Configuration Settings - More compact
+    help_text.append("CONFIGURATION SETTINGS")
+    help_text.append("-" * 70)
     help_text.append("  Settings can be configured via:")
-    help_text.append("    - Command line arguments: --setting-name value")
-    help_text.append("    - Environment variables: CLAIA_SETTING_NAME=value")
-    help_text.append("    - .env file (default: .env)")
-    help_text.append("    - settings.json file (in files directory)")
+    help_text.append("    • Command line: --setting-name value")
+    help_text.append("    • Environment: CLAIA_SETTING_NAME=value")
+    help_text.append("    • .env file (default: .env)")
+    help_text.append("    • settings.json (in files directory)")
     help_text.append("")
-    help_text.append("  Available settings:")
-    for var_name, default, externally_settable, help_desc in CONFIG_VARS:
+    
+    # Group settings by category using the SettingCategory enum
+    categorized_settings = defaultdict(list)
+    
+    for var_name, default, externally_settable, category, help_desc in CONFIG_VARS:
       if externally_settable:
         cli_name = var_name.replace('_', '-')
-        current_value = getattr(self.settings, var_name, default)
-        # Don't display sensitive tokens
-        if 'token' in var_name or 'api' in var_name:
-          display_value = "***" if current_value and current_value != default else "(not set)"
-        else:
-          display_value = current_value if current_value != default else f"(default: {default})"
-        help_text.append(f"    --{cli_name:30s} {help_desc}")
-        help_text.append(f"      Current: {display_value}")
+        setting_line = f"    --{cli_name:30s} {help_desc}"
+        categorized_settings[category].append(setting_line)
+    
+    # Display settings grouped by category in enum order
+    for category in SettingCategory:
+      if category in categorized_settings:
+        help_text.append(f"  {category.value}:")
+        help_text.extend(categorized_settings[category])
+        help_text.append("")
+    
+    help_text.append("  Use ':h' or '--help' to see this help message anytime.")
+    help_text.append("="*70)
 
     output = "\n".join(help_text)
     print(output)
