@@ -348,23 +348,12 @@ def main() -> None:
         # Process interactive command using Commands processor
         tokens = user_input[1:].split()
         
-        # If no command entered, print available modules
+        # If no command entered, show help
         if not tokens:
-          catalog = registry.get_commands_catalog()
-          if not catalog:
-            print("No modules available.")
-          else:
-            print("Available modules:")
-            for mod_name, mod in catalog.items():
-              info = mod.get('module_info')
-              title = getattr(info, 'title', None) if info else None
-              desc = getattr(info, 'description', None) if info else None
-              line = f"  - {mod_name}"
-              if title:
-                line += f" ({title})"
-              if desc:
-                line += f": {desc}"
-              print(line)
+          setup_conversation(settings, registry)
+          cmd_result = commands.run(['help'], settings.active_conversation, is_interactive=True)
+          if cmd_result.is_exit():
+            result = cmd_result
           continue
         
         cmd = tokens[0]

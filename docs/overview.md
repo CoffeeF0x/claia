@@ -191,9 +191,10 @@ claia sample.add a=1 b=2
 
 Interactive commands:
 - Enter `:` to run commands inside the REPL
-- `:` (alone) lists available modules
-- `:sample` lists commands in the `sample` module
-- `:sample.echo message=Hello` runs a command
+- `:` (alone) shows help information
+- `:tool` lists available modules
+- `:tool sample` lists commands in the `sample` module
+- `:sample.echo message=Hello` or `:tool sample.echo message=Hello` runs a command
 
 Model inference (interactive):
 - Type a prompt (no leading `:`). The default agent (e.g., `bob`) creates a `Process` and calls the selected model via the registry.

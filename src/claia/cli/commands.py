@@ -33,7 +33,7 @@ COMMAND_SPECS: List[Tuple[List[str], List[str], str, str]] = [
   (['-q', '--quit', '--exit'], ['q', 'quit', 'exit'], '_cmd_quit',    'Exit the application'                                           ),
   (['-h', '--help'],           ['h', 'help'],         '_cmd_help',    'Show help information including commands, modules, and settings'),
   (['-v', '--version'],        ['v', 'version'],      '_cmd_version', 'Show version information'                                       ),
-  (['-t', '--tool'],           ['tool'],              '_cmd_tool',    'Execute a tool command explicitly'                              ),
+  (['-t', '--tool'],           ['tool'],              '_cmd_tool',    'List available modules or execute tool commands'                ),
   (['-g', '--get'],            ['get'],               '_cmd_get',     'View current settings (optionally specify setting name)'        ),
   (['-s', '--set'],            ['set'],               '_cmd_set',     'Update a setting (usage: set <key> <value> or key=value)'       ),
   (['-a', '--agent'],          ['agent'],             '_cmd_agent',   'Manage agents (usage: agent [list|<agent_name>])'               ),
@@ -130,8 +130,6 @@ class Commands:
       
       # Special handling for commands that need args
       if handler_name == '_cmd_tool':
-        if not args:
-          return Result(success=False, message="No tool command provided")
         return handler(args, conversation)
       elif handler_name == '_cmd_set':
         if not args:
@@ -168,8 +166,6 @@ class Commands:
       
       # Special handling for commands that need args
       if handler_name == '_cmd_tool':
-        if not args:
-          return Result(success=False, message="No tool command provided")
         return handler(args, conversation)
       elif handler_name == '_cmd_set':
         if not args:
@@ -206,6 +202,7 @@ class Commands:
   def _cmd_tool(self, tokens: List[str], conversation: Optional[Any]) -> Result:
     """
     Execute a tool command via the registry.
+    If no tokens provided, displays available modules.
 
     Args:
         tokens: Command tokens (first token is the tool name, rest are arguments)
@@ -215,10 +212,58 @@ class Commands:
         Result from the tool execution
     """
     if not tokens:
-      return Result(success=False, message="No command provided")
+      # Show available modules when no command provided
+      catalog = self.registry.get_commands_catalog()
+      if not catalog:
+        output = "No modules available."
+        print(output)
+        return Result(success=True, message=output)
+      
+      output_lines = []
+      output_lines.append("\nAvailable modules:")
+      for mod_name, mod in catalog.items():
+        info = mod.get('module_info')
+        title = getattr(info, 'title', None) if info else None
+        desc = getattr(info, 'description', None) if info else None
+        line = f"  - {mod_name}"
+        if title:
+          line += f" ({title})"
+        if desc:
+          line += f": {desc}"
+        output_lines.append(line)
+      
+      output_lines.append("\nUsage:")
+      output_lines.append("  :tool <module>.<tool> [args]  - Execute a tool")
+      output_lines.append("  :<module>.<tool> [args]       - Execute a tool (shorthand)")
+      output_lines.append("  :tool <module>                - List tools in a module")
+      output_lines.append("")
+      
+      output = "\n".join(output_lines)
+      print(output)
+      return Result(success=True, data=catalog)
 
     cmd = tokens[0]
     tail_tokens = tokens[1:]
+    
+    # If only a module name was given (no dot), list its tools
+    if '.' not in cmd and not tail_tokens:
+      catalog = self.registry.get_commands_catalog()
+      mod = catalog.get(cmd)
+      if mod:
+        output_lines = []
+        output_lines.append(f"\nModule '{cmd}' tools:")
+        for c in mod.get('list_of_tools', []):
+          cname = c.get('tool_name')
+          cdesc = c.get('tool_description')
+          output_lines.append(f"  - {cmd}.{cname}: {cdesc}")
+        output_lines.append("")
+        output = "\n".join(output_lines)
+        print(output)
+        return Result(success=True, data=mod)
+      else:
+        output = f"Unknown module: {cmd}\nUse ':tool' to see available modules."
+        print(output)
+        return Result(success=False, message=output)
 
     # Build params from key=value and collect positionals into __args__
     params = self._parse_kv_args(tail_tokens)
