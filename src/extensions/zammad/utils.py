@@ -151,36 +151,85 @@ class ZammadUtils:
     total_tickets = len(tickets or [])
     shown_tickets = tickets[:limit] if limit > 0 else tickets
 
-    response = [f"┌{'─' * 78}┐"]
-    response.append(f"│ {'ZAMMAD TICKETS':^76} │")
-    response.append(f"├{'─' * 78}┤")
+    # Constants for formatting
+    width = 100
+    
+    response = []
+    response.append("┌" + "─" * width + "┐")
+    response.append("│" + "ZAMMAD TICKETS".center(width) + "│")
+    response.append("├" + "─" * width + "┤")
+    
+    # Query information
     query_display = f"{query} ({TICKET_QUERIES[query]})" if query in TICKET_QUERIES else query
-    response.append(f"│ Query: {query_display:<68} │")
-    response.append(f"│ Found {total_tickets} tickets, showing {len(shown_tickets)}{'':^41} │")
-    response.append(f"├{'─' * 78}┤")
+    response.append(f"│ Query: {query_display:<{width - 9}} │")
+    response.append(f"│ Found {total_tickets} tickets, showing {len(shown_tickets)}{'':<{width - 26 - len(str(total_tickets)) - len(str(len(shown_tickets)))}} │")
+    response.append("├" + "─" * width + "┤")
+
+    if not shown_tickets:
+      response.append("│" + "No tickets found".center(width) + "│")
+      response.append("└" + "─" * width + "┘")
+      return '\n'.join(response)
 
     if compact:
+      # Compact mode: Simple list format
       for ticket in shown_tickets:
+        ticket_id = str(ticket.get('id', 'N/A'))
         title = ticket.get('title', 'Unknown')
-        if len(title) > 60:
-          title = title[:57] + '...'
-        response.append(f"│ #{ticket.get('id')} - {title:<{69 - len(str(ticket.get('id')))}} │")
+        
+        # Calculate available space for title
+        # Format: "│ #ID - TITLE │"
+        prefix = f"│ #{ticket_id} - "
+        suffix = " │"
+        available_width = width - len(prefix) - len(suffix)
+        
+        if len(title) > available_width:
+          title = title[:available_width - 3] + "..."
+        
+        response.append(f"{prefix}{title:<{available_width}}{suffix}")
     else:
-      response.append(f"│ {'ID':<5}│ {'TITLE':<30}│ {'CREATED':<20}│ {'STATE':<15} │")
-      response.append(f"├{'─' * 5}┼{'─' * 30}┼{'─' * 20}┼{'─' * 15}┤")
+      # Full table mode with proper alignment
+      # Column widths
+      id_width = 8
+      title_width = 45
+      created_width = 20
+      state_width = width - id_width - title_width - created_width - 11  # 7 for separators
+      
+      # Header
+      header = f"│ {'ID':<{id_width}} │ {'TITLE':<{title_width}} │ {'CREATED':<{created_width}} │ {'STATE':<{state_width}} │"
+      response.append(header)
+      response.append("├─" + "─" * id_width + "─┼─" + "─" * title_width + "─┼─" + "─" * created_width + "─┼─" + "─" * state_width + "─┤")
+      
+      # Rows
       for ticket in shown_tickets:
+        ticket_id = str(ticket.get('id', 'N/A'))
         title = ticket.get('title', 'Unknown')
-        if len(title) > 27:
-          title = title[:27] + '...'
         created_at = ticket.get('created_at', '')
-        created_str = created_at[:16] if isinstance(created_at, str) else 'N/A'
         state = ticket.get('state', {})
-        state_name = state.get('name', 'Unknown') if isinstance(state, dict) else str(state)
-        if len(state_name) > 12:
-          state_name = state_name[:12] + '...'
-        response.append(f"│ {ticket.get('id'):<5}│ {title:<30}│ {created_str:<20}│ {state_name:<15} │")
+        
+        # Truncate title if too long
+        if len(title) > title_width:
+          title = title[:title_width - 3] + "..."
+        
+        # Format created date
+        if isinstance(created_at, str) and len(created_at) >= 16:
+          created_str = created_at[:16]
+        else:
+          created_str = str(created_at)[:created_width]
+        
+        # Get state name
+        if isinstance(state, dict):
+          state_name = state.get('name', 'Unknown')
+        else:
+          state_name = str(state)
+        
+        # Truncate state if too long
+        if len(state_name) > state_width:
+          state_name = state_name[:state_width - 3] + "..."
+        
+        row = f"│ {ticket_id:<{id_width}} │ {title:<{title_width}} │ {created_str:<{created_width}} │ {state_name:<{state_width}} │"
+        response.append(row)
 
-    response.append(f"└{'─' * 78}┘")
+    response.append("└" + "─" * width + "┘")
     return '\n'.join(response)
 
   # ---------- AI-assisted processors ----------
