@@ -107,8 +107,11 @@ class Commands:
     if result:
       return result
 
-    # If no built-in command matched, try to execute as a tool via registry
-    return self._cmd_tool(tokens, conversation)
+    # If no built-in command matched, return error
+    output = f"Unknown command: {cmd}"
+    output += "\nUse ':help' to see available commands or ':tool' to see available tools."
+    print(output)
+    return Result(success=False, message=output)
 
 
   def _process_cli_flag(self, cmd: str, args: List[str], conversation: Optional[Any]) -> Optional[Result]:
@@ -234,7 +237,6 @@ class Commands:
       
       output_lines.append("\nUsage:")
       output_lines.append("  :tool <module>.<tool> [args]  - Execute a tool")
-      output_lines.append("  :<module>.<tool> [args]       - Execute a tool (shorthand)")
       output_lines.append("  :tool <module>                - List tools in a module")
       output_lines.append("")
       
@@ -330,7 +332,6 @@ class Commands:
       # Format interactive aliases nicely
       aliases_str = ', '.join(interactive_aliases)
       help_text.append(f"    :{aliases_str:24s} - {help_desc}")
-    help_text.append("    :<module>.<tool> [args]    - Execute a specific tool")
     help_text.append("")
     
     help_text.append("  CLI Mode (command line arguments):")
