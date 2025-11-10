@@ -322,11 +322,8 @@ def main() -> None:
 
       if cmd_result.is_success():
         data = cmd_result.get_data()
-        if isinstance(data, (dict, list)):
-          print(json.dumps(data, indent=2))
-        elif data is not None and not isinstance(data, str):
-          # Don't print string data as it's already displayed by the command
-          print(str(data))
+        if data is not None:
+          print(data)
       else:
         print(f"Error: {cmd_result.get_message()}")
 
@@ -380,11 +377,8 @@ def main() -> None:
         
         if cmd_result.is_success():
           data = cmd_result.get_data()
-          if isinstance(data, (dict, list)):
-            print(json.dumps(data, indent=2))
-          elif data is not None and not isinstance(data, str):
-            # Don't print string data as it's already displayed by the command
-            print(str(data))
+          if data is not None:
+            print(data)
         else:
           print(f"Error: {cmd_result.get_message()}")
         

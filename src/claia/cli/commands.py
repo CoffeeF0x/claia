@@ -240,7 +240,7 @@ class Commands:
       
       output = "\n".join(output_lines)
       print(output)
-      return Result(success=True, data=catalog)
+      return Result(success=True, message=output)
 
     cmd = tokens[0]
     tail_tokens = tokens[1:]
@@ -259,7 +259,7 @@ class Commands:
         output_lines.append("")
         output = "\n".join(output_lines)
         print(output)
-        return Result(success=True, data=mod)
+        return Result(success=True, message=output)
       else:
         output = f"Unknown module: {cmd}\nUse ':tool' to see available modules."
         print(output)
