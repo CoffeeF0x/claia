@@ -175,7 +175,7 @@ def print_header(settings: Settings) -> None:
     return f"║ {inner} ║"
 
   title = "CLAIA"
-  subtitle = "AI Framework for Agents, Models, and Tools"
+  subtitle = "Another AI Agent Framework"
   ver = _get_app_version()
   pyver = sys.version.split()[0]
 
@@ -188,8 +188,22 @@ def print_header(settings: Settings) -> None:
   print("╔" + ("═" * (width - 2)) + "╗")
   print(line(subtitle))
   print(line(f"Version v{ver} • Python {pyver} • https://claia.dev"))
-  print(line(f"Prompt prefix: '{COMMAND_CHARACTER}' for commands"))
-  print(line("Type ':' then Enter to list modules. Ctrl+C to exit."))
+  print(line(""))
+  
+  # Show active configuration
+  active_model = settings.active_model or settings.default_model or "None"
+  active_agent = settings.active_agent or settings.default_agent or "None"
+  print(line(f"Active Model: {active_model}"))
+  print(line(f"Active Agent: {active_agent}"))
+  print("╟" + ("─" * (width - 2)) + "╢")
+  
+  # Quick start guide
+  print(line("QUICK START"))
+  print(line("  • Chat: Just type your message"))
+  print(line(f"  • Commands: Type '{COMMAND_CHARACTER}' followed by command (e.g., '{COMMAND_CHARACTER}help')"))
+  print(line(f"  • Tools: Type '{COMMAND_CHARACTER}tool' to see modules, '{COMMAND_CHARACTER}tool <module>' for tools"))
+  print(line(f"  • Setup: Type '{COMMAND_CHARACTER}setup' to configure API keys"))
+  print(line(f"  • Exit: Press Ctrl+C or type '{COMMAND_CHARACTER}quit'"))
   
   # Check for unset API keys and show notice if not suppressed
   if not settings.suppress_setup_notice:
@@ -197,8 +211,8 @@ def print_header(settings: Settings) -> None:
     if unset_keys:
       print("╟" + ("─" * (width - 2)) + "╢")
       print(line("⚠ Notice: Some API keys are not configured"))
-      print(line(f"  Run ':setup' to configure {len(unset_keys)} API key(s)"))
-      print(line("  Or use ':set suppress_setup_notice true' to hide this"))
+      print(line(f"  Run '{COMMAND_CHARACTER}setup' to configure {len(unset_keys)} API key(s)"))
+      print(line(f"  Or use '{COMMAND_CHARACTER}set suppress_setup_notice true' to hide this"))
   
   print("╚" + ("═" * (width - 2)) + "╝")
   print()
