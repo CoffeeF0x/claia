@@ -451,10 +451,13 @@ def main() -> None:
           if new_content:
             remaining_content = final_message.content[len(new_content):]
             if remaining_content:
-              print(remaining_content, flush=True)
+              print(remaining_content, end='', flush=True)
           else:
-            print(final_message.content, flush=True)
-          print() # Add newline after final message
+            print(final_message.content, end='', flush=True)
+
+          # Add newline after final message if it doesn't already end with one
+          if final_message.content and not final_message.content.endswith('\n'):
+            print()
 
           # Check for and process any tool calls in the final message
           # process_final_message_tools(final_message, process, settings, registry)
