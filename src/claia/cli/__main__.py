@@ -284,7 +284,7 @@ def main() -> None:
     for arg in settings.extra_args:
       logger.debug(f"Stored extra argument: {arg}")
 
-    # Initialize the unified registry (tools, models, agents)
+    # Initialize the registry
     logger.debug("Initializing unified registry")
     registry = Registry(**user_kwargs)
     _ = registry.get_commands_catalog() # NOTE: Can probably be removed later
@@ -371,18 +371,6 @@ def main() -> None:
           continue
         
         cmd = tokens[0]
-
-        # If only a module name was given, list its tools
-        if '.' not in cmd and len(tokens) == 1:
-          catalog = registry.get_commands_catalog()
-          mod = catalog.get(cmd)
-          if mod:
-            print(f"Module '{cmd}' tools:")
-            for c in mod.get('list_of_tools', []):
-              cname = c.get('tool_name')
-              cdesc = c.get('tool_description')
-              print(f"  - {cmd}.{cname}: {cdesc}")
-            continue
 
         # Ensure there is a conversation context
         setup_conversation(settings, registry)
