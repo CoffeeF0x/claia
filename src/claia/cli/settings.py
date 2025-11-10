@@ -61,7 +61,6 @@ CONFIG_VARS: List[Tuple[str, Any, bool, SettingCategory, str]] = [
 
   # Directories
   ("files_directory",                   "storage",     True,  SettingCategory.DIRECTORY,    "Directory for generated, converted, or imported files"),
-  ("modules_directory",                 "modules",     True,  SettingCategory.DIRECTORY,    "Directory for claia modules"),
   ("models_directory",                  "models",      True,  SettingCategory.DIRECTORY,    "Directory for model files"),
 
   # Model Settings
