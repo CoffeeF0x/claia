@@ -36,6 +36,7 @@ COMMAND_SPECS: List[Tuple[List[str], List[str], str, str]] = [
   (['-t', '--tool'],           ['tool'],              '_cmd_tool',    'Execute a tool command explicitly'                              ),
   (['-g', '--get'],            ['get'],               '_cmd_get',     'View current settings (optionally specify setting name)'        ),
   (['-s', '--set'],            ['set'],               '_cmd_set',     'Update a setting (usage: set <key> <value> or key=value)'       ),
+  (['-a', '--agent'],          ['agent'],             '_cmd_agent',   'Manage agents (usage: agent [list|<agent_name>])'               ),
   (['--setup'],                ['setup'],             '_cmd_setup',   'Interactive setup wizard for API keys and configuration'        ),
 ]
 
@@ -138,6 +139,8 @@ class Commands:
         return handler(args)
       elif handler_name == '_cmd_get':
         return handler(args)
+      elif handler_name == '_cmd_agent':
+        return handler(args)
       
       return handler()
 
@@ -173,6 +176,8 @@ class Commands:
           return Result(success=False, message="No setting provided. Usage: set <key> <value> or key=value")
         return handler(args)
       elif handler_name == '_cmd_get':
+        return handler(args)
+      elif handler_name == '_cmd_agent':
         return handler(args)
       
       return handler()
@@ -546,6 +551,100 @@ class Commands:
       output = f"Failed to save setting: {str(e)}"
       print(output)
       logger.error(f"Error saving settings: {e}", exc_info=True)
+      return Result(success=False, message=output)
+
+
+  def _cmd_agent(self, args: List[str]) -> Result:
+    """
+    Handle agent command - manage active agent selection.
+
+    Args:
+        args: Optional list of arguments (empty, "list", or agent name)
+
+    Returns:
+        Result indicating success/failure
+    """
+    logger.debug("Agent command received")
+    
+    # If no args, show current active agent
+    if not args:
+      current_agent = self.settings.active_agent or "None"
+      default_agent = self.settings.default_agent or "None"
+      
+      output = f"\nCurrent active agent: {current_agent}"
+      output += f"\nDefault agent (from settings): {default_agent}"
+      output += "\n\nUsage:"
+      output += "\n  :agent list          - List all available agents"
+      output += "\n  :agent <agent_name>  - Switch to specified agent"
+      
+      print(output)
+      return Result(success=True, data={"active_agent": current_agent, "default_agent": default_agent})
+    
+    # If "list" argument, show available agents
+    if args[0].lower() == "list":
+      try:
+        # Get all registered agents from the manager
+        agents_info = self.registry.manager.get_agents()
+        
+        if not agents_info:
+          output = "No agents available."
+          print(output)
+          return Result(success=False, message=output)
+        
+        output_lines = []
+        output_lines.append("\nAvailable Agents:")
+        output_lines.append("-" * 70)
+        
+        for agent_info in agents_info:
+          agent_name = agent_info.name
+          description = getattr(agent_info, 'description', 'No description available')
+          
+          # Mark the current active agent
+          marker = " (active)" if agent_name == self.settings.active_agent else ""
+          marker += " (default)" if agent_name == self.settings.default_agent else ""
+          
+          output_lines.append(f"  • {agent_name}{marker}")
+          output_lines.append(f"    {description}")
+        
+        output_lines.append("")
+        output = "\n".join(output_lines)
+        print(output)
+        return Result(success=True, data={"agents": [info.name for info in agents_info]})
+        
+      except Exception as e:
+        output = f"Error listing agents: {str(e)}"
+        print(output)
+        logger.error(f"Error listing agents: {e}", exc_info=True)
+        return Result(success=False, message=output)
+    
+    # Otherwise, treat first arg as agent name to switch to
+    agent_name = args[0].lower()
+    
+    # Validate that the agent exists
+    try:
+      agent_class = self.registry.get_agent_class(agent_name)
+      
+      if not agent_class:
+        output = f"Unknown agent: {agent_name}"
+        output += "\nUse ':agent list' to see available agents."
+        print(output)
+        return Result(success=False, message=output)
+      
+      # Set the active agent (runtime only, not persisted)
+      old_agent = self.settings.active_agent
+      self.settings.active_agent = agent_name
+      
+      output = f"\nActive agent changed: {old_agent or 'None'} -> {agent_name}"
+      output += "\n(Note: This change is for the current session only)"
+      output += f"\nTo set as default for future sessions, use: :set default_agent {agent_name}"
+      
+      print(output)
+      return Result(success=True, message=f"Switched to agent '{agent_name}'", data={"agent": agent_name})
+      
+    except Exception as e:
+      output = f"Error switching to agent '{agent_name}': {str(e)}"
+      print(output)
+      logger.error(f"Error switching agent: {e}", exc_info=True)
       return Result(success=False, message=output)
 
 
