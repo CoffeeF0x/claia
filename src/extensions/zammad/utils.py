@@ -15,7 +15,7 @@ from claia.lib import Process
 from claia.lib.queue import ProcessQueue
 from claia.lib.enums.process import ProcessStatus
 from claia.lib.enums.model import SourcePreference
-from claia.lib.files import Conversation, TextFile
+from claia.lib.data import Conversation, TextFile
 from claia.lib.enums.conversation import MessageRole
 
 # Internal module dependencies

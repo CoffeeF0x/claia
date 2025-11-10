@@ -9,7 +9,7 @@ from typing import Dict
 import pluggy
 
 from claia.hooks.tool import ToolModuleInfo, ToolDefinition, ArgumentDefinition
-from claia.lib.files import TextFile
+from claia.lib.data import TextFile
 from .api import ZammadAPI
 from .utils import ZammadUtils
 

@@ -39,7 +39,7 @@ INFO_METHOD_BY_GROUP: Dict[str, Optional[str]] = {
   'claia.definitions': None,          # definitions expose definitions via hook, not a single info
   'claia.tool_patterns': 'get_pattern_info',
   'claia.tool_protocols': 'get_protocol_info',
-  'claia.tool_modules': 'get_tool_info',
+  'claia.tool_modules': 'get_module_info',
   'claia.agents': 'get_agent_info',   # best-effort; if missing, we won't pass kwargs
 }
 
