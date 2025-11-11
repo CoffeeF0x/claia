@@ -257,8 +257,12 @@ class Commands:
         output_lines.append(line)
       
       output_lines.append("\nUsage:")
-      output_lines.append("  :tool <module>.<tool> [args]  - Execute a tool")
-      output_lines.append("  :tool <module>                - List tools in a module")
+      if self._current_mode == 'interactive':
+        output_lines.append("  :tool <module>.<tool> [args]  - Execute a tool")
+        output_lines.append("  :tool <module>                - List tools in a module")
+      else:
+        output_lines.append("  --tool <module>.<tool> [args]  - Execute a tool")
+        output_lines.append("  --tool <module>                - List tools in a module")
       output_lines.append("")
       
       output = "\n".join(output_lines)
@@ -284,7 +288,10 @@ class Commands:
         print(output)
         return Result(success=True, message=output)
       else:
-        output = f"Unknown module: {cmd}\nUse ':tool' to see available modules."
+        if self._current_mode == 'interactive':
+          output = f"Unknown module: {cmd}\nUse ':tool' to see available modules."
+        else:
+          output = f"Unknown module: {cmd}\nUse '--tool' to see available modules."
         print(output)
         return Result(success=False, message=output)
 
@@ -622,8 +629,12 @@ class Commands:
       output = f"\nCurrent active agent: {current_agent}"
       output += f"\nDefault agent (from settings): {default_agent}"
       output += "\n\nUsage:"
-      output += "\n  :agent list          - List all available agents"
-      output += "\n  :agent <agent_name>  - Switch to specified agent"
+      if self._current_mode == 'interactive':
+        output += "\n  :agent list          - List all available agents"
+        output += "\n  :agent <agent_name>  - Switch to specified agent"
+      else:
+        output += "\n  --agent list          - List all available agents"
+        output += "\n  --agent <agent_name>  - Switch to specified agent"
       
       print(output)
       return Result(success=True, data={"active_agent": current_agent, "default_agent": default_agent})
@@ -674,7 +685,10 @@ class Commands:
       
       if not agent_class:
         output = f"Unknown agent: {agent_name}"
-        output += "\nUse ':agent list' to see available agents."
+        if self._current_mode == 'interactive':
+          output += "\nUse ':agent list' to see available agents."
+        else:
+          output += "\nUse '--agent list' to see available agents."
         print(output)
         return Result(success=False, message=output)
       
@@ -684,7 +698,10 @@ class Commands:
       
       output = f"\nActive agent changed: {old_agent or 'None'} -> {agent_name}"
       output += "\n(Note: This change is for the current session only)"
-      output += f"\nTo set as default for future sessions, use: :set default_agent {agent_name}"
+      if self._current_mode == 'interactive':
+        output += f"\nTo set as default for future sessions, use: :set default_agent {agent_name}"
+      else:
+        output += f"\nTo set as default for future sessions, use: --set default_agent {agent_name}"
       
       print(output)
       return Result(success=True, message=f"Switched to agent '{agent_name}'", data={"agent": agent_name})
@@ -715,7 +732,10 @@ class Commands:
     if not unset_keys:
       print("✓ All API keys are configured!")
       print("\nYou can still update any settings using:")
-      print("  :set <key> <value>  or  :get <key>\n")
+      if self._current_mode == 'interactive':
+        print("  :set <key> <value>  or  :get <key>\n")
+      else:
+        print("  --set <key> <value>  or  --get <key>\n")
       return Result(success=True, message="All API keys already configured")
     
     print("The following API keys are not configured:\n")
@@ -724,10 +744,16 @@ class Commands:
     
     print("\n" + "-"*70)
     print("\nYou can configure API keys in several ways:")
-    print("  1. Interactively now (recommended for getting started)")
-    print("  2. Using the ':set' command (e.g., :set openai_api_token YOUR_KEY)")
-    print("  3. Setting environment variables (e.g., CLAIA_OPENAI_API_TOKEN)")
-    print("  4. Adding them to your .env file")
+    if self._current_mode == 'interactive':
+      print("  1. Interactively now (recommended for getting started)")
+      print("  2. Using the ':set' command (e.g., :set openai_api_token YOUR_KEY)")
+      print("  3. Setting environment variables (e.g., CLAIA_OPENAI_API_TOKEN)")
+      print("  4. Adding them to your .env file")
+    else:
+      print("  1. Using the '--set' flag (e.g., --set openai_api_token YOUR_KEY)")
+      print("  2. Setting environment variables (e.g., CLAIA_OPENAI_API_TOKEN)")
+      print("  3. Adding them to your .env file")
+      print("  4. Editing settings.json in your files directory")
     print("\n" + "-"*70)
     
     # Ask if user wants to configure keys now
@@ -735,9 +761,14 @@ class Commands:
       response = input("\nWould you like to configure API keys now? [y/N]: ").strip().lower()
       
       if response not in ('y', 'yes'):
-        print("\nSetup cancelled. You can run ':setup' again anytime.")
-        print("To suppress this notice on startup, run:")
-        print("  :set suppress_setup_notice true\n")
+        if self._current_mode == 'interactive':
+          print("\nSetup cancelled. You can run ':setup' again anytime.")
+          print("To suppress this notice on startup, run:")
+          print("  :set suppress_setup_notice true\n")
+        else:
+          print("\nSetup cancelled.")
+          print("To suppress this notice on startup, use:")
+          print("  --set suppress_setup_notice true\n")
         return Result(success=True, message="Setup cancelled by user")
       
       print()
