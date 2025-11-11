@@ -78,6 +78,7 @@ class Commands:
     """
     self.registry = registry
     self.settings = settings
+    self._current_mode = 'interactive'  # Default to interactive mode
     
     # Build command lookup dictionaries from COMMAND_SPECS
     # Maps alias -> (handler_name, help_text, needs_args, needs_conversation)
@@ -111,6 +112,9 @@ class Commands:
     if not tokens:
       return Result(success=True)
 
+    # Store mode for use by command handlers
+    self._current_mode = 'interactive' if is_interactive else 'cli'
+
     # Get the first token as the command
     cmd = tokens[0]
     args = tokens[1:]
@@ -128,7 +132,10 @@ class Commands:
 
     # If no built-in command matched, return error
     output = f"Unknown command: {cmd}"
-    output += "\nUse ':help' to see available commands or ':tool' to see available tools."
+    if is_interactive:
+      output += "\nUse ':help' to see available commands or ':tool' to see available tools."
+    else:
+      output += "\nUse '--help' to see available commands or '--tool' to see available tools."
     print(output)
     return Result(success=False, message=output)
 
@@ -324,37 +331,37 @@ class Commands:
   def _cmd_help(self) -> Result:
     """
     Handle help command - displays available commands and settings.
+    Shows only the relevant command format based on current mode.
 
     Returns:
         Result with help information
     """
     logger.debug("Help command received")
 
-    # Import CONFIG_VARS and SettingCategory from settings
-
-
     help_text = []
     help_text.append("\n" + "="*70)
     help_text.append("CLAIA HELP".center(70))
     help_text.append("="*70 + "\n")
  
-    # Built-in Commands - generated from COMMAND_SPECS
+    # Built-in Commands - show only the format appropriate for current mode
     help_text.append("BUILT-IN COMMANDS")
     help_text.append("-" * 70)
-    help_text.append("  Interactive Mode (prefix with ':'):")
-    for aliases, handler_name, help_desc, needs_args, needs_conversation in COMMAND_SPECS:
-      # Format interactive aliases nicely
-      aliases_str = ', '.join(aliases)
-      help_text.append(f"    :{aliases_str:24s} - {help_desc}")
-    help_text.append("")
     
-    help_text.append("  CLI Mode (command line arguments):")
-    for aliases, handler_name, help_desc, needs_args, needs_conversation in COMMAND_SPECS:
-      # Format CLI aliases nicely (generate them from base aliases)
-      cli_aliases = [_generate_cli_alias(alias) for alias in aliases]
-      aliases_str = ', '.join(cli_aliases)
-      help_text.append(f"    {aliases_str:25s} - {help_desc}")
-    help_text.append("")
+    if self._current_mode == 'interactive':
+      # Interactive mode - show only colon-prefixed commands
+      help_text.append("  Commands (prefix with ':'):")
+      for aliases, handler_name, help_desc, needs_args, needs_conversation in COMMAND_SPECS:
+        aliases_str = ', '.join(aliases)
+        help_text.append(f"    :{aliases_str:24s} - {help_desc}")
+      help_text.append("")
+    else:
+      # CLI mode - show only dash-prefixed flags
+      help_text.append("  Command Line Flags:")
+      for aliases, handler_name, help_desc, needs_args, needs_conversation in COMMAND_SPECS:
+        cli_aliases = [_generate_cli_alias(alias) for alias in aliases]
+        aliases_str = ', '.join(cli_aliases)
+        help_text.append(f"    {aliases_str:25s} - {help_desc}")
+      help_text.append("")
 
     # Available Modules/Tools - MORE PROMINENT
     help_text.append("AVAILABLE TOOLS & MODULES")
@@ -418,7 +425,11 @@ class Commands:
         help_text.extend(categorized_settings[category])
         help_text.append("")
     
-    help_text.append("  Use ':h' or '--help' to see this help message anytime.")
+    # Show appropriate help command for the current mode
+    if self._current_mode == 'interactive':
+      help_text.append("  Use ':help' or ':h' to see this help message anytime.")
+    else:
+      help_text.append("  Use '--help' or '-h' to see this help message anytime.")
     help_text.append("="*70)
 
     output = "\n".join(help_text)
@@ -468,7 +479,10 @@ class Commands:
       
       if current_value is None and not help_text:
         output = f"Unknown setting: {setting_name}\n"
-        output += f"Use ':help' or '--help' to see available settings."
+        if self._current_mode == 'interactive':
+          output += f"Use ':help' to see available settings."
+        else:
+          output += f"Use '--help' to see available settings."
         print(output)
         return Result(success=False, message=output)
       
@@ -537,7 +551,10 @@ class Commands:
     # Validate setting name
     if not self.settings.is_valid_setting(key):
       output = f"Unknown setting: {key}\n"
-      output += f"Use ':help' or '--help' to see available settings."
+      if self._current_mode == 'interactive':
+        output += f"Use ':help' to see available settings."
+      else:
+        output += f"Use '--help' to see available settings."
       print(output)
       return Result(success=False, message=output)
     

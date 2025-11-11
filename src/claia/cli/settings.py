@@ -134,7 +134,8 @@ class Settings:
     Load configuration from command line arguments, .env file, and environment variables
     Priority: Command line args > .env file > Environment variables > settings.json > Defaults
     """
-    parser = argparse.ArgumentParser(description='CLAIA Settings')
+    # Disable argparse's automatic -h/--help so our custom help handler can take over
+    parser = argparse.ArgumentParser(description='CLAIA Settings', add_help=False)
 
     # Add arguments based on CONFIG_VARS, but only for externally settable ones
     for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
