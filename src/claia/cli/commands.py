@@ -399,14 +399,29 @@ class Commands:
       help_text.append("  No modules loaded")
     help_text.append("")
 
-    # Configuration Settings - More compact
+    # Configuration Settings - Mode-aware display
     help_text.append("CONFIGURATION SETTINGS")
     help_text.append("-" * 70)
     help_text.append("  Settings can be configured via:")
-    help_text.append("    • Command line: --setting-name value")
-    help_text.append("    • Environment: CLAIA_SETTING_NAME=value")
-    help_text.append("    • .env file (default: .env)")
-    help_text.append("    • settings.json (in files directory)")
+    
+    if self._current_mode == 'interactive':
+      # Interactive mode - show how to use :get and :set commands
+      help_text.append("    • Interactive commands: :get <setting> or :set <setting> <value>")
+      help_text.append("    • Command line: --setting-name value (when launching)")
+      help_text.append("    • Environment: CLAIA_SETTING_NAME=value")
+      help_text.append("    • .env file (default: .env)")
+      help_text.append("    • settings.json (in files directory)")
+      help_text.append("")
+      help_text.append("  Use ':get' to view current values, ':set <name> <value>' to change.")
+    else:
+      # CLI mode - show command line flag usage
+      help_text.append("    • Command line: --setting-name value")
+      help_text.append("    • Environment: CLAIA_SETTING_NAME=value")
+      help_text.append("    • .env file (default: .env)")
+      help_text.append("    • settings.json (in files directory)")
+      help_text.append("")
+      help_text.append("  Note: the settings below are not saved to the settings.json file.")
+      help_text.append("        please use one of the other methods to save your settings.")
     help_text.append("")
     
     # Group settings by category using the SettingCategory enum
@@ -414,8 +429,13 @@ class Commands:
     
     for var_name, default, externally_settable, category, help_desc in CONFIG_VARS:
       if externally_settable:
-        cli_name = var_name.replace('_', '-')
-        setting_line = f"    --{cli_name:30s} {help_desc}"
+        if self._current_mode == 'interactive':
+          # Interactive mode - show plain setting names
+          setting_line = f"    {var_name:30s} {help_desc}"
+        else:
+          # CLI mode - show dash-prefixed flags
+          cli_name = var_name.replace('_', '-')
+          setting_line = f"    --{cli_name:30s} {help_desc}"
         categorized_settings[category].append(setting_line)
     
     # Display settings grouped by category in enum order
