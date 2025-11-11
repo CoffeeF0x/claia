@@ -9,6 +9,7 @@ and loads settings from various sources (environment variables and command-line 
 import os
 import argparse
 import json
+from collections import defaultdict
 from enum import Enum
 from typing import Dict, Any, List, Tuple
 from dotenv import load_dotenv
@@ -361,3 +362,133 @@ class Settings:
           unset_keys.append((var_name, help_text))
     
     return unset_keys
+
+
+  def get_setting_info(self, setting_name: str) -> Tuple[Any, Any, str, SettingCategory]:
+    """
+    Get information about a specific setting.
+
+    Args:
+        setting_name: The setting name to look up
+
+    Returns:
+        Tuple of (current_value, default_value, help_text, category)
+        Returns (None, None, "", None) if setting not found or not externally settable
+    """
+    setting_name = setting_name.lower().replace('-', '_')
+    
+    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+      if var_name == setting_name and externally_settable:
+        current_value = getattr(self, var_name, default)
+        return (current_value, default, help_text, category)
+    
+    return (None, None, "", None)
+
+
+  def get_all_settings_info(self) -> Dict[SettingCategory, List[Tuple[str, Any, str]]]:
+    """
+    Get all externally settable settings grouped by category.
+
+    Returns:
+        Dictionary mapping category to list of (var_name, current_value, help_text) tuples
+    """
+    categorized = defaultdict(list)
+    
+    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+      if externally_settable:
+        value = getattr(self, var_name, default)
+        # Mask sensitive values
+        display_value = self._mask_sensitive_value(var_name, value)
+        categorized[category].append((var_name, display_value, help_text))
+    
+    return categorized
+
+
+  def is_valid_setting(self, setting_name: str) -> bool:
+    """
+    Check if a setting name is valid and externally settable.
+
+    Args:
+        setting_name: The setting name to check
+
+    Returns:
+        True if the setting is valid and externally settable, False otherwise
+    """
+    setting_name = setting_name.lower().replace('-', '_')
+    
+    for var_name, _, externally_settable, _, _ in CONFIG_VARS:
+      if var_name == setting_name and externally_settable:
+        return True
+    
+    return False
+
+
+  def update_setting(self, setting_name: str, value: Any) -> Tuple[bool, str, Any]:
+    """
+    Update a setting with type conversion and validation.
+
+    Args:
+        setting_name: The setting name to update
+        value: The new value (will be type-converted as needed)
+
+    Returns:
+        Tuple of (success, message, old_value)
+    """
+    setting_name = setting_name.lower().replace('-', '_')
+    
+    # Find the setting in CONFIG_VARS
+    setting_found = False
+    default_value = None
+    
+    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+      if var_name == setting_name and externally_settable:
+        setting_found = True
+        default_value = default
+        break
+    
+    if not setting_found:
+      return (False, f"Unknown setting: {setting_name}", None)
+    
+    # Type conversion
+    try:
+      if isinstance(default_value, bool):
+        value = value.lower() in ('true', '1', 'yes', 'on') if isinstance(value, str) else bool(value)
+      elif isinstance(default_value, int):
+        value = int(value)
+      # Otherwise keep as string
+    except (ValueError, AttributeError) as e:
+      return (False, f"Invalid value for {setting_name}: {value}", None)
+    
+    # Get old value and update
+    old_value = getattr(self, setting_name, None)
+    setattr(self, setting_name, value)
+    
+    # Remove from CLI sourced settings if present (so it will be saved to file)
+    if setting_name in self._cli_sourced_settings:
+      self._cli_sourced_settings.remove(setting_name)
+    
+    # Save to file
+    try:
+      self._save_settings_to_file()
+      return (True, f"Setting '{setting_name}' updated successfully", old_value)
+    except Exception as e:
+      # Revert on failure
+      setattr(self, setting_name, old_value)
+      return (False, f"Failed to save setting: {str(e)}", old_value)
+
+
+  def _mask_sensitive_value(self, var_name: str, value: Any) -> Any:
+    """
+    Mask sensitive values (tokens, passwords) for display.
+
+    Args:
+        var_name: The variable name
+        value: The value to potentially mask
+
+    Returns:
+        Masked value if sensitive, otherwise original value
+    """
+    if 'token' in var_name.lower() or 'password' in var_name.lower():
+      if value and value != "":
+        return "***" + value[-4:] if len(str(value)) > 4 else "***"
+    return value

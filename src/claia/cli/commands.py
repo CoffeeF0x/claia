@@ -28,17 +28,17 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                               CONSTANTS                              #
 ########################################################################
-# Format: (aliases, handler_method_name, help_text)
+# Format: (aliases, handler_method_name, help_text, needs_args, needs_conversation)
 # CLI versions are auto-generated: single letter = '-x', multi-letter = '--word'
-COMMAND_SPECS: List[Tuple[List[str], str, str]] = [
-  (['q', 'quit', 'exit'], '_cmd_quit',    'Exit the application'                                           ),
-  (['h', 'help'],         '_cmd_help',    'Show help information including commands, modules, and settings'),
-  (['v', 'version'],      '_cmd_version', 'Show version information'                                       ),
-  (['t', 'tool'],         '_cmd_tool',    'List available modules or execute tool commands'                ),
-  (['g', 'get'],          '_cmd_get',     'View current settings (optionally specify setting name)'        ),
-  (['s', 'set'],          '_cmd_set',     'Update a setting (usage: set <key> <value> or key=value)'       ),
-  (['a', 'agent'],        '_cmd_agent',   'Manage agents (usage: agent [list|<agent_name>])'               ),
-  (['setup'],             '_cmd_setup',   'Interactive setup wizard for API keys and configuration'        ),
+COMMAND_SPECS: List[Tuple[List[str], str, str, bool, bool]] = [
+  (['q', 'quit', 'exit'], '_cmd_quit',    'Exit the application',                                            False, False),
+  (['h', 'help'],         '_cmd_help',    'Show help information including commands, modules, and settings', False, False),
+  (['v', 'version'],      '_cmd_version', 'Show version information',                                        False, False),
+  (['t', 'tool'],         '_cmd_tool',    'List available modules or execute tool commands',                 True,  True ),
+  (['g', 'get'],          '_cmd_get',     'View current settings (optionally specify setting name)',         True,  False),
+  (['s', 'set'],          '_cmd_set',     'Update a setting (usage: set <key> <value> or key=value)',        True,  False),
+  (['a', 'agent'],        '_cmd_agent',   'Manage agents (usage: agent [list|<agent_name>])',                True,  False),
+  (['setup'],             '_cmd_setup',   'Interactive setup wizard for API keys and configuration',         False, False),
 ]
 
 
@@ -80,17 +80,18 @@ class Commands:
     self.settings = settings
     
     # Build command lookup dictionaries from COMMAND_SPECS
-    self._cli_command_map: Dict[str, Tuple[str, str]] = {}  # alias -> (handler_name, help_text)
-    self._interactive_command_map: Dict[str, Tuple[str, str]] = {}  # alias -> (handler_name, help_text)
+    # Maps alias -> (handler_name, help_text, needs_args, needs_conversation)
+    self._cli_command_map: Dict[str, Tuple[str, str, bool, bool]] = {}
+    self._interactive_command_map: Dict[str, Tuple[str, str, bool, bool]] = {}
     
-    for aliases, handler_name, help_text in COMMAND_SPECS:
+    for aliases, handler_name, help_text, needs_args, needs_conversation in COMMAND_SPECS:
       for alias in aliases:
         # Map interactive alias (no prefix)
-        self._interactive_command_map[alias.lower()] = (handler_name, help_text)
+        self._interactive_command_map[alias.lower()] = (handler_name, help_text, needs_args, needs_conversation)
         
         # Map CLI alias (with - or -- prefix)
         cli_alias = _generate_cli_alias(alias)
-        self._cli_command_map[cli_alias] = (handler_name, help_text)
+        self._cli_command_map[cli_alias] = (handler_name, help_text, needs_args, needs_conversation)
     
     logger.debug("Commands processor initialized")
 
@@ -144,25 +145,8 @@ class Commands:
     Returns:
         Result if command was processed, None if not recognized
     """
-    # Look up command in CLI command map
     if cmd in self._cli_command_map:
-      handler_name, _ = self._cli_command_map[cmd]
-      handler = getattr(self, handler_name)
-      
-      # Special handling for commands that need args
-      if handler_name == '_cmd_tool':
-        return handler(args, conversation)
-      elif handler_name == '_cmd_set':
-        if not args:
-          return Result(success=False, message="No setting provided. Usage: set <key> <value> or key=value")
-        return handler(args)
-      elif handler_name == '_cmd_get':
-        return handler(args)
-      elif handler_name == '_cmd_agent':
-        return handler(args)
-      
-      return handler()
-
+      return self._execute_command(cmd, args, conversation, self._cli_command_map)
     return None
 
 
@@ -179,27 +163,39 @@ class Commands:
         Result if command was processed, None if not recognized
     """
     cmd_lower = cmd.lower()
-
-    # Look up command in interactive command map
     if cmd_lower in self._interactive_command_map:
-      handler_name, _ = self._interactive_command_map[cmd_lower]
-      handler = getattr(self, handler_name)
-      
-      # Special handling for commands that need args
-      if handler_name == '_cmd_tool':
-        return handler(args, conversation)
-      elif handler_name == '_cmd_set':
-        if not args:
-          return Result(success=False, message="No setting provided. Usage: set <key> <value> or key=value")
-        return handler(args)
-      elif handler_name == '_cmd_get':
-        return handler(args)
-      elif handler_name == '_cmd_agent':
-        return handler(args)
-      
-      return handler()
-
+      return self._execute_command(cmd_lower, args, conversation, self._interactive_command_map)
     return None
+
+
+  def _execute_command(self, cmd: str, args: List[str], conversation: Optional[Any], 
+                      command_map: Dict[str, Tuple[str, str, bool, bool]]) -> Result:
+    """
+    Execute a command using the provided command map.
+
+    Args:
+        cmd: The command string to execute
+        args: Arguments for the command
+        conversation: Optional conversation context
+        command_map: The command map to look up the handler
+
+    Returns:
+        Result from command execution
+    """
+    handler_name, _, needs_args, needs_conversation = command_map[cmd]
+    handler = getattr(self, handler_name)
+    
+    # Check if command requires args but none provided
+    if needs_args and handler_name == '_cmd_set' and not args:
+      return Result(success=False, message="No setting provided. Usage: set <key> <value> or key=value")
+    
+    # Call handler with appropriate arguments
+    if needs_conversation and needs_args:
+      return handler(args, conversation)
+    elif needs_args:
+      return handler(args)
+    else:
+      return handler()
 
 
   def _parse_kv_args(self, tokens: List[str]) -> Dict[str, Any]:
@@ -346,14 +342,14 @@ class Commands:
     help_text.append("BUILT-IN COMMANDS")
     help_text.append("-" * 70)
     help_text.append("  Interactive Mode (prefix with ':'):")
-    for aliases, handler_name, help_desc in COMMAND_SPECS:
+    for aliases, handler_name, help_desc, needs_args, needs_conversation in COMMAND_SPECS:
       # Format interactive aliases nicely
       aliases_str = ', '.join(aliases)
       help_text.append(f"    :{aliases_str:24s} - {help_desc}")
     help_text.append("")
     
     help_text.append("  CLI Mode (command line arguments):")
-    for aliases, handler_name, help_desc in COMMAND_SPECS:
+    for aliases, handler_name, help_desc, needs_args, needs_conversation in COMMAND_SPECS:
       # Format CLI aliases nicely (generate them from base aliases)
       cli_aliases = [_generate_cli_alias(alias) for alias in aliases]
       aliases_str = ', '.join(cli_aliases)
@@ -465,34 +461,26 @@ class Commands:
     """
     logger.debug("Get command received")
     
-    # Build a dict of all valid setting names for validation
-    valid_settings = {var_name for var_name, _, externally_settable, _, _ in CONFIG_VARS if externally_settable}
-    
     if args:
       # Get specific setting
-      setting_name = args[0].lower().replace('-', '_')
+      setting_name = args[0]
+      current_value, default_value, help_text, category = self.settings.get_setting_info(setting_name)
       
-      if setting_name not in valid_settings:
+      if current_value is None and not help_text:
         output = f"Unknown setting: {setting_name}\n"
         output += f"Use ':help' or '--help' to see available settings."
         print(output)
         return Result(success=False, message=output)
       
-      value = getattr(self.settings, setting_name, None)
+      # Mask sensitive display
+      display_value = self.settings._mask_sensitive_value(setting_name, current_value)
       
-      # Find the help text for this setting
-      help_text = ""
-      for var_name, default, externally_settable, category, help_desc in CONFIG_VARS:
-        if var_name == setting_name:
-          help_text = help_desc
-          break
-      
-      output = f"\n{setting_name}: {value}"
+      output = f"\n{setting_name}: {display_value}"
       if help_text:
         output += f"\n  ({help_text})"
       
       print(output)
-      return Result(success=True, data={setting_name: value})
+      return Result(success=True, data={setting_name: current_value})
     
     else:
       # Display all settings grouped by category
@@ -501,26 +489,16 @@ class Commands:
       output_lines.append("CURRENT SETTINGS".center(70))
       output_lines.append("="*70 + "\n")
       
-      # Group settings by category
-      categorized = defaultdict(list)
-      for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
-        if externally_settable:
-          value = getattr(self.settings, var_name, default)
-          # Mask sensitive values (tokens)
-          display_value = value
-          if 'token' in var_name.lower() or 'password' in var_name.lower():
-            if value and value != "":
-              display_value = "***" + value[-4:] if len(value) > 4 else "***"
-          
-          categorized[category].append((var_name, display_value, help_text))
+      # Get settings grouped by category
+      categorized = self.settings.get_all_settings_info()
       
       # Display settings by category
       for category in SettingCategory:
         if category in categorized:
           output_lines.append(f"{category.value}:")
           output_lines.append("-" * 70)
-          for var_name, value, help_text in categorized[category]:
-            output_lines.append(f"  {var_name:30s} = {value}")
+          for var_name, display_value, help_text in categorized[category]:
+            output_lines.append(f"  {var_name:30s} = {display_value}")
           output_lines.append("")
       
       output_lines.append("="*70)
@@ -541,21 +519,15 @@ class Commands:
     """
     logger.debug("Set command received")
     
-    # Build a dict of all valid setting names for validation
-    valid_settings = {}
-    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
-      if externally_settable:
-        valid_settings[var_name] = (default, help_text)
-    
     # Parse the arguments
     if len(args) == 1 and '=' in args[0]:
       # Format: key=value
       key, value = args[0].split('=', 1)
-      key = key.strip().lower().replace('-', '_')
+      key = key.strip()
       value = value.strip()
     elif len(args) >= 2:
       # Format: key value (value may contain spaces)
-      key = args[0].lower().replace('-', '_')
+      key = args[0]
       value = ' '.join(args[1:])
     else:
       output = "Invalid syntax. Usage: set <key> <value> or set key=value"
@@ -563,60 +535,34 @@ class Commands:
       return Result(success=False, message=output)
     
     # Validate setting name
-    if key not in valid_settings:
+    if not self.settings.is_valid_setting(key):
       output = f"Unknown setting: {key}\n"
       output += f"Use ':help' or '--help' to see available settings."
       print(output)
       return Result(success=False, message=output)
     
-    # Get the default value to determine type
-    default_value, help_text = valid_settings[key]
+    # Update the setting using the Settings helper method
+    success, message, old_value = self.settings.update_setting(key, value)
     
-    # Type conversion
-    try:
-      if isinstance(default_value, bool):
-        value = value.lower() in ('true', '1', 'yes', 'on')
-      elif isinstance(default_value, int):
-        value = int(value)
-      # Otherwise keep as string
-    except (ValueError, AttributeError) as e:
-      output = f"Invalid value for {key}: {value}"
-      print(output)
-      return Result(success=False, message=output)
+    if not success:
+      print(message)
+      logger.error(f"Error updating setting: {message}")
+      return Result(success=False, message=message)
     
-    # Set the value on the settings object
-    old_value = getattr(self.settings, key, None)
-    setattr(self.settings, key, value)
+    # Get setting info for display
+    key_normalized = key.lower().replace('-', '_')
+    current_value, _, help_text, _ = self.settings.get_setting_info(key_normalized)
+    display_value = self.settings._mask_sensitive_value(key_normalized, current_value)
+    display_old = self.settings._mask_sensitive_value(key_normalized, old_value)
     
-    # Remove from CLI sourced settings if present (so it will be saved to file)
-    if key in self.settings._cli_sourced_settings:
-      self.settings._cli_sourced_settings.remove(key)
+    # Display confirmation
+    output = f"\nSetting updated and saved:"
+    output += f"\n  {key_normalized}: {display_old} -> {display_value}"
+    if help_text:
+      output += f"\n  ({help_text})"
     
-    # Save to settings file
-    try:
-      self.settings._save_settings_to_file()
-      
-      # Display confirmation
-      display_value = value
-      if 'token' in key.lower() or 'password' in key.lower():
-        if value and value != "":
-          display_value = "***" + value[-4:] if len(value) > 4 else "***"
-      
-      output = f"\nSetting updated and saved:"
-      output += f"\n  {key}: {old_value} -> {display_value}"
-      if help_text:
-        output += f"\n  ({help_text})"
-      
-      print(output)
-      return Result(success=True, message=f"Setting '{key}' updated successfully", data={key: value})
-      
-    except Exception as e:
-      # Revert the change if save failed
-      setattr(self.settings, key, old_value)
-      output = f"Failed to save setting: {str(e)}"
-      print(output)
-      logger.error(f"Error saving settings: {e}", exc_info=True)
-      return Result(success=False, message=output)
+    print(output)
+    return Result(success=True, message=message, data={key_normalized: current_value})
 
 
   def _cmd_agent(self, args: List[str]) -> Result:
