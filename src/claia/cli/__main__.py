@@ -41,6 +41,7 @@
 # - Swap prompt inside of conversation to the actual prompt object (should be a reference?)
 # - Add dictionary support to the prompt object
 # - Clean up onboarding
+# - command character by itself should show help (code exists, but never gets called)
 
 # - BASEFILE:
 #   - Add a validate function to the that verifies that everything is as
