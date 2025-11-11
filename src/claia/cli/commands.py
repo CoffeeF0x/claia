@@ -136,7 +136,6 @@ class Commands:
       output += "\nUse ':help' to see available commands or ':tool' to see available tools."
     else:
       output += "\nUse '--help' to see available commands or '--tool' to see available tools."
-    print(output)
     return Result(success=False, message=output)
 
 
@@ -240,8 +239,7 @@ class Commands:
       catalog = self.registry.get_commands_catalog()
       if not catalog:
         output = "No modules available."
-        print(output)
-        return Result(success=True, message=output)
+        return Result(success=True, data=output)
       
       output_lines = []
       output_lines.append("\nAvailable modules:")
@@ -266,8 +264,7 @@ class Commands:
       output_lines.append("")
       
       output = "\n".join(output_lines)
-      print(output)
-      return Result(success=True, message=output)
+      return Result(success=True, data=output)
 
     cmd = tokens[0]
     tail_tokens = tokens[1:]
@@ -285,14 +282,12 @@ class Commands:
           output_lines.append(f"  - {cmd}.{cname}: {cdesc}")
         output_lines.append("")
         output = "\n".join(output_lines)
-        print(output)
-        return Result(success=True, message=output)
+        return Result(success=True, data=output)
       else:
         if self._current_mode == 'interactive':
           output = f"Unknown module: {cmd}\nUse ':tool' to see available modules."
         else:
           output = f"Unknown module: {cmd}\nUse '--tool' to see available modules."
-        print(output)
         return Result(success=False, message=output)
 
     # Build params from key=value and collect positionals into __args__
@@ -460,7 +455,6 @@ class Commands:
     help_text.append("="*70)
 
     output = "\n".join(help_text)
-    print(output)
     return Result(success=True, data=output)
 
 
@@ -483,7 +477,6 @@ class Commands:
     version_text += f"\nPython {sys.version.split()[0]}"
     version_text += f"\nPlatform: {sys.platform}"
 
-    print(version_text)
     return Result(success=True, data=version_text)
 
 
@@ -510,7 +503,6 @@ class Commands:
           output += f"Use ':help' to see available settings."
         else:
           output += f"Use '--help' to see available settings."
-        print(output)
         return Result(success=False, message=output)
       
       # Mask sensitive display
@@ -520,8 +512,7 @@ class Commands:
       if help_text:
         output += f"\n  ({help_text})"
       
-      print(output)
-      return Result(success=True, data={setting_name: current_value})
+      return Result(success=True, data=output)
     
     else:
       # Display all settings grouped by category
@@ -544,7 +535,6 @@ class Commands:
       
       output_lines.append("="*70)
       output = "\n".join(output_lines)
-      print(output)
       return Result(success=True, data=output)
 
 
@@ -572,7 +562,6 @@ class Commands:
       value = ' '.join(args[1:])
     else:
       output = "Invalid syntax. Usage: set <key> <value> or set key=value"
-      print(output)
       return Result(success=False, message=output)
     
     # Validate setting name
@@ -582,14 +571,12 @@ class Commands:
         output += f"Use ':help' to see available settings."
       else:
         output += f"Use '--help' to see available settings."
-      print(output)
       return Result(success=False, message=output)
     
     # Update the setting using the Settings helper method
     success, message, old_value = self.settings.update_setting(key, value)
     
     if not success:
-      print(message)
       logger.error(f"Error updating setting: {message}")
       return Result(success=False, message=message)
     
@@ -605,8 +592,7 @@ class Commands:
     if help_text:
       output += f"\n  ({help_text})"
     
-    print(output)
-    return Result(success=True, message=message, data={key_normalized: current_value})
+    return Result(success=True, data=output)
 
 
   def _cmd_agent(self, args: List[str]) -> Result:
@@ -636,8 +622,7 @@ class Commands:
         output += "\n  --agent list          - List all available agents"
         output += "\n  --agent <agent_name>  - Switch to specified agent"
       
-      print(output)
-      return Result(success=True, data={"active_agent": current_agent, "default_agent": default_agent})
+      return Result(success=True, data=output)
     
     # If "list" argument, show available agents
     if args[0].lower() == "list":
@@ -647,7 +632,6 @@ class Commands:
         
         if not agents_info:
           output = "No agents available."
-          print(output)
           return Result(success=False, message=output)
         
         output_lines = []
@@ -667,12 +651,10 @@ class Commands:
         
         output_lines.append("")
         output = "\n".join(output_lines)
-        print(output)
-        return Result(success=True, data={"agents": [info.name for info in agents_info]})
+        return Result(success=True, data=output)
         
       except Exception as e:
         output = f"Error listing agents: {str(e)}"
-        print(output)
         logger.error(f"Error listing agents: {e}", exc_info=True)
         return Result(success=False, message=output)
     
@@ -689,7 +671,6 @@ class Commands:
           output += "\nUse ':agent list' to see available agents."
         else:
           output += "\nUse '--agent list' to see available agents."
-        print(output)
         return Result(success=False, message=output)
       
       # Set the active agent (runtime only, not persisted)
@@ -703,12 +684,10 @@ class Commands:
       else:
         output += f"\nTo set as default for future sessions, use: --set default_agent {agent_name}"
       
-      print(output)
-      return Result(success=True, message=f"Switched to agent '{agent_name}'", data={"agent": agent_name})
+      return Result(success=True, data=output)
       
     except Exception as e:
       output = f"Error switching to agent '{agent_name}': {str(e)}"
-      print(output)
       logger.error(f"Error switching agent: {e}", exc_info=True)
       return Result(success=False, message=output)
 
