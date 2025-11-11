@@ -28,17 +28,35 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                               CONSTANTS                              #
 ########################################################################
-# Format: (cli_aliases, interactive_aliases, handler_method_name, help_text)
-COMMAND_SPECS: List[Tuple[List[str], List[str], str, str]] = [
-  (['-q', '--quit', '--exit'], ['q', 'quit', 'exit'], '_cmd_quit',    'Exit the application'                                           ),
-  (['-h', '--help'],           ['h', 'help'],         '_cmd_help',    'Show help information including commands, modules, and settings'),
-  (['-v', '--version'],        ['v', 'version'],      '_cmd_version', 'Show version information'                                       ),
-  (['-t', '--tool'],           ['t', 'tool'],         '_cmd_tool',    'List available modules or execute tool commands'                ),
-  (['-g', '--get'],            ['g', 'get'],          '_cmd_get',     'View current settings (optionally specify setting name)'        ),
-  (['-s', '--set'],            ['s', 'set'],          '_cmd_set',     'Update a setting (usage: set <key> <value> or key=value)'       ),
-  (['-a', '--agent'],          ['a', 'agent'],        '_cmd_agent',   'Manage agents (usage: agent [list|<agent_name>])'               ),
-  (['--setup'],                ['setup'],             '_cmd_setup',   'Interactive setup wizard for API keys and configuration'        ),
+# Format: (aliases, handler_method_name, help_text)
+# CLI versions are auto-generated: single letter = '-x', multi-letter = '--word'
+COMMAND_SPECS: List[Tuple[List[str], str, str]] = [
+  (['q', 'quit', 'exit'], '_cmd_quit',    'Exit the application'                                           ),
+  (['h', 'help'],         '_cmd_help',    'Show help information including commands, modules, and settings'),
+  (['v', 'version'],      '_cmd_version', 'Show version information'                                       ),
+  (['t', 'tool'],         '_cmd_tool',    'List available modules or execute tool commands'                ),
+  (['g', 'get'],          '_cmd_get',     'View current settings (optionally specify setting name)'        ),
+  (['s', 'set'],          '_cmd_set',     'Update a setting (usage: set <key> <value> or key=value)'       ),
+  (['a', 'agent'],        '_cmd_agent',   'Manage agents (usage: agent [list|<agent_name>])'               ),
+  (['setup'],             '_cmd_setup',   'Interactive setup wizard for API keys and configuration'        ),
 ]
+
+
+def _generate_cli_alias(alias: str) -> str:
+  """
+  Generate CLI-style alias from a simple alias.
+  Single letter -> '-x', multi-letter -> '--word'
+  
+  Args:
+      alias: Simple alias (e.g., 'q', 'quit')
+  
+  Returns:
+      CLI-style alias (e.g., '-q', '--quit')
+  """
+  if len(alias) == 1:
+    return f'-{alias}'
+  else:
+    return f'--{alias}'
 
 
 ########################################################################
@@ -65,14 +83,14 @@ class Commands:
     self._cli_command_map: Dict[str, Tuple[str, str]] = {}  # alias -> (handler_name, help_text)
     self._interactive_command_map: Dict[str, Tuple[str, str]] = {}  # alias -> (handler_name, help_text)
     
-    for cli_aliases, interactive_aliases, handler_name, help_text in COMMAND_SPECS:
-      # Map CLI aliases
-      for alias in cli_aliases:
-        self._cli_command_map[alias] = (handler_name, help_text)
-      
-      # Map interactive aliases
-      for alias in interactive_aliases:
+    for aliases, handler_name, help_text in COMMAND_SPECS:
+      for alias in aliases:
+        # Map interactive alias (no prefix)
         self._interactive_command_map[alias.lower()] = (handler_name, help_text)
+        
+        # Map CLI alias (with - or -- prefix)
+        cli_alias = _generate_cli_alias(alias)
+        self._cli_command_map[cli_alias] = (handler_name, help_text)
     
     logger.debug("Commands processor initialized")
 
@@ -328,15 +346,16 @@ class Commands:
     help_text.append("BUILT-IN COMMANDS")
     help_text.append("-" * 70)
     help_text.append("  Interactive Mode (prefix with ':'):")
-    for cli_aliases, interactive_aliases, handler_name, help_desc in COMMAND_SPECS:
+    for aliases, handler_name, help_desc in COMMAND_SPECS:
       # Format interactive aliases nicely
-      aliases_str = ', '.join(interactive_aliases)
+      aliases_str = ', '.join(aliases)
       help_text.append(f"    :{aliases_str:24s} - {help_desc}")
     help_text.append("")
     
     help_text.append("  CLI Mode (command line arguments):")
-    for cli_aliases, interactive_aliases, handler_name, help_desc in COMMAND_SPECS:
-      # Format CLI aliases nicely
+    for aliases, handler_name, help_desc in COMMAND_SPECS:
+      # Format CLI aliases nicely (generate them from base aliases)
+      cli_aliases = [_generate_cli_alias(alias) for alias in aliases]
       aliases_str = ', '.join(cli_aliases)
       help_text.append(f"    {aliases_str:25s} - {help_desc}")
     help_text.append("")
