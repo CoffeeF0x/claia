@@ -54,9 +54,7 @@
 #   - Make mime type rely on our enum
 
 # BIG TODO: 
-# - Verify that required_args are being passed to all extensions
 # - Finish migrating tools and create tools for updating/creating prompts, updating settings, and creating new conversations (and generating a title for the existing conversation)
-# - Check extension loading and update zammad extension
 
 
 

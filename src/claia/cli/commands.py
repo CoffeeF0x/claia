@@ -33,10 +33,10 @@ COMMAND_SPECS: List[Tuple[List[str], List[str], str, str]] = [
   (['-q', '--quit', '--exit'], ['q', 'quit', 'exit'], '_cmd_quit',    'Exit the application'                                           ),
   (['-h', '--help'],           ['h', 'help'],         '_cmd_help',    'Show help information including commands, modules, and settings'),
   (['-v', '--version'],        ['v', 'version'],      '_cmd_version', 'Show version information'                                       ),
-  (['-t', '--tool'],           ['tool'],              '_cmd_tool',    'List available modules or execute tool commands'                ),
-  (['-g', '--get'],            ['get'],               '_cmd_get',     'View current settings (optionally specify setting name)'        ),
-  (['-s', '--set'],            ['set'],               '_cmd_set',     'Update a setting (usage: set <key> <value> or key=value)'       ),
-  (['-a', '--agent'],          ['agent'],             '_cmd_agent',   'Manage agents (usage: agent [list|<agent_name>])'               ),
+  (['-t', '--tool'],           ['t', 'tool'],         '_cmd_tool',    'List available modules or execute tool commands'                ),
+  (['-g', '--get'],            ['g', 'get'],          '_cmd_get',     'View current settings (optionally specify setting name)'        ),
+  (['-s', '--set'],            ['s', 'set'],          '_cmd_set',     'Update a setting (usage: set <key> <value> or key=value)'       ),
+  (['-a', '--agent'],          ['a', 'agent'],        '_cmd_agent',   'Manage agents (usage: agent [list|<agent_name>])'               ),
   (['--setup'],                ['setup'],             '_cmd_setup',   'Interactive setup wizard for API keys and configuration'        ),
 ]
 
