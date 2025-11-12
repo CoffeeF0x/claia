@@ -24,6 +24,7 @@ COMMAND_SPECS: List[Tuple[List[str], str, str, bool, bool]] = [
   (['p', 'prompt'],       '_cmd_prompt',       'Manage prompts',                                                  True,  False),
   (['c', 'conversation'], '_cmd_conversation', 'Manage conversations',                                            True,  False),
   (['m', 'model'],        '_cmd_model',        'List and select models',                                          True,  False),
+  (['query'],             '_cmd_query',        'Send a one-shot query to the AI',                                 True,  False),
   (['setup'],             '_cmd_setup',        'Interactive setup wizard for API keys and configuration',         False, False),
 ]
 

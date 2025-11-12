@@ -20,6 +20,7 @@ from .agent import AgentCommand, PromptCommand
 from .tool import ToolCommand
 from .conversation import ConversationCommand
 from .model import ModelCommand
+from .query import QueryCommand
 
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ COMMAND_REGISTRY: Dict[str, Type[BaseCommand]] = {
   'prompt': PromptCommand,
   'conversation': ConversationCommand,
   'model': ModelCommand,
+  'query': QueryCommand,
   'tool': ToolCommand,
 }
 
