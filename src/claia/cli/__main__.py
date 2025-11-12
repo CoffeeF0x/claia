@@ -280,6 +280,16 @@ def main() -> None:
     for arg in settings.extra_args:
       logger.debug(f"Stored extra argument: {arg}")
 
+    # Check if stdin has data (piped input)
+    if not sys.stdin.isatty():
+      logger.debug("Detected stdin input (piped data)")
+      stdin_data = sys.stdin.read().strip()
+      if stdin_data:
+        logger.debug(f"Read {len(stdin_data)} characters from stdin")
+        # Prepend --query to treat stdin as a query command
+        settings.extra_args = ['--query', stdin_data] + settings.extra_args
+        logger.info(f"Treating stdin as query command")
+
     # Initialize the registry
     logger.debug("Initializing unified registry")
     registry = Registry(**user_kwargs)
@@ -289,7 +299,7 @@ def main() -> None:
     logger.debug("Registering CLI-specific agents")
     register_cli_agents(registry)
     
-    registry.start_workers(3)  # Start 3 worker threads
+    registry.start_workers(2)  # Start 2 worker threads
 
     # Initialize command processor
     logger.debug("Initializing command processor")
