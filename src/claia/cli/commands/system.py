@@ -149,13 +149,13 @@ class HelpCommand(BaseCommand):
     
     if self._current_mode == 'interactive':
       lines.append("  Commands (prefix with ':'):")
-      for aliases, _, help_desc, _, _ in self.command_specs:
+      for aliases, _, help_desc, _, _, _ in self.command_specs:
         aliases_str = ', '.join(aliases)
         lines.append(f"    :{aliases_str:24s} - {help_desc}")
     else:
       lines.append("  Command Line Flags:")
       from .specs import generate_cli_alias
-      for aliases, _, help_desc, _, _ in self.command_specs:
+      for aliases, _, help_desc, _, _, _ in self.command_specs:
         cli_aliases = [generate_cli_alias(alias) for alias in aliases]
         aliases_str = ', '.join(cli_aliases)
         lines.append(f"    {aliases_str:25s} - {help_desc}")

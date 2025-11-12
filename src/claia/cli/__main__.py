@@ -55,9 +55,7 @@
 #   - Is format metadata even needed since we have mime type?
 #   - Make mime type rely on our enum
 
-# BIG TODO: 
-# - Finish migrating tools and create tools for updating/creating prompts, updating settings, and creating new conversations (and generating a title for the existing conversation)
-
+# - add tools/commands for each module type (solver, architecture, definitions, etc)
 
 
 # External dependencies
@@ -66,7 +64,6 @@ import atexit
 import logging
 import os
 import sys
-import json
 import shutil
 import importlib.metadata as importlib_metadata
 import pyfiglet
@@ -344,10 +341,7 @@ def main() -> None:
     # Main application loop
     result = Result()
     while not result.is_exit():
-      # Initialize and clear variables
       process = None
-      response = None
-      new_content = None
 
       # Wait for user input
       user_input = get_user_input()
@@ -366,8 +360,6 @@ def main() -> None:
             result = cmd_result
           continue
         
-        cmd = tokens[0]
-
         # Ensure there is a conversation context
         setup_conversation(settings, registry)
         
