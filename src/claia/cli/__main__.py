@@ -63,7 +63,6 @@
 # External dependencies
 import readline
 import atexit
-import time
 import logging
 import os
 import sys
@@ -75,7 +74,6 @@ import pyfiglet
 # Internal dependencies
 from claia.lib import Process
 from claia.lib.results import Result
-from claia.lib.enums.process import ProcessStatus
 from claia.lib.enums.model import SourcePreference
 from claia.lib.enums.conversation import MessageRole
 from claia.lib.data import Conversation, FileSystemRepository
@@ -84,6 +82,7 @@ from claia.cli.commands import Commands
 from claia.cli.defaults import initialize_defaults
 from claia.cli.logger import initialize_logging
 from claia.cli.agents import register_cli_agents
+from claia.cli.utils import stream_process_response
 from claia.registry import Registry
 
 
@@ -410,52 +409,13 @@ def main() -> None:
 
         logger.debug(f"Waiting for process to complete: {process.id}")
 
-        # Print updates while waiting for the process to complete
-        while process.status == ProcessStatus.PENDING or process.status == ProcessStatus.PROCESSING:
-          # process = process_queue.get_by_id(process.id)
-
-          if process.status == ProcessStatus.PROCESSING:
-            response = process.conversation.get_latest_message()
-
-            if response.message_id != user_message.message_id:
-              if new_content and response.content and len(response.content) > len(new_content):
-                print(response.content[len(new_content):], end='', flush=True)
-              elif not new_content:
-                print(response.content, end='', flush=True)
-
-              new_content = response.content
-
-          # Sleep a bit to avoid busy waiting
-          time.sleep(0.1)
-
-        logger.debug(f"Process completed: {process.id}")
-
-        # Display the final result
-        if process.status == ProcessStatus.COMPLETED:
-          final_message = process.conversation.get_latest_message()
-          if new_content:
-            remaining_content = final_message.content[len(new_content):]
-            if remaining_content:
-              print(remaining_content, end='', flush=True)
-          else:
-            print(final_message.content, end='', flush=True)
-
-          # Add newline after final message if it doesn't already end with one
-          if final_message.content and not final_message.content.endswith('\n'):
-            print()
-
-          # Check for and process any tool calls in the final message
-          # process_final_message_tools(final_message, process, settings, registry)
-
-          # Save all files (including conversation) using repository
-          if not file_repo.save(process.conversation):
-            logger.error("Failed to save conversation")
-        elif process.status == ProcessStatus.FAILED:
-          logger.error(f"Process failed: {process.error}")
-          print(f"Error: {process.error}")
-        elif process.status == ProcessStatus.CANCELLED:
-          logger.warning(f"Process cancelled: {process.error}")
-          print("Process was cancelled.")
+        # Stream the response and handle completion
+        stream_process_response(
+          process=process,
+          user_message_id=user_message.message_id,
+          file_repo=file_repo,
+          save_conversation=True
+        )
 
       # Display any error messages
       if result.is_error():

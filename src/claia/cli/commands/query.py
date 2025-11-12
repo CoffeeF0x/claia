@@ -5,14 +5,14 @@ This module contains the command class for sending a one-shot query to the AI.
 """
 
 import logging
-import time
 from typing import List, Optional, Any
 
 from claia.lib.results import Result
 from claia.lib.data.models import Conversation
 from claia.lib.enums.conversation import MessageRole
 from claia.lib.enums.model import SourcePreference
-from claia.lib.process import Process, ProcessStatus
+from claia.lib.process import Process
+from claia.cli.utils import stream_process_response
 from .base import BaseCommand
 
 
@@ -81,44 +81,19 @@ class QueryCommand(BaseCommand):
       process_id = self.registry.add_process(process)
       self.logger.debug(f"Query process added with ID: {process_id}")
       
-      # Wait for the process to complete and stream the response
-      print()  # Newline before response
-      response_content = ""
+      # Stream the response and handle completion
+      success = stream_process_response(
+        process=process,
+        user_message_id=user_message.message_id,
+        file_repo=None,  # Don't save conversation for query command
+        save_conversation=False
+      )
       
-      while process.status == ProcessStatus.PENDING or process.status == ProcessStatus.PROCESSING:
-        if process.status == ProcessStatus.PROCESSING:
-          response = process.conversation.get_latest_message()
-          
-          # Only show new content from assistant messages
-          if response.message_id != user_message.message_id and response.content:
-            if len(response.content) > len(response_content):
-              # Print only the new content
-              print(response.content[len(response_content):], end='', flush=True)
-              response_content = response.content
-        
-        # Small sleep to avoid busy waiting
-        time.sleep(0.1)
-      
-      print()  # Newline after response
-      
-      # Check if process completed successfully
-      if process.status == ProcessStatus.COMPLETED:
-        final_message = process.conversation.get_latest_message()
-        
-        # Process any tool calls in the final message
-        # self._process_tool_calls(final_message, process)
-        
+      if success:
         self.logger.debug(f"Query completed successfully: {process_id}")
-        # Return success without data since output was already streamed
         return Result(success=True)
-      
-      elif process.status == ProcessStatus.FAILED:
-        error_msg = f"Query failed: {process.error}"
-        self.logger.error(error_msg)
-        return Result(success=False, message=error_msg)
-      
       else:
-        error_msg = f"Query ended with unexpected status: {process.status}"
+        error_msg = f"Query failed with status: {process.status}"
         self.logger.error(error_msg)
         return Result(success=False, message=error_msg)
       
