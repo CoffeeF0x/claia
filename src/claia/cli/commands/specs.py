@@ -14,17 +14,17 @@ from typing import List, Tuple
 # Format: (aliases, handler_method_name, help_text, needs_args, needs_conversation)
 # CLI versions are auto-generated: single letter = '-x', multi-letter = '--word'
 COMMAND_SPECS: List[Tuple[List[str], str, str, bool, bool]] = [
-  (['q', 'quit', 'exit'], '_cmd_quit',         'Exit the application',                                                      False, False),
-  (['h', 'help'],         '_cmd_help',         'Show help information including commands, modules, and settings',           False, False),
-  (['v', 'version'],      '_cmd_version',      'Show version information',                                                  False, False),
-  (['t', 'tool'],         '_cmd_tool',         'List available modules or execute tool commands',                           True,  True ),
-  (['g', 'get'],          '_cmd_get',          'View current settings (optionally specify setting name)',                   True,  False),
-  (['s', 'set'],          '_cmd_set',          'Update a setting (usage: set <key> <value> or key=value)',                  True,  False),
-  (['a', 'agent'],        '_cmd_agent',        'Manage agents (usage: agent [list|<agent_name>])',                          True,  False),
-  (['p', 'prompt'],       '_cmd_prompt',       'Manage prompts (usage: prompt [list|set|clear|delete|print])',              True,  False),
-  (['c', 'conversation'], '_cmd_conversation', 'Manage conversations (usage: conversation [list|load|clear|title|delete])', True,  False),
-  (['m', 'model'],        '_cmd_model',        'List and select models (usage: model [list|show|select|<name>])',           True,  False),
-  (['setup'],             '_cmd_setup',        'Interactive setup wizard for API keys and configuration',                   False, False),
+  (['q', 'quit', 'exit'], '_cmd_quit',         'Exit the application',                                            False, False),
+  (['h', 'help'],         '_cmd_help',         'Show help information including commands, modules, and settings', False, False),
+  (['v', 'version'],      '_cmd_version',      'Show version information',                                        False, False),
+  (['t', 'tool'],         '_cmd_tool',         'List available modules or execute tool commands',                 True,  True ),
+  (['g', 'get'],          '_cmd_get',          'View current settings (optionally specify setting name)',         True,  False),
+  (['s', 'set'],          '_cmd_set',          'Update a setting (usage: set <key> <value> or key=value)',        True,  False),
+  (['a', 'agent'],        '_cmd_agent',        'Manage agents',                                                   True,  False),
+  (['p', 'prompt'],       '_cmd_prompt',       'Manage prompts',                                                  True,  False),
+  (['c', 'conversation'], '_cmd_conversation', 'Manage conversations',                                            True,  False),
+  (['m', 'model'],        '_cmd_model',        'List and select models',                                          True,  False),
+  (['setup'],             '_cmd_setup',        'Interactive setup wizard for API keys and configuration',         False, False),
 ]
 
 

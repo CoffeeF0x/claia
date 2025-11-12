@@ -11,6 +11,7 @@ from typing import List, Optional, Any
 from claia.lib.results import Result
 from claia.lib.data.models import Conversation
 from claia.lib.data.repositories import FileSystemRepository
+from claia.lib.enums.conversation import MessageRole
 from .base import BaseCommand
 
 
@@ -52,8 +53,8 @@ class ConversationCommand(BaseCommand):
       'load': lambda: self._load_conversation(args[1:]),
       'title': lambda: self._set_title(args[1:]),
       'delete': lambda: self._delete_conversation(args[1:]),
-      'show': self._show_current,
-      'current': self._show_current,  # alias for show
+      'print': self._print_conversation,
+      'details': self._show_details,
     }
     
     handler = handlers.get(subcommand)
@@ -80,7 +81,8 @@ class ConversationCommand(BaseCommand):
     prefix = self.get_help_prefix()
     
     output_lines.append(f"  {prefix}conversation list              - List all saved conversations")
-    output_lines.append(f"  {prefix}conversation show              - Show current conversation info")
+    output_lines.append(f"  {prefix}conversation print             - Print the entire active conversation")
+    output_lines.append(f"  {prefix}conversation details           - Show metadata/technical info")
     output_lines.append(f"  {prefix}conversation load <id|title>   - Load a specific conversation")
     output_lines.append(f"  {prefix}conversation clear/new         - Clear active and start new conversation")
     output_lines.append(f"  {prefix}conversation title <title>     - Set title of active conversation")
@@ -131,14 +133,57 @@ class ConversationCommand(BaseCommand):
       self.logger.error(f"Error listing conversations: {e}", exc_info=True)
       return Result(success=False, message=output)
   
-  def _show_current(self) -> Result:
-    """Show information about the current conversation."""
+  def _print_conversation(self) -> Result:
+    """Print the entire active conversation with all messages."""
     if not self.settings.active_conversation:
       return Result(success=True, data="No active conversation.")
     
     conv = self.settings.active_conversation
     output_lines = []
-    output_lines.append(f"\nActive Conversation:")
+    
+    # Title header
+    output_lines.append(f"\n{'=' * 70}")
+    output_lines.append(f"{conv.title.center(70)}")
+    output_lines.append(f"{'=' * 70}\n")
+    
+    # Show each message
+    if not conv.messages:
+      output_lines.append("(No messages in conversation)")
+    else:
+      for i, msg in enumerate(conv.messages):
+        # Prettify the role
+        role = self._prettify_role(msg.speaker)
+        
+        # Add message header
+        output_lines.append(f"[{role}]")
+        output_lines.append("-" * 70)
+        
+        # Add message content
+        if msg.content:
+          output_lines.append(msg.content)
+        else:
+          output_lines.append("(empty message)")
+        
+        # Add spacing between messages (except after last one)
+        if i < len(conv.messages) - 1:
+          output_lines.append("")
+    
+    output_lines.append("")
+    output_lines.append(f"{'=' * 70}")
+    output_lines.append(f"{f'{len(conv.messages)} message(s)'.center(70)}")
+    output_lines.append(f"{'=' * 70}\n")
+    
+    output = "\n".join(output_lines)
+    return Result(success=True, data=output)
+  
+  def _show_details(self) -> Result:
+    """Show metadata and technical information about the current conversation."""
+    if not self.settings.active_conversation:
+      return Result(success=True, data="No active conversation.")
+    
+    conv = self.settings.active_conversation
+    output_lines = []
+    output_lines.append(f"\nConversation Details:")
     output_lines.append(CONVERSATION_DIVIDER)
     output_lines.append(f"  Title: {conv.title}")
     output_lines.append(f"  ID: {conv.id}")
@@ -158,11 +203,58 @@ class ConversationCommand(BaseCommand):
       prompt_preview = conv.prompt['system'][:100]
       if len(conv.prompt['system']) > 100:
         prompt_preview += "..."
-      output_lines.append(f"  Prompt: {prompt_preview}")
+      output_lines.append(f"\n  System Prompt: {prompt_preview}")
+    
+    # Show settings if present
+    if conv.settings:
+      output_lines.append(f"\n  Settings:")
+      if hasattr(conv.settings, 'model'):
+        output_lines.append(f"    Model: {conv.settings.model or 'None'}")
+      if hasattr(conv.settings, 'temperature'):
+        output_lines.append(f"    Temperature: {conv.settings.temperature}")
+      if hasattr(conv.settings, 'max_tokens'):
+        output_lines.append(f"    Max Tokens: {conv.settings.max_tokens or 'Default'}")
+    
+    # Show tool definitions count if present
+    if hasattr(conv, 'tool_definitions') and conv.tool_definitions:
+      output_lines.append(f"\n  Tool Definitions: {len(conv.tool_definitions)}")
+    
+    # Show actions count if present
+    if hasattr(conv, 'actions') and conv.actions:
+      output_lines.append(f"  Actions (audit trail): {len(conv.actions)}")
+    
+    # Show message breakdown by role
+    if conv.messages:
+      role_counts = {}
+      for msg in conv.messages:
+        role_name = self._prettify_role(msg.speaker)
+        role_counts[role_name] = role_counts.get(role_name, 0) + 1
+      
+      output_lines.append(f"\n  Message Breakdown:")
+      for role, count in sorted(role_counts.items()):
+        output_lines.append(f"    {role}: {count}")
     
     output_lines.append("")
     output = "\n".join(output_lines)
     return Result(success=True, data=output)
+  
+  def _prettify_role(self, role) -> str:
+    """
+    Convert a MessageRole enum to a prettified string.
+    
+    Args:
+        role: MessageRole enum or string
+    
+    Returns:
+        Prettified role string
+    """
+    if isinstance(role, MessageRole):
+      role_str = role.value
+    else:
+      role_str = str(role).lower()
+    
+    # Capitalize first letter
+    return role_str.capitalize()
   
   def _clear_conversation(self) -> Result:
     """Clear the active conversation and start a new one."""

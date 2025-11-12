@@ -14,6 +14,7 @@
 # - Need to clean input from user and models (set gpt-4 to temperature 2 causing issues)
 # - Add multi-gpu support for transformer models
 # - local models aren't using model path
+# - limit list of models to only ones that can be loaded with the given api keys or parameters and maybe fetch lists from supporting apis or repos
 
 # - local models should check ram and download size and confirm resource availability?
 # - local models should have flags to select cpu or gpu, or specify certain gpus or memory usage
