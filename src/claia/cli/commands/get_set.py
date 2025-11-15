@@ -130,6 +130,11 @@ class SetCommand(BaseCommand):
     display_value = self.settings._mask_sensitive_value(key_normalized, current_value)
     display_old = self.settings._mask_sensitive_value(key_normalized, old_value)
     
+    # Update the registry's user_kwargs with the new setting value
+    # This ensures that any code using the registry's kwargs gets the updated value
+    self.registry.update_user_kwargs({key_normalized: current_value})
+    self.logger.debug(f"Updated registry user_kwargs with new value for {key_normalized}")
+    
     # Display confirmation
     output = f"\nSetting updated and saved:"
     output += f"\n  {key_normalized}: {display_old} -> {display_value}"

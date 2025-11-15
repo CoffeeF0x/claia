@@ -57,6 +57,18 @@ class Registry:
     self.manager.load_all_plugins(**self._user_kwargs)
     logger.info("Registry initialized successfully")
 
+  def update_user_kwargs(self, new_kwargs: Dict[str, Any]) -> None:
+    """
+    Update the stored user kwargs with new values.
+    
+    This allows runtime updates to settings that are used by plugins and commands.
+    
+    Args:
+        new_kwargs: Dictionary of new kwargs to merge with existing kwargs
+    """
+    self._user_kwargs.update(new_kwargs)
+    logger.debug(f"Updated user kwargs with {len(new_kwargs)} new values")
+
 
   ######################################################################
   #                             TOOLS API                              #
