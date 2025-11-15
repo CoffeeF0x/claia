@@ -303,6 +303,10 @@ class Registry:
     try:
       logger.debug(f"Running model {model_name}")
 
+      # Merge user kwargs from Registry initialization with run-time kwargs
+      # Run-time kwargs take precedence over initialization kwargs
+      combined_kwargs = {**self._user_kwargs, **kwargs}
+
       # Get available models and deployments
       available_models = self.manager.get_supported_models()
       available_deployments = list(self.manager.get_available_deployments().keys())
@@ -314,7 +318,7 @@ class Registry:
 
       # Filter kwargs for solver based on required_args
       solver_info = selected_solver.get_solver_info()
-      solver_kwargs = self._filter_kwargs(kwargs, getattr(solver_info, 'required_args', None))
+      solver_kwargs = self._filter_kwargs(combined_kwargs, getattr(solver_info, 'required_args', None))
 
       # Call solver to determine deployment
       params_result = selected_solver.solve_deployment(
@@ -354,17 +358,17 @@ class Registry:
 
       # Filter kwargs for deployment based on required_args
       deployment_info = selected_deployment.get_deployment_info()
-      deployment_kwargs = self._filter_kwargs(kwargs, getattr(deployment_info, 'required_args', None))
+      deployment_kwargs = self._filter_kwargs(combined_kwargs, getattr(deployment_info, 'required_args', None))
 
       # Also get architecture kwargs for the model class
       available_architectures = self.manager.get_available_architectures()
       architecture_info = available_architectures.get(deployment_params.architecture_name)
       if architecture_info:
-        architecture_kwargs = self._filter_kwargs(kwargs, getattr(architecture_info, 'required_args', None))
+        architecture_kwargs = self._filter_kwargs(combined_kwargs, getattr(architecture_info, 'required_args', None))
         # Merge architecture kwargs with deployment kwargs (deployment takes precedence)
-        combined_kwargs = {**architecture_kwargs, **deployment_kwargs}
+        final_kwargs = {**architecture_kwargs, **deployment_kwargs}
       else:
-        combined_kwargs = deployment_kwargs
+        final_kwargs = deployment_kwargs
 
       # Let deployment plugin handle deployment + inference
       result = selected_deployment.run(
@@ -372,7 +376,7 @@ class Registry:
         model_class=model_class,
         conversation=conversation,
         cache=self.cache,
-        **combined_kwargs
+        **final_kwargs
       )
 
       return result
