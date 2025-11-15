@@ -7,8 +7,6 @@ variables:
   B2_PATH: "" # path inside the bucket to upload to, leave empty for root bucket path
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
   PYTHONPATH: "$CI_PROJECT_DIR"
-  TWINE_USERNAME: "gitlab-ci-token"
-  TWINE_PASSWORD: "${CI_JOB_TOKEN}"
 
 stages:
   - test
@@ -122,6 +120,9 @@ main_build_and_upload:
 publish_pypi:
   <<: *common_job_config
   stage: publish
+  variables:
+    TWINE_USERNAME: __token__
+    TWINE_PASSWORD: ${MAIN_TWINE_TOKEN}
   script:
     - python -m pip install --upgrade pip
     - pip install build twine
@@ -161,6 +162,9 @@ dev_build_and_upload:
 publish_testpypi:
   <<: *common_job_config
   stage: publish
+  variables:
+    TWINE_USERNAME: __token__
+    TWINE_PASSWORD: ${DEV_TWINE_TOKEN}
   script:
     - python -m pip install --upgrade pip
     - pip install build twine
