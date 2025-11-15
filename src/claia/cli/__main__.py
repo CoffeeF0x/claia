@@ -171,7 +171,7 @@ def print_header(settings: Settings) -> None:
     return f"║ {inner} ║"
 
   title = "CLAIA"
-  subtitle = "Another AI Agent Framework"
+  subtitle = "Command Line Artificial Intelligence Agent"
   ver = _get_app_version()
   pyver = sys.version.split()[0]
 
@@ -299,7 +299,7 @@ def main() -> None:
     logger.debug("Registering CLI-specific agents")
     register_cli_agents(registry)
     
-    registry.start_workers(2)  # Start 2 worker threads
+    registry.start_workers(2)  # Start n worker threads
 
     # Initialize command processor
     logger.debug("Initializing command processor")
