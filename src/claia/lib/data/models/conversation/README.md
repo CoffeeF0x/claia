@@ -1,284 +1,40 @@
-# Conversation Package
+# Conversation Models
 
-Pure data models and repository interfaces for managing conversations in CLAIA.
+Pure data models for conversations, built on top of the media/data layer.
 
-## Overview
+## What lives here
 
-This package provides a clean separation between conversation data models and their persistence mechanisms, following the Repository Pattern. This architecture enables:
+- `conversation.py` — `Conversation` model (title, prompt, messages, actions, settings).
+- `message.py` — `Message` model with thread-safe operations.
+- `action.py` — `Action` model for audit trail events.
+- `conversation_settings.py` — `ConversationSettings` configuration object.
 
-- **Flexibility**: Use any storage backend (files, databases, memory)
-- **Testability**: Easy testing with in-memory repositories
-- **Thread Safety**: Concurrent streaming and tool processing
-- **Database Ready**: Pure models can be mapped to any ORM
-- **Audit Trail**: Complete action history for debugging
-- **Code Reuse**: Conversation extends TextFile to eliminate duplication
+All are re-exported via `claia.lib.data` (see `lib/data/__init__.py`).
 
-## Architecture
+## How it fits (TL;DR)
 
-```
-conversation/
-├── models/              # Pure data models (no persistence logic)
-│   ├── conversation.py  # Main conversation model
-│   ├── message.py       # Message model with thread-safe operations
-│   ├── action.py        # Action/event for audit trail
-│   └── conversation_settings.py
-├── repositories/        # Persistence layer
-│   ├── base.py         # Abstract repository interface
-│   ├── file_repository.py  # JSON file storage
-│   └── memory_repository.py  # In-memory storage
-└── utils/              # Helper utilities
-    └── tool_text.py    # Tool call text processing
-```
+- `Conversation` extends `TextFile` so it can be stored with the same repository infrastructure as other files.
+- Repositories live in `lib/data/repositories` and operate on `BaseFile`/`TextFile` and subclasses.
+- The rest of CLAIA (agents, registry, CLI) treats `Conversation` as a pure in-memory model; persistence is optional.
 
-## Quick Start
-
-### Creating a Conversation
+## Quick usage example
 
 ```python
-from claia.lib.conversation import Conversation
+from claia.lib.data import Conversation, FileRepository
 from claia.lib.enums.conversation import MessageRole
 
-# Create a new conversation (pure data model)
-conversation = Conversation(title="My Conversation")
+# Create a conversation
+conv = Conversation(title="My Conversation")
+conv.add_message(MessageRole.USER, "Hello!")
+conv.add_message(MessageRole.ASSISTANT, "Hi there!")
 
-# Add messages
-conversation.add_message(MessageRole.USER, "Hello!")
-conversation.add_message(MessageRole.ASSISTANT, "Hi there!")
+# Persist via generic file repository
+repo = FileRepository.create_file_system("/conversations")
+repo.save(conv)
+
+loaded = repo.load(conv.id, load_content=True)
+print(loaded.title, len(loaded.messages))
 ```
 
-### Using Repositories
-
-#### File-Based Storage
-
-```python
-from claia.lib.conversation import FileConversationRepository
-
-# Initialize repository with a base directory
-repo = FileConversationRepository("/path/to/conversations")
-
-# Save conversation
-repo.save(conversation)
-
-# Load conversation
-loaded = repo.load(conversation.id)
-
-# List all conversations
-all_convs = repo.list_all()
-
-# Find by criteria
-recent = repo.find_by_criteria(
-    title="weather",
-    created_after=1234567890
-)
-```
-
-#### In-Memory Storage (for testing)
-
-```python
-from claia.lib.conversation import MemoryRepository
-
-# Initialize in-memory repository
-repo = MemoryRepository()
-
-# Same interface as file repository
-repo.save(conversation)
-loaded = repo.load(conversation.id)
-
-# Additional testing helpers
-repo.clear()  # Clear all conversations
-count = repo.count()  # Get count
-```
-
-### Thread-Safe Message Operations
-
-When streaming content and processing tools concurrently, use thread-safe message methods:
-
-```python
-# Get a message
-message = conversation.get_latest_message()
-
-# Thread-safe append (for streaming)
-message.safe_append_content("streaming chunk")
-
-# Thread-safe replace (for tool processing)
-message.safe_replace_substring(
-    start=10,
-    end=20,
-    replacement="[TOOL_RESULT]"
-)
-
-# Thread-safe read
-content = message.safe_get_content()
-```
-
-### Streaming Support
-
-The conversation has built-in streaming support:
-
-```python
-# Start streaming (creates START_STREAM action)
-conversation.stream_message(
-    message_id=msg.message_id,
-    content="chunk",
-    append=True
-)
-
-# End streaming (creates END_STREAM action)
-conversation.stream_message(
-    message_id=msg.message_id,
-    content="",
-    append=True,
-    end=True
-)
-```
-
-## Custom Repository Implementation
-
-To create a custom repository (e.g., for a database):
-
-```python
-from claia.lib.conversation import ConversationRepository, Conversation
-from typing import Optional, List, Dict, Any
-
-class DatabaseRepository(ConversationRepository):
-    def __init__(self, db_connection):
-        self.db = db_connection
-    
-    def save(self, conversation: Conversation) -> bool:
-        # Serialize and save to database
-        data = conversation.to_dict()
-        # ... your database logic
-        return True
-    
-    def load(self, conversation_id: str) -> Optional[Conversation]:
-        # Load from database and deserialize
-        data = # ... fetch from database
-        return Conversation.from_dict(data) if data else None
-    
-    def delete(self, conversation_id: str) -> bool:
-        # ... your delete logic
-        pass
-    
-    def list_all(self) -> List[Dict[str, Any]]:
-        # ... your list logic
-        pass
-    
-    def find_by_criteria(self, **filters) -> List[Conversation]:
-        # ... your search logic
-        pass
-    
-    def exists(self, conversation_id: str) -> bool:
-        # ... your exists check
-        pass
-```
-
-## Audit Trail
-
-Every action in a conversation is tracked:
-
-```python
-# Actions are automatically created for all operations
-conversation.add_message(...)  # Creates CREATE_MESSAGE action
-conversation.update_message(...)  # Creates UPDATE_MESSAGE action
-conversation.delete_message(...)  # Creates DELETE_MESSAGE action
-conversation.change_title(...)  # Creates CHANGE_TITLE action
-# ... and many more
-
-# Access the audit trail
-for action in conversation.actions:
-    print(f"{action.action_type.name} at {action.timestamp}")
-    print(f"  Metadata: {action.metadata}")
-```
-
-## Architecture Details
-
-### Inheritance Structure
-
-The `Conversation` class now extends `TextFile`, following the same pattern as `Prompt`:
-
-```python
-# Inheritance hierarchy:
-BaseFile (abstract)
-└── TextFile
-    ├── Prompt       # Overrides get_file_type() → FileSubdirectory.PROMPT
-    └── Conversation # Overrides get_file_type() → FileSubdirectory.CONVERSATION
-```
-
-**Benefits:**
-- Eliminates code duplication (serialization, timestamps, ID management)
-- Consistent file handling across the system
-- Inherits all TextFile functionality (encoding, content management, etc.)
-- Simplified save/load logic through unified file structure
-
-**Key Methods:**
-```python
-# Conversation automatically inherits from TextFile:
-conv = Conversation(title="Test")
-conv.file_name          # "abc-123.json"
-conv.mime_type          # "application/json"
-conv.get_file_type()    # FileSubdirectory.CONVERSATION
-conv.content            # JSON serialization of conversation
-conv.to_dict()          # Dictionary with all conversation data
-```
-
-### Migration from Old Structure
-
-The conversation models have been refactored to extend TextFile. Key changes:
-
-### Removed Fields
-- `tool_pattern_name` - Now handled by registry extensions
-- `tool_protocol_name` - Now handled by registry extensions
-- `custom_tag_formats` - Tag parsing moved to extensions
-- `find_tags()` method - Use registry for tool detection
-
-### Changed Fields
-- Now inherits from `TextFile` (previously standalone)
-- `id` is now the primary identifier (same as `file_id` in BaseFile)
-- Automatic file naming based on conversation ID
-
-### New Features
-- Thread-safe message operations
-- Repository-based persistence
-- Cleaner separation of concerns
-- Unified file handling with other media types
-
-### Backward Compatibility
-
-Old conversation files can be loaded with FileRepository:
-
-```python
-repo = FileConversationRepository("/old/conversations")
-# The repository can read the old JSON format
-old_conv = repo.load("conversation-id")
-```
-
-## Tool Call Processing
-
-Tool call text manipulation has been moved to utilities:
-
-```python
-from claia.lib.conversation.utils import find_tool_calls, validate_tool_call_json
-
-# Find tool calls in text
-calls = find_tool_calls(
-    content=message.content,
-    start_token="[TOOL_CALL]",
-    end_token="[/TOOL_CALL]"
-)
-
-# Validate tool call JSON
-is_valid = validate_tool_call_json('{"name": "test", "parameters": {}}')
-```
-
-## Best Practices
-
-1. **Use Repositories**: Always persist conversations through repositories, not by calling internal methods
-2. **Thread Safety**: Use `safe_*` methods when concurrent access is possible
-3. **Audit Trail**: The action log is your friend for debugging - don't disable it
-4. **Immutability**: Repositories return copies to prevent accidental mutations
-5. **Testing**: Use `MemoryRepository` for fast, isolated tests
-
-## Examples
-
-See the tests in `src/tests/` for comprehensive examples of using conversations and repositories.
-
+For more details on methods and behavior (streaming, audit trail, thread safety), see
+`conversation.py`, `message.py`, and `action.py`.

@@ -2,9 +2,12 @@
 
 Clients/adapters for hosted LLM APIs.
 
-Included:
-- `anthropic.py`
-- `openai.py`
-- `openrouter.py`
+## What lives here
 
-Provide `required_args` (e.g., API keys) so registries pass only needed kwargs.
+- `anthropic.py` — Anthropic client/adapter.
+- `openai.py` — OpenAI client/adapter.
+- `openrouter.py` — OpenRouter client/adapter.
+
+These classes typically:
+- inherit from base API model types (see `lib/model/base/`)
+- declare `required_args` (e.g., API keys, base URLs) so the `Registry` only passes the kwargs they need.

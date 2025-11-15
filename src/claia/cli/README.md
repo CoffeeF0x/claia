@@ -1,10 +1,21 @@
 # CLI
 
-Command-line interface and runtime configuration.
+Command-line interface and runtime configuration for CLAIA.
 
-- `__main__.py` — entrypoint for `python -m claia` / `claia`
-- `settings.py` — load/validate runtime settings (supports user kwargs)
-- `defaults.py` — default prompt/settings presets
-- `logger.py` — CLI logging setup
+## What lives here
 
-Pass custom settings via CLI; they propagate to agents and models as filtered kwargs.
+- `__main__.py` — entrypoint for `python -m claia` / `claia`.
+- `agents.py` — CLI helpers for creating/running agents and registries.
+- `commands/` — subcommands and interactive flows.
+- `defaults.py` — default prompt/settings presets.
+- `logger.py` — CLI logging setup.
+- `settings.py` — settings model and loading/validation utilities.
+- `utils.py` — CLI utility helpers.
+
+## How CLI fits in (TL;DR)
+
+1. Parse CLI arguments into a config/settings object.
+2. Instantiate a `Registry` with filtered kwargs (API keys, paths, etc.).
+3. Create conversations/processes and dispatch them to agents/models.
+
+Custom settings passed via CLI propagate to plugins as filtered kwargs, based on each plugin’s `required_args`.
