@@ -56,6 +56,7 @@
 #   - Make mime type rely on our enum
 
 # - add tools/commands for each module type (solver, architecture, definitions, etc)
+# - add update system (with on launch invocation) for debian repo publishing
 
 
 # External dependencies
