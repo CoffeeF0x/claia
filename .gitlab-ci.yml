@@ -129,6 +129,25 @@ publish_pypi:
   only:
     - main
 
+# publish_pypi:
+#   <<: *common_job_config
+#   stage: publish
+#   variables:
+#     # TWINE_USERNAME: "gitlab-ci-token"
+#     # TWINE_PASSWORD: "${CI_JOB_TOKEN}"
+#     TWINE_USERNAME: __token__
+#     TWINE_PASSWORD: ${TWINE_TOKEN}
+#     TWINE_REPOSITORY_URL: "https://pypi.org/legacy/"
+#     GITLAB_REPOSITORY_URL: ${CI_API_V4_URL}/claia/${CI_PROJECT_ID}/packages/pypi
+#   script:
+#     - python -m pip install --upgrade pip
+#     - pip install build twine
+#     - python -m build
+#     - python -m twine check dist/*
+#     - python -m twine upload dist/* --repository-url ${TWINE_REPOSITORY_URL} --verbose
+#   only:
+#     - main
+
 
 ########################################################################
 #                                 DEV                                  #
@@ -164,7 +183,7 @@ publish_testpypi:
     TWINE_USERNAME: __token__
     TWINE_PASSWORD: ${DEV_TWINE_TOKEN}
     TWINE_REPOSITORY_URL: "https://test.pypi.org/legacy/"
-    GITLAB_REPOSITORY_URL: ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi
+    GITLAB_REPOSITORY_URL: ${CI_API_V4_URL}/claia/${CI_PROJECT_ID}/packages/pypi
   script:
     - python -m pip install --upgrade pip
     - pip install build twine
