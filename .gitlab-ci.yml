@@ -7,6 +7,8 @@ variables:
   B2_PATH: "" # path inside the bucket to upload to, leave empty for root bucket path
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
   PYTHONPATH: "$CI_PROJECT_DIR"
+  TWINE_USERNAME: "gitlab-ci-token"
+  TWINE_PASSWORD: "${CI_JOB_TOKEN}"
 
 stages:
   - test
@@ -125,28 +127,10 @@ publish_pypi:
     - pip install build twine
     - python -m build
     - python -m twine check dist/*
-    - TWINE_USERNAME=gitlab-ci-token TWINE_PASSWORD=${CI_JOB_TOKEN} python -m twine upload dist/* --skip-existing --repository-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi
+    - python -m twine upload dist/* --verbose
   only:
     - main
 
-# publish_pypi:
-#   <<: *common_job_config
-#   stage: publish
-#   variables:
-#     # TWINE_USERNAME: "gitlab-ci-token"
-#     # TWINE_PASSWORD: "${CI_JOB_TOKEN}"
-#     TWINE_USERNAME: __token__
-#     TWINE_PASSWORD: ${TWINE_TOKEN}
-#     TWINE_REPOSITORY_URL: "https://pypi.org/legacy/"
-#     GITLAB_REPOSITORY_URL: ${CI_API_V4_URL}/claia/${CI_PROJECT_ID}/packages/pypi
-#   script:
-#     - python -m pip install --upgrade pip
-#     - pip install build twine
-#     - python -m build
-#     - python -m twine check dist/*
-#     - python -m twine upload dist/* --repository-url ${TWINE_REPOSITORY_URL} --verbose
-#   only:
-#     - main
 
 
 ########################################################################
@@ -177,18 +161,11 @@ dev_build_and_upload:
 publish_testpypi:
   <<: *common_job_config
   stage: publish
-  variables:
-    # TWINE_USERNAME: "gitlab-ci-token"
-    # TWINE_PASSWORD: "${CI_JOB_TOKEN}"
-    TWINE_USERNAME: __token__
-    TWINE_PASSWORD: ${DEV_TWINE_TOKEN}
-    TWINE_REPOSITORY_URL: "https://test.pypi.org/legacy/"
-    GITLAB_REPOSITORY_URL: ${CI_API_V4_URL}/claia/${CI_PROJECT_ID}/packages/pypi
   script:
     - python -m pip install --upgrade pip
     - pip install build twine
     - python -m build
     - python -m twine check dist/*
-    - python -m twine upload dist/* --repository-url ${TWINE_REPOSITORY_URL} --verbose
+    - python -m twine upload dist/* -r testpypi --verbose
   only:
     - dev
