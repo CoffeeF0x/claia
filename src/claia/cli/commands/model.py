@@ -221,14 +221,21 @@ class ModelCommand(BaseCommand):
     
     try:
       models = self.registry.get_supported_models()
-      model_def = models.get(model_name)
       
-      if not model_def:
+      # Try to resolve as an alias
+      resolved_name = self._resolve_model_alias(model_name, models)
+      
+      if resolved_name:
+        # Found the model (either directly or via alias)
+        if resolved_name != model_name:
+          print(f"\nNote: '{model_name}' is an alias for '{resolved_name}'")
+        model_def = models.get(resolved_name)
+        return self._format_model_details(resolved_name, model_def)
+      else:
+        # Not found
         output = f"Model not found: {model_name}\n"
         output += f"Use {self.format_command('model list')} to see available models."
         return Result(success=False, message=output)
-      
-      return self._format_model_details(model_name, model_def)
       
     except Exception as e:
       output = f"Error getting model info for '{model_name}': {str(e)}"
@@ -313,19 +320,45 @@ class ModelCommand(BaseCommand):
       # Verify the model exists
       models = self.registry.get_supported_models()
       
-      if model_name not in models:
-        output = f"Model not found: {model_name}\n"
-        output += f"Use {self.format_command('model list')} to see available models."
-        return Result(success=False, message=output)
+      # First, try to resolve as an alias
+      resolved_name = self._resolve_model_alias(model_name, models)
+      
+      if resolved_name:
+        # Alias was resolved to a canonical name
+        if resolved_name != model_name:
+          self.logger.info(f"Resolved alias '{model_name}' to canonical name '{resolved_name}'")
+          print(f"\nNote: '{model_name}' is an alias for '{resolved_name}'")
+        actual_model_name = resolved_name
+      elif model_name not in models:
+        # Model not found in definitions - offer to use it anyway
+        print(f"\nWarning: Model '{model_name}' is not in the definitions.")
+        print("This model may still work if supported by the provider/deployment,")
+        print("but CLAIA cannot verify its existence or capabilities.")
+        
+        try:
+          response = input("\nDo you want to use this model anyway? [y/N]: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+          return Result(success=False, message="\nModel selection cancelled.")
+        
+        if response not in ['y', 'yes']:
+          output = f"\nModel selection cancelled."
+          output += f"\nUse {self.format_command('model list')} to see available models."
+          return Result(success=False, message=output)
+        
+        # User confirmed - use the model name as-is
+        actual_model_name = model_name
+      else:
+        # Direct match found
+        actual_model_name = model_name
       
       # Set the active model (runtime only, not persisted)
       old_model = self.settings.active_model
-      self.settings.active_model = model_name
+      self.settings.active_model = actual_model_name
       self.settings.active_model_source = "cli"
       
-      output = f"\nActive model changed: {old_model or 'None'} → {model_name}"
+      output = f"\nActive model changed: {old_model or 'None'} → {actual_model_name}"
       output += "\n(Note: This change is for the current session only)"
-      output += f"\nTo set as default for future sessions, use: {self.format_command(f'set default_model {model_name}')}"
+      output += f"\nTo set as default for future sessions, use: {self.format_command(f'set default_model {actual_model_name}')}"
       
       return Result(success=True, data=output)
       
@@ -333,4 +366,28 @@ class ModelCommand(BaseCommand):
       output = f"Error selecting model '{model_name}': {str(e)}"
       self.logger.error(f"Error selecting model: {e}", exc_info=True)
       return Result(success=False, message=output)
+  
+  def _resolve_model_alias(self, model_name: str, models: Dict[str, Any]) -> Optional[str]:
+    """
+    Resolve a model name or alias to its canonical name.
+    
+    Args:
+        model_name: Name or alias to resolve
+        models: Dictionary of available models
+    
+    Returns:
+        Canonical model name if found, None otherwise
+    """
+    # Check if it's already a canonical name
+    if model_name in models:
+      return model_name
+    
+    # Check aliases
+    for canonical_name, model_def in models.items():
+      if hasattr(model_def, 'aliases') and model_def.aliases and model_name in model_def.aliases:
+        self.logger.debug(f"Resolved alias '{model_name}' to '{canonical_name}'")
+        return canonical_name
+    
+    # Not found
+    return None
 
