@@ -74,7 +74,6 @@ legacy = "claia.definitions.legacy:LegacyDefinitionsPlugin"
 
 [project.entry-points."claia.agents"]
 simple = "claia.agents.simple:SimpleAgentPlugin"
-bob = "extensions.bob:BobAgentPlugin"
 
 # Entry points for tools system
 [project.entry-points."claia.tool_patterns"]
