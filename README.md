@@ -61,6 +61,9 @@ You can also run CLAIA as a command line utility:
 # Get a list of available commands
 claia --help
 
+# Call a model directly
+claia --query "What's the capital of France?"
+
 # Call a tool command directly
 claia --tool sample.echo message="Hello"
 ```
