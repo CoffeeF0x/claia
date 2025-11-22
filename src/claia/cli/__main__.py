@@ -57,6 +57,7 @@
 
 # - add tools/commands for each module type (solver, architecture, definitions, etc)
 # - add update system (with on launch invocation) for debian repo publishing
+# - model_id in process parameters being ignored? Bob's code example doesn't work
 
 
 # External dependencies

@@ -1,13 +1,10 @@
 """
-Unified Registry for CLAIA models, tools, and agents.
-
-This merges the former AgentRegistry, ToolsRegistry, and ModelRegistry into a
-single facade over Manager. It exposes the union of their public APIs.
+CLAIA's central registry. A single facade over the module manager
+that provides a unified interface for tools, models, and agents.
 """
 
 import logging
 import threading
-import time
 import json
 from typing import Any, Dict, Optional
 
