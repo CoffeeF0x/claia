@@ -2,35 +2,25 @@
 Get and Set command classes for the CLAIA CLI.
 
 This module contains command classes for viewing and updating settings.
+Delegates to cli.settings_* tools via the registry.
 """
 
 import logging
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 
 from claia.lib.results import Result
-from claia.cli.settings import SettingCategory
 from .base import BaseCommand
 
 
 logger = logging.getLogger(__name__)
 
 
-# Constants for formatted output
-SETTINGS_HEADER = """
-======================================================================
-                         CURRENT SETTINGS                           
-======================================================================
-"""
-
-SETTINGS_FOOTER = "=" * 70
-
-
 class GetCommand(BaseCommand):
-  """Command to view current settings."""
+  """Command to view current settings. Delegates to cli.settings_get tool."""
   
   def execute(self, args: List[str], conversation: Optional[Any] = None) -> Result:
     """
-    Execute the get command to display settings.
+    Execute the get command to display settings via cli.settings_get tool.
     
     Args:
         args: Optional list containing setting name to display
@@ -41,49 +31,11 @@ class GetCommand(BaseCommand):
     """
     self.logger.debug("Get command received")
     
+    params: Dict[str, Any] = {'settings': self.settings}
     if args:
-      return self._get_single_setting(args[0])
-    else:
-      return self._get_all_settings()
-  
-  def _get_single_setting(self, setting_name: str) -> Result:
-    """Get and display a single setting."""
-    current_value, default_value, help_text, category = self.settings.get_setting_info(setting_name)
+      params['setting_name'] = args[0]
     
-    if current_value is None and not help_text:
-      output = f"Unknown setting: {setting_name}\n"
-      output += f"Use {self.format_command('help')} to see available settings."
-      return Result(success=False, message=output)
-    
-    # Mask sensitive display
-    display_value = self.settings._mask_sensitive_value(setting_name, current_value)
-    
-    output = f"\n{setting_name}: {display_value}"
-    if help_text:
-      output += f"\n  ({help_text})"
-    
-    return Result(success=True, data=output)
-  
-  def _get_all_settings(self) -> Result:
-    """Get and display all settings grouped by category."""
-    output_lines = []
-    output_lines.append(SETTINGS_HEADER)
-    
-    # Get settings grouped by category
-    categorized = self.settings.get_all_settings_info()
-    
-    # Display settings by category
-    for category in SettingCategory:
-      if category in categorized:
-        output_lines.append(f"{category.value}:")
-        output_lines.append("-" * 70)
-        for var_name, display_value, help_text in categorized[category]:
-          output_lines.append(f"  {var_name:30s} = {display_value}")
-        output_lines.append("")
-    
-    output_lines.append(SETTINGS_FOOTER)
-    output = "\n".join(output_lines)
-    return Result(success=True, data=output)
+    return self.registry.run_command('cli.settings_get', params, None)
 
 
 class SetCommand(BaseCommand):

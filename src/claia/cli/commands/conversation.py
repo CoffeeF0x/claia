@@ -3,10 +3,11 @@ Conversation command class for the CLAIA CLI.
 
 This module contains the command class for managing conversations
 (list, load, clear, set title, delete).
+Delegates to cli.conversation_* tools via the registry.
 """
 
 import logging
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 
 from claia.lib.results import Result
 from claia.lib.data.models import Conversation
@@ -19,12 +20,11 @@ logger = logging.getLogger(__name__)
 
 
 # Constants for formatted output
-CONVERSATION_DIVIDER = "-" * 70
 CONVERSATION_WARNING = "⚠️  WARNING"
 
 
 class ConversationCommand(BaseCommand):
-  """Command to manage conversations."""
+  """Command to manage conversations. Delegates to cli.conversation_* tools."""
   
   def execute(self, args: List[str], conversation: Optional[Any] = None) -> Result:
     """
@@ -65,6 +65,14 @@ class ConversationCommand(BaseCommand):
       output += f"Use {self.format_command('conversation')} to see available subcommands."
       return Result(success=False, message=output)
   
+  def _get_tool_params(self) -> Dict[str, Any]:
+    """Get common parameters to pass to cli tools."""
+    return {
+      'files_directory': self.settings.files_directory,
+      'active_conversation_id': self.settings.active_conversation.id if self.settings.active_conversation else None,
+      'conversation': self.settings.active_conversation,
+    }
+  
   def _show_usage(self) -> Result:
     """Show usage information and current conversation."""
     output_lines = []
@@ -92,169 +100,19 @@ class ConversationCommand(BaseCommand):
     return Result(success=True, data=output)
   
   def _list_conversations(self) -> Result:
-    """List all saved conversations."""
-    try:
-      file_repo = FileSystemRepository(self.settings.files_directory)
-      conversations = file_repo.list_all(file_type='conversations')
-      
-      if not conversations:
-        return Result(success=True, data="No saved conversations found.")
-      
-      output_lines = []
-      output_lines.append("\nSaved conversations:")
-      output_lines.append(CONVERSATION_DIVIDER)
-      
-      # Sort by updated_at (most recent first)
-      conversations.sort(key=lambda c: c.get('updated_at', 0), reverse=True)
-      
-      for conv_meta in conversations:
-        conv_id = conv_meta.get('id', 'Unknown')
-        title = conv_meta.get('title', 'Untitled')
-        updated_at = conv_meta.get('updated_at', 0)
-        
-        # Mark the current active conversation
-        marker = " (active)" if (self.settings.active_conversation and 
-                                 self.settings.active_conversation.id == conv_id) else ""
-        
-        # Format timestamp
-        import time
-        time_str = time.strftime('%Y-%m-%d %H:%M', time.localtime(updated_at)) if updated_at else "Unknown"
-        
-        output_lines.append(f"  • {title}{marker}")
-        output_lines.append(f"    ID: {conv_id}")
-        output_lines.append(f"    Updated: {time_str}")
-      
-      output_lines.append("")
-      output = "\n".join(output_lines)
-      return Result(success=True, data=output)
-      
-    except Exception as e:
-      output = f"Error listing conversations: {str(e)}"
-      self.logger.error(f"Error listing conversations: {e}", exc_info=True)
-      return Result(success=False, message=output)
+    """List all saved conversations via cli.conversation_list tool."""
+    params = self._get_tool_params()
+    return self.registry.run_command('cli.conversation_list', params, None)
   
   def _print_conversation(self) -> Result:
-    """Print the entire active conversation with all messages."""
-    if not self.settings.active_conversation:
-      return Result(success=True, data="No active conversation.")
-    
-    conv = self.settings.active_conversation
-    output_lines = []
-    
-    # Title header
-    output_lines.append(f"\n{'=' * 70}")
-    output_lines.append(f"{conv.title.center(70)}")
-    output_lines.append(f"{'=' * 70}\n")
-    
-    # Show each message
-    if not conv.messages:
-      output_lines.append("(No messages in conversation)")
-    else:
-      for i, msg in enumerate(conv.messages):
-        # Prettify the role
-        role = self._prettify_role(msg.speaker)
-        
-        # Add message header
-        output_lines.append(f"[{role}]")
-        output_lines.append("-" * 70)
-        
-        # Add message content
-        if msg.content:
-          output_lines.append(msg.content)
-        else:
-          output_lines.append("(empty message)")
-        
-        # Add spacing between messages (except after last one)
-        if i < len(conv.messages) - 1:
-          output_lines.append("")
-    
-    output_lines.append("")
-    output_lines.append(f"{'=' * 70}")
-    output_lines.append(f"{f'{len(conv.messages)} message(s)'.center(70)}")
-    output_lines.append(f"{'=' * 70}\n")
-    
-    output = "\n".join(output_lines)
-    return Result(success=True, data=output)
+    """Print the entire active conversation via cli.conversation_print tool."""
+    params = self._get_tool_params()
+    return self.registry.run_command('cli.conversation_print', params, None)
   
   def _show_details(self) -> Result:
-    """Show metadata and technical information about the current conversation."""
-    if not self.settings.active_conversation:
-      return Result(success=True, data="No active conversation.")
-    
-    conv = self.settings.active_conversation
-    output_lines = []
-    output_lines.append(f"\nConversation Details:")
-    output_lines.append(CONVERSATION_DIVIDER)
-    output_lines.append(f"  Title: {conv.title}")
-    output_lines.append(f"  ID: {conv.id}")
-    output_lines.append(f"  Messages: {len(conv.messages)}")
-    
-    # Show creation and update time
-    import time
-    if conv.created_at:
-      created_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(conv.created_at))
-      output_lines.append(f"  Created: {created_str}")
-    if conv.updated_at:
-      updated_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(conv.updated_at))
-      output_lines.append(f"  Updated: {updated_str}")
-    
-    # Show prompt if present
-    if conv.prompt and conv.prompt.get('system'):
-      prompt_preview = conv.prompt['system'][:100]
-      if len(conv.prompt['system']) > 100:
-        prompt_preview += "..."
-      output_lines.append(f"\n  System Prompt: {prompt_preview}")
-    
-    # Show settings if present
-    if conv.settings:
-      output_lines.append(f"\n  Settings:")
-      if hasattr(conv.settings, 'model'):
-        output_lines.append(f"    Model: {conv.settings.model or 'None'}")
-      if hasattr(conv.settings, 'temperature'):
-        output_lines.append(f"    Temperature: {conv.settings.temperature}")
-      if hasattr(conv.settings, 'max_tokens'):
-        output_lines.append(f"    Max Tokens: {conv.settings.max_tokens or 'Default'}")
-    
-    # Show tool definitions count if present
-    if hasattr(conv, 'tool_definitions') and conv.tool_definitions:
-      output_lines.append(f"\n  Tool Definitions: {len(conv.tool_definitions)}")
-    
-    # Show actions count if present
-    if hasattr(conv, 'actions') and conv.actions:
-      output_lines.append(f"  Actions (audit trail): {len(conv.actions)}")
-    
-    # Show message breakdown by role
-    if conv.messages:
-      role_counts = {}
-      for msg in conv.messages:
-        role_name = self._prettify_role(msg.speaker)
-        role_counts[role_name] = role_counts.get(role_name, 0) + 1
-      
-      output_lines.append(f"\n  Message Breakdown:")
-      for role, count in sorted(role_counts.items()):
-        output_lines.append(f"    {role}: {count}")
-    
-    output_lines.append("")
-    output = "\n".join(output_lines)
-    return Result(success=True, data=output)
-  
-  def _prettify_role(self, role) -> str:
-    """
-    Convert a MessageRole enum to a prettified string.
-    
-    Args:
-        role: MessageRole enum or string
-    
-    Returns:
-        Prettified role string
-    """
-    if isinstance(role, MessageRole):
-      role_str = role.value
-    else:
-      role_str = str(role).lower()
-    
-    # Capitalize first letter
-    return role_str.capitalize()
+    """Show metadata and technical info via cli.conversation_details tool."""
+    params = self._get_tool_params()
+    return self.registry.run_command('cli.conversation_details', params, None)
   
   def _clear_conversation(self) -> Result:
     """Clear the active conversation and start a new one."""

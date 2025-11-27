@@ -4,9 +4,7 @@ System command classes for the CLAIA CLI.
 This module contains command classes for system-level operations like quit, help, and version.
 """
 
-import sys
 import logging
-import importlib.metadata as importlib_metadata
 from typing import List, Optional, Any
 from collections import defaultdict
 
@@ -60,11 +58,11 @@ class QuitCommand(BaseCommand):
 
 
 class VersionCommand(BaseCommand):
-  """Command to display version information."""
+  """Command to display version information. Delegates to cli.version tool."""
   
   def execute(self, args: List[str], conversation: Optional[Any] = None) -> Result:
     """
-    Execute the version command.
+    Execute the version command via cli.version tool.
     
     Args:
         args: Command arguments (unused)
@@ -75,22 +73,15 @@ class VersionCommand(BaseCommand):
     """
     self.logger.debug("Version command received")
     
-    try:
-      version = importlib_metadata.version("claia")
-    except importlib_metadata.PackageNotFoundError:
-      version = "dev"
-    except Exception:
-      version = "unknown"
+    # Get user configuration parameters
+    user_kwargs = self.settings.get_user_kwargs()
     
-    version_text = f"CLAIA version {version}"
-    version_text += f"\nPython {sys.version.split()[0]}"
-    version_text += f"\nPlatform: {sys.platform}"
-    
-    return Result(success=True, data=version_text)
+    # Call the cli.version tool through the registry
+    return self.registry.run_command('cli.version', {}, None, **user_kwargs)
 
 
 class HelpCommand(BaseCommand):
-  """Command to display help information."""
+  """Command to display help information. Delegates to cli.help tool."""
   
   def __init__(self, registry, settings, current_mode='interactive', command_specs=None):
     """
@@ -107,7 +98,10 @@ class HelpCommand(BaseCommand):
   
   def execute(self, args: List[str], conversation: Optional[Any] = None) -> Result:
     """
-    Execute the help command.
+    Execute the help command via cli.help tool.
+    
+    Note: This still includes settings help which requires CONFIG_VARS,
+    so we generate a combined output from the tool and local settings.
     
     Args:
         args: Command arguments (unused)
@@ -118,87 +112,30 @@ class HelpCommand(BaseCommand):
     """
     self.logger.debug("Help command received")
     
-    help_text = []
-    help_text.append(HELP_HEADER)
+    # Call the cli.help tool for commands and tools help
+    params = {
+      'registry': self.registry,
+      'command_specs': self.command_specs,
+      'current_mode': self._current_mode,
+    }
     
-    # Built-in Commands
-    help_text.append("BUILT-IN COMMANDS")
-    help_text.append("-" * 70)
-    help_text.extend(self._get_commands_help())
+    tool_result = self.registry.run_command('cli.help', params, None)
+    
+    if not tool_result.is_success():
+      return tool_result
+    
+    help_text = [tool_result.get_data() or ""]
+    
+    # Add configuration settings help (requires CONFIG_VARS from settings module)
     help_text.append("")
-    
-    # Available Tools/Modules
-    help_text.append("AVAILABLE TOOLS & MODULES")
-    help_text.append("-" * 70)
-    help_text.extend(self._get_tools_help())
-    help_text.append("")
-    
-    # Configuration Settings
     help_text.append("CONFIGURATION SETTINGS")
     help_text.append("-" * 70)
     help_text.extend(self._get_settings_help())
-    
-    help_text.append(HELP_FOOTER)
+    help_text.append("")
+    help_text.append("=" * 70)
     
     output = "\n".join(help_text)
     return Result(success=True, data=output)
-  
-  def _get_commands_help(self) -> List[str]:
-    """Generate help text for built-in commands."""
-    lines = []
-    
-    if self._current_mode == 'interactive':
-      lines.append("  Commands (prefix with ':'):")
-      for aliases, _, help_desc, _, _, _ in self.command_specs:
-        aliases_str = ', '.join(aliases)
-        lines.append(f"    :{aliases_str:24s} - {help_desc}")
-    else:
-      lines.append("  Command Line Flags:")
-      from .specs import generate_cli_alias
-      for aliases, _, help_desc, _, _, _ in self.command_specs:
-        cli_aliases = [generate_cli_alias(alias) for alias in aliases]
-        aliases_str = ', '.join(cli_aliases)
-        lines.append(f"    {aliases_str:25s} - {help_desc}")
-    
-    return lines
-  
-  def _get_tools_help(self) -> List[str]:
-    """Generate help text for available tools and modules."""
-    lines = []
-    catalog = self.registry.get_commands_catalog()
-    
-    if catalog:
-      total_tools = 0
-      for mod_name, mod in catalog.items():
-        info = mod.get('module_info')
-        title = getattr(info, 'title', None) if info else None
-        desc = getattr(info, 'description', None) if info else None
-        
-        # Module header
-        line = f"  [{mod_name}]"
-        if title:
-          line += f" {title}"
-        lines.append(line)
-        if desc:
-          lines.append(f"    {desc}")
-        
-        # List tools in this module
-        tools = mod.get('list_of_tools', [])
-        if tools:
-          for tool in tools:
-            tool_name = tool.get('tool_name')
-            tool_desc = tool.get('tool_description', '')
-            lines.append(f"    • {mod_name}.{tool_name:20s} - {tool_desc}")
-            total_tools += 1
-        else:
-          lines.append(f"    (no tools available)")
-        lines.append("")
-      
-      lines.append(f"  Total: {len(catalog)} module(s), {total_tools} tool(s)")
-    else:
-      lines.append("  No modules loaded")
-    
-    return lines
   
   def _get_settings_help(self) -> List[str]:
     """Generate help text for configuration settings."""

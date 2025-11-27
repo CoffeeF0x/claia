@@ -270,9 +270,13 @@ class Registry:
   def _convert_type(self, value: Any, data_type: str) -> Any:
     """Convert string value to the requested data type.
 
-    Supports: 'str', 'int', 'float', 'bool'. Falls back to str.
+    Supports: 'str', 'int', 'float', 'bool', 'custom'. Falls back to str.
+    Custom type passes through values without conversion.
     """
     try:
+      if data_type == 'custom':
+        # Pass through custom types without conversion
+        return value
       if data_type == 'int':
         return int(value)
       if data_type == 'float':

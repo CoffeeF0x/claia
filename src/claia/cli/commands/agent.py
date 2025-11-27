@@ -2,10 +2,11 @@
 Agent and Prompt command classes for the CLAIA CLI.
 
 This module contains command classes for managing agents and prompts.
+Delegates to cli.agent_* and cli.prompt_* tools via the registry.
 """
 
 import logging
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 
 from claia.lib.results import Result
 from claia.lib.data.models import Prompt
@@ -17,12 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 # Constants for formatted output
-AGENT_DIVIDER = "-" * 70
 PROMPT_DIVIDER = "-" * 70
 
 
 class AgentCommand(BaseCommand):
-  """Command to manage active agent selection."""
+  """Command to manage active agent selection. Delegates to cli.agent_* tools."""
   
   def execute(self, args: List[str], conversation: Optional[Any] = None) -> Result:
     """
@@ -48,55 +48,40 @@ class AgentCommand(BaseCommand):
     # Otherwise, switch to specified agent
     return self._switch_agent(args[0])
   
+  def _get_tool_params(self) -> Dict[str, Any]:
+    """Get common parameters to pass to cli tools."""
+    return {
+      'active_agent': self.settings.active_agent,
+      'default_agent': self.settings.default_agent,
+      'registry': self.registry,
+    }
+  
   def _show_current_agent(self) -> Result:
-    """Show the current active agent and usage information."""
-    current_agent = self.settings.active_agent or "None"
-    default_agent = self.settings.default_agent or "None"
+    """Show the current active agent and usage information via cli.agent_current tool."""
+    # Get current status via tool
+    params = self._get_tool_params()
+    result = self.registry.run_command('cli.agent_current', params, None)
     
-    output = f"\nCurrent active agent: {current_agent}"
-    output += f"\nDefault agent (from settings): {default_agent}"
-    output += "\n\nUsage:"
+    # Append usage information
+    if result.is_success():
+      output = result.get_data() or ""
+      output += "\n\nUsage:"
+      
+      if self._current_mode == 'interactive':
+        output += "\n  :agent list          - List all available agents"
+        output += "\n  :agent <agent_name>  - Switch to specified agent"
+      else:
+        output += "\n  --agent list          - List all available agents"
+        output += "\n  --agent <agent_name>  - Switch to specified agent"
+      
+      return Result(success=True, data=output)
     
-    if self._current_mode == 'interactive':
-      output += "\n  :agent list          - List all available agents"
-      output += "\n  :agent <agent_name>  - Switch to specified agent"
-    else:
-      output += "\n  --agent list          - List all available agents"
-      output += "\n  --agent <agent_name>  - Switch to specified agent"
-    
-    return Result(success=True, data=output)
+    return result
   
   def _list_agents(self) -> Result:
-    """List all available agents."""
-    try:
-      agents_info = self.registry.manager.get_agents()
-      
-      if not agents_info:
-        return Result(success=False, message="No agents available.")
-      
-      output_lines = []
-      output_lines.append("\nAvailable Agents:")
-      output_lines.append(AGENT_DIVIDER)
-      
-      for agent_info in agents_info:
-        agent_name = agent_info.name
-        description = getattr(agent_info, 'description', 'No description available')
-        
-        # Mark the current active agent
-        marker = " (active)" if agent_name == self.settings.active_agent else ""
-        marker += " (default)" if agent_name == self.settings.default_agent else ""
-        
-        output_lines.append(f"  • {agent_name}{marker}")
-        output_lines.append(f"    {description}")
-      
-      output_lines.append("")
-      output = "\n".join(output_lines)
-      return Result(success=True, data=output)
-      
-    except Exception as e:
-      output = f"Error listing agents: {str(e)}"
-      self.logger.error(f"Error listing agents: {e}", exc_info=True)
-      return Result(success=False, message=output)
+    """List all available agents via cli.agent_list tool."""
+    params = self._get_tool_params()
+    return self.registry.run_command('cli.agent_list', params, None)
   
   def _switch_agent(self, agent_name: str) -> Result:
     """
@@ -135,7 +120,7 @@ class AgentCommand(BaseCommand):
 
 
 class PromptCommand(BaseCommand):
-  """Command to manage prompts (list, set, clear, delete, print)."""
+  """Command to manage prompts (list, set, clear, delete, print). Delegates to cli.prompt_* tools."""
   
   def execute(self, args: List[str], conversation: Optional[Any] = None) -> Result:
     """
@@ -173,6 +158,14 @@ class PromptCommand(BaseCommand):
       output += f"Use {self.format_command('prompt')} to see available subcommands."
       return Result(success=False, message=output)
   
+  def _get_tool_params(self) -> Dict[str, Any]:
+    """Get common parameters to pass to cli tools."""
+    return {
+      'files_directory': self.settings.files_directory,
+      'active_prompt_name': self.settings.active_prompt.prompt_name if self.settings.active_prompt else None,
+      'default_prompt': self.settings.default_prompt,
+    }
+  
   def _show_usage(self) -> Result:
     """Show usage information and current active prompt."""
     output_lines = []
@@ -195,36 +188,9 @@ class PromptCommand(BaseCommand):
     return Result(success=True, data=output)
   
   def _list_prompts(self) -> Result:
-    """List all available prompts."""
-    try:
-      file_repo = FileSystemRepository(self.settings.files_directory)
-      prompts = file_repo.list_all(file_type='prompts')
-      
-      if not prompts:
-        return Result(success=True, data="No prompts found.")
-      
-      output_lines = []
-      output_lines.append("\nAvailable prompts:")
-      output_lines.append(PROMPT_DIVIDER)
-      
-      for prompt_meta in prompts:
-        prompt_name = prompt_meta.get('prompt_name', 'Unknown')
-        
-        # Mark the current active prompt
-        marker = " (active)" if (self.settings.active_prompt and 
-                                 self.settings.active_prompt.prompt_name == prompt_name) else ""
-        marker += " (default)" if prompt_name == self.settings.default_prompt else ""
-        
-        output_lines.append(f"  • {prompt_name}{marker}")
-      
-      output_lines.append("")
-      output = "\n".join(output_lines)
-      return Result(success=True, data=output)
-      
-    except Exception as e:
-      output = f"Error listing prompts: {str(e)}"
-      self.logger.error(f"Error listing prompts: {e}", exc_info=True)
-      return Result(success=False, message=output)
+    """List all available prompts via cli.prompt_list tool."""
+    params = self._get_tool_params()
+    return self.registry.run_command('cli.prompt_list', params, None)
   
   def _clear_prompt(self) -> Result:
     """Clear the active prompt."""
@@ -289,7 +255,7 @@ class PromptCommand(BaseCommand):
   
   def _print_prompt(self, args: List[str]) -> Result:
     """
-    Print a prompt (active or specified).
+    Print a prompt (active or specified) via cli.prompt_print tool.
     
     Args:
         args: Optional list containing prompt name
@@ -297,41 +263,11 @@ class PromptCommand(BaseCommand):
     Returns:
         Result with prompt content
     """
-    try:
-      file_repo = FileSystemRepository(self.settings.files_directory)
-      
-      # If prompt name specified, print that prompt
-      if args:
-        prompt = self._load_prompt_by_name(args[0], file_repo)
-        if isinstance(prompt, Result):
-          return prompt  # Error result
-      else:
-        # Print active prompt
-        if not self.settings.active_prompt:
-          output = f"No active prompt.\n"
-          output += f"Use {self.format_command('prompt set <name>')} to set an active prompt."
-          return Result(success=True, data=output)
-        
-        # Ensure content is loaded
-        if not self.settings.active_prompt.has_content_loaded():
-          self.settings.active_prompt = file_repo.load(
-            self.settings.active_prompt.id, 
-            load_content=True
-          )
-        
-        prompt = self.settings.active_prompt
-      
-      output = f"\n{prompt.prompt_name}:"
-      output += f"\n{PROMPT_DIVIDER}"
-      output += f"\n{prompt.content}"
-      output += f"\n{PROMPT_DIVIDER}\n"
-      
-      return Result(success=True, data=output)
-      
-    except Exception as e:
-      output = f"Error printing prompt: {str(e)}"
-      self.logger.error(f"Error printing prompt: {e}", exc_info=True)
-      return Result(success=False, message=output)
+    params = self._get_tool_params()
+    if args:
+      params['prompt_name'] = args[0]
+    
+    return self.registry.run_command('cli.prompt_print', params, None)
   
   def _delete_prompt(self, args: List[str]) -> Result:
     """
