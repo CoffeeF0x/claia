@@ -1,8 +1,5 @@
 """
-Agent and Prompt command classes for the CLAIA CLI.
-
-This module contains command classes for managing agents and prompts.
-Delegates to cli.agent_* and cli.prompt_* tools via the registry.
+Agent and Prompt commands for the CLAIA CLI.
 """
 
 import logging
@@ -17,39 +14,19 @@ from .base import BaseCommand
 logger = logging.getLogger(__name__)
 
 
-# Constants for formatted output
-PROMPT_DIVIDER = "-" * 70
-
-
 class AgentCommand(BaseCommand):
-  """Command to manage active agent selection. Delegates to cli.agent_* tools."""
+  """Command to manage active agent selection."""
   
   def execute(self, args: List[str], conversation: Optional[Any] = None) -> Result:
-    """
-    Execute the agent command.
-    
-    Args:
-        args: Optional list of arguments (empty, "list", or agent name)
-        conversation: Optional conversation context (unused)
-    
-    Returns:
-        Result indicating success/failure
-    """
-    self.logger.debug("Agent command received")
-    
-    # If no args, show current active agent
+    """Execute agent command: show current, list, or switch agents."""
     if not args:
       return self._show_current_agent()
-    
-    # If "list" argument, show available agents
     if args[0].lower() == "list":
       return self._list_agents()
-    
-    # Otherwise, switch to specified agent
     return self._switch_agent(args[0])
   
   def _get_tool_params(self) -> Dict[str, Any]:
-    """Get common parameters to pass to cli tools."""
+    """Get common parameters for cli tools."""
     return {
       'active_agent': self.settings.active_agent,
       'default_agent': self.settings.default_agent,
@@ -57,91 +34,52 @@ class AgentCommand(BaseCommand):
     }
   
   def _show_current_agent(self) -> Result:
-    """Show the current active agent and usage information via cli.agent_current tool."""
-    # Get current status via tool
-    params = self._get_tool_params()
-    result = self.registry.run_command('cli.agent_current', params, None)
+    """Show the current active agent with usage info."""
+    result = self.registry.run_command('cli.agent_current', self._get_tool_params(), None)
+    if not result.is_success():
+      return result
     
-    # Append usage information
-    if result.is_success():
-      output = result.get_data() or ""
-      output += "\n\nUsage:"
-      
-      if self._current_mode == 'interactive':
-        output += "\n  :agent list          - List all available agents"
-        output += "\n  :agent <agent_name>  - Switch to specified agent"
-      else:
-        output += "\n  --agent list          - List all available agents"
-        output += "\n  --agent <agent_name>  - Switch to specified agent"
-      
-      return Result(success=True, data=output)
-    
-    return result
+    prefix = self.get_help_prefix()
+    output = result.get_data() or ""
+    output += f"\n\nUsage:\n  {prefix}agent list          - List all available agents"
+    output += f"\n  {prefix}agent <agent_name>  - Switch to specified agent"
+    return Result(success=True, data=output)
   
   def _list_agents(self) -> Result:
-    """List all available agents via cli.agent_list tool."""
-    params = self._get_tool_params()
-    return self.registry.run_command('cli.agent_list', params, None)
+    """List all available agents."""
+    return self.registry.run_command('cli.agent_list', self._get_tool_params(), None)
   
   def _switch_agent(self, agent_name: str) -> Result:
-    """
-    Switch to a specified agent.
-    
-    Args:
-        agent_name: Name of the agent to switch to
-    
-    Returns:
-        Result indicating success/failure
-    """
+    """Switch to a specified agent."""
     agent_name = agent_name.lower()
     
     try:
       agent_class = self.registry.get_agent_class(agent_name)
-      
       if not agent_class:
-        output = f"Unknown agent: {agent_name}\n"
-        output += f"Use {self.format_command('agent list')} to see available agents."
-        return Result(success=False, message=output)
+        return Result(success=False, message=f"Unknown agent: {agent_name}\nUse {self.format_command('agent list')} to see available agents.")
       
-      # Set the active agent (runtime only, not persisted)
       old_agent = self.settings.active_agent
       self.settings.active_agent = agent_name
       
       output = f"\nActive agent changed: {old_agent or 'None'} -> {agent_name}"
       output += "\n(Note: This change is for the current session only)"
       output += f"\nTo set as default for future sessions, use: {self.format_command(f'set default_agent {agent_name}')}"
-      
       return Result(success=True, data=output)
       
     except Exception as e:
-      output = f"Error switching to agent '{agent_name}': {str(e)}"
       self.logger.error(f"Error switching agent: {e}", exc_info=True)
-      return Result(success=False, message=output)
+      return Result(success=False, message=f"Error switching to agent '{agent_name}': {str(e)}")
 
 
 class PromptCommand(BaseCommand):
-  """Command to manage prompts (list, set, clear, delete, print). Delegates to cli.prompt_* tools."""
+  """Command to manage prompts (list, set, clear, delete, print)."""
   
   def execute(self, args: List[str], conversation: Optional[Any] = None) -> Result:
-    """
-    Execute the prompt command.
-    
-    Args:
-        args: List of arguments (subcommand and additional args)
-        conversation: Optional conversation context (unused)
-    
-    Returns:
-        Result indicating success/failure
-    """
-    self.logger.debug("Prompt command received")
-    
-    # If no args, show usage and current active prompt
+    """Execute prompt command: show usage or route to subcommand."""
     if not args:
       return self._show_usage()
     
     subcommand = args[0].lower()
-    
-    # Route to appropriate subcommand handler
     handlers = {
       'list': self._list_prompts,
       'clear': self._clear_prompt,
@@ -153,13 +91,10 @@ class PromptCommand(BaseCommand):
     handler = handlers.get(subcommand)
     if handler:
       return handler()
-    else:
-      output = f"Unknown prompt subcommand: {subcommand}\n"
-      output += f"Use {self.format_command('prompt')} to see available subcommands."
-      return Result(success=False, message=output)
+    return Result(success=False, message=f"Unknown prompt subcommand: {subcommand}\nUse {self.format_command('prompt')} to see available subcommands.")
   
   def _get_tool_params(self) -> Dict[str, Any]:
-    """Get common parameters to pass to cli tools."""
+    """Get common parameters for cli tools."""
     return {
       'files_directory': self.settings.files_directory,
       'active_prompt_name': self.settings.active_prompt.prompt_name if self.settings.active_prompt else None,
@@ -168,75 +103,50 @@ class PromptCommand(BaseCommand):
   
   def _show_usage(self) -> Result:
     """Show usage information and current active prompt."""
-    output_lines = []
-    
-    if self.settings.active_prompt:
-      output_lines.append(f"\nActive prompt: {self.settings.active_prompt.prompt_name}")
-    else:
-      output_lines.append("\nNo active prompt")
-    
-    output_lines.append("\nUsage:")
     prefix = self.get_help_prefix()
+    active = self.settings.active_prompt
     
-    output_lines.append(f"  {prefix}prompt list              - List all available prompts")
-    output_lines.append(f"  {prefix}prompt set <name>        - Set the active prompt")
-    output_lines.append(f"  {prefix}prompt clear             - Clear the active prompt")
-    output_lines.append(f"  {prefix}prompt print [name]      - Print active prompt or specified prompt")
-    output_lines.append(f"  {prefix}prompt delete <name>     - Delete a stored prompt (requires confirmation)")
-    
-    output = "\n".join(output_lines)
-    return Result(success=True, data=output)
+    lines = [f"\nActive prompt: {active.prompt_name}" if active else "\nNo active prompt"]
+    lines.extend([
+      "\nUsage:",
+      f"  {prefix}prompt list              - List all available prompts",
+      f"  {prefix}prompt set <name>        - Set the active prompt",
+      f"  {prefix}prompt clear             - Clear the active prompt",
+      f"  {prefix}prompt print [name]      - Print active prompt or specified prompt",
+      f"  {prefix}prompt delete <name>     - Delete a stored prompt (requires confirmation)",
+    ])
+    return Result(success=True, data="\n".join(lines))
   
   def _list_prompts(self) -> Result:
-    """List all available prompts via cli.prompt_list tool."""
-    params = self._get_tool_params()
-    return self.registry.run_command('cli.prompt_list', params, None)
+    """List all available prompts."""
+    return self.registry.run_command('cli.prompt_list', self._get_tool_params(), None)
   
   def _clear_prompt(self) -> Result:
     """Clear the active prompt."""
     if not self.settings.active_prompt:
       return Result(success=True, data="No active prompt to clear.")
     
-    old_prompt_name = self.settings.active_prompt.prompt_name
+    old_name = self.settings.active_prompt.prompt_name
     self.settings.active_prompt = None
-    output = f"Cleared active prompt: {old_prompt_name}"
-    return Result(success=True, data=output)
+    return Result(success=True, data=f"Cleared active prompt: {old_name}")
   
   def _set_prompt(self, args: List[str]) -> Result:
-    """
-    Set the active prompt.
-    
-    Args:
-        args: List containing the prompt name
-    
-    Returns:
-        Result indicating success/failure
-    """
+    """Set the active prompt."""
     if not args:
-      output = f"Missing prompt name. Usage: {self.format_command('prompt set <name>')}"
-      return Result(success=False, message=output)
+      return Result(success=False, message=f"Missing prompt name. Usage: {self.format_command('prompt set <name>')}")
     
     prompt_name = args[0]
-    
     try:
       validated_name = Prompt.validate_prompt_name(prompt_name)
       file_repo = FileSystemRepository(self.settings.files_directory)
       
-      # Find the prompt
+      # Find and load the prompt
       prompts = file_repo.list_all(file_type='prompts')
-      prompt_id = None
-      
-      for prompt_meta in prompts:
-        if prompt_meta.get('prompt_name') == validated_name:
-          prompt_id = prompt_meta.get('id')
-          break
+      prompt_id = next((p.get('id') for p in prompts if p.get('prompt_name') == validated_name), None)
       
       if not prompt_id:
-        output = f"Prompt '{validated_name}' not found.\n"
-        output += f"Use {self.format_command('prompt list')} to see available prompts."
-        return Result(success=False, message=output)
+        return Result(success=False, message=f"Prompt '{validated_name}' not found.\nUse {self.format_command('prompt list')} to see available prompts.")
       
-      # Load the prompt
       prompt = file_repo.load(prompt_id, load_content=True)
       if not prompt:
         return Result(success=False, message=f"Error loading prompt '{validated_name}'.")
@@ -245,130 +155,56 @@ class PromptCommand(BaseCommand):
       output = f"\nActive prompt set to: {validated_name}"
       output += "\n(Note: This change is for the current session only)"
       output += f"\nTo set as default for future sessions, use: {self.format_command(f'set default_prompt {validated_name}')}"
-      
       return Result(success=True, data=output)
       
     except Exception as e:
-      output = f"Error setting prompt '{prompt_name}': {str(e)}"
       self.logger.error(f"Error setting prompt: {e}", exc_info=True)
-      return Result(success=False, message=output)
+      return Result(success=False, message=f"Error setting prompt '{prompt_name}': {str(e)}")
   
   def _print_prompt(self, args: List[str]) -> Result:
-    """
-    Print a prompt (active or specified) via cli.prompt_print tool.
-    
-    Args:
-        args: Optional list containing prompt name
-    
-    Returns:
-        Result with prompt content
-    """
+    """Print a prompt (active or specified)."""
     params = self._get_tool_params()
     if args:
       params['prompt_name'] = args[0]
-    
     return self.registry.run_command('cli.prompt_print', params, None)
   
   def _delete_prompt(self, args: List[str]) -> Result:
-    """
-    Delete a stored prompt.
-    
-    Args:
-        args: List containing prompt name
-    
-    Returns:
-        Result indicating success/failure
-    """
+    """Delete a stored prompt with confirmation."""
     if not args:
-      output = f"Missing prompt name. Usage: {self.format_command('prompt delete <name>')}"
-      return Result(success=False, message=output)
-    
-    prompt_name = args[0]
+      return Result(success=False, message=f"Missing prompt name. Usage: {self.format_command('prompt delete <name>')}")
     
     try:
-      validated_name = Prompt.validate_prompt_name(prompt_name)
+      validated_name = Prompt.validate_prompt_name(args[0])
       file_repo = FileSystemRepository(self.settings.files_directory)
       
       # Find the prompt
       prompts = file_repo.list_all(file_type='prompts')
-      prompt_id = None
-      
-      for prompt_meta in prompts:
-        if prompt_meta.get('prompt_name') == validated_name:
-          prompt_id = prompt_meta.get('id')
-          break
+      prompt_id = next((p.get('id') for p in prompts if p.get('prompt_name') == validated_name), None)
       
       if not prompt_id:
         return Result(success=False, message=f"Prompt '{validated_name}' not found.")
       
-      # Check if it's the active prompt
-      if (self.settings.active_prompt and 
-          self.settings.active_prompt.prompt_name == validated_name):
-        output = f"Cannot delete the active prompt '{validated_name}'.\n"
-        output += f"Use {self.format_command('prompt clear')} to clear the active prompt first."
-        return Result(success=False, message=output)
+      # Can't delete active prompt
+      if self.settings.active_prompt and self.settings.active_prompt.prompt_name == validated_name:
+        return Result(success=False, message=f"Cannot delete the active prompt '{validated_name}'.\nUse {self.format_command('prompt clear')} to clear the active prompt first.")
       
-      # Ask for confirmation
+      # Confirmation
       print(f"\n⚠️  WARNING: You are about to delete prompt '{validated_name}'.")
       print("This action cannot be undone.")
       
       try:
         confirmation = input("\nType the prompt name to confirm deletion: ").strip()
-        
         if confirmation != validated_name:
           return Result(success=True, message="Deletion cancelled. Name did not match.")
         
-        # Delete the prompt
         if file_repo.delete(prompt_id):
-          output = f"Successfully deleted prompt: {validated_name}"
-          return Result(success=True, data=output)
-        else:
-          return Result(success=False, message=f"Failed to delete prompt: {validated_name}")
-          
+          return Result(success=True, data=f"Successfully deleted prompt: {validated_name}")
+        return Result(success=False, message=f"Failed to delete prompt: {validated_name}")
+        
       except (KeyboardInterrupt, EOFError):
         print("\n\nDeletion cancelled.")
         return Result(success=True, message="Deletion cancelled by user")
       
     except Exception as e:
-      output = f"Error deleting prompt '{prompt_name}': {str(e)}"
       self.logger.error(f"Error deleting prompt: {e}", exc_info=True)
-      return Result(success=False, message=output)
-  
-  def _load_prompt_by_name(self, prompt_name: str, file_repo: FileSystemRepository):
-    """
-    Load a prompt by name from the repository.
-    
-    Args:
-        prompt_name: Name of the prompt
-        file_repo: File repository instance
-    
-    Returns:
-        Prompt object or Result (error)
-    """
-    try:
-      validated_name = Prompt.validate_prompt_name(prompt_name)
-      
-      # Find the prompt
-      prompts = file_repo.list_all(file_type='prompts')
-      prompt_id = None
-      
-      for prompt_meta in prompts:
-        if prompt_meta.get('prompt_name') == validated_name:
-          prompt_id = prompt_meta.get('id')
-          break
-      
-      if not prompt_id:
-        output = f"Prompt '{validated_name}' not found.\n"
-        output += f"Use {self.format_command('prompt list')} to see available prompts."
-        return Result(success=False, message=output)
-      
-      # Load the prompt with content
-      prompt = file_repo.load(prompt_id, load_content=True)
-      if not prompt:
-        return Result(success=False, message=f"Error loading prompt '{validated_name}'.")
-      
-      return prompt
-      
-    except Exception as e:
-      return Result(success=False, message=f"Error loading prompt: {str(e)}")
-
+      return Result(success=False, message=f"Error deleting prompt '{args[0]}': {str(e)}")

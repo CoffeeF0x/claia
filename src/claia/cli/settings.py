@@ -135,7 +135,8 @@ class Settings:
     Priority: Command line args > .env file > Environment variables > settings.json > Defaults
     """
     # Disable argparse's automatic -h/--help so our custom help handler can take over
-    parser = argparse.ArgumentParser(description='CLAIA Settings', add_help=False)
+    # Disable allow_abbrev to prevent --model from matching --models-directory etc.
+    parser = argparse.ArgumentParser(description='CLAIA Settings', add_help=False, allow_abbrev=False)
 
     # Add arguments based on CONFIG_VARS, but only for externally settable ones
     for var_name, default, externally_settable, category, help_text in CONFIG_VARS:

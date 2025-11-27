@@ -1,7 +1,5 @@
 """
-Query command class for the CLAIA CLI.
-
-This module contains the command class for sending a one-shot query to the AI.
+Query command for sending one-shot queries to the AI.
 """
 
 import logging
@@ -17,9 +15,6 @@ from .base import BaseCommand
 
 
 logger = logging.getLogger(__name__)
-
-
-# Default agent to use if none is active
 DEFAULT_AGENT = "assistant"
 
 
@@ -27,46 +22,25 @@ class QueryCommand(BaseCommand):
   """Command to send a one-shot query to the AI."""
   
   def execute(self, args: List[str], conversation: Optional[Any] = None) -> Result:
-    """
-    Execute the query command - send a message and get a response.
-    
-    Args:
-        args: List of arguments (the query text)
-        conversation: Optional conversation context (unused, we use active conversation)
-    
-    Returns:
-        Result with the AI's response
-    """
-    self.logger.debug("Query command received")
-    
+    """Send a message and get a response."""
     if not args:
-      output = f"Missing query text. Usage: {self.format_command('query <your question>')}"
-      return Result(success=False, message=output)
+      return Result(success=False, message=f"Missing query text. Usage: {self.format_command('query <your question>')}")
     
-    # Join all args into the query text
     query_text = ' '.join(args)
     
     try:
-      # Ensure we have an active conversation
+      # Ensure conversation and agent exist
       if not self.settings.active_conversation:
         self.settings.active_conversation = Conversation()
-        self.logger.debug("Created new conversation for query")
       
-      # Ensure we have an active agent
       if not self.settings.active_agent:
         self.settings.active_agent = self.settings.default_agent or DEFAULT_AGENT
-        self.logger.debug(f"Using agent: {self.settings.active_agent}")
       
-      # Add the user message to the conversation
-      user_message = self.settings.active_conversation.add_message(
-        MessageRole.USER, 
-        query_text
-      )
-      
-      # Get user configuration parameters
+      # Add user message
+      user_message = self.settings.active_conversation.add_message(MessageRole.USER, query_text)
       user_kwargs = self.settings.get_user_kwargs()
       
-      # Create a process for the query
+      # Create and run process
       process = Process(
         agent_type=self.settings.active_agent,
         conversation=self.settings.active_conversation,
@@ -77,27 +51,19 @@ class QueryCommand(BaseCommand):
         }
       )
       
-      # Add process to registry for execution
-      process_id = self.registry.add_process(process)
-      self.logger.debug(f"Query process added with ID: {process_id}")
+      self.registry.add_process(process)
       
-      # Stream the response and handle completion
       success = stream_process_response(
         process=process,
         user_message_id=user_message.message_id,
-        file_repo=None,  # Don't save conversation for query command
+        file_repo=None,
         save_conversation=False
       )
       
       if success:
-        self.logger.debug(f"Query completed successfully: {process_id}")
         return Result(success=True)
-      else:
-        error_msg = f"Query failed with status: {process.status}"
-        self.logger.error(error_msg)
-        return Result(success=False, message=error_msg)
+      return Result(success=False, message=f"Query failed with status: {process.status}")
       
     except Exception as e:
-      error_msg = f"Error processing query: {str(e)}"
-      self.logger.error(error_msg, exc_info=True)
-      return Result(success=False, message=error_msg)
+      self.logger.error(f"Error processing query: {e}", exc_info=True)
+      return Result(success=False, message=f"Error processing query: {str(e)}")
