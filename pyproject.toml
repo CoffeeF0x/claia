@@ -50,7 +50,6 @@ license-files = ["LICENSE", "NOTICE*"]
 [project.scripts]
 claia = "claia.cli.__main__:main"
 
-# Entry points for plugin system
 [project.entry-points."claia.architectures"]
 openai = "claia.architectures.openai:OpenAIPlugin"
 anthropic = "claia.architectures.anthropic:AnthropicPlugin"
@@ -75,7 +74,6 @@ legacy = "claia.definitions.legacy:LegacyDefinitionsPlugin"
 [project.entry-points."claia.agents"]
 simple = "claia.agents.simple:SimpleAgentPlugin"
 
-# Entry points for tools system
 [project.entry-points."claia.tool_patterns"]
 default = "claia.tool_patterns.default:DefaultToolPatternPlugin"
 
@@ -86,8 +84,6 @@ simple = "claia.tool_protocols.simple:SimpleProtocolPlugin"
 cli = "claia.cli.commands.extension:CLIModulePlugin"
 sample = "claia.tools.sample:SampleModulePlugin"
 system = "claia.tools.system:SystemModulePlugin"
-zammad = "extensions.zammad.plugin_basic:ZammadBasicModulePlugin"
-zammad_processes = "extensions.zammad.plugin_processes:ZammadProcessesModulePlugin"
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
