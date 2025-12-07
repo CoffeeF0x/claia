@@ -9,11 +9,16 @@ This module handles loading and coordinating all plugin types:
 - Tool patterns (define how tools are used)
 - Tool protocols (handle tool execution)
 - Tool modules (provide tool implementations)
+
+Extensions are lazy-loaded: definitions/metadata are discovered first without
+instantiation, allowing required_args to be collected for dynamic settings.
+Full instantiation occurs when the extension is first accessed.
 """
 
 import pluggy
 import logging
 import importlib.metadata as metadata
+from dataclasses import dataclass
 from typing import Dict, Optional, List, Type, Any, Callable, Tuple
 
 from .hooks import (
@@ -44,6 +49,21 @@ INFO_METHOD_BY_GROUP: Dict[str, Optional[str]] = {
 }
 
 
+########################################################################
+#                            DATA CLASSES                              #
+########################################################################
+@dataclass
+class LazyPluginEntry:
+  """Represents a discovered but not-yet-instantiated plugin."""
+  name: str                    # Entry point name
+  group: str                   # Entry point group (e.g., 'claia.tool_modules')
+  entry_point: Any             # The entry point object
+  plugin_class: Type = None    # Loaded class (after load())
+  info: Any = None             # Plugin info object (from get_*_info())
+  instance: Any = None         # Instantiated plugin (lazy)
+  required_args: Optional[List[str]] = None  # Cached required_args from info
+
+
 
 ########################################################################
 #                              INITIALIZE                              #
@@ -63,6 +83,10 @@ class Manager:
   - Model: Architecture, Deployment, Solver, Definition plugins
   - Tools: Pattern, Protocol, CommandModule plugins
   - Agents: Agent plugins
+  
+  Extensions are lazy-loaded: discover_plugins() collects metadata without
+  instantiation, allowing required_args to be collected for dynamic settings.
+  Full instantiation occurs when load_all_plugins() is called with settings.
   """
 
   def __init__(self):
@@ -97,14 +121,142 @@ class Manager:
     # Programmatically registered agents
     self._registered_agents: Dict[str, AgentInfo] = {}
 
+    # Lazy loading state
+    self._lazy_plugins: Dict[str, List[LazyPluginEntry]] = {}  # group -> list of entries
+    self._plugins_discovered = False
     self._plugins_loaded = False
     logger.debug("Manager initialized")
 
+
+  ######################################################################
+  #                         LAZY LOADING                               #
+  ######################################################################
+  def discover_plugins(self) -> None:
+    """
+    Discover all plugins from entry points without fully instantiating them.
+    
+    This method:
+    1. Loads each plugin class from entry points
+    2. Creates a temporary no-arg instance to introspect its info
+    3. Extracts required_args and stores them for later use
+    4. Does NOT register the plugin with pluggy yet
+    
+    This allows collecting required_args before settings are fully loaded,
+    breaking the circular dependency between settings and extensions.
+    """
+    if self._plugins_discovered:
+      logger.debug("Plugins already discovered")
+      return
+
+    groups = list(INFO_METHOD_BY_GROUP.keys())
+    
+    for group in groups:
+      self._lazy_plugins[group] = []
+      
+      for ep in metadata.entry_points().select(group=group):
+        entry = LazyPluginEntry(
+          name=ep.name,
+          group=group,
+          entry_point=ep
+        )
+        
+        try:
+          # Load the class
+          entry.plugin_class = ep.load()
+          
+          # Create temporary instance to get info (no kwargs)
+          try:
+            temp_instance = entry.plugin_class()
+            
+            # Get info object if available
+            info_method = INFO_METHOD_BY_GROUP.get(group)
+            if info_method and hasattr(temp_instance, info_method):
+              try:
+                entry.info = getattr(temp_instance, info_method)()
+                entry.required_args = getattr(entry.info, 'required_args', None)
+              except Exception as e:
+                logger.debug(f"Could not get info for {ep.name}: {e}")
+            
+          except Exception as e:
+            logger.debug(f"Could not create temp instance for {ep.name}: {e}")
+            # Still keep the entry - might work with kwargs later
+            
+        except Exception as e:
+          logger.warning(f"Failed to load plugin class {ep.name} from {group}: {e}")
+          continue
+        
+        self._lazy_plugins[group].append(entry)
+        logger.debug(f"Discovered {group} plugin: {ep.name}")
+    
+    self._plugins_discovered = True
+    logger.info(f"Discovered plugins from {len(groups)} groups")
+
+
+  def get_all_required_args(self) -> Dict[str, List[str]]:
+    """
+    Get all required_args from all discovered plugins.
+    
+    Returns:
+      Dict mapping plugin identifier (group:name) to list of required_args.
+      Empty list for plugins with no required_args.
+    
+    Example:
+      {
+        'claia.tool_modules:zammad': ['zammad_api_token', 'zammad_base_url'],
+        'claia.deployments:openai': ['openai_api_token'],
+      }
+    """
+    self.discover_plugins()
+    
+    result: Dict[str, List[str]] = {}
+    
+    for group, entries in self._lazy_plugins.items():
+      for entry in entries:
+        key = f"{group}:{entry.name}"
+        if entry.required_args:
+          result[key] = list(entry.required_args)
+        else:
+          result[key] = []
+    
+    return result
+
+
+  def get_extension_required_args(self) -> List[str]:
+    """
+    Get a flat list of all unique required_args from all extensions.
+    
+    This is useful for extending the settings configuration with
+    dynamic settings from extensions.
+    
+    Returns:
+      List of unique required_arg names across all extensions.
+    """
+    self.discover_plugins()
+    
+    unique_args = set()
+    
+    for group, entries in self._lazy_plugins.items():
+      for entry in entries:
+        if entry.required_args:
+          unique_args.update(entry.required_args)
+    
+    return list(sorted(unique_args))
+
+
   def load_all_plugins(self, **kwargs) -> None:
-    """Load all plugins from entry points."""
+    """
+    Load all plugins from entry points.
+    
+    Uses lazy loading: if plugins were already discovered via discover_plugins(),
+    uses the cached entries and instantiates them with the provided kwargs.
+    Otherwise, discovers and loads in one step.
+    """
     if self._plugins_loaded:
       logger.debug("Plugins already loaded")
       return
+
+    # Ensure plugins are discovered first
+    self.discover_plugins()
 
     try:
       # Load definition plugins first (they're optional)
@@ -138,54 +290,58 @@ class Manager:
   def _load_plugins(self, group: str, pm: pluggy.PluginManager, label: str, allow_empty: bool = False, ctor_kwargs: Optional[Dict[str, Any]] = None) -> None:
     """Load plugins securely by filtering ctor kwargs based on required_args.
 
-    We instantiate each plugin twice at most:
-      1) Create a temporary no-arg instance to introspect its info and required_args
-      2) If required_args is present, re-instantiate with only filtered kwargs
-         Otherwise, register the temporary instance
+    Uses the lazy plugin entries discovered by discover_plugins() if available.
+    Instantiates each plugin with only the kwargs specified in its required_args.
     """
     loaded_count = 0
+    
     try:
-      for ep in metadata.entry_points().select(group=group):
+      # Use cached lazy entries if available
+      entries = self._lazy_plugins.get(group, [])
+      
+      for entry in entries:
         try:
-          cls = ep.load()
-          inst = None
-
-          # Step 1: always try to build a temporary instance without kwargs
-          try:
-            temp = cls()
-          except Exception as e:
-            logger.warning(f"Failed to instantiate {label} plugin {ep.name} without kwargs: {e}")
-            # As a last resort, do not pass full ctor_kwargs (security); skip this plugin
+          cls = entry.plugin_class
+          if cls is None:
+            logger.warning(f"No plugin class loaded for {entry.name}")
             continue
-
-          # Step 2: if the plugin exposes an info method with required_args, filter
-          info_method = self._get_info_method_for_group(group)
+          
+          inst = None
+          
+          # Get filtered kwargs based on cached required_args
           filtered_kwargs: Dict[str, Any] = {}
-          if info_method and hasattr(temp, info_method):
-            try:
-              info_obj = getattr(temp, info_method)()
-              req = getattr(info_obj, 'required_args', None)
-              if req and ctor_kwargs:
-                filtered_kwargs = self._filter_kwargs(ctor_kwargs, req)
-            except Exception as e:
-              logger.debug(f"Could not inspect required_args for {label} plugin {ep.name}: {e}")
-
-          # If we have any filtered kwargs to pass, re-instantiate with them
+          if entry.required_args and ctor_kwargs:
+            filtered_kwargs = self._filter_kwargs(ctor_kwargs, entry.required_args)
+          
+          # Instantiate with filtered kwargs if we have any
           if filtered_kwargs:
             try:
               inst = cls(**filtered_kwargs)
             except Exception as e:
-              logger.debug(f"Re-instantiating {label} plugin {ep.name} with filtered kwargs failed, using temp instance: {e}")
-              inst = temp
+              logger.debug(f"Instantiating {label} plugin {entry.name} with kwargs failed: {e}")
+              # Fall back to no-arg instance
+              try:
+                inst = cls()
+              except Exception as e2:
+                logger.warning(f"Failed to instantiate {label} plugin {entry.name}: {e2}")
+                continue
           else:
-            # No required args or none provided — register temp instance (no secrets)
-            inst = temp
-
+            # No required args or none provided — use no-arg instance
+            try:
+              inst = cls()
+            except Exception as e:
+              logger.warning(f"Failed to instantiate {label} plugin {entry.name}: {e}")
+              continue
+          
+          # Cache the instance in the lazy entry
+          entry.instance = inst
+          
           pm.register(inst)
           loaded_count += 1
-          logger.debug(f"Loaded {label} plugin: {ep.name} from {ep.value}")
+          logger.debug(f"Loaded {label} plugin: {entry.name} from {entry.entry_point.value}")
+          
         except Exception as e:
-          logger.warning(f"Failed to load {label} plugin {ep.name}: {e}")
+          logger.warning(f"Failed to load {label} plugin {entry.name}: {e}")
 
       if loaded_count == 0:
         msg = f"No {label} plugins found in entry points"

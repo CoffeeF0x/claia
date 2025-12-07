@@ -265,10 +265,20 @@ def main() -> None:
   try:
     # Initialize the application
     logger.info("Initializing CLAIA...")
-    settings = Settings()
+    
+    # Create registry (discovers extensions but doesn't load them yet)
+    # This allows Settings to collect required_args from extensions
+    logger.debug("Initializing registry")
+    registry = Registry()
+    
+    # Create Settings with registry - extension settings are handled internally
+    settings = Settings(registry=registry)
     settings.root_logger = initialize_logging(settings.log_level, settings.log_format)
     settings = initialize_defaults(settings)
     user_kwargs = settings.get_user_kwargs()
+    
+    # Now load plugins with the settings
+    registry.load_plugins(**user_kwargs)
 
     # Log application startup with version and environment info
     logger.info("CLAIA application starting")
@@ -292,9 +302,7 @@ def main() -> None:
         settings.extra_args = ['--query', stdin_data] + settings.extra_args
         logger.info(f"Treating stdin as query command")
 
-    # Initialize the registry
-    logger.debug("Initializing unified registry")
-    registry = Registry(**user_kwargs)
+    # Build commands catalog
     _ = registry.get_commands_catalog() # NOTE: Can probably be removed later
     
     # Register CLI-specific agents using the programmatic registration API

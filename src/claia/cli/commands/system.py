@@ -7,7 +7,7 @@ from typing import List, Optional, Any
 from collections import defaultdict
 
 from claia.lib.results import Result
-from claia.cli.settings import CONFIG_VARS, SettingCategory
+from claia.cli.settings import SettingCategory
 from .base import BaseCommand
 
 
@@ -94,7 +94,7 @@ class HelpCommand(BaseCommand):
     
     # Group settings by category
     categorized = defaultdict(list)
-    for var_name, default, externally_settable, category, help_desc in CONFIG_VARS:
+    for var_name, default, externally_settable, category, help_desc in self.settings.config_vars:
       if externally_settable:
         if is_interactive:
           setting_line = f"    {var_name:30s} {help_desc}"

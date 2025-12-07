@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 
 # Internal dependencies
 from claia.lib.enums.logging import LogLevel, LogFormat
+from claia.registry import Registry
 
 
 
@@ -33,6 +34,7 @@ class SettingCategory(Enum):
   VLLM = "VLLM Settings"
   APPLICATION = "Application Settings"
   INTEGRATION = "External Integrations"
+  EXTENSION = "Extension Settings"
 
 
 
@@ -46,6 +48,7 @@ DEFAULT_SETTINGS_FILE = "settings.json"
 ENV_PREFIX = "CLAIA_"
 
 # Format: (variable_name, default_value, externally_settable, category, help_text)
+# Base configuration - extension settings are added dynamically via Settings._extend_with_extensions()
 CONFIG_VARS: List[Tuple[str, Any, bool, SettingCategory, str]] = [
   # API Tokens
   ("openai_api_token",                  "",            True,  SettingCategory.API,          "OpenAI API Token"),
@@ -87,11 +90,8 @@ CONFIG_VARS: List[Tuple[str, Any, bool, SettingCategory, str]] = [
   ("log_file",                          "claia.log",   True,  SettingCategory.APPLICATION,  "Log file path (empty for console only)"),
   ("env_file",                          "",            True,  SettingCategory.APPLICATION,  "Path to .env file for configuration"),
   ("suppress_setup_notice",             False,         True,  SettingCategory.APPLICATION,  "Suppress API key setup notice on startup"),
-
-  # Zammad Settings
-  ("zammad_base_url",                   "",            True,  SettingCategory.INTEGRATION,  "Zammad Base URL"),
-  ("zammad_api_token",                  "",            True,  SettingCategory.INTEGRATION,  "Zammad API Token"),
 ]
+
 
 
 
@@ -103,8 +103,14 @@ class Settings:
   Stores and manages configuration settings for the CLAIA application.
   """
 
-  def __init__(self):
-    """Initialize configuration from environment variables and command line arguments."""
+  def __init__(self, registry: 'Registry' = None):
+    """
+    Initialize configuration from environment variables and command line arguments.
+    
+    Args:
+      registry: Optional Registry instance for discovering extension settings.
+                If provided, extension required_args will be added as dynamic settings.
+    """
     self.loaded_local_models: Dict[str, Any] = {}
 
     self.prompt_store = []
@@ -120,6 +126,14 @@ class Settings:
 
     # Track which settings came from CLI (to avoid saving them to file)
     self._cli_sourced_settings = set()
+    
+    # Copy base CONFIG_VARS to instance and extend with extension settings
+    self.config_vars: List[Tuple[str, Any, bool, SettingCategory, str]] = list(CONFIG_VARS)
+    self._extension_settings: List[str] = []
+    
+    # Extend with extension settings if registry is provided
+    if registry is not None:
+      self._extend_with_extensions(registry)
 
     # Load configuration
     self._load_config()
@@ -127,6 +141,40 @@ class Settings:
     
     # Save settings to file after loading (creates file if doesn't exist, updates if values changed)
     self._save_settings_to_file()
+  
+  def _extend_with_extensions(self, registry: 'Registry') -> None:
+    """
+    Extend config_vars with settings from extension required_args.
+    
+    Args:
+      registry: The CLAIA registry instance
+    """
+    # Get all required args from extensions via registry
+    extension_args = registry.get_extension_required_args()
+    
+    # Track existing setting names to avoid duplicates
+    existing_names = {var[0] for var in self.config_vars}
+    
+    for arg_name in extension_args:
+      if arg_name not in existing_names:
+        # Generate a human-readable help text from the arg name
+        help_text = self._generate_help_text(arg_name)
+        
+        # Add to instance config_vars
+        self.config_vars.append((arg_name, "", True, SettingCategory.EXTENSION, help_text))
+        self._extension_settings.append(arg_name)
+        existing_names.add(arg_name)
+  
+  @staticmethod
+  def _generate_help_text(arg_name: str) -> str:
+    """Generate a human-readable help text from an argument name."""
+    # Convert snake_case to Title Case
+    words = arg_name.replace('_', ' ').title()
+    return words
+  
+  def get_extension_settings(self) -> List[str]:
+    """Get the list of setting names that were added from extensions."""
+    return list(self._extension_settings)
 
 
   def _load_config(self):
@@ -138,8 +186,8 @@ class Settings:
     # Disable allow_abbrev to prevent --model from matching --models-directory etc.
     parser = argparse.ArgumentParser(description='CLAIA Settings', add_help=False, allow_abbrev=False)
 
-    # Add arguments based on CONFIG_VARS, but only for externally settable ones
-    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+    # Add arguments based on config_vars, but only for externally settable ones
+    for var_name, default, externally_settable, category, help_text in self.config_vars:
       if externally_settable:
         cli_name = f"--{var_name.replace('_', '-')}"
 
@@ -168,7 +216,7 @@ class Settings:
     self.extra_args = unknown
 
     # Track which settings were explicitly provided via CLI
-    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+    for var_name, default, externally_settable, category, help_text in self.config_vars:
       if externally_settable:
         cli_name = var_name.lower()
         cli_value = getattr(args, cli_name, None)
@@ -188,7 +236,7 @@ class Settings:
     # Build config dictionary using helper function
     config_dict = {
       var_name: self._get_config_value(var_name, default, args, externally_settable, json_settings)
-      for var_name, default, externally_settable, category, help_text in CONFIG_VARS
+      for var_name, default, externally_settable, category, help_text in self.config_vars
     }
 
     # Set all configuration values as instance attributes
@@ -273,8 +321,8 @@ class Settings:
     """
     kwargs = {}
 
-    # Iterate through CONFIG_VARS to get all user-configurable settings
-    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+    # Iterate through config_vars to get all user-configurable settings
+    for var_name, default, externally_settable, category, help_text in self.config_vars:
       if externally_settable:
         kwargs[var_name] = getattr(self, var_name, default)
 
@@ -327,7 +375,7 @@ class Settings:
     
     # Build dictionary of current settings (excluding CLI-sourced ones)
     current_settings = {}
-    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+    for var_name, default, externally_settable, category, help_text in self.config_vars:
       if externally_settable:
         # If this setting came from CLI, preserve the existing file value (if any)
         if var_name in self._cli_sourced_settings:
@@ -356,7 +404,7 @@ class Settings:
     """
     unset_keys = []
     
-    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+    for var_name, default, externally_settable, category, help_text in self.config_vars:
       # Only check API tokens
       if category == SettingCategory.API and externally_settable:
         value = getattr(self, var_name, default)
@@ -379,7 +427,7 @@ class Settings:
     """
     setting_name = setting_name.lower().replace('-', '_')
     
-    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+    for var_name, default, externally_settable, category, help_text in self.config_vars:
       if var_name == setting_name and externally_settable:
         current_value = getattr(self, var_name, default)
         return (current_value, default, help_text, category)
@@ -396,7 +444,7 @@ class Settings:
     """
     categorized = defaultdict(list)
     
-    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+    for var_name, default, externally_settable, category, help_text in self.config_vars:
       if externally_settable:
         value = getattr(self, var_name, default)
         # Mask sensitive values
@@ -418,7 +466,7 @@ class Settings:
     """
     setting_name = setting_name.lower().replace('-', '_')
     
-    for var_name, _, externally_settable, _, _ in CONFIG_VARS:
+    for var_name, _, externally_settable, _, _ in self.config_vars:
       if var_name == setting_name and externally_settable:
         return True
     
@@ -438,11 +486,11 @@ class Settings:
     """
     setting_name = setting_name.lower().replace('-', '_')
     
-    # Find the setting in CONFIG_VARS
+    # Find the setting in config_vars
     setting_found = False
     default_value = None
     
-    for var_name, default, externally_settable, category, help_text in CONFIG_VARS:
+    for var_name, default, externally_settable, category, help_text in self.config_vars:
       if var_name == setting_name and externally_settable:
         setting_found = True
         default_value = default

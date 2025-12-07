@@ -36,23 +36,57 @@ class Registry:
   - Agents API: process queue + worker lifecycle and agent dispatch.
   """
 
-  def __init__(self, manager: Optional[Manager] = None, process_queue: Optional[ProcessQueue] = None, **kwargs):
+  def __init__(self, process_queue: Optional[ProcessQueue] = None):
     # Core manager and caches
-    self.manager = manager or Manager()
+    self.manager = Manager()
     self.cache: Dict[str, Any] = {}
 
     # Tool-related
     self._commands_catalog: Optional[Dict[str, Dict]] = None
-    self._user_kwargs = kwargs
+    self._user_kwargs: Dict[str, Any] = {}
+    self._plugins_loaded = False
 
     # Agent-related (queue and workers)
     self.process_queue = process_queue or ProcessQueue()
     self._workers = []
     self._shutdown = threading.Event()
 
-    # Load plugins up front with user kwargs (for command modules required_args)
+    # Discover plugins (metadata only) but don't load them yet
+    # This allows get_extension_required_args() to work before settings are loaded
+    self.manager.discover_plugins()
+    
+    logger.info("Registry initialized")
+
+  def load_plugins(self, **kwargs) -> None:
+    """
+    Load all plugins with the provided kwargs.
+    
+    This method should be called after settings are available to provide
+    the required_args values to plugins that need them.
+    
+    Args:
+        **kwargs: User settings/configuration to pass to plugins
+    """
+    if self._plugins_loaded:
+      logger.debug("Plugins already loaded")
+      return
+    
+    self._user_kwargs.update(kwargs)
     self.manager.load_all_plugins(**self._user_kwargs)
-    logger.info("Registry initialized successfully")
+    self._plugins_loaded = True
+    logger.debug("Plugins loaded with user kwargs")
+
+  def get_extension_required_args(self) -> list:
+    """
+    Get a flat list of all unique required_args from all extensions.
+    
+    This delegates to the manager and is useful for extending settings
+    configuration with dynamic settings from extensions.
+    
+    Returns:
+        List of unique required_arg names across all extensions.
+    """
+    return self.manager.get_extension_required_args()
 
   def update_user_kwargs(self, new_kwargs: Dict[str, Any]) -> None:
     """
@@ -72,7 +106,8 @@ class Registry:
   ######################################################################
   def _ensure_loaded(self) -> None:
     """Ensure plugins are loaded and commands catalog is built."""
-    self.manager.load_all_plugins(**self._user_kwargs)
+    if not self._plugins_loaded:
+      self.load_plugins()
     if self._commands_catalog is None:
       self._commands_catalog = self.manager.get_all_commands()
 
