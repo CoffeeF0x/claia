@@ -485,18 +485,11 @@ class Registry:
     }
 
   def _filter_kwargs(self, kwargs: Dict[str, Any], required_args: Optional[list]) -> Dict[str, Any]:
-    """Filter kwargs to only include those specified in required_args."""
-    if required_args is None or len(required_args) == 0:
-      # If no required_args specified, return empty dict
-      return {}
-
-    # Filter to only include kwargs that are in the required_args list
-    filtered = {}
-    for arg_name in required_args:
-      if arg_name in kwargs:
-        filtered[arg_name] = kwargs[arg_name]
-
-    return filtered
+    """Filter kwargs to only include those specified in required_args.
+    
+    Delegates to Manager's implementation to avoid duplication.
+    """
+    return self.manager._filter_kwargs(kwargs, required_args)
 
 
   ######################################################################

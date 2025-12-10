@@ -7,7 +7,7 @@ command module (or remote tool) and invoke it.
 
 import pluggy
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 from claia.lib.results import Result
 
 
@@ -16,6 +16,7 @@ class ProtocolInfo:
   name: str
   title: str
   description: str
+  required_args: Optional[List[str]] = None  # List of custom args required by the protocol
 
 
 hookspec = pluggy.HookspecMarker("claia_tool_protocols")
