@@ -6,17 +6,17 @@ command module (or remote tool) and invoke it.
 """
 
 import pluggy
+from typing import Dict, Any
 from dataclasses import dataclass
-from typing import Dict, Any, Optional, List
+
 from claia.lib.results import Result
+from .base import ExtensionInfo
 
 
 @dataclass
-class ProtocolInfo:
-  name: str
-  title: str
-  description: str
-  required_args: Optional[List[str]] = None  # List of custom args required by the protocol
+class ProtocolInfo(ExtensionInfo):
+  """Information about a tool protocol plugin."""
+  pass
 
 
 hookspec = pluggy.HookspecMarker("claia_tool_protocols")

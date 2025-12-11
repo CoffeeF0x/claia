@@ -7,20 +7,20 @@ based on user preferences, model availability, and system constraints.
 
 import pluggy
 from typing import Optional, Dict, List, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # Internal dependencies
 from claia.lib.results import Result
+from .base import ExtensionInfo
 
 
 @dataclass
-class SolverInfo:
-  """Information about a deployment solver provided by a solver plugin."""
-  name: str
-  title: str
-  description: str
-  settings: Optional[Dict[str, Any]] = None
-  required_args: Optional[List[str]] = None  # list of custom args required by the solver
+class SolverInfo(ExtensionInfo):
+  """Information about a deployment solver provided by a solver plugin.
+  
+  Extends ExtensionInfo with solver-specific settings.
+  """
+  settings: Optional[Dict[str, Any]] = field(default=None)
 
 
 @dataclass

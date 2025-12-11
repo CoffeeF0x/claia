@@ -6,19 +6,21 @@ inside content (e.g., tags, JSON blocks, function_call markers).
 """
 
 import pluggy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
+
+from .base import ExtensionInfo
 
 
 @dataclass
-class PatternInfo:
-  name: str
-  title: str
-  description: str
-  opening_token: str  # Token that starts a tool call
-  closing_token: str  # Token that ends a tool call
-  prompt_template: Optional[str] = None  # Optional system/tool prompt template
-  required_args: Optional[List[str]] = None  # List of custom args required by the pattern
+class PatternInfo(ExtensionInfo):
+  """Information about a tool-calling pattern plugin.
+  
+  Extends ExtensionInfo with pattern-specific token definitions.
+  """
+  opening_token: str = field(default="")   # Token that starts a tool call
+  closing_token: str = field(default="")   # Token that ends a tool call
+  prompt_template: Optional[str] = field(default=None)  # Optional system/tool prompt template
 
 
 hookspec = pluggy.HookspecMarker("claia_tool_patterns")

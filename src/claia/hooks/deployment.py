@@ -6,21 +6,19 @@ Deployment method plugins handle specific ways to deploy/run models
 """
 
 import pluggy
-from typing import Optional, Dict, List, Any, Type
+from typing import Dict, Any, Type
 from dataclasses import dataclass
 
 # Internal dependencies
 from claia.lib.results import Result
 from claia.lib.data import Conversation
+from .base import ExtensionInfo
 
 
 @dataclass
-class DeploymentInfo:
+class DeploymentInfo(ExtensionInfo):
   """Information about a deployment method provided by a deployment plugin."""
-  name: str
-  title: str
-  description: str
-  required_args: Optional[List[str]] = None # list of custom args required by the deployment method
+  pass
 
 
 # Create hookspec decorator

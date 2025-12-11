@@ -8,7 +8,9 @@ This allows a single module to efficiently handle multiple related commands.
 
 import pluggy
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Callable, List
+from typing import Optional, Dict, Any, Callable
+
+from .base import ExtensionInfo
 
 
 @dataclass
@@ -38,12 +40,9 @@ class ToolDefinition:
 
 
 @dataclass
-class ToolModuleInfo:
+class ToolModuleInfo(ExtensionInfo):
   """Metadata for a tool module."""
-  name: str
-  title: str
-  description: str
-  required_args: Optional[List[str]] = None
+  pass
 
 
 hookspec = pluggy.HookspecMarker("claia_tool_modules")

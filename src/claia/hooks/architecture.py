@@ -6,8 +6,10 @@ Architecture plugins implement specific AI model architectures
 """
 
 import pluggy
-from typing import Type, Optional, List
+from typing import Type
 from dataclasses import dataclass
+
+from .base import ExtensionInfo
 
 
 # Create hookspec decorator
@@ -15,12 +17,9 @@ hookspec = pluggy.HookspecMarker("claia_architectures")
 
 
 @dataclass
-class ArchitectureInfo:
+class ArchitectureInfo(ExtensionInfo):
   """Information about an architecture plugin."""
-  name: str
-  title: str
-  description: str
-  required_args: Optional[List[str]] = None  # list of custom args required by the architecture
+  pass
 
 
 class ArchitectureHooks:

@@ -4,23 +4,24 @@ Hook specifications for agent plugins.
 
 # External dependencies
 import pluggy
-from typing import Type, Optional, List
-from dataclasses import dataclass
+from typing import Type, Optional
+from dataclasses import dataclass, field
 
 # Internal dependencies
 from ..lib.base import BaseAgent
+from .base import ExtensionInfo
 
 
 ########################################################################
 #                            DATA CLASSES                              #
 ########################################################################
 @dataclass
-class AgentInfo:
-  """Information about an agent implementation."""
-  name: str
-  description: str
-  agent_class: Type[BaseAgent]
-  required_args: Optional[List[str]] = None  # list of custom args required by the agent
+class AgentInfo(ExtensionInfo):
+  """Information about an agent implementation.
+  
+  Extends ExtensionInfo with the agent_class field.
+  """
+  agent_class: Optional[Type[BaseAgent]] = field(default=None)
 
 
 ########################################################################
