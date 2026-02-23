@@ -1,23 +1,25 @@
 {
   "name": "Claia Development",
-  "build": {
-    "dockerfile": "Dockerfile",
-    "context": ".."
-  },
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "runArgs": [
+    "--name", "devcontainer-${localWorkspaceFolderBasename}",
+    "--network", "exofox"
+  ],
+
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
-        "ms-python.vscode-pylance"
-      ],
-      "settings": {
-        "python.defaultInterpreterPath": "/usr/local/bin/python"
-      }
+        "ms-python.vscode-pylance",
+        "shardulm94.trailing-spaces"
+      ]
     }
   },
+
+  "remoteUser": "root",
+  "postCreateCommand": "${containerWorkspaceFolder}/.devcontainer/init.sh",
+
   "mounts": [
     "source=C:/.cache/claia/models,target=${containerWorkspaceFolder}/models,type=bind,consistency=cached"
-  ],
-  "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && chmod +x ${containerWorkspaceFolder}/.devcontainer/init.sh && ${containerWorkspaceFolder}/.devcontainer/init.sh",
-  "remoteUser": "vscode"
+  ]
 }
