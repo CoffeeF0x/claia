@@ -81,7 +81,7 @@ test:
   <<: *common_job_config
   stage: test
   script:
-    - pip install -r build/requirements.txt
+    - pip install -e ".[dev]"
     - pytest
   artifacts:
     when: always

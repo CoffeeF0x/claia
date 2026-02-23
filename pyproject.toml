@@ -36,6 +36,17 @@ classifiers = [
   "Topic :: Software Development :: Libraries",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "build",
+  "pyinstaller",
+  "pytest",
+  "pytest-mock",
+  "pytest-playwright",
+  "playwright",
+  "debugpy",
+]
+
 [project.urls]
 Homepage = "https://claia.dev"
 Repository = "https://gitlab.com/exofox/claia/claia.git"
