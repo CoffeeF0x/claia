@@ -53,8 +53,16 @@ def fake_model_registry_error():
 def fake_manager():
   """Provide a fake ModuleManager with just enough surface for ModelRegistry.run()."""
   class FakeManager:
-    def load_all_plugins(self):
+    def discover_plugins(self):
       return None
+
+    def load_all_plugins(self, **kwargs):
+      return None
+
+    def _filter_kwargs(self, kwargs, required_args):
+      if not required_args:
+        return {}
+      return {k: v for k, v in kwargs.items() if k in required_args}
 
     def get_supported_models(self):
       return {"dummy": {"aliases": ["alias1"]}}
@@ -107,7 +115,9 @@ def fake_manager():
 def fake_manager_no_solver():
   """A fake manager that returns no solver, to exercise error handling path."""
   class FM:
-    def load_all_plugins(self):
+    def discover_plugins(self):
+      return None
+    def load_all_plugins(self, **kwargs):
       return None
     def get_supported_models(self):
       return {}
