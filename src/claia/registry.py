@@ -499,6 +499,7 @@ class Registry:
     self,
     agent_class,
     name: Optional[str] = None,
+    title: Optional[str] = None,
     description: Optional[str] = None,
     required_args: Optional[list] = None
   ) -> None:
@@ -531,6 +532,7 @@ class Registry:
     Args:
         agent_class: The agent class to register (must inherit from BaseAgent)
         name: The name to register the agent under (defaults to class name)
+        title: Human-readable display name (defaults to class name)
         description: Description of the agent (defaults to class docstring)
         required_args: Optional list of required arguments for the agent
     
@@ -540,6 +542,7 @@ class Registry:
     self.manager.register_agent(
       agent_class=agent_class,
       name=name,
+      title=title,
       description=description,
       required_args=required_args
     )

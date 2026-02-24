@@ -628,6 +628,7 @@ class Manager:
     self,
     agent_class: Type[BaseAgent],
     name: Optional[str] = None,
+    title: Optional[str] = None,
     description: Optional[str] = None,
     required_args: Optional[List[str]] = None
   ) -> None:
@@ -640,6 +641,7 @@ class Manager:
     Args:
         agent_class: The agent class to register (must inherit from BaseAgent)
         name: The name to register the agent under (defaults to class name)
+        title: Human-readable display name (defaults to class name)
         description: Description of the agent (defaults to class docstring)
         required_args: Optional list of required arguments for the agent
     
@@ -654,6 +656,10 @@ class Manager:
     if name is None:
       name = agent_class.__name__
     
+    # Use class name as title if no title provided
+    if title is None:
+      title = agent_class.__name__
+    
     # Use class docstring if no description provided
     if description is None:
       description = agent_class.get_description()
@@ -665,6 +671,7 @@ class Manager:
     # Create AgentInfo and store it
     agent_info = AgentInfo(
       name=name,
+      title=title,
       description=description,
       agent_class=agent_class,
       required_args=required_args

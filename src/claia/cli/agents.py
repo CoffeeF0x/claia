@@ -128,6 +128,7 @@ def register_cli_agents(registry) -> None:
   registry.register(
     agent_class=WriterAgent,
     name="writer",
+    title="Writer Agent",
     description="A specialized agent for writing tasks with enhanced literary capabilities",
     required_args=None  # Uses all available kwargs
   )
