@@ -81,5 +81,33 @@ class OpenAIDefinitionsPlugin:
         capabilities=["chat", "code"],
         license="Commercial",
         url="https://openai.com/gpt-3-5"
+      ),
+
+      "gpt-4o": ModelDefinition(
+        title="GPT-4o",
+        aliases=["gpt4o"],
+        company="OpenAI",
+        deployments=["api"],
+        architectures=["openai"],
+        description="OpenAI's flagship multimodal model with vision and advanced reasoning",
+        parameters="200B+",
+        context_length=128000,
+        capabilities=["chat", "code", "reasoning", "vision"],
+        license="Commercial",
+        url="https://openai.com/gpt-4o"
+      ),
+
+      "gpt-4o-mini": ModelDefinition(
+        title="GPT-4o Mini",
+        aliases=["gpt4o-mini"],
+        company="OpenAI",
+        deployments=["api"],
+        architectures=["openai"],
+        description="Smaller, faster, and more affordable GPT-4o variant",
+        parameters="8B+",
+        context_length=128000,
+        capabilities=["chat", "code", "vision"],
+        license="Commercial",
+        url="https://openai.com/gpt-4o-mini"
       )
     }
