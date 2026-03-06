@@ -51,7 +51,7 @@ class Message:
         "Hello {model=gpt-4}" → content: "Hello", args: {"model": "gpt-4"}
         "Image {style: cartoon} {hd}" → content: "Image", args: {"style": "cartoon", "hd": true}
         "Translate {--lang spanish}" → content: "Translate", args: {"lang": "spanish"}
-    
+
     Thread Safety:
         Messages include thread-safe methods for concurrent updates during streaming
         and tool processing. Use safe_* methods when multiple threads access the same message.
@@ -61,6 +61,7 @@ class Message:
                  speaker: MessageRole,
                  content: str,
                  message_id: Optional[str] = None,
+                 parent_id: Optional[str] = None,
                  file_ids: Optional[List[str]] = None,
                  created_at: Optional[float] = None,
                  updated_at: Optional[float] = None,
@@ -72,19 +73,21 @@ class Message:
             speaker: The speaker of the message
             content: The content of the message
             message_id: Optional ID for the message (generated if not provided)
+            parent_id: ID of the preceding message in the conversation tree (None for root)
             file_ids: Optional list of file IDs attached to the message
             created_at: Optional timestamp for creation time
             updated_at: Optional timestamp for last update time
             inline_args: Optional arguments extracted from the message content
         """
         self.message_id = message_id or str(uuid.uuid4())
+        self.parent_id = parent_id
         self.speaker = speaker if isinstance(speaker, MessageRole) else MessageRole(speaker)
         self.content = content
         self.file_ids = file_ids or []
         self.created_at = created_at or time.time()
         self.updated_at = updated_at or self.created_at
         self.inline_args = inline_args or {}
-        
+
         # Thread safety for concurrent updates (streaming + tool processing)
         self._content_lock = threading.Lock()
 
@@ -92,12 +95,13 @@ class Message:
         """Convert the message to a dictionary."""
         return {
             "message_id": self.message_id,
+            "parent_id": self.parent_id,
             "speaker": self.speaker.value,
             "content": self.content,
             "file_ids": self.file_ids,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "inline_args": self.inline_args
+            "inline_args": self.inline_args,
         }
 
     @classmethod
@@ -107,20 +111,21 @@ class Message:
             speaker=data.get("speaker", MessageRole.USER.value),
             content=data.get("content", ""),
             message_id=data.get("message_id"),
+            parent_id=data.get("parent_id"),
             file_ids=data.get("file_ids", []),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
-            inline_args=data.get("inline_args", {}) or data.get("query_args", {})  # Handle both old and new field names
+            inline_args=data.get("inline_args", {}) or data.get("query_args", {}),
         )
 
     # Thread-safe methods for concurrent updates
-    
+
     def safe_update_content(self, new_content: str) -> None:
         """
         Thread-safe content update.
-        
+
         Use this when multiple threads might be updating the message concurrently.
-        
+
         Args:
             new_content: The new content to set
         """
@@ -131,9 +136,9 @@ class Message:
     def safe_append_content(self, chunk: str) -> None:
         """
         Thread-safe append for streaming.
-        
+
         Use this when streaming content from an API and you need to append chunks.
-        
+
         Args:
             chunk: The content chunk to append
         """
@@ -144,14 +149,14 @@ class Message:
     def safe_replace_substring(self, start: int, end: int, replacement: str) -> bool:
         """
         Thread-safe substring replacement for tool calls.
-        
+
         Use this when replacing tool calls with their results while streaming continues.
-        
+
         Args:
             start: Start index (inclusive) of the substring to replace
             end: End index (exclusive) of the substring to replace
             replacement: The replacement string
-            
+
         Returns:
             bool: True if replacement succeeded, False if indices were invalid
         """
@@ -165,9 +170,9 @@ class Message:
     def safe_get_content(self) -> str:
         """
         Thread-safe content read.
-        
+
         Use this when reading content that might be concurrently modified.
-        
+
         Returns:
             str: A copy of the current content
         """
@@ -311,4 +316,3 @@ class Message:
             bool: True if message has inline arguments, False otherwise
         """
         return bool(self.inline_args)
-

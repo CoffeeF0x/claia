@@ -95,7 +95,7 @@ class AnthropicModel(APIModel):
     system_message = conversation.get_system_prompt()
     messages = []
 
-    for message in conversation.messages:
+    for message in conversation.get_thread():
       # Skip explicit system messages; we already injected merged system prompt
       if message.speaker == MessageRole.USER:
         messages.append({

@@ -42,7 +42,7 @@ class Gemma3Model(GenericTransformerModel):
     prompt_parts = []
 
     # Gemma3 uses specific formatting tokens
-    for message in conversation.messages:
+    for message in conversation.get_thread():
       if message.speaker == MessageRole.SYSTEM:
         prompt_parts.append(f"<start_of_turn>system\n{message.content}<end_of_turn>")
       elif message.speaker == MessageRole.USER:

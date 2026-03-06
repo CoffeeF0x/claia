@@ -121,7 +121,7 @@ class GenericTransformerModel(LocalModel):
     """Convert a Conversation object to a text prompt."""
     prompt_parts = []
 
-    for message in conversation.messages:
+    for message in conversation.get_thread():
       if message.speaker == MessageRole.SYSTEM:
         prompt_parts.append(f"System: {message.content}")
       elif message.speaker == MessageRole.USER:

@@ -71,7 +71,7 @@ class OpenAIModel(APIModel):
         "content": system_prompt
       })
 
-    for message in conversation.messages:
+    for message in conversation.get_thread():
       # Skip any existing system messages; we already injected a merged system prompt above
       if message.speaker not in (MessageRole.USER, MessageRole.ASSISTANT):
         continue
