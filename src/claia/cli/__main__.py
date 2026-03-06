@@ -67,6 +67,7 @@ import logging
 import os
 import sys
 import shutil
+import threading
 import importlib.metadata as importlib_metadata
 import pyfiglet
 
@@ -81,7 +82,6 @@ from claia.cli.commands import Commands
 from claia.cli.defaults import initialize_defaults
 from claia.cli.logger import initialize_logging
 from claia.cli.agents import register_cli_agents
-from claia.cli.utils import stream_process_response
 from claia.registry import Registry
 
 
@@ -361,7 +361,6 @@ def main() -> None:
     # Main application loop
     result = Result()
     while not result.is_exit():
-      process = None
 
       # Wait for user input
       user_input = get_user_input()
@@ -369,10 +368,8 @@ def main() -> None:
       # Process user input as either a command or a query
       if user_input and user_input[0] == COMMAND_CHARACTER:
         logger.debug(f"Processing as command: {user_input[1:]}")
-        # Process interactive command using Commands processor
         tokens = user_input[1:].split()
         
-        # If no command entered, show help
         if not tokens:
           setup_conversation(settings, registry)
           cmd_result = commands.run(['help'], settings.active_conversation, is_interactive=True)
@@ -380,10 +377,7 @@ def main() -> None:
             result = cmd_result
           continue
         
-        # Ensure there is a conversation context
         setup_conversation(settings, registry)
-        
-        # Execute the command using the Commands processor
         cmd_result = commands.run(tokens, settings.active_conversation, is_interactive=True)
         
         if cmd_result.is_success():
@@ -393,18 +387,17 @@ def main() -> None:
         else:
           print(f"Error: {cmd_result.get_message()}")
         
-        # Check if command requested exit and terminate the main loop
         if cmd_result.is_exit():
           result = cmd_result
       else:
-        # Create a new conversation if one doesn't exist
         setup_conversation(settings, registry)
 
-        # Set the active agent if one doesn't exist
         if not settings.active_agent:
           settings.active_agent = settings.default_agent or DEFAULT_AGENT
 
-        user_message = settings.active_conversation.add_message(MessageRole.USER, user_input)
+        settings.active_conversation.add_message(MessageRole.USER, user_input)
+
+        done_event = threading.Event()
 
         process = Process(
           agent_type=settings.active_agent,
@@ -416,28 +409,41 @@ def main() -> None:
           }
         )
 
+        # Register callbacks for streaming output
+        process.on("token", lambda token: print(token, end='', flush=True))
+
+        def on_complete(full_response):
+          # Ensure a newline after the streamed output
+          if full_response and not full_response.endswith('\n'):
+            print()
+          # Save conversation
+          if file_repo:
+            if not file_repo.save(process.conversation):
+              logger.error("Failed to save conversation")
+          # Process tool calls in the final message
+          final_message = process.conversation.get_latest_message()
+          if final_message:
+            process_final_message_tools(final_message, process, settings, registry)
+          done_event.set()
+
+        def on_error(error_msg):
+          print(f"\nError: {error_msg}")
+          done_event.set()
+
+        process.on("complete", on_complete)
+        process.on("error", on_error)
+
         process_id = registry.add_process(process)
         logger.debug(f"Process added with ID: {process_id}")
 
-        logger.debug(f"Waiting for process to complete: {process.id}")
+        # Block until the worker thread signals completion
+        done_event.wait()
 
-        # Stream the response and handle completion
-        stream_process_response(
-          process=process,
-          user_message_id=user_message.message_id,
-          file_repo=file_repo,
-          save_conversation=True
-        )
-
-      # Display any error messages
       if result.is_error():
         logger.debug(f"Error result: {result.get_message()}")
         print(f"Error: {result.get_message()}")
 
-    # Display exit message
     logger.info(f"CLAIA application exiting: {result.get_message()}")
-
-    # Stop worker threads before exiting
     registry.stop_workers()
 
   except Exception as e:

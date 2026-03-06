@@ -68,38 +68,36 @@ class WriterAgent(BaseAgent):
 
   @classmethod
   def process_request(cls, process, registry=None, **kwargs) -> object:
-    """
-    Process a writing request with specialized writing capabilities.
-
-    Args:
-        process: The process to execute
-        registry: Registry instance to use for model operations
-        **kwargs: Additional keyword arguments
-
-    Returns:
-        The updated process with results or error information
-    """
+    """Process a writing request with specialized writing capabilities."""
     try:
-      # Get the model ID from the validated parameters
       model_id = process.parameters.get("model_id")
       
       if not model_id:
         raise ValueError("No model_id provided in process parameters")
 
-      # Apply the writer's system prompt if different
       current_prompt = process.conversation.prompt.get("system", "")
       if current_prompt != WRITER_SYSTEM_PROMPT:
         logger.debug(f"Applying writer system prompt to process {process.id}")
         process.conversation.change_prompt(WRITER_SYSTEM_PROMPT)
 
-      # Run the model with the conversation using the registry
       logger.debug(f"Running model {model_id} for writing task {process.id}")
-      result = registry.run(model_id, process.conversation, **kwargs)
+      gen = registry.run(model_id, process.conversation, **kwargs)
+      full_response = ""
+      result = None
 
-      if result.is_error():
+      while True:
+        try:
+          token = next(gen)
+          full_response += token
+          process.emit("token", token)
+        except StopIteration as e:
+          result = e.value
+          break
+
+      if result is not None and result.is_error():
         raise ValueError(f"Error running model: {result.get_message()}")
 
-      process.mark_completed(result.data)
+      process.mark_completed(full_response)
       logger.info(f"Writer agent successfully completed process {process.id}")
 
     except Exception as e:

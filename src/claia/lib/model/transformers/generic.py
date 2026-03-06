@@ -6,7 +6,7 @@ using the Hugging Face transformers library.
 """
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Generator
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 
@@ -75,23 +75,18 @@ class GenericTransformerModel(LocalModel):
     self.loaded = False
     logger.info(f"Unloaded transformer model: {self.model_name}")
 
-  def generate(self, conversation: Conversation, **kwargs) -> str:
-    """Generate a response using the transformer model."""
+  def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
+    """Generate a response using the transformer model. Yields the full response as a single token."""
     if not self.loaded:
       self.load()
 
     try:
-      # Get settings
       settings = self.update_settings({}, conversation, **kwargs)
-
-      # Convert conversation to prompt
       prompt = self._convert_conversation_to_prompt(conversation)
 
-      # Tokenize input
       inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)
       inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-      # Generate response
       with torch.no_grad():
         outputs = self.model.generate(
           **inputs,
@@ -103,19 +98,18 @@ class GenericTransformerModel(LocalModel):
           pad_token_id=self.tokenizer.eos_token_id
         )
 
-      # Decode response
       input_length = inputs["input_ids"].shape[1]
       generated_tokens = outputs[0][input_length:]
       response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
 
-      # Add the response to the conversation
-      conversation.add_message(MessageRole.ASSISTANT, response)
-
+      yield response
       return response
 
     except Exception as e:
       logger.error(f"Error generating response with transformer model {self.model_name}: {e}")
-      return f"Error: {str(e)}"
+      error_msg = f"Error: {str(e)}"
+      yield error_msg
+      return error_msg
 
   def _convert_conversation_to_prompt(self, conversation: Conversation) -> str:
     """Convert a Conversation object to a text prompt."""

@@ -5,7 +5,7 @@ This module defines the foundational BaseModel class that all model implementati
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Dict, Any, Generator
 
 # Internal dependencies
 from claia.lib.data import Conversation
@@ -37,8 +37,14 @@ class BaseModel(ABC):
     self.default_settings = DEFAULT_SETTINGS.copy()
 
   @abstractmethod
-  def generate(self, conversation: Conversation, **kwargs) -> str:
-    """Generate a response based on the given conversation."""
+  def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
+    """Generate a response based on the given conversation.
+
+    Yields individual tokens/chunks as they become available.
+    Returns the full response string when the generator is exhausted.
+    The model should NOT modify the Conversation — that is the
+    deployment layer's responsibility.
+    """
     pass
 
   def update_settings(self, model_settings: Dict[str, Any], conversation: Conversation, **kwargs) -> Dict[str, Any]:

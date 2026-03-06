@@ -6,7 +6,7 @@ that provides a unified interface for tools, models, and agents.
 import logging
 import threading
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Generator, Optional
 
 from claia.manager import Manager
 from claia.lib.results import Result
@@ -344,31 +344,29 @@ class Registry:
     deployment_method: Optional[str] = None,
     deployment_preference: Optional[str] = None,
     **kwargs
-  ) -> Result:
+  ) -> Generator[str, None, Result]:
     """
-    Orchestrate model execution via solver → deployment → architecture.
+    Orchestrate model execution via solver -> deployment -> architecture.
+
+    Yields tokens as they arrive from the model. Returns a Result with
+    the full response when the generator is exhausted (accessible via
+    StopIteration.value or yield from).
     """
     try:
       logger.debug(f"Running model {model_name}")
 
-      # Merge user kwargs from Registry initialization with run-time kwargs
-      # Run-time kwargs take precedence over initialization kwargs
       combined_kwargs = {**self._user_kwargs, **kwargs}
 
-      # Get available models and deployments
       available_models = self.manager.get_supported_models()
       available_deployments = list(self.manager.get_available_deployments().keys())
 
-      # Get solver plugin
       selected_solver = self.manager.get_solver_plugin(solver)
       if not selected_solver:
         return Result.fail(f"No solver available (requested: {solver})")
 
-      # Filter kwargs for solver based on required_args
       solver_info = selected_solver.get_solver_info()
       solver_kwargs = self._filter_kwargs(combined_kwargs, getattr(solver_info, 'required_args', None))
 
-      # Call solver to determine deployment
       params_result = selected_solver.solve_deployment(
         model_name=model_name,
         available_deployments=available_deployments,
@@ -385,12 +383,10 @@ class Registry:
       deployment_params = params_result.data
       logger.debug(f"Solver result: deployment={deployment_params.deployment_name} model={deployment_params.model_name} arch={deployment_params.architecture_name}")
 
-      # Resolve model class from architecture plugins using architecture name
       model_class = self.manager.get_model_class(deployment_params.architecture_name)
       if not model_class:
         return Result.fail(f"No architecture '{deployment_params.architecture_name}' found for model '{deployment_params.model_name}'")
 
-      # Resolve provider-specific model identifier for the selected architecture
       provider_model_name = deployment_params.model_name
       model_def = available_models.get(deployment_params.model_name)
       if model_def and getattr(model_def, 'identifiers', None):
@@ -399,27 +395,22 @@ class Registry:
           provider_model_name = model_def.identifiers[arch_key]
           logger.debug(f"Resolved provider model name for arch '{arch_key}': {provider_model_name}")
 
-      # Get deployment plugin
       selected_deployment = self.manager.get_deployment_plugin(deployment_params.deployment_name)
       if not selected_deployment:
         return Result.fail(f"Deployment method '{deployment_params.deployment_name}' not available")
 
-      # Filter kwargs for deployment based on required_args
       deployment_info = selected_deployment.get_deployment_info()
       deployment_kwargs = self._filter_kwargs(combined_kwargs, getattr(deployment_info, 'required_args', None))
 
-      # Also get architecture kwargs for the model class
       available_architectures = self.manager.get_available_architectures()
       architecture_info = available_architectures.get(deployment_params.architecture_name)
       if architecture_info:
         architecture_kwargs = self._filter_kwargs(combined_kwargs, getattr(architecture_info, 'required_args', None))
-        # Merge architecture kwargs with deployment kwargs (deployment takes precedence)
         final_kwargs = {**architecture_kwargs, **deployment_kwargs}
       else:
         final_kwargs = deployment_kwargs
 
-      # Let deployment plugin handle deployment + inference
-      result = selected_deployment.run(
+      result = yield from selected_deployment.run(
         model_name=provider_model_name,
         model_class=model_class,
         conversation=conversation,
@@ -432,6 +423,98 @@ class Registry:
     except Exception as e:
       logger.error(f"Error running model {model_name}: {str(e)}")
       return Result.fail(f"Failed to run model: {str(e)}")
+
+  def run_sync(
+    self,
+    model_name: str,
+    conversation: Conversation,
+    **kwargs
+  ) -> Result:
+    """
+    Synchronous convenience wrapper around run().
+
+    Consumes the generator, discards individual tokens, and returns
+    only the final Result. Useful for non-streaming consumers or
+    simple library usage.
+    """
+    gen = self.run(model_name, conversation, **kwargs)
+    try:
+      while True:
+        next(gen)
+    except StopIteration as e:
+      return e.value if e.value is not None else Result.fail("Generator did not return a result")
+    except Exception as e:
+      return Result.fail(f"Failed to run model: {str(e)}")
+
+  def query(
+    self,
+    model_name: str,
+    message: str,
+    on_token: Optional[callable] = None,
+    on_complete: Optional[callable] = None,
+    on_error: Optional[callable] = None,
+    agent_type: str = "simple",
+    conversation: Optional[Conversation] = None,
+    **kwargs
+  ) -> Result:
+    """
+    High-level convenience method: send a message and get a response.
+
+    Creates a Conversation (or reuses the one provided), submits a
+    Process with callbacks, waits for completion, and returns the Result.
+    This is the simplest way to use CLAIA as a library.
+
+    Args:
+        model_name: Model identifier (e.g. "gpt-4")
+        message: The user message to send
+        on_token: Optional callback fired for each streamed token
+        on_complete: Optional callback fired with the full response on success
+        on_error: Optional callback fired with error message on failure
+        agent_type: Agent type to use (default "simple")
+        conversation: Optional existing Conversation to continue
+        **kwargs: Extra parameters forwarded to the agent/model
+
+    Returns:
+        Result with the full response in data, or an error.
+    """
+    from claia.lib.enums.conversation import MessageRole
+
+    if conversation is None:
+      conversation = Conversation()
+
+    conversation.add_message(MessageRole.USER, message)
+
+    done_event = threading.Event()
+    result_holder = [None]
+
+    process = Process(
+      agent_type=agent_type,
+      conversation=conversation,
+      parameters={"model_id": model_name, **kwargs}
+    )
+
+    if on_token:
+      process.on("token", on_token)
+
+    def _on_complete(full_response):
+      result_holder[0] = Result.ok(full_response)
+      if on_complete:
+        on_complete(full_response)
+      done_event.set()
+
+    def _on_error(error_msg):
+      result_holder[0] = Result.fail(error_msg)
+      if on_error:
+        on_error(error_msg)
+      done_event.set()
+
+    process.on("complete", _on_complete)
+    process.on("error", _on_error)
+
+    self.add_process(process)
+    done_event.wait()
+
+    return result_holder[0] or Result.fail("Process did not complete")
 
   def get_supported_models(self) -> Dict[str, Any]:
     """Get all models supported by registered plugins."""

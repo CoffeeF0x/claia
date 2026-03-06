@@ -30,19 +30,22 @@ def process(conversation):
 
 @pytest.fixture
 def fake_model_registry_ok():
-  """A minimal registry whose run() returns success."""
+  """A minimal registry whose run() yields tokens and returns success."""
   class FakeRegistry:
     def run(self, model_id, conversation, **kwargs):
-      return Result.ok({"echo_model": model_id})
+      response = f'{{"echo_model": "{model_id}"}}'
+      yield response
+      return Result.ok(response)
   return FakeRegistry()
 
 
 @pytest.fixture
 def fake_model_registry_error():
-  """A minimal registry whose run() returns an error."""
+  """A minimal registry whose run() returns an error (no tokens yielded)."""
   class FakeRegistry:
     def run(self, model_id, conversation, **kwargs):
       return Result.fail("model error")
+      yield  # make it a generator
   return FakeRegistry()
 
 
@@ -100,7 +103,9 @@ def fake_manager():
           return Info()
 
         def run(self, model_name, model_class, conversation, cache, **kwargs):
-          return Result.ok(f"deployed {model_name} via {deployment_name}")
+          response = f"deployed {model_name} via {deployment_name}"
+          yield response
+          return Result.ok(response)
       return Deployment()
 
     def get_available_architectures(self):

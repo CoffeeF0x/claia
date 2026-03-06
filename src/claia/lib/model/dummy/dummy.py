@@ -7,7 +7,7 @@ Used for testing streaming capabilities.
 import time
 import logging
 import random
-from typing import Dict, Any
+from typing import Dict, Any, Generator
 
 # Internal dependencies
 from ..base import BaseModel
@@ -119,37 +119,28 @@ class DummyModel(BaseModel):
     self.story_length = len(self.characters)
     logger.debug(f"Initialized DummyModel with {self.story_length} characters")
 
-  def generate(self, conversation: Conversation, **kwargs) -> str:
+  def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
     """
     Generate a response by streaming a predefined story.
 
-    Args:
-        conversation: The conversation to add the response to
-        **kwargs: Additional parameters, including:
-            - chars_per_second: How many characters to return per second (default: 100)
-            - chars_per_chunk: How many characters to send per chunk (default: 20)
-
-    Returns:
-        The complete story after streaming is finished
+    Yields chunks of the story at a controlled rate to simulate streaming.
+    Returns the complete story when finished.
     """
-    # Get the streaming rate
     chars_per_second = kwargs.get("chars_per_second", CHARS_PER_SECOND)
     chars_per_chunk = kwargs.get("chars_per_chunk", CHARS_PER_CHUNK)
     logger.debug(f"Generating response at {chars_per_second} characters per second in chunks of {chars_per_chunk}")
 
-    # Add a blank assistant message to the conversation that we'll update
-    message = conversation.add_message(MessageRole.ASSISTANT, "")
+    full_response = ""
 
-    # Simulate streaming by adding characters in chunks
     for i in range(0, self.story_length, chars_per_chunk):
         end_idx = min(i + chars_per_chunk, self.story_length)
         chunk = "".join(self.characters[i:end_idx])
-        # Stream only the new chunk, appending to the message
-        conversation.stream_message(message.message_id, chunk, append=True)
+        full_response += chunk
+        yield chunk
         delay = (chars_per_chunk / chars_per_second) * (0.9 + (random.random() * 0.2))
         time.sleep(delay)
 
-    # Append a newline and mark the end of the stream
-    conversation.stream_message(message.message_id, "\n", append=True, end=True)
+    full_response += "\n"
+    yield "\n"
 
-    return message.content
+    return full_response

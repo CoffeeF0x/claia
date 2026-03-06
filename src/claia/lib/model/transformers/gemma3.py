@@ -6,7 +6,7 @@ custom handling for their specific requirements and optimizations.
 """
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Generator
 
 # Internal dependencies
 from claia.lib.data import Conversation
@@ -78,23 +78,18 @@ class Gemma3Model(GenericTransformerModel):
       self.loaded = False
       raise
 
-  def generate(self, conversation: Conversation, **kwargs) -> str:
-    """Generate a response using the Gemma3 model with specialized handling."""
+  def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
+    """Generate a response using the Gemma3 model. Yields the full response as a single token."""
     if not self.loaded:
       self.load()
 
     try:
-      # Get settings with Gemma3-specific defaults
       settings = self.update_settings({}, conversation, **kwargs)
-
-      # Convert conversation to Gemma3 prompt format
       prompt = self._convert_conversation_to_prompt(conversation)
 
-      # Tokenize input
       inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)
       inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-      # Generate response with Gemma3-optimized parameters
       import torch
       with torch.no_grad():
         outputs = self.model.generate(
@@ -106,20 +101,20 @@ class Gemma3Model(GenericTransformerModel):
           do_sample=True,
           pad_token_id=self.tokenizer.eos_token_id,
           eos_token_id=self.tokenizer.eos_token_id,
-          repetition_penalty=1.1,  # Gemma3-specific
+          repetition_penalty=1.1,
           length_penalty=1.0
         )
 
-      # Decode response
       input_length = inputs["input_ids"].shape[1]
       generated_tokens = outputs[0][input_length:]
       response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
-
-      # Clean up Gemma3-specific tokens if they appear in output
       response = response.replace("<end_of_turn>", "").strip()
 
+      yield response
       return response
 
     except Exception as e:
       logger.error(f"Error generating response with Gemma3 model {self.model_name}: {e}")
-      return f"Error: {str(e)}"
+      error_msg = f"Error: {str(e)}"
+      yield error_msg
+      return error_msg

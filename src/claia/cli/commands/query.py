@@ -3,6 +3,7 @@ Query command for sending one-shot queries to the AI.
 """
 
 import logging
+import threading
 from typing import List, Optional, Any
 
 from claia.lib.results import Result
@@ -10,7 +11,6 @@ from claia.lib.data.models import Conversation
 from claia.lib.enums.conversation import MessageRole
 from claia.lib.enums.model import SourcePreference
 from claia.lib.process import Process
-from claia.cli.utils import stream_process_response
 from .base import BaseCommand
 
 
@@ -29,18 +29,18 @@ class QueryCommand(BaseCommand):
     query_text = ' '.join(args)
     
     try:
-      # Ensure conversation and agent exist
       if not self.settings.active_conversation:
         self.settings.active_conversation = Conversation()
       
       if not self.settings.active_agent:
         self.settings.active_agent = self.settings.default_agent or DEFAULT_AGENT
       
-      # Add user message
-      user_message = self.settings.active_conversation.add_message(MessageRole.USER, query_text)
+      self.settings.active_conversation.add_message(MessageRole.USER, query_text)
       user_kwargs = self.settings.get_user_kwargs()
       
-      # Create and run process
+      done_event = threading.Event()
+      error_holder = [None]
+
       process = Process(
         agent_type=self.settings.active_agent,
         conversation=self.settings.active_conversation,
@@ -50,19 +50,28 @@ class QueryCommand(BaseCommand):
           **user_kwargs
         }
       )
+
+      process.on("token", lambda token: print(token, end='', flush=True))
+
+      def on_complete(full_response):
+        if full_response and not full_response.endswith('\n'):
+          print()
+        done_event.set()
+
+      def on_error(error_msg):
+        error_holder[0] = error_msg
+        print(f"\nError: {error_msg}")
+        done_event.set()
+
+      process.on("complete", on_complete)
+      process.on("error", on_error)
       
       self.registry.add_process(process)
-      
-      success = stream_process_response(
-        process=process,
-        user_message_id=user_message.message_id,
-        file_repo=None,
-        save_conversation=False
-      )
-      
-      if success:
-        return Result(success=True)
-      return Result(success=False, message=f"Query failed with status: {process.status}")
+      done_event.wait()
+
+      if error_holder[0]:
+        return Result(success=False, message=f"Query failed: {error_holder[0]}")
+      return Result(success=True)
       
     except Exception as e:
       self.logger.error(f"Error processing query: {e}", exc_info=True)

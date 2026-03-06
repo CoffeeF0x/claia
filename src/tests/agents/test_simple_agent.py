@@ -11,9 +11,16 @@ from claia.lib.enums.process import ProcessStatus
 def test_simple_agent_success(process, fake_model_registry_ok):
   updated = SimpleAgent.process_request(process, registry=fake_model_registry_ok)
   assert updated.status == ProcessStatus.COMPLETED
-  assert isinstance(updated.result, dict)
-  assert updated.result.get("echo_model") == process.parameters["model_id"]
+  assert isinstance(updated.result, str)
   assert updated.error is None
+
+
+def test_simple_agent_emits_token_callbacks(process, fake_model_registry_ok):
+  tokens = []
+  process.on("token", lambda t: tokens.append(t))
+  updated = SimpleAgent.process_request(process, registry=fake_model_registry_ok)
+  assert updated.status == ProcessStatus.COMPLETED
+  assert len(tokens) > 0
 
 
 def test_simple_agent_error(process, fake_model_registry_error):

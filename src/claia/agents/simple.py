@@ -26,33 +26,34 @@ class SimpleAgent(BaseAgent):
   """
   A simple agent that directly calls a model for inference.
 
-  This agent will simply forward requests to the appropriate model.
+  Consumes the token generator from registry.run(), emitting "token"
+  callbacks on the process for each chunk. On completion emits
+  "complete"; on failure emits "error".
   """
 
   @classmethod
   def process_request(cls, process, registry=None, **kwargs) -> object:
-    """
-    Process a model inference request.
-
-    Args:
-        process: The process to execute
-        registry: Registry instance to use for model operations
-        **kwargs: Additional keyword arguments
-
-    Returns:
-        The updated process with results or error information
-    """
+    """Process a model inference request by streaming tokens from the registry."""
     try:
-      # Get the model ID from the validated parameters
       model_id = process.parameters["model_id"]
 
-      # Run the model with the conversation using the provided model registry
-      result = registry.run(model_id, process.conversation, **kwargs)
+      gen = registry.run(model_id, process.conversation, **kwargs)
+      full_response = ""
+      result = None
 
-      if result.is_error():
+      while True:
+        try:
+          token = next(gen)
+          full_response += token
+          process.emit("token", token)
+        except StopIteration as e:
+          result = e.value
+          break
+
+      if result is not None and result.is_error():
         raise ValueError(f"Error running model: {result.get_message()}")
 
-      process.mark_completed(result.data)
+      process.mark_completed(full_response)
 
     except Exception as e:
       logging.exception(f"Error in SimpleAgent for {process.id}: {str(e)}")
