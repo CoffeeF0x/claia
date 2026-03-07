@@ -19,14 +19,14 @@ Usage:
 from .base import BaseAgent
 from .process import Process
 from .queue import ProcessQueue
-from .results import Result
+from .results import Result, DeploymentError
 
 # Model classes are under model/ subdirectory
 from .model import BaseModel, APIModel, LocalModel
 
 __all__ = [
   # Core classes
-  'BaseAgent', 'Process', 'ProcessQueue', 'Result',
+  'BaseAgent', 'Process', 'ProcessQueue', 'Result', 'DeploymentError',
 
   # Model base classes (re-exported for convenience)
   'BaseModel', 'APIModel', 'LocalModel'

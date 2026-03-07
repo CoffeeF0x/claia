@@ -6,11 +6,10 @@ Deployment method plugins handle specific ways to deploy/run models
 """
 
 import pluggy
-from typing import Dict, Any, Type
+from typing import Dict, Any, Type, Iterator
 from dataclasses import dataclass
 
 # Internal dependencies
-from claia.lib.results import Result
 from claia.lib.data import Conversation
 from .base import ExtensionInfo
 
@@ -38,12 +37,13 @@ class DeploymentHooks:
     """
 
   @hookspec
-  def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Result:
+  def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[str]:
     """
     Deploy (if needed) and run inference on a model.
 
     This method handles both model deployment/caching and running inference.
     The deployment plugin manages its own model instances and caching strategies.
+    Errors are raised as exceptions (typically DeploymentError).
 
     Args:
         model_name: Canonical model name
@@ -52,6 +52,6 @@ class DeploymentHooks:
         cache: Cache dictionary for model instances (deployment plugin manages this)
         **kwargs: Additional deployment and runtime parameters
 
-    Returns:
-        Result containing the model response or error
+    Yields:
+        Tokens as they arrive from the model
     """

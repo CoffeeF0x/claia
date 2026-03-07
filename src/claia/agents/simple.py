@@ -36,22 +36,11 @@ class SimpleAgent(BaseAgent):
     """Process a model inference request by streaming tokens from the registry."""
     try:
       model_id = process.parameters["model_id"]
-
-      gen = registry.run(model_id, process.conversation, **kwargs)
       full_response = ""
-      result = None
 
-      while True:
-        try:
-          token = next(gen)
-          full_response += token
-          process.emit("token", token)
-        except StopIteration as e:
-          result = e.value
-          break
-
-      if result is not None and result.is_error():
-        raise ValueError(f"Error running model: {result.get_message()}")
+      for token in registry.run(model_id, process.conversation, streaming=True, **kwargs):
+        full_response += token
+        process.emit("token", token)
 
       process.mark_completed(full_response)
 

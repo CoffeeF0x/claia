@@ -7,7 +7,7 @@ import pytest
 from types import SimpleNamespace
 
 # Internal dependencies
-from claia.lib.results import Result
+from claia.lib.results import Result, DeploymentError
 from claia.lib.data import Conversation
 from claia.lib.process import Process
 from claia.lib.enums.process import ProcessStatus
@@ -30,22 +30,23 @@ def process(conversation):
 
 @pytest.fixture
 def fake_model_registry_ok():
-  """A minimal registry whose run() yields tokens and returns success."""
+  """A minimal registry whose run() yields tokens (streaming) or returns Result."""
   class FakeRegistry:
-    def run(self, model_id, conversation, **kwargs):
-      response = f'{{"echo_model": "{model_id}"}}'
-      yield response
-      return Result.ok(response)
+    def run(self, model_id, conversation, streaming=False, **kwargs):
+      if streaming:
+        return iter([f'{{"echo_model": "{model_id}"}}'])
+      return Result.ok(f'{{"echo_model": "{model_id}"}}')
   return FakeRegistry()
 
 
 @pytest.fixture
 def fake_model_registry_error():
-  """A minimal registry whose run() returns an error (no tokens yielded)."""
+  """A minimal registry whose run() raises (streaming) or returns error Result."""
   class FakeRegistry:
-    def run(self, model_id, conversation, **kwargs):
+    def run(self, model_id, conversation, streaming=False, **kwargs):
+      if streaming:
+        raise DeploymentError("model error")
       return Result.fail("model error")
-      yield  # make it a generator
   return FakeRegistry()
 
 
@@ -103,9 +104,7 @@ def fake_manager():
           return Info()
 
         def run(self, model_name, model_class, conversation, cache, **kwargs):
-          response = f"deployed {model_name} via {deployment_name}"
-          yield response
-          return Result.ok(response)
+          yield f"deployed {model_name} via {deployment_name}"
       return Deployment()
 
     def get_available_architectures(self):

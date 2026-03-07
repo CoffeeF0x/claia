@@ -6,10 +6,10 @@ that provides a unified interface for tools, models, and agents.
 import logging
 import threading
 import json
-from typing import Any, Dict, Generator, Optional
+from typing import Any, Dict, Iterator, Optional, Union
 
 from claia.manager import Manager
-from claia.lib.results import Result
+from claia.lib.results import Result, DeploymentError
 from claia.lib.process import Process
 from claia.lib.queue import ProcessQueue
 from claia.lib.enums.process import ProcessStatus
@@ -336,7 +336,7 @@ class Registry:
   ######################################################################
   #                             MODELS API                             #
   ######################################################################
-  def run(
+  def _run_stream(
     self,
     model_name: str,
     conversation: Conversation,
@@ -344,107 +344,111 @@ class Registry:
     deployment_method: Optional[str] = None,
     deployment_preference: Optional[str] = None,
     **kwargs
-  ) -> Generator[str, None, Result]:
+  ) -> Iterator[str]:
     """
-    Orchestrate model execution via solver -> deployment -> architecture.
-
-    Yields tokens as they arrive from the model. Returns a Result with
-    the full response when the generator is exhausted (accessible via
-    StopIteration.value or yield from).
+    Internal: resolve solver/deployment and return the deployment's
+    token iterator. Raises DeploymentError on failure.
     """
-    try:
-      logger.debug(f"Running model {model_name}")
+    logger.debug(f"Running model {model_name}")
 
-      combined_kwargs = {**self._user_kwargs, **kwargs}
+    combined_kwargs = {**self._user_kwargs, **kwargs}
 
-      available_models = self.manager.get_supported_models()
-      available_deployments = list(self.manager.get_available_deployments().keys())
+    available_models = self.manager.get_supported_models()
+    available_deployments = list(self.manager.get_available_deployments().keys())
 
-      selected_solver = self.manager.get_solver_plugin(solver)
-      if not selected_solver:
-        return Result.fail(f"No solver available (requested: {solver})")
+    selected_solver = self.manager.get_solver_plugin(solver)
+    if not selected_solver:
+      raise DeploymentError(f"No solver available (requested: {solver})")
 
-      solver_info = selected_solver.get_solver_info()
-      solver_kwargs = self._filter_kwargs(combined_kwargs, getattr(solver_info, 'required_args', None))
+    solver_info = selected_solver.get_solver_info()
+    solver_kwargs = self._filter_kwargs(combined_kwargs, getattr(solver_info, 'required_args', None))
 
-      params_result = selected_solver.solve_deployment(
-        model_name=model_name,
-        available_deployments=available_deployments,
-        available_models=available_models,
-        cache=self.cache,
-        deployment_preference=deployment_preference,
-        deployment_method=deployment_method,
-        **solver_kwargs
-      )
+    params_result = selected_solver.solve_deployment(
+      model_name=model_name,
+      available_deployments=available_deployments,
+      available_models=available_models,
+      cache=self.cache,
+      deployment_preference=deployment_preference,
+      deployment_method=deployment_method,
+      **solver_kwargs
+    )
 
-      if params_result.is_error():
-        return params_result
+    if params_result.is_error():
+      raise DeploymentError(params_result.get_message())
 
-      deployment_params = params_result.data
-      logger.debug(f"Solver result: deployment={deployment_params.deployment_name} model={deployment_params.model_name} arch={deployment_params.architecture_name}")
+    deployment_params = params_result.data
+    logger.debug(f"Solver result: deployment={deployment_params.deployment_name} model={deployment_params.model_name} arch={deployment_params.architecture_name}")
 
-      model_class = self.manager.get_model_class(deployment_params.architecture_name)
-      if not model_class:
-        return Result.fail(f"No architecture '{deployment_params.architecture_name}' found for model '{deployment_params.model_name}'")
+    model_class = self.manager.get_model_class(deployment_params.architecture_name)
+    if not model_class:
+      raise DeploymentError(f"No architecture '{deployment_params.architecture_name}' found for model '{deployment_params.model_name}'")
 
-      provider_model_name = deployment_params.model_name
-      model_def = available_models.get(deployment_params.model_name)
-      if model_def and getattr(model_def, 'identifiers', None):
-        arch_key = deployment_params.architecture_name
-        if arch_key in model_def.identifiers:
-          provider_model_name = model_def.identifiers[arch_key]
-          logger.debug(f"Resolved provider model name for arch '{arch_key}': {provider_model_name}")
+    provider_model_name = deployment_params.model_name
+    model_def = available_models.get(deployment_params.model_name)
+    if model_def and getattr(model_def, 'identifiers', None):
+      arch_key = deployment_params.architecture_name
+      if arch_key in model_def.identifiers:
+        provider_model_name = model_def.identifiers[arch_key]
+        logger.debug(f"Resolved provider model name for arch '{arch_key}': {provider_model_name}")
 
-      selected_deployment = self.manager.get_deployment_plugin(deployment_params.deployment_name)
-      if not selected_deployment:
-        return Result.fail(f"Deployment method '{deployment_params.deployment_name}' not available")
+    selected_deployment = self.manager.get_deployment_plugin(deployment_params.deployment_name)
+    if not selected_deployment:
+      raise DeploymentError(f"Deployment method '{deployment_params.deployment_name}' not available")
 
-      deployment_info = selected_deployment.get_deployment_info()
-      deployment_kwargs = self._filter_kwargs(combined_kwargs, getattr(deployment_info, 'required_args', None))
+    deployment_info = selected_deployment.get_deployment_info()
+    deployment_kwargs = self._filter_kwargs(combined_kwargs, getattr(deployment_info, 'required_args', None))
 
-      available_architectures = self.manager.get_available_architectures()
-      architecture_info = available_architectures.get(deployment_params.architecture_name)
-      if architecture_info:
-        architecture_kwargs = self._filter_kwargs(combined_kwargs, getattr(architecture_info, 'required_args', None))
-        final_kwargs = {**architecture_kwargs, **deployment_kwargs}
-      else:
-        final_kwargs = deployment_kwargs
+    available_architectures = self.manager.get_available_architectures()
+    architecture_info = available_architectures.get(deployment_params.architecture_name)
+    if architecture_info:
+      architecture_kwargs = self._filter_kwargs(combined_kwargs, getattr(architecture_info, 'required_args', None))
+      final_kwargs = {**architecture_kwargs, **deployment_kwargs}
+    else:
+      final_kwargs = deployment_kwargs
 
-      result = yield from selected_deployment.run(
-        model_name=provider_model_name,
-        model_class=model_class,
-        conversation=conversation,
-        cache=self.cache,
-        **final_kwargs
-      )
+    return selected_deployment.run(
+      model_name=provider_model_name,
+      model_class=model_class,
+      conversation=conversation,
+      cache=self.cache,
+      **final_kwargs
+    )
 
-      return result
-
-    except Exception as e:
-      logger.error(f"Error running model {model_name}: {str(e)}")
-      return Result.fail(f"Failed to run model: {str(e)}")
-
-  def run_sync(
+  def run(
     self,
     model_name: str,
     conversation: Conversation,
+    streaming: bool = False,
     **kwargs
-  ) -> Result:
+  ) -> Union[Result, Iterator[str]]:
     """
-    Synchronous convenience wrapper around run().
+    Orchestrate model execution via solver -> deployment -> architecture.
 
-    Consumes the generator, discards individual tokens, and returns
-    only the final Result. Useful for non-streaming consumers or
-    simple library usage.
+    Args:
+        model_name: Model identifier (e.g. "gpt-4")
+        conversation: Conversation to process
+        streaming: If True, returns an Iterator[str] yielding tokens.
+                   If False (default), consumes all tokens and returns
+                   a Result with the full response.
+        **kwargs: Forwarded to solver/deployment/architecture (also accepts
+                  solver, deployment_method, deployment_preference)
+
+    Returns:
+        Result (streaming=False) or Iterator[str] (streaming=True).
+        Errors raise when streaming; errors are wrapped in Result.fail
+        when not streaming.
     """
-    gen = self.run(model_name, conversation, **kwargs)
+    if streaming:
+      return self._run_stream(model_name, conversation, **kwargs)
+
     try:
-      while True:
-        next(gen)
-    except StopIteration as e:
-      return e.value if e.value is not None else Result.fail("Generator did not return a result")
+      full_response = ""
+      for token in self._run_stream(model_name, conversation, **kwargs):
+        full_response += token
+      return Result.ok(full_response)
     except Exception as e:
-      return Result.fail(f"Failed to run model: {str(e)}")
+      logger.error(f"Error running model {model_name}: {e}")
+      return Result.fail(str(e))
 
   def query(
     self,

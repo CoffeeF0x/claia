@@ -15,8 +15,12 @@ Library usage::
     # One-shot (blocking, no streaming)
     conv = Conversation()
     conv.add_message_from_role("user", "Hello!")
-    result = registry.run_sync("gpt-4", conv)
+    result = registry.run("gpt-4", conv)
     print(result.get_data())
+
+    # Streaming
+    for token in registry.run("gpt-4", conv, streaming=True):
+        print(token, end="", flush=True)
 
     # Streaming via callbacks
     result = registry.query("gpt-4", "Hello!",
@@ -24,13 +28,14 @@ Library usage::
 """
 
 from .registry import Registry
-from .lib.results import Result
+from .lib.results import Result, DeploymentError
 from .lib.process import Process
 from .lib.data import Conversation
 
 __all__ = [
   "Registry",
   "Result",
+  "DeploymentError",
   "Process",
   "Conversation",
 ]

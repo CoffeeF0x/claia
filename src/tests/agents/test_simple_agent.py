@@ -28,4 +28,4 @@ def test_simple_agent_error(process, fake_model_registry_error):
   assert updated.status == ProcessStatus.FAILED
   assert updated.result is None
   assert isinstance(updated.error, str)
-  assert "Error running model: model error" in updated.error
+  assert "model error" in updated.error
