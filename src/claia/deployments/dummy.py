@@ -10,7 +10,6 @@ from typing import Dict, Any, Type, Iterator
 
 # Internal dependencies
 from claia.lib.data import Conversation
-from claia.lib.enums.conversation import MessageRole
 from ..hooks.deployment import DeploymentInfo
 
 
@@ -53,11 +52,4 @@ class DummyDeploymentPlugin:
             logger.debug(f"Successfully deployed and cached dummy model: {model_name}")
 
         logger.debug(f"Running dummy model inference: {model_name}")
-        gen = model_instance.generate(conversation, **kwargs)
-        message = conversation.add_message(MessageRole.ASSISTANT, "")
-
-        for token in gen:
-            conversation.stream_message(message.message_id, token, append=True)
-            yield token
-
-        conversation.stream_message(message.message_id, "", append=True, end=True)
+        yield from model_instance.generate(conversation, **kwargs)

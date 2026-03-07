@@ -10,6 +10,7 @@ from typing import Type
 
 # Internal dependencies
 from ..lib import BaseAgent, Process
+from ..lib.enums.conversation import MessageRole
 from ..hooks import AgentHooks, AgentInfo
 
 
@@ -42,6 +43,7 @@ class SimpleAgent(BaseAgent):
         full_response += token
         process.emit("token", token)
 
+      process.conversation.add_message(MessageRole.ASSISTANT, full_response)
       process.mark_completed(full_response)
 
     except Exception as e:

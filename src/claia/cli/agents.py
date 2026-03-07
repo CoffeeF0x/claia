@@ -25,6 +25,7 @@ import logging
 
 # Internal dependencies
 from claia.lib import BaseAgent
+from claia.lib.enums.conversation import MessageRole
 
 
 ########################################################################
@@ -87,6 +88,7 @@ class WriterAgent(BaseAgent):
         full_response += token
         process.emit("token", token)
 
+      process.conversation.add_message(MessageRole.ASSISTANT, full_response)
       process.mark_completed(full_response)
       logger.info(f"Writer agent successfully completed process {process.id}")
 

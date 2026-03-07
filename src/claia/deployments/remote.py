@@ -12,7 +12,6 @@ from typing import Dict, Any, Type, Iterator
 # Internal dependencies
 from claia.lib.results import DeploymentError, Result
 from claia.lib.data import Conversation
-from claia.lib.enums.conversation import MessageRole
 from ..hooks.deployment import DeploymentInfo
 
 
@@ -49,9 +48,7 @@ class RemoteDeploymentPlugin:
   def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[str]:
     """
     Deploy (if needed) and run inference on a remote model.
-
-    Yields tokens as they arrive from the model and manages the assistant
-    message on the Conversation.
+    Yields tokens as they arrive from the model.
     """
     cache_key = f"{model_name}:remote"
 
@@ -88,11 +85,4 @@ class RemoteDeploymentPlugin:
       logger.debug(f"Successfully deployed and cached remote model: {model_name}")
 
     logger.debug(f"Running remote model inference: {model_name}")
-    gen = model_instance.generate(conversation, **kwargs)
-    message = conversation.add_message(MessageRole.ASSISTANT, "")
-
-    for token in gen:
-      conversation.stream_message(message.message_id, token, append=True)
-      yield token
-
-    conversation.stream_message(message.message_id, "", append=True, end=True)
+    yield from model_instance.generate(conversation, **kwargs)
