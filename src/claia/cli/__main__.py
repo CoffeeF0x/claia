@@ -77,7 +77,7 @@ from claia.lib.results import Result
 from claia.lib.enums.model import SourcePreference
 from claia.lib.enums.conversation import MessageRole
 from claia.lib.data import Conversation
-from claia.cli.storage import FileSystemStore
+from claia.cli.storage import JsonStore
 from claia.cli.settings import Settings
 from claia.cli.commands import Commands
 from claia.cli.defaults import initialize_defaults
@@ -317,7 +317,7 @@ def main() -> None:
     commands = Commands(registry, settings)
 
     # Initialize file system repository
-    file_repo = FileSystemStore(settings.files_directory)
+    file_repo = JsonStore(settings.files_directory)
 
     # Set up command history with arrow key navigation
     setup_command_history(settings)

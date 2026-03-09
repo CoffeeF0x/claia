@@ -9,7 +9,7 @@ import logging
 
 # Internal dependencies
 from claia.lib.data import Prompt
-from claia.cli.storage import FileSystemStore
+from claia.cli.storage import JsonStore
 from .settings import Settings
 
 
@@ -101,7 +101,7 @@ def initialize_default_prompts(settings: Settings) -> None:
   logger.info("Initializing default prompts")
 
   # Create file repository for managing prompts
-  file_repo = FileSystemStore(settings.files_directory)
+  file_repo = JsonStore(settings.files_directory)
 
   # Load existing prompts from repository
   existing_prompts_metadata = file_repo.list_all(artifact_type='prompts')
@@ -113,7 +113,7 @@ def initialize_default_prompts(settings: Settings) -> None:
   for metadata in existing_prompts_metadata:
     try:
       prompt_id = metadata.get('id')
-      existing_prompt = file_repo.load(prompt_id, load_content=True)
+      existing_prompt = file_repo.load(prompt_id)
       if existing_prompt:
         settings.prompt_store.append(existing_prompt)
         logger.debug(f"Loaded existing prompt '{existing_prompt.prompt_name}' (ID: {existing_prompt.id})")

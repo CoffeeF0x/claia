@@ -7,7 +7,7 @@ from typing import List, Optional, Any, Dict
 
 from claia.lib.results import Result
 from claia.lib.data.models import Conversation
-from claia.cli.storage import FileSystemStore
+from claia.cli.storage import JsonStore
 from .base import BaseCommand
 
 
@@ -103,17 +103,17 @@ class ConversationCommand(BaseCommand):
     identifier = ' '.join(args)
     
     try:
-      file_repo = FileSystemStore(self.settings.files_directory)
+      file_repo = JsonStore(self.settings.files_directory)
       
       # Try by ID first
-      conv = file_repo.load(identifier, load_content=True)
+      conv = file_repo.load(identifier)
       
       # If not found, try by title
       if not conv:
         conversations = file_repo.list_all(artifact_type='conversations')
         for meta in conversations:
           if meta.get('title', '').lower() == identifier.lower():
-            conv = file_repo.load(meta.get('id'), load_content=True)
+            conv = file_repo.load(meta.get('id'))
             break
       
       if not conv:
@@ -144,7 +144,7 @@ class ConversationCommand(BaseCommand):
       self.settings.active_conversation.title = new_title
       self.settings.active_conversation.metadata['title'] = new_title
       
-      file_repo = FileSystemStore(self.settings.files_directory)
+      file_repo = JsonStore(self.settings.files_directory)
       file_repo.save(self.settings.active_conversation)
       
       return Result(success=True, data=f"\nConversation title updated:\n  {old_title} → {new_title}")
@@ -161,11 +161,11 @@ class ConversationCommand(BaseCommand):
     identifier = ' '.join(args)
     
     try:
-      file_repo = FileSystemStore(self.settings.files_directory)
+      file_repo = JsonStore(self.settings.files_directory)
       
       # Find conversation
       conv_id, conv_title = None, None
-      conv = file_repo.load(identifier, load_content=False)
+      conv = file_repo.load(identifier)
       
       if conv and isinstance(conv, Conversation):
         conv_id, conv_title = conv.id, conv.title

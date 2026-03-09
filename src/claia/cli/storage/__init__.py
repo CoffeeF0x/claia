@@ -1,13 +1,7 @@
 """
-CLI-owned persistence adapters.
+CLI-owned JSON file storage.
 """
 
-from .base import ArtifactStore
-from .file_system import FileSystemStore
-from .memory import MemoryStore
+from .json_store import JsonStore
 
-__all__ = [
-    "ArtifactStore",
-    "FileSystemStore",
-    "MemoryStore",
-]
+__all__ = ["JsonStore"]

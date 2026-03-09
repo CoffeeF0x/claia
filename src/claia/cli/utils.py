@@ -1,7 +1,5 @@
 """
 Utility functions for the CLAIA CLI.
-
-This module contains reusable utility functions for common CLI operations.
 """
 
 import threading
@@ -9,7 +7,7 @@ import logging
 from typing import Optional
 
 from claia.lib.process import Process
-from claia.cli.storage import FileSystemStore
+from claia.cli.storage import JsonStore
 
 
 logger = logging.getLogger(__name__)
@@ -17,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 def wait_for_process(
     process: Process,
-    file_repo: Optional[FileSystemStore] = None,
+    store: Optional[JsonStore] = None,
     save_conversation: bool = True,
     timeout: Optional[float] = None
 ) -> bool:
@@ -27,25 +25,13 @@ def wait_for_process(
   Before calling this, register "token", "complete", and "error" callbacks
   on the process. This helper simply waits for the done event to be set
   by one of those callbacks.
-
-  Args:
-      process: The Process object to wait on (must have callbacks registered)
-      file_repo: Optional FileSystemStore for saving conversations
-      save_conversation: Whether to save the conversation after completion
-      timeout: Optional timeout in seconds
-
-  Returns:
-      bool: True if process completed successfully, False otherwise
   """
   done = threading.Event()
   success_flag = [True]
 
-  original_complete = None
-  original_error = None
-
   def on_complete(*args):
-    if save_conversation and file_repo and process.conversation:
-      if not file_repo.save(process.conversation):
+    if save_conversation and store and process.conversation:
+      if not store.save(process.conversation):
         logger.error("Failed to save conversation")
     done.set()
 

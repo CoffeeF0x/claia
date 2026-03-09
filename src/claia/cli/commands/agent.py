@@ -7,7 +7,7 @@ from typing import List, Optional, Any, Dict
 
 from claia.lib.results import Result
 from claia.lib.data.models import Prompt
-from claia.cli.storage import FileSystemStore
+from claia.cli.storage import JsonStore
 from .base import BaseCommand
 
 
@@ -138,7 +138,7 @@ class PromptCommand(BaseCommand):
     prompt_name = args[0]
     try:
       validated_name = Prompt.validate_prompt_name(prompt_name)
-      file_repo = FileSystemStore(self.settings.files_directory)
+      file_repo = JsonStore(self.settings.files_directory)
       
       # Find and load the prompt
       prompts = file_repo.list_all(artifact_type='prompts')
@@ -147,7 +147,7 @@ class PromptCommand(BaseCommand):
       if not prompt_id:
         return Result(success=False, message=f"Prompt '{validated_name}' not found.\nUse {self.format_command('prompt list')} to see available prompts.")
       
-      prompt = file_repo.load(prompt_id, load_content=True)
+      prompt = file_repo.load(prompt_id)
       if not prompt:
         return Result(success=False, message=f"Error loading prompt '{validated_name}'.")
       
@@ -175,7 +175,7 @@ class PromptCommand(BaseCommand):
     
     try:
       validated_name = Prompt.validate_prompt_name(args[0])
-      file_repo = FileSystemStore(self.settings.files_directory)
+      file_repo = JsonStore(self.settings.files_directory)
       
       # Find the prompt
       prompts = file_repo.list_all(artifact_type='prompts')
