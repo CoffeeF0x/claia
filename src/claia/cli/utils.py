@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 
 from claia.lib.process import Process
-from claia.lib.data import FileSystemRepository
+from claia.cli.storage import FileSystemStore
 
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 def wait_for_process(
     process: Process,
-    file_repo: Optional[FileSystemRepository] = None,
+    file_repo: Optional[FileSystemStore] = None,
     save_conversation: bool = True,
     timeout: Optional[float] = None
 ) -> bool:
@@ -30,7 +30,7 @@ def wait_for_process(
 
   Args:
       process: The Process object to wait on (must have callbacks registered)
-      file_repo: Optional FileSystemRepository for saving conversations
+      file_repo: Optional FileSystemStore for saving conversations
       save_conversation: Whether to save the conversation after completion
       timeout: Optional timeout in seconds
 

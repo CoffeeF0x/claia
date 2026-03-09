@@ -11,11 +11,12 @@ branch is identified by active_head_id — the ID of the leaf message on the act
 path. To get the active linear thread, call get_thread().
 
 This is a pure Python object that can exist in memory without file operations.
-Persistence is handled separately by Repository classes.
+Persistence is handled by host runtimes (CLI, API, workers) using emitted
+domain events and/or direct serialization.
 """
 
 # External dependencies
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List, Union, Callable
 import logging
 import json
 import time
@@ -23,7 +24,8 @@ import uuid
 
 # Internal dependencies
 from ....enums.conversation import ActionType, MessageRole
-from ..text import TextFile
+from ..text import TextArtifact
+from ...events import DomainEvent
 from .action import Action
 from .message import Message
 from .conversation_settings import ConversationSettings
@@ -44,11 +46,11 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                             CONVERSATION                             #
 ########################################################################
-class Conversation(TextFile):
+class Conversation(TextArtifact):
     """
     Pure data model for conversations.
 
-    Extends TextFile to store conversation as JSON files, following the same
+    Extends TextArtifact to store conversation data as JSON text, following the same
     pattern as Prompt. This eliminates code duplication and enables consistent
     file handling across the system.
 
@@ -68,6 +70,7 @@ class Conversation(TextFile):
     - Branch/revision support via parent_id tree
     - Settings management
     - Action tracking for audit trail
+    - Domain event emission for host-runtime persistence triggers
     - System prompt generation with substitutions
     - Streaming support via thread-safe message updates
     """
@@ -119,13 +122,13 @@ class Conversation(TextFile):
             active_head_id: ID of the leaf message on the active branch
             created_at: Optional creation timestamp
             updated_at: Optional last update timestamp
-            **kwargs: Additional arguments for TextFile (file_name handled by repository)
+            **kwargs: Additional arguments for TextArtifact
         """
-        # Initialize TextFile - BaseFile handles ID generation and file naming
+        # Initialize TextArtifact - BaseArtifact handles ID generation and naming
         # The file_name is primarily for persistence; repositories can override it
         super().__init__(
             file_name=kwargs.pop('file_name', f"conversation-{id or 'new'}"),
-            file_id=id,  # BaseFile generates UUID if None
+            file_id=id,  # BaseArtifact generates UUID if None
             mime_type='application/json',
             encoding='utf-8',
             created_at=created_at,
@@ -179,6 +182,10 @@ class Conversation(TextFile):
         else:
             self.settings = ConversationSettings.from_dict(settings)
 
+        # Runtime-consumable domain event queue (not serialized)
+        self._events: List[DomainEvent] = []
+        self._event_listeners: List[Callable[[DomainEvent], None]] = []
+
         # If no actions are provided, create an initial action
         if not self.actions:
             self.add_action(ActionType.CREATE_CONVERSATION, {
@@ -213,6 +220,51 @@ class Conversation(TextFile):
 
         return data
 
+    # ---------------------------------------------------------------------- #
+    # Domain event helpers                                                     #
+    # ---------------------------------------------------------------------- #
+    def emit_event(self, event_type: str, metadata: Optional[Dict[str, Any]] = None,
+                   entity_id: Optional[str] = None, parent_id: Optional[str] = None) -> DomainEvent:
+        """Emit a domain event for host-runtime consumers (CLI/API/etc)."""
+        event = DomainEvent(
+            event_type=event_type,
+            entity_type="conversation",
+            entity_id=entity_id or self.id,
+            parent_id=parent_id,
+            metadata=metadata or {},
+        )
+        self._events.append(event)
+        for listener in list(self._event_listeners):
+            try:
+                listener(event)
+            except Exception as e:
+                logger.warning(f"Conversation event listener failed: {e}")
+        return event
+
+    def add_event_listener(self, listener: Callable[[DomainEvent], None]) -> None:
+        """Register a callback invoked whenever a new domain event is emitted."""
+        if listener not in self._event_listeners:
+            self._event_listeners.append(listener)
+
+    def remove_event_listener(self, listener: Callable[[DomainEvent], None]) -> None:
+        """Remove a previously registered event listener callback."""
+        if listener in self._event_listeners:
+            self._event_listeners.remove(listener)
+
+    def peek_events(self) -> List[DomainEvent]:
+        """Return currently queued domain events without clearing them."""
+        return list(self._events)
+
+    def pull_events(self) -> List[DomainEvent]:
+        """Return and clear queued domain events (recommended runtime API)."""
+        events = list(self._events)
+        self._events.clear()
+        return events
+
+    def clear_events(self) -> None:
+        """Clear any queued domain events."""
+        self._events.clear()
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Conversation':
         """
@@ -234,9 +286,9 @@ class Conversation(TextFile):
             active_head_id=data.get("active_head_id"),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
-            file_name=data.get("file_name"),
+            file_name=data.get("name") or data.get("file_name"),
             is_reference=data.get("is_reference", False),
-            source_path=data.get("source_path"),
+            source_path=data.get("source_uri") or data.get("source_path"),
             metadata=data.get("metadata", {})
         )
 
@@ -483,6 +535,12 @@ class Conversation(TextFile):
             action_metadata["inline_args_count"] = len(message.inline_args)
 
         self.add_action(ActionType.CREATE_MESSAGE, action_metadata)
+        self.emit_event(
+            "conversation.message_added",
+            metadata=action_metadata,
+            entity_id=message.message_id,
+            parent_id=message.parent_id,
+        )
 
         return message
 
@@ -533,6 +591,12 @@ class Conversation(TextFile):
                         action_metadata["inline_args_count"] = len(message.inline_args)
 
                 self.add_action(ActionType.UPDATE_MESSAGE, action_metadata)
+                self.emit_event(
+                    "conversation.message_updated",
+                    metadata=action_metadata,
+                    entity_id=message.message_id,
+                    parent_id=message.parent_id,
+                )
 
                 return message
 
@@ -562,6 +626,15 @@ class Conversation(TextFile):
                     "message_id": message_id,
                     "speaker": deleted_message.speaker.value
                 })
+                self.emit_event(
+                    "conversation.message_deleted",
+                    metadata={
+                        "message_id": message_id,
+                        "speaker": deleted_message.speaker.value,
+                    },
+                    entity_id=message_id,
+                    parent_id=deleted_message.parent_id,
+                )
 
                 return True
 
@@ -665,6 +738,16 @@ class Conversation(TextFile):
                         "content_preview": message.content[:50] + "..." if len(message.content) > 50 else message.content
                     })
 
+                self.emit_event(
+                    "conversation.message_streamed",
+                    metadata={
+                        "message_id": message_id,
+                        "append": append,
+                        "end": end,
+                    },
+                    entity_id=message_id,
+                    parent_id=message.parent_id,
+                )
                 return message
 
         logger.error(f"Message not found for streaming update: {message_id}")
@@ -702,6 +785,12 @@ class Conversation(TextFile):
             "message_id": message_id,
             "file_id": file_id
         })
+        self.emit_event(
+            "conversation.attachment_added",
+            metadata={"message_id": message_id, "file_id": file_id},
+            entity_id=message_id,
+            parent_id=message.parent_id,
+        )
 
         return True
 
@@ -733,6 +822,12 @@ class Conversation(TextFile):
             "message_id": message_id,
             "file_id": file_id
         })
+        self.emit_event(
+            "conversation.attachment_removed",
+            metadata={"message_id": message_id, "file_id": file_id},
+            entity_id=message_id,
+            parent_id=message.parent_id,
+        )
 
         return True
 
@@ -807,6 +902,11 @@ class Conversation(TextFile):
             "old_title": old_title,
             "new_title": new_title
         })
+        self.emit_event(
+            "conversation.title_changed",
+            metadata={"old_title": old_title, "new_title": new_title},
+            entity_id=self.id,
+        )
 
     def change_prompt(self, new_prompt: Union[str, Dict[str, str]]) -> None:
         """
@@ -823,6 +923,14 @@ class Conversation(TextFile):
             "old_prompt": old_prompt,
             "new_prompt": self.prompt.get("system", "")
         })
+        self.emit_event(
+            "conversation.prompt_changed",
+            metadata={
+                "old_prompt": old_prompt,
+                "new_prompt": self.prompt.get("system", ""),
+            },
+            entity_id=self.id,
+        )
 
     def update_settings(self, settings: ConversationSettings) -> None:
         """
@@ -854,6 +962,11 @@ class Conversation(TextFile):
         if changes:
             self.updated_at = time.time()
             self.add_action(ActionType.UPDATE_SETTINGS, changes)
+            self.emit_event(
+                "conversation.settings_updated",
+                metadata=changes,
+                entity_id=self.id,
+            )
 
     def get_settings(self) -> ConversationSettings:
         """
@@ -872,15 +985,15 @@ class Conversation(TextFile):
         """
         Load all files attached to a message.
 
-        Generic method that works with any file type (ImageFile, TextFile, etc.).
+        Generic method that works with any artifact type (ImageArtifact, TextArtifact, etc.).
 
         Args:
             message_id: The ID of the message
-            file_repo: FileRepository instance for loading files
+            file_repo: ArtifactStore-like instance for loading artifacts
             load_content: Whether to pre-load file content
 
         Returns:
-            List[BaseFile]: List of files attached to the message
+            List[BaseArtifact]: List of artifacts attached to the message
         """
         message = self.get_message(message_id)
         if not message:
@@ -899,11 +1012,11 @@ class Conversation(TextFile):
         Load all files for all messages in the active thread.
 
         Args:
-            file_repo: FileRepository instance for loading files
+            file_repo: ArtifactStore-like instance for loading artifacts
             load_content: Whether to pre-load file content
 
         Returns:
-            Dict[str, List[BaseFile]]: Dictionary mapping message_id -> list of files
+            Dict[str, List[BaseArtifact]]: Dictionary mapping message_id -> list of artifacts
         """
         result = {}
 
@@ -944,4 +1057,13 @@ class Conversation(TextFile):
         """
         action = Action(action_type=action_type, metadata=metadata or {})
         self.actions.append(action)
+        self.emit_event(
+            "conversation.action_added",
+            metadata={
+                "action_type": action.action_type.value,
+                "action_id": action.action_id,
+                "action_metadata": action.metadata,
+            },
+            entity_id=self.id,
+        )
         return action

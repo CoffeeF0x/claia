@@ -1,7 +1,7 @@
 """
-Image file data model.
+Image artifact data model.
 
-Handles image files with PIL Image support.
+Handles image content with PIL Image support.
 """
 
 # External dependencies
@@ -10,7 +10,7 @@ import time
 from typing import Dict, Any, Optional, Tuple
 
 # Internal dependencies
-from .base import BaseFile
+from .base import BaseArtifact
 
 
 ########################################################################
@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                             IMAGE FILE                               #
 ########################################################################
-class ImageFile(BaseFile):
+class ImageArtifact(BaseArtifact):
     """
-    Image file model.
+    Image artifact model.
 
     Handles image files with PIL Image support.
     Content is loaded as a PIL Image object.
@@ -37,14 +37,14 @@ class ImageFile(BaseFile):
                  format: Optional[str] = None,
                  **kwargs):
         """
-        Initialize an image file.
+        Initialize an image artifact.
 
         Args:
-            file_name: Name of the file
+            file_name: Name of the artifact
             width: Image width in pixels
             height: Image height in pixels
             format: Image format (PNG, JPEG, etc.)
-            **kwargs: Additional arguments for BaseFile
+            **kwargs: Additional arguments for BaseArtifact
         """
         # Set image MIME type if not provided
         if 'mime_type' not in kwargs:
@@ -169,23 +169,23 @@ class ImageFile(BaseFile):
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ImageFile':
+    def from_dict(cls, data: Dict[str, Any]) -> 'ImageArtifact':
         """
-        Create image file from dictionary.
+        Create image artifact from dictionary.
 
         Args:
             data: Dictionary containing file data
 
         Returns:
-            ImageFile: New image file instance
+            ImageArtifact: New image artifact instance
         """
         return cls(
-            file_name=data.get('file_name', 'untitled.jpg'),
+            file_name=data.get('name') or data.get('file_name', 'untitled.jpg'),
             file_id=data.get('id'),
-            mime_type=data.get('mime_type'),
+            mime_type=data.get('media_type') or data.get('mime_type'),
             size=data.get('size', 0),
             is_reference=data.get('is_reference', False),
-            source_path=data.get('source_path'),
+            source_path=data.get('source_uri') or data.get('source_path'),
             width=data.get('width') or data.get('metadata', {}).get('width'),
             height=data.get('height') or data.get('metadata', {}).get('height'),
             format=data.get('format') or data.get('metadata', {}).get('format'),
@@ -195,17 +195,17 @@ class ImageFile(BaseFile):
         )
 
     @classmethod
-    def from_image(cls, image_obj, file_name: str, **kwargs) -> 'ImageFile':
+    def from_image(cls, image_obj, file_name: str, **kwargs) -> 'ImageArtifact':
         """
-        Create an image file from a PIL Image object.
+        Create an image artifact from a PIL Image object.
 
         Args:
             image_obj: PIL Image object
-            file_name: Name for the file
-            **kwargs: Additional arguments for BaseFile
+            file_name: Name for the artifact
+            **kwargs: Additional arguments for BaseArtifact
 
         Returns:
-            ImageFile: New image file with content set
+            ImageArtifact: New image artifact with content set
         """
         # Extract dimensions
         width, height = image_obj.size if hasattr(image_obj, 'size') else (None, None)
@@ -226,9 +226,9 @@ class ImageFile(BaseFile):
         return file
 
     @classmethod
-    def from_path(cls, source: str, is_reference: bool = False, **kwargs) -> 'ImageFile':
+    def from_path(cls, source: str, is_reference: bool = False, **kwargs) -> 'ImageArtifact':
         """
-        Create an image file referencing a path.
+        Create an image artifact referencing a path.
 
         Args:
             source: Path to the file
@@ -236,7 +236,7 @@ class ImageFile(BaseFile):
             **kwargs: Additional arguments
 
         Returns:
-            ImageFile: New image file instance
+            ImageArtifact: New image artifact instance
         """
         import os
         
@@ -250,9 +250,9 @@ class ImageFile(BaseFile):
         )
 
     @classmethod
-    def from_url(cls, url: str, is_reference: bool = True, **kwargs) -> 'ImageFile':
+    def from_url(cls, url: str, is_reference: bool = True, **kwargs) -> 'ImageArtifact':
         """
-        Create an image file referencing a URL.
+        Create an image artifact referencing a URL.
 
         Args:
             url: URL to the file
@@ -260,7 +260,7 @@ class ImageFile(BaseFile):
             **kwargs: Additional arguments
 
         Returns:
-            ImageFile: New image file instance
+            ImageArtifact: New image artifact instance
         """
         file_name = kwargs.pop('file_name', url.split('/')[-1] or 'download.jpg')
         
@@ -272,25 +272,25 @@ class ImageFile(BaseFile):
         )
 
     @classmethod
-    def from_bytes(cls, 
+    def from_bytes(cls,
                    image_data: bytes,
                    file_name: str,
                    format: Optional[str] = None,
-                   **kwargs) -> 'ImageFile':
+                   **kwargs) -> 'ImageArtifact':
         """
-        Create an ImageFile from binary image data.
+        Create an ImageArtifact from binary image data.
         
-        This is a convenience method that creates an ImageFile and stores the
+        This is a convenience method that creates an ImageArtifact and stores the
         content in memory. The file should be saved to a repository for persistence.
 
         Args:
             image_data: Raw image bytes
             file_name: Name for the file
             format: Image format (e.g., 'PNG', 'JPEG'). Detected if not provided.
-            **kwargs: Additional arguments for ImageFile
+            **kwargs: Additional arguments for ImageArtifact
 
         Returns:
-            ImageFile: New image file with content loaded
+            ImageArtifact: New image artifact with content loaded
         """
         try:
             from PIL import Image

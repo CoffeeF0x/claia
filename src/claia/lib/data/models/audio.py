@@ -1,7 +1,7 @@
 """
-Audio file data model.
+Audio artifact data model.
 
-Handles audio files with metadata support.
+Handles audio content with metadata support.
 """
 
 # External dependencies
@@ -10,7 +10,7 @@ import time
 from typing import Dict, Any, Optional
 
 # Internal dependencies
-from .base import BaseFile
+from .base import BaseArtifact
 
 
 ########################################################################
@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                             AUDIO FILE                               #
 ########################################################################
-class AudioFile(BaseFile):
+class AudioArtifact(BaseArtifact):
     """
-    Audio file model.
+    Audio artifact model.
 
     Handles audio files with duration and format metadata.
     Content is loaded as bytes.
@@ -38,15 +38,15 @@ class AudioFile(BaseFile):
                  channels: Optional[int] = None,
                  **kwargs):
         """
-        Initialize an audio file.
+        Initialize an audio artifact.
 
         Args:
-            file_name: Name of the file
+            file_name: Name of the artifact
             duration: Duration in seconds
             format: Audio format (MP3, WAV, etc.)
             sample_rate: Sample rate in Hz
             channels: Number of audio channels
-            **kwargs: Additional arguments for BaseFile
+            **kwargs: Additional arguments for BaseArtifact
         """
         # Set audio MIME type if not provided
         if 'mime_type' not in kwargs:
@@ -145,23 +145,23 @@ class AudioFile(BaseFile):
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'AudioFile':
+    def from_dict(cls, data: Dict[str, Any]) -> 'AudioArtifact':
         """
-        Create audio file from dictionary.
+        Create audio artifact from dictionary.
 
         Args:
             data: Dictionary containing file data
 
         Returns:
-            AudioFile: New audio file instance
+            AudioArtifact: New audio artifact instance
         """
         return cls(
-            file_name=data.get('file_name', 'untitled.mp3'),
+            file_name=data.get('name') or data.get('file_name', 'untitled.mp3'),
             file_id=data.get('id'),
-            mime_type=data.get('mime_type'),
+            mime_type=data.get('media_type') or data.get('mime_type'),
             size=data.get('size', 0),
             is_reference=data.get('is_reference', False),
-            source_path=data.get('source_path'),
+            source_path=data.get('source_uri') or data.get('source_path'),
             duration=data.get('duration') or data.get('metadata', {}).get('duration'),
             format=data.get('format') or data.get('metadata', {}).get('format'),
             sample_rate=data.get('sample_rate') or data.get('metadata', {}).get('sample_rate'),
@@ -172,17 +172,17 @@ class AudioFile(BaseFile):
         )
 
     @classmethod
-    def from_bytes(cls, audio_data: bytes, file_name: str, **kwargs) -> 'AudioFile':
+    def from_bytes(cls, audio_data: bytes, file_name: str, **kwargs) -> 'AudioArtifact':
         """
-        Create an audio file from bytes.
+        Create an audio artifact from bytes.
 
         Args:
             audio_data: The audio data as bytes
-            file_name: Name for the file
-            **kwargs: Additional arguments for BaseFile
+            file_name: Name for the artifact
+            **kwargs: Additional arguments for BaseArtifact
 
         Returns:
-            AudioFile: New audio file with content set
+            AudioArtifact: New audio artifact with content set
         """
         file = cls(file_name=file_name, **kwargs)
         file._content = audio_data
@@ -193,9 +193,9 @@ class AudioFile(BaseFile):
         return file
 
     @classmethod
-    def from_path(cls, source: str, is_reference: bool = False, **kwargs) -> 'AudioFile':
+    def from_path(cls, source: str, is_reference: bool = False, **kwargs) -> 'AudioArtifact':
         """
-        Create an audio file referencing a path.
+        Create an audio artifact referencing a path.
 
         Args:
             source: Path to the file
@@ -203,7 +203,7 @@ class AudioFile(BaseFile):
             **kwargs: Additional arguments
 
         Returns:
-            AudioFile: New audio file instance
+            AudioArtifact: New audio artifact instance
         """
         import os
         
@@ -217,9 +217,9 @@ class AudioFile(BaseFile):
         )
 
     @classmethod
-    def from_url(cls, url: str, is_reference: bool = True, **kwargs) -> 'AudioFile':
+    def from_url(cls, url: str, is_reference: bool = True, **kwargs) -> 'AudioArtifact':
         """
-        Create an audio file referencing a URL.
+        Create an audio artifact referencing a URL.
 
         Args:
             url: URL to the file
@@ -227,7 +227,7 @@ class AudioFile(BaseFile):
             **kwargs: Additional arguments
 
         Returns:
-            AudioFile: New audio file instance
+            AudioArtifact: New audio artifact instance
         """
         file_name = kwargs.pop('file_name', url.split('/')[-1] or 'download.mp3')
         

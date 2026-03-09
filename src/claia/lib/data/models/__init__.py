@@ -1,14 +1,14 @@
 """
-Media file data models.
+Domain data models.
 
-Pure Python data models for different file types.
+Pure Python models for CLAIA artifacts and conversation objects.
 All models are independent of persistence mechanisms.
 """
 
-from .base import BaseFile
-from .text import TextFile
-from .image import ImageFile
-from .audio import AudioFile
+from .base import BaseArtifact
+from .text import TextArtifact
+from .image import ImageArtifact
+from .audio import AudioArtifact
 from .prompt import Prompt
 from .conversation import (
     Conversation,
@@ -18,10 +18,10 @@ from .conversation import (
 )
 
 __all__ = [
-    "BaseFile",
-    "TextFile",
-    "ImageFile",
-    "AudioFile",
+    "BaseArtifact",
+    "TextArtifact",
+    "ImageArtifact",
+    "AudioArtifact",
     "Prompt",
     "Conversation",
     "Message",

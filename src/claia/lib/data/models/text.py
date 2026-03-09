@@ -1,7 +1,7 @@
 """
-Text file data model.
+Text artifact data model.
 
-Handles text files with encoding support.
+Handles text content with encoding support.
 """
 
 # External dependencies
@@ -10,7 +10,7 @@ import time
 from typing import Dict, Any, Optional
 
 # Internal dependencies
-from .base import BaseFile
+from .base import BaseArtifact
 
 
 ########################################################################
@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                              TEXT FILE                               #
 ########################################################################
-class TextFile(BaseFile):
+class TextArtifact(BaseArtifact):
     """
-    Text file model.
+    Text artifact model.
 
     Handles text files with encoding support.
     Content is loaded as a string.
@@ -35,12 +35,12 @@ class TextFile(BaseFile):
                  encoding: str = "utf-8",
                  **kwargs):
         """
-        Initialize a text file.
+        Initialize a text artifact.
 
         Args:
-            file_name: Name of the file
+            file_name: Name of the artifact
             encoding: Text encoding (default: utf-8)
-            **kwargs: Additional arguments for BaseFile
+            **kwargs: Additional arguments for BaseArtifact
         """
         # Set text MIME type if not provided
         if 'mime_type' not in kwargs:
@@ -120,23 +120,23 @@ class TextFile(BaseFile):
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TextFile':
+    def from_dict(cls, data: Dict[str, Any]) -> 'TextArtifact':
         """
-        Create text file from dictionary.
+        Create text artifact from dictionary.
 
         Args:
             data: Dictionary containing file data
 
         Returns:
-            TextFile: New text file instance
+            TextArtifact: New text artifact instance
         """
         return cls(
-            file_name=data.get('file_name', 'untitled.txt'),
+            file_name=data.get('name') or data.get('file_name', 'untitled.txt'),
             file_id=data.get('id'),
-            mime_type=data.get('mime_type'),
+            mime_type=data.get('media_type') or data.get('mime_type'),
             size=data.get('size', 0),
             is_reference=data.get('is_reference', False),
-            source_path=data.get('source_path'),
+            source_path=data.get('source_uri') or data.get('source_path'),
             encoding=data.get('encoding', 'utf-8'),
             metadata=data.get('metadata', {}),
             created_at=data.get('created_at'),
@@ -144,18 +144,18 @@ class TextFile(BaseFile):
         )
 
     @classmethod
-    def from_content(cls, content: str, file_name: str, encoding: str = "utf-8", **kwargs) -> 'TextFile':
+    def from_content(cls, content: str, file_name: str, encoding: str = "utf-8", **kwargs) -> 'TextArtifact':
         """
-        Create a text file from content.
+        Create a text artifact from content.
 
         Args:
             content: The text content
-            file_name: Name for the file
+            file_name: Name for the artifact
             encoding: Text encoding
-            **kwargs: Additional arguments for BaseFile
+            **kwargs: Additional arguments for BaseArtifact
 
         Returns:
-            TextFile: New text file with content set
+            TextArtifact: New text artifact with content set
         """
         import time
         
@@ -168,9 +168,9 @@ class TextFile(BaseFile):
         return file
 
     @classmethod
-    def from_path(cls, source: str, is_reference: bool = False, **kwargs) -> 'TextFile':
+    def from_path(cls, source: str, is_reference: bool = False, **kwargs) -> 'TextArtifact':
         """
-        Create a text file referencing a path.
+        Create a text artifact referencing a path.
 
         Args:
             source: Path to the file
@@ -178,7 +178,7 @@ class TextFile(BaseFile):
             **kwargs: Additional arguments
 
         Returns:
-            TextFile: New text file instance
+            TextArtifact: New text artifact instance
         """
         import os
         
@@ -192,9 +192,9 @@ class TextFile(BaseFile):
         )
 
     @classmethod
-    def from_url(cls, url: str, is_reference: bool = True, **kwargs) -> 'TextFile':
+    def from_url(cls, url: str, is_reference: bool = True, **kwargs) -> 'TextArtifact':
         """
-        Create a text file referencing a URL.
+        Create a text artifact referencing a URL.
 
         Args:
             url: URL to the file
@@ -202,7 +202,7 @@ class TextFile(BaseFile):
             **kwargs: Additional arguments
 
         Returns:
-            TextFile: New text file instance
+            TextArtifact: New text artifact instance
         """
         file_name = kwargs.pop('file_name', url.split('/')[-1] or 'download.txt')
         

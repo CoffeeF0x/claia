@@ -7,7 +7,7 @@ from typing import List, Optional, Any, Dict
 
 from claia.lib.results import Result
 from claia.lib.data.models import Conversation
-from claia.lib.data.repositories import FileSystemRepository
+from claia.cli.storage import FileSystemStore
 from .base import BaseCommand
 
 
@@ -103,7 +103,7 @@ class ConversationCommand(BaseCommand):
     identifier = ' '.join(args)
     
     try:
-      file_repo = FileSystemRepository(self.settings.files_directory)
+      file_repo = FileSystemStore(self.settings.files_directory)
       
       # Try by ID first
       conv = file_repo.load(identifier, load_content=True)
@@ -144,7 +144,7 @@ class ConversationCommand(BaseCommand):
       self.settings.active_conversation.title = new_title
       self.settings.active_conversation.metadata['title'] = new_title
       
-      file_repo = FileSystemRepository(self.settings.files_directory)
+      file_repo = FileSystemStore(self.settings.files_directory)
       file_repo.save(self.settings.active_conversation)
       
       return Result(success=True, data=f"\nConversation title updated:\n  {old_title} → {new_title}")
@@ -161,7 +161,7 @@ class ConversationCommand(BaseCommand):
     identifier = ' '.join(args)
     
     try:
-      file_repo = FileSystemRepository(self.settings.files_directory)
+      file_repo = FileSystemStore(self.settings.files_directory)
       
       # Find conversation
       conv_id, conv_title = None, None

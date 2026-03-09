@@ -76,7 +76,8 @@ from claia.lib import Process
 from claia.lib.results import Result
 from claia.lib.enums.model import SourcePreference
 from claia.lib.enums.conversation import MessageRole
-from claia.lib.data import Conversation, FileSystemRepository
+from claia.lib.data import Conversation
+from claia.cli.storage import FileSystemStore
 from claia.cli.settings import Settings
 from claia.cli.commands import Commands
 from claia.cli.defaults import initialize_defaults
@@ -316,7 +317,7 @@ def main() -> None:
     commands = Commands(registry, settings)
 
     # Initialize file system repository
-    file_repo = FileSystemRepository(settings.files_directory)
+    file_repo = FileSystemStore(settings.files_directory)
 
     # Set up command history with arrow key navigation
     setup_command_history(settings)
@@ -416,14 +417,19 @@ def main() -> None:
           # Ensure a newline after the streamed output
           if full_response and not full_response.endswith('\n'):
             print()
-          # Save conversation
-          if file_repo:
+          # Persist only if domain events indicate conversation mutations.
+          pending_events = process.conversation.pull_events()
+          if file_repo and pending_events:
             if not file_repo.save(process.conversation):
               logger.error("Failed to save conversation")
           # Process tool calls in the final message
           final_message = process.conversation.get_latest_message()
           if final_message:
             process_final_message_tools(final_message, process, settings, registry)
+            post_tool_events = process.conversation.pull_events()
+            if file_repo and post_tool_events:
+              if not file_repo.save(process.conversation):
+                logger.error("Failed to save conversation after tool processing")
           done_event.set()
 
         def on_error(error_msg):

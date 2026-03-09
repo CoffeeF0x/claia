@@ -8,7 +8,8 @@ It defines default prompts and other default settings.
 import logging
 
 # Internal dependencies
-from claia.lib.data import Prompt, FileSystemRepository
+from claia.lib.data import Prompt
+from claia.cli.storage import FileSystemStore
 from .settings import Settings
 
 
@@ -100,7 +101,7 @@ def initialize_default_prompts(settings: Settings) -> None:
   logger.info("Initializing default prompts")
 
   # Create file repository for managing prompts
-  file_repo = FileSystemRepository(settings.files_directory)
+  file_repo = FileSystemStore(settings.files_directory)
 
   # Load existing prompts from repository
   existing_prompts_metadata = file_repo.list_all(file_type='prompts')

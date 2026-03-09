@@ -17,7 +17,7 @@ import pluggy
 from claia.hooks.tool import ToolModuleInfo, ToolDefinition, ArgumentDefinition
 from claia.lib.results import Result
 from claia.lib.data.models import Conversation, Prompt
-from claia.lib.data.repositories import FileSystemRepository
+from claia.cli.storage import FileSystemStore
 from claia.lib.enums.conversation import MessageRole
 
 
@@ -579,7 +579,7 @@ class CLIModulePlugin:
                    default_prompt: str = None, **kwargs) -> str:
     """List all available prompts."""
     try:
-      file_repo = FileSystemRepository(files_directory)
+      file_repo = FileSystemStore(files_directory)
       prompts = file_repo.list_all(file_type='prompts')
       
       if not prompts:
@@ -608,7 +608,7 @@ class CLIModulePlugin:
                     active_prompt_name: str = None, **kwargs) -> str:
     """Print the content of a prompt."""
     try:
-      file_repo = FileSystemRepository(files_directory)
+      file_repo = FileSystemStore(files_directory)
       
       # Determine which prompt to print
       target_name = prompt_name or active_prompt_name
@@ -650,7 +650,7 @@ class CLIModulePlugin:
   def _conversation_list(self, files_directory: str, active_conversation_id: str = None, **kwargs) -> str:
     """List all saved conversations."""
     try:
-      file_repo = FileSystemRepository(files_directory)
+      file_repo = FileSystemStore(files_directory)
       conversations = file_repo.list_all(file_type='conversations')
       
       if not conversations:

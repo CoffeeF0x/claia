@@ -7,7 +7,7 @@ from typing import List, Optional, Any, Dict
 
 from claia.lib.results import Result
 from claia.lib.data.models import Prompt
-from claia.lib.data.repositories import FileSystemRepository
+from claia.cli.storage import FileSystemStore
 from .base import BaseCommand
 
 
@@ -138,7 +138,7 @@ class PromptCommand(BaseCommand):
     prompt_name = args[0]
     try:
       validated_name = Prompt.validate_prompt_name(prompt_name)
-      file_repo = FileSystemRepository(self.settings.files_directory)
+      file_repo = FileSystemStore(self.settings.files_directory)
       
       # Find and load the prompt
       prompts = file_repo.list_all(file_type='prompts')
@@ -175,7 +175,7 @@ class PromptCommand(BaseCommand):
     
     try:
       validated_name = Prompt.validate_prompt_name(args[0])
-      file_repo = FileSystemRepository(self.settings.files_directory)
+      file_repo = FileSystemStore(self.settings.files_directory)
       
       # Find the prompt
       prompts = file_repo.list_all(file_type='prompts')

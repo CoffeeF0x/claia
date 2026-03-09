@@ -1,7 +1,7 @@
 """
 Prompt data model.
 
-Special text file for prompts with validation and formatting.
+Specialized text artifact for prompts with validation and formatting.
 """
 
 # External dependencies
@@ -11,7 +11,7 @@ import re
 from typing import Dict, Any, Optional
 
 # Internal dependencies
-from .text import TextFile
+from .text import TextArtifact
 
 
 ########################################################################
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                              PROMPT                                  #
 ########################################################################
-class Prompt(TextFile):
+class Prompt(TextArtifact):
     """
     Prompt model.
 
@@ -43,7 +43,7 @@ class Prompt(TextFile):
             file_name: Name of the file (should end in .json)
             prompt_name: Validated name for the prompt
             prompt_type: Type of prompt (text, function, system, etc.)
-            **kwargs: Additional arguments for TextFile
+            **kwargs: Additional arguments for TextArtifact
         """
         # Ensure JSON extension
         if not file_name.endswith('.json'):
@@ -122,11 +122,11 @@ class Prompt(TextFile):
             Prompt: New prompt instance
         """
         return cls(
-            file_name=data.get('file_name', 'untitled-prompt.json'),
+            file_name=data.get('name') or data.get('file_name', 'untitled-prompt.json'),
             file_id=data.get('id'),
             size=data.get('size', 0),
             is_reference=data.get('is_reference', False),
-            source_path=data.get('source_path'),
+            source_path=data.get('source_uri') or data.get('source_path'),
             prompt_name=data.get('prompt_name') or data.get('metadata', {}).get('prompt_name'),
             prompt_type=data.get('prompt_type', 'text') or data.get('metadata', {}).get('prompt_type'),
             metadata=data.get('metadata', {}),
