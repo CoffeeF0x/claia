@@ -2,7 +2,7 @@
 Conversation data model.
 
 A pure data model representing a conversation between users and AI assistants,
-with support for messages, tool definitions, settings, and audit trail actions.
+with support for messages, settings, and an event-based audit trail.
 
 Messages are stored as a directed tree: each Message has a parent_id that
 points to the preceding message. Multiple messages may share the same parent_id,
@@ -15,44 +15,35 @@ Persistence is handled by host runtimes (CLI, API, workers) using emitted
 domain events and/or direct serialization.
 """
 
-# External dependencies
 from typing import Dict, Any, Optional, List, Union, Callable
 import logging
 import json
 import time
-import uuid
 
-# Internal dependencies
-from ....enums.conversation import ActionType, MessageRole
 from ..text import TextArtifact
-from ...events import DomainEvent
-from .action import Action
+from ...events import DomainEvent, EventType
 from .message import Message
 from .conversation_settings import ConversationSettings
+from ....enums.conversation import MessageRole
 
 
-########################################################################
-#                              CONSTANTS                               #
-########################################################################
 DEFAULT_CONVERSATION_TITLE = "New Conversation"
 
-
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
 
 
-########################################################################
-#                             CONVERSATION                             #
-########################################################################
 class Conversation(TextArtifact):
     """
     Pure data model for conversations.
 
-    Extends TextArtifact to store conversation data as JSON text, following the
-    same pattern as Prompt. Persistence is handled externally by host runtimes
-    (CLI, API) via domain events and/or direct serialization.
+    Extends TextArtifact to store conversation data as JSON text.
+    Persistence is handled externally by host runtimes (CLI, API) via
+    domain events and/or direct serialization.
+
+    Domain events serve two purposes:
+      1. Audit trail — every mutation is recorded in self.events and serialized.
+      2. Runtime notifications — listeners can react to mutations for
+         persistence, sync, or other side effects.
 
     Message tree:
         All messages are stored in the messages list. Each message has a parent_id
@@ -64,17 +55,6 @@ class Conversation(TextArtifact):
 
     @staticmethod
     def _format_prompt(prompt: Optional[Union[str, Dict[str, str]]]) -> Dict[str, str]:
-        """
-        Format prompt to ensure it's a dictionary with a 'system' key.
-
-        Handles backward compatibility by converting string prompts to dictionary format.
-
-        Args:
-            prompt: Prompt as string, dictionary, or None
-
-        Returns:
-            Dict[str, str]: Properly formatted prompt dictionary with 'system' key
-        """
         if prompt is None:
             return {"system": ""}
         elif isinstance(prompt, str):
@@ -82,7 +62,6 @@ class Conversation(TextArtifact):
         elif isinstance(prompt, dict):
             return prompt
         else:
-            # Fallback for unexpected types
             return {"system": str(prompt)}
 
     def __init__(self,
@@ -90,7 +69,7 @@ class Conversation(TextArtifact):
                  title: str = DEFAULT_CONVERSATION_TITLE,
                  prompt: Optional[Union[str, Dict[str, str]]] = None,
                  messages: Optional[List[Union[Message, Dict[str, Any]]]] = None,
-                 actions: Optional[List[Union[Action, Dict[str, Any]]]] = None,
+                 events: Optional[List[Union[DomainEvent, Dict[str, Any]]]] = None,
                  settings: Optional[Union[ConversationSettings, Dict[str, Any]]] = None,
                  active_head_id: Optional[str] = None,
                  created_at: Optional[float] = None,
@@ -110,20 +89,11 @@ class Conversation(TextArtifact):
         self.prompt = self._format_prompt(prompt)
         self.metadata['title'] = title
 
-        # ------------------------------------------------------------------ #
-        # Message tree                                                         #
-        # messages holds every node in the tree (all branches).               #
-        # active_head_id is the leaf of the currently active path.            #
-        # ------------------------------------------------------------------ #
         self.messages: List[Message] = []
         if messages:
-            for message_data in messages:
-                if isinstance(message_data, Message):
-                    self.messages.append(message_data)
-                else:
-                    self.messages.append(Message.from_dict(message_data))
+            for m in messages:
+                self.messages.append(m if isinstance(m, Message) else Message.from_dict(m))
 
-        # Resolve active_head_id
         if active_head_id:
             self.active_head_id: Optional[str] = active_head_id
         elif self.messages:
@@ -131,16 +101,12 @@ class Conversation(TextArtifact):
         else:
             self.active_head_id = None
 
-        # Initialize actions
-        self.actions: List[Action] = []
-        if actions:
-            for action_data in actions:
-                if isinstance(action_data, Action):
-                    self.actions.append(action_data)
-                else:
-                    self.actions.append(Action.from_dict(action_data))
+        # Persisted audit trail
+        self.events: List[DomainEvent] = []
+        if events:
+            for e in events:
+                self.events.append(e if isinstance(e, DomainEvent) else DomainEvent.from_dict(e))
 
-        # Initialize settings
         if settings is None:
             self.settings = ConversationSettings()
         elif isinstance(settings, ConversationSettings):
@@ -148,101 +114,85 @@ class Conversation(TextArtifact):
         else:
             self.settings = ConversationSettings.from_dict(settings)
 
-        # Runtime-consumable domain event queue (not serialized)
-        self._events: List[DomainEvent] = []
+        # Transient runtime queue (not serialized) + listeners
+        self._pending_events: List[DomainEvent] = []
         self._event_listeners: List[Callable[[DomainEvent], None]] = []
 
-        # If no actions are provided, create an initial action
-        if not self.actions:
-            self.add_action(ActionType.CREATE_CONVERSATION, {
+        if not self.events:
+            self.emit_event(EventType.CONVERSATION_CREATED, {
                 "title": self.title,
-                "system_prompt": self.prompt.get("system", "")
+                "system_prompt": self.prompt.get("system", ""),
             })
 
+    # ---------------------------------------------------------------------- #
+    # Domain events                                                            #
+    # ---------------------------------------------------------------------- #
+
+    def emit_event(self, event_type: EventType,
+                   metadata: Optional[Dict[str, Any]] = None,
+                   entity_id: Optional[str] = None,
+                   parent_id: Optional[str] = None) -> DomainEvent:
+        """Record a domain event in the audit trail and notify listeners."""
+        event = DomainEvent(
+            event_type=event_type,
+            entity_id=entity_id or self.id,
+            parent_id=parent_id,
+            metadata=metadata or {},
+        )
+        self.events.append(event)
+        self._pending_events.append(event)
+        for listener in list(self._event_listeners):
+            try:
+                listener(event)
+            except Exception as e:
+                logger.warning(f"Event listener failed: {e}")
+        return event
+
+    def add_event_listener(self, listener: Callable[[DomainEvent], None]) -> None:
+        if listener not in self._event_listeners:
+            self._event_listeners.append(listener)
+
+    def remove_event_listener(self, listener: Callable[[DomainEvent], None]) -> None:
+        if listener in self._event_listeners:
+            self._event_listeners.remove(listener)
+
+    def peek_events(self) -> List[DomainEvent]:
+        """Return pending events without clearing."""
+        return list(self._pending_events)
+
+    def pull_events(self) -> List[DomainEvent]:
+        """Return and clear pending events (recommended runtime API)."""
+        events = list(self._pending_events)
+        self._pending_events.clear()
+        return events
+
+    def clear_pending_events(self) -> None:
+        self._pending_events.clear()
+
+    # ---------------------------------------------------------------------- #
+    # Serialization                                                             #
+    # ---------------------------------------------------------------------- #
+
     def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert the conversation to a dictionary.
-
-        Returns:
-            Dict containing all conversation data for serialization
-        """
-        # Get base file data
         data = super().to_dict()
-
-        # Add conversation-specific fields
         data.update({
             "title": self.title,
             "prompt": self.prompt,
             "messages": [m.to_dict() for m in self.messages],
             "active_head_id": self.active_head_id,
-            "actions": [a.to_dict() for a in self.actions],
+            "events": [e.to_dict() for e in self.events],
             "settings": self.settings.to_dict(),
         })
-
         return data
-
-    # ---------------------------------------------------------------------- #
-    # Domain event helpers                                                     #
-    # ---------------------------------------------------------------------- #
-    def emit_event(self, event_type: str, metadata: Optional[Dict[str, Any]] = None,
-                   entity_id: Optional[str] = None, parent_id: Optional[str] = None) -> DomainEvent:
-        """Emit a domain event for host-runtime consumers (CLI/API/etc)."""
-        event = DomainEvent(
-            event_type=event_type,
-            entity_type="conversation",
-            entity_id=entity_id or self.id,
-            parent_id=parent_id,
-            metadata=metadata or {},
-        )
-        self._events.append(event)
-        for listener in list(self._event_listeners):
-            try:
-                listener(event)
-            except Exception as e:
-                logger.warning(f"Conversation event listener failed: {e}")
-        return event
-
-    def add_event_listener(self, listener: Callable[[DomainEvent], None]) -> None:
-        """Register a callback invoked whenever a new domain event is emitted."""
-        if listener not in self._event_listeners:
-            self._event_listeners.append(listener)
-
-    def remove_event_listener(self, listener: Callable[[DomainEvent], None]) -> None:
-        """Remove a previously registered event listener callback."""
-        if listener in self._event_listeners:
-            self._event_listeners.remove(listener)
-
-    def peek_events(self) -> List[DomainEvent]:
-        """Return currently queued domain events without clearing them."""
-        return list(self._events)
-
-    def pull_events(self) -> List[DomainEvent]:
-        """Return and clear queued domain events (recommended runtime API)."""
-        events = list(self._events)
-        self._events.clear()
-        return events
-
-    def clear_events(self) -> None:
-        """Clear any queued domain events."""
-        self._events.clear()
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Conversation':
-        """
-        Create a conversation from a dictionary.
-
-        Args:
-            data: Dictionary containing conversation data
-
-        Returns:
-            Conversation: New conversation instance
-        """
         return cls(
             id=data.get("id"),
             title=data.get("title", DEFAULT_CONVERSATION_TITLE),
             prompt=data.get("prompt"),
             messages=data.get("messages", []),
-            actions=data.get("actions", []),
+            events=data.get("events", []),
             settings=data.get("settings"),
             active_head_id=data.get("active_head_id"),
             created_at=data.get("created_at"),
@@ -254,63 +204,32 @@ class Conversation(TextArtifact):
         )
 
     def load_content(self) -> str:
-        """
-        Load conversation content as JSON string.
-
-        Returns:
-            str: JSON serialization of conversation data
-        """
         if self._content_loaded and self._content is not None:
             return self._content
-
-        # Generate content from current conversation state
         return self.content
 
     @property
     def content(self) -> str:
-        """
-        Get conversation content as JSON string.
-
-        Returns:
-            str: JSON serialization of conversation data
-        """
         return json.dumps(self.to_dict(), indent=2)
 
     def set_content(self, content: str) -> None:
-        """
-        Set conversation content from JSON string.
-
-        Args:
-            content: JSON string containing conversation data
-        """
         data = json.loads(content)
 
-        # Update conversation fields from data
         self.title = data.get("title", self.title)
         self.prompt = self._format_prompt(data.get("prompt", self.prompt))
 
-        # Update message tree
         self.messages = []
-        for message_data in data.get("messages", []):
-            if isinstance(message_data, Message):
-                self.messages.append(message_data)
-            else:
-                self.messages.append(Message.from_dict(message_data))
+        for m in data.get("messages", []):
+            self.messages.append(m if isinstance(m, Message) else Message.from_dict(m))
 
-        # Restore active head
         self.active_head_id = data.get("active_head_id")
         if not self.active_head_id and self.messages:
             self.active_head_id = self.messages[-1].message_id
 
-        # Update actions
-        self.actions = []
-        for action_data in data.get("actions", []):
-            if isinstance(action_data, Action):
-                self.actions.append(action_data)
-            else:
-                self.actions.append(Action.from_dict(action_data))
+        self.events = []
+        for e in data.get("events", []):
+            self.events.append(e if isinstance(e, DomainEvent) else DomainEvent.from_dict(e))
 
-        # Update settings
         settings_data = data.get("settings")
         if settings_data:
             if isinstance(settings_data, ConversationSettings):
@@ -318,7 +237,6 @@ class Conversation(TextArtifact):
             else:
                 self.settings = ConversationSettings.from_dict(settings_data)
 
-        # Mark content as loaded
         self._content = content
         self._content_loaded = True
         self.size = len(content.encode(self.encoding))
@@ -329,31 +247,15 @@ class Conversation(TextArtifact):
     # ---------------------------------------------------------------------- #
 
     def _build_id_map(self) -> Dict[str, Message]:
-        """Return a dict mapping message_id → Message for all messages."""
         return {m.message_id: m for m in self.messages}
 
     def get_thread(self, head_id: Optional[str] = None) -> List[Message]:
-        """
-        Return the ordered list of messages on the path from the root to head_id.
-
-        Walk backwards from head_id via parent_id links and reverse the result
-        so the list is in chronological order (oldest first).
-
-        If head_id is None, uses active_head_id. If there is no active_head_id
-        (empty conversation), returns an empty list.
-
-        Args:
-            head_id: ID of the leaf message to trace back from.
-
-        Returns:
-            List[Message]: Messages in chronological order along that branch.
-        """
+        """Return ordered messages from root to head_id (chronological)."""
         target = head_id or self.active_head_id
         if not target or not self.messages:
             return []
 
         by_id = self._build_id_map()
-
         chain: List[Message] = []
         current_id: Optional[str] = target
         seen = set()
@@ -373,43 +275,17 @@ class Conversation(TextArtifact):
         return chain
 
     def get_siblings(self, message_id: str) -> List[Message]:
-        """
-        Return all messages that share the same parent_id as the given message.
-
-        This includes the message itself. The result is ordered by created_at.
-
-        Args:
-            message_id: ID of the reference message.
-
-        Returns:
-            List[Message]: All siblings (including the message itself), oldest first.
-        """
+        """Return all messages sharing the same parent_id, ordered by created_at."""
         by_id = self._build_id_map()
         target = by_id.get(message_id)
         if not target:
             return []
-
-        parent_id = target.parent_id
-        siblings = [m for m in self.messages if m.parent_id == parent_id]
+        siblings = [m for m in self.messages if m.parent_id == target.parent_id]
         siblings.sort(key=lambda m: m.created_at)
         return siblings
 
     def get_branch_head(self, message_id: str) -> Optional[str]:
-        """
-        Find the most recently created leaf message reachable from message_id.
-
-        Useful when the user wants to navigate to the branch that passes through
-        a given message: call this to get the tip of that branch, then set
-        active_head_id to the returned ID.
-
-        Args:
-            message_id: Starting point in the tree.
-
-        Returns:
-            str | None: ID of the leaf message (deepest, most recent) reachable
-                        from message_id (inclusive), or None if not found.
-        """
-        # Build parent→children map
+        """Find the most recently created leaf reachable from message_id."""
         children_map: Dict[str, List[Message]] = {}
         for m in self.messages:
             if m.parent_id:
@@ -419,7 +295,6 @@ class Conversation(TextArtifact):
         if message_id not in by_id:
             return None
 
-        # DFS to collect all leaves
         leaves: List[str] = []
 
         def dfs(mid: str) -> None:
@@ -431,11 +306,8 @@ class Conversation(TextArtifact):
                     dfs(child.message_id)
 
         dfs(message_id)
-
         if not leaves:
             return message_id
-
-        # Return the most recently created leaf
         leaves.sort(key=lambda lid: by_id[lid].created_at if lid in by_id else 0, reverse=True)
         return leaves[0]
 
@@ -448,25 +320,7 @@ class Conversation(TextArtifact):
                     content: str,
                     file_ids: Optional[List[str]] = None,
                     parent_id: Optional[str] = None) -> Message:
-        """
-        Add a message to the conversation tree.
-
-        The new message's parent_id defaults to active_head_id, placing it
-        at the tip of the current active branch. Passing an explicit parent_id
-        lets callers attach the message to a different point in the tree (e.g.
-        when creating a branch/edit sibling).
-
-        After adding, active_head_id is updated to the new message's ID.
-
-        Args:
-            speaker: The speaker of the message
-            content: The content of the message
-            file_ids: Optional list of file IDs attached to the message
-            parent_id: Parent message ID; defaults to active_head_id
-
-        Returns:
-            Message: The created message
-        """
+        """Add a message to the conversation tree."""
         effective_parent_id = parent_id if parent_id is not None else self.active_head_id
 
         message = Message(
@@ -475,150 +329,79 @@ class Conversation(TextArtifact):
             file_ids=file_ids or [],
             parent_id=effective_parent_id,
         )
-
-        # Extract arguments from the message content
         message.extract_inline_args()
 
         self.messages.append(message)
         self.active_head_id = message.message_id
         self.updated_at = time.time()
 
-        # Audit trail
-        action_metadata = {
+        meta = {
             "message_id": message.message_id,
             "parent_id": message.parent_id,
             "speaker": message.speaker.value,
-            "content_preview": message.content[:50] + "..." if len(message.content) > 50 else message.content
+            "content_preview": message.content[:50] + ("..." if len(message.content) > 50 else ""),
         }
-
         if message.has_inline_args():
-            action_metadata["has_inline_args"] = True
-            action_metadata["inline_args_count"] = len(message.inline_args)
+            meta["inline_args_count"] = len(message.inline_args)
 
-        self.add_action(ActionType.CREATE_MESSAGE, action_metadata)
-        self.emit_event(
-            "conversation.message_added",
-            metadata=action_metadata,
-            entity_id=message.message_id,
-            parent_id=message.parent_id,
-        )
-
+        self.emit_event(EventType.MESSAGE_CREATED, meta,
+                        entity_id=message.message_id, parent_id=message.parent_id)
         return message
 
     def update_message(self, message_id: str, content: Optional[str] = None,
-                      file_ids: Optional[List[str]] = None) -> Optional[Message]:
-        """
-        Update a message in-place (content fix, not a branch).
-
-        This modifies the existing message node directly. For creating a new
-        versioned branch, use add_message with an explicit parent_id instead.
-
-        Args:
-            message_id: The ID of the message to update
-            content: Optional new content for the message
-            file_ids: Optional new list of file IDs
-
-        Returns:
-            Optional[Message]: The updated message, or None if not found
-        """
+                       file_ids: Optional[List[str]] = None) -> Optional[Message]:
+        """Update a message in-place (content fix, not a branch)."""
         for message in self.messages:
             if message.message_id == message_id:
-                had_inline_args_before = message.has_inline_args()
-                old_inline_args_count = len(message.inline_args) if had_inline_args_before else 0
-
                 if content is not None:
                     message.content = content
                     message.inline_args = {}
                     message.extract_inline_args()
-
                 if file_ids is not None:
                     message.file_ids = file_ids
 
                 message.updated_at = time.time()
                 self.updated_at = time.time()
 
-                action_metadata = {
+                meta = {
                     "message_id": message_id,
-                    "content_preview": message.content[:50] + "..." if len(message.content) > 50 else message.content
+                    "content_preview": message.content[:50] + ("..." if len(message.content) > 50 else ""),
                 }
+                if message.has_inline_args():
+                    meta["inline_args_count"] = len(message.inline_args)
 
-                if content is not None:
-                    action_metadata["inline_args_changed"] = (
-                        had_inline_args_before != message.has_inline_args() or
-                        old_inline_args_count != len(message.inline_args)
-                    )
-                    if message.has_inline_args():
-                        action_metadata["has_inline_args"] = True
-                        action_metadata["inline_args_count"] = len(message.inline_args)
-
-                self.add_action(ActionType.UPDATE_MESSAGE, action_metadata)
-                self.emit_event(
-                    "conversation.message_updated",
-                    metadata=action_metadata,
-                    entity_id=message.message_id,
-                    parent_id=message.parent_id,
-                )
-
+                self.emit_event(EventType.MESSAGE_UPDATED, meta,
+                                entity_id=message.message_id, parent_id=message.parent_id)
                 return message
 
         logger.error(f"Message not found for update: {message_id}")
         return None
 
     def delete_message(self, message_id: str) -> bool:
-        """
-        Delete a message from the conversation (removes from the tree entirely).
-
-        Args:
-            message_id: The ID of the message to delete
-
-        Returns:
-            bool: True if the message was deleted, False otherwise
-        """
+        """Delete a message from the conversation tree."""
         for i, message in enumerate(self.messages):
             if message.message_id == message_id:
-                deleted_message = self.messages.pop(i)
+                deleted = self.messages.pop(i)
                 self.updated_at = time.time()
-
-                # If the deleted message was the active head, rewind to its parent
                 if self.active_head_id == message_id:
-                    self.active_head_id = deleted_message.parent_id
+                    self.active_head_id = deleted.parent_id
 
-                self.add_action(ActionType.DELETE_MESSAGE, {
+                self.emit_event(EventType.MESSAGE_DELETED, {
                     "message_id": message_id,
-                    "speaker": deleted_message.speaker.value
-                })
-                self.emit_event(
-                    "conversation.message_deleted",
-                    metadata={
-                        "message_id": message_id,
-                        "speaker": deleted_message.speaker.value,
-                    },
-                    entity_id=message_id,
-                    parent_id=deleted_message.parent_id,
-                )
-
+                    "speaker": deleted.speaker.value,
+                }, entity_id=message_id, parent_id=deleted.parent_id)
                 return True
 
         logger.error(f"Message not found for deletion: {message_id}")
         return False
 
     def get_message(self, message_id: str) -> Optional[Message]:
-        """
-        Get a message by ID (searches the entire tree, not just the active thread).
-
-        Args:
-            message_id: The ID of the message to get
-
-        Returns:
-            Optional[Message]: The message, or None if not found
-        """
         for message in self.messages:
             if message.message_id == message_id:
                 return message
         return None
 
     def get_latest_message(self) -> Optional[Message]:
-        """Get the leaf message of the active branch (the most recent message)."""
         if self.active_head_id:
             msg = self.get_message(self.active_head_id)
             if msg:
@@ -627,45 +410,20 @@ class Conversation(TextArtifact):
         return thread[-1] if thread else None
 
     def get_messages(self, speaker: Optional[Union[MessageRole, List[MessageRole]]] = None) -> List[Message]:
-        """
-        Get messages from the active branch, optionally filtered by speaker(s).
-
-        Args:
-            speaker: Optional speaker or list of speakers to filter by
-
-        Returns:
-            List[Message]: List of matching messages
-        """
         thread = self.get_thread()
-
         if speaker is None:
             return thread
-
         speakers = [speaker] if not isinstance(speaker, list) else speaker
         speakers = [s if isinstance(s, MessageRole) else MessageRole(s) for s in speakers]
-
         return [m for m in thread if m.speaker in speakers]
 
     def stream_message(self, message_id: str, content: str, append: bool = False,
-                      end: bool = False) -> Optional[Message]:
-        """
-        Update a message's content for streaming without adding an action.
+                       end: bool = False) -> Optional[Message]:
+        """Update a message's content for streaming.
 
-        This method uses thread-safe message updates and is designed for streaming
-        scenarios where a message is updated incrementally. It doesn't create actions
-        for each update to avoid flooding the audit trail.
-
-        On the first call for a given message_id, a START_STREAM action will be added.
-        When end=True, an END_STREAM action will be added.
-
-        Args:
-            message_id: The ID of the message to update
-            content: New content for the message
-            append: If True, append the content; if False, replace it
-            end: If True, mark the end of streaming
-
-        Returns:
-            Optional[Message]: The updated message, or None if not found
+        Emits MESSAGE_STREAM_START on the first call per message, and
+        MESSAGE_STREAM_END when end=True.  Intermediate chunks are silent
+        to avoid flooding the audit trail.
         """
         for message in self.messages:
             if message.message_id == message_id:
@@ -673,42 +431,26 @@ class Conversation(TextArtifact):
                     message.safe_append_content(content)
                 else:
                     message.safe_update_content(content)
-
                 self.updated_at = time.time()
 
-                # Check if we already have a START_STREAM action for this message
-                has_start_stream_action = False
-                for action in self.actions:
-                    if (action.action_type == ActionType.START_STREAM and
-                        action.metadata.get("message_id") == message_id):
-                        has_start_stream_action = True
-                        break
-
-                # Add a START_STREAM action if this is the first streaming update
-                if not has_start_stream_action:
-                    self.add_action(ActionType.START_STREAM, {
+                has_start = any(
+                    e.event_type == EventType.MESSAGE_STREAM_START and
+                    e.metadata.get("message_id") == message_id
+                    for e in self.events
+                )
+                if not has_start:
+                    self.emit_event(EventType.MESSAGE_STREAM_START, {
                         "message_id": message_id,
                         "speaker": message.speaker.value,
-                        "content_preview": message.content[:50] + "..." if len(message.content) > 50 else message.content
-                    })
+                    }, entity_id=message_id, parent_id=message.parent_id)
 
                 if end:
-                    self.add_action(ActionType.END_STREAM, {
+                    self.emit_event(EventType.MESSAGE_STREAM_END, {
                         "message_id": message_id,
                         "speaker": message.speaker.value,
-                        "content_preview": message.content[:50] + "..." if len(message.content) > 50 else message.content
-                    })
+                        "content_preview": message.content[:50] + ("..." if len(message.content) > 50 else ""),
+                    }, entity_id=message_id, parent_id=message.parent_id)
 
-                self.emit_event(
-                    "conversation.message_streamed",
-                    metadata={
-                        "message_id": message_id,
-                        "append": append,
-                        "end": end,
-                    },
-                    entity_id=message_id,
-                    parent_id=message.parent_id,
-                )
                 return message
 
         logger.error(f"Message not found for streaming update: {message_id}")
@@ -719,77 +461,37 @@ class Conversation(TextArtifact):
     # ---------------------------------------------------------------------- #
 
     def attach_file(self, message_id: str, file_id: str) -> bool:
-        """
-        Attach a file to a message.
-
-        Args:
-            message_id: The ID of the message to attach to
-            file_id: The ID of the file to attach
-
-        Returns:
-            bool: True if the file was attached, False otherwise
-        """
         message = self.get_message(message_id)
         if not message:
             logger.error(f"Cannot attach file: message not found: {message_id}")
             return False
-
         if file_id in message.file_ids:
-            logger.warning(f"File already attached to message: {file_id}")
             return True
 
         message.file_ids.append(file_id)
         message.updated_at = time.time()
         self.updated_at = time.time()
 
-        self.add_action(ActionType.ATTACH_FILE, {
-            "message_id": message_id,
-            "file_id": file_id
-        })
-        self.emit_event(
-            "conversation.attachment_added",
-            metadata={"message_id": message_id, "file_id": file_id},
-            entity_id=message_id,
-            parent_id=message.parent_id,
-        )
-
+        self.emit_event(EventType.ATTACHMENT_ADDED,
+                        {"message_id": message_id, "file_id": file_id},
+                        entity_id=message_id, parent_id=message.parent_id)
         return True
 
     def detach_file(self, message_id: str, file_id: str) -> bool:
-        """
-        Detach a file from a message.
-
-        Args:
-            message_id: The ID of the message to detach from
-            file_id: The ID of the file to detach
-
-        Returns:
-            bool: True if the file was detached, False otherwise
-        """
         message = self.get_message(message_id)
         if not message:
             logger.error(f"Cannot detach file: message not found: {message_id}")
             return False
-
         if file_id not in message.file_ids:
-            logger.warning(f"File not attached to message: {file_id}")
             return False
 
         message.file_ids.remove(file_id)
         message.updated_at = time.time()
         self.updated_at = time.time()
 
-        self.add_action(ActionType.DETACH_FILE, {
-            "message_id": message_id,
-            "file_id": file_id
-        })
-        self.emit_event(
-            "conversation.attachment_removed",
-            metadata={"message_id": message_id, "file_id": file_id},
-            entity_id=message_id,
-            parent_id=message.parent_id,
-        )
-
+        self.emit_event(EventType.ATTACHMENT_REMOVED,
+                        {"message_id": message_id, "file_id": file_id},
+                        entity_id=message_id, parent_id=message.parent_id)
         return True
 
     # ---------------------------------------------------------------------- #
@@ -797,145 +499,59 @@ class Conversation(TextArtifact):
     # ---------------------------------------------------------------------- #
 
     def get_system_prompt(self, **kwargs) -> Optional[str]:
-        """
-        Build the effective system prompt to send to models.
-
-        - Gets the 'system' prompt from the prompt dictionary.
-        - Expands placeholders via `apply_substitutions()`.
-
-        Args:
-            **kwargs: Optional substitution values for placeholders.
-
-        Returns:
-            The substituted system prompt, or None if empty.
-        """
         system_prompt = self.prompt.get("system", "")
-
         if not system_prompt or not system_prompt.strip():
             return None
-
         return self.apply_substitutions(system_prompt, **kwargs)
 
     def apply_substitutions(self, text: str, **kwargs) -> str:
-        """
-        Apply substitutions to the given text, replacing placeholders with values.
-
-        This is the main method for all text substitutions in the conversation.
-        Use this to process any text that contains placeholders, including:
-        - Conversation prompts
-        - Message content
-        - Custom templates
-
-        The substitution system handles simple placeholders like {name} or {date}
-        and any other placeholders passed via kwargs.
-
-        Args:
-            text: The text containing placeholders to replace
-            **kwargs: Keyword arguments mapping placeholder names to values
-
-        Returns:
-            str: The text with all matched placeholders replaced
-        """
-        processed_text = text
-
-        if kwargs and any(f"{{{key}}}" in processed_text for key in kwargs):
+        if kwargs and any(f"{{{key}}}" in text for key in kwargs):
             try:
-                processed_text = processed_text.format(**kwargs)
+                text = text.format(**kwargs)
             except KeyError as e:
                 logger.warning(f"Missing key in text substitution: {e}")
             except Exception as e:
                 logger.error(f"Error during text substitution: {e}")
-
-        return processed_text
+        return text
 
     def change_title(self, new_title: str) -> None:
-        """
-        Change the conversation title.
-
-        Args:
-            new_title: The new title for the conversation
-        """
         old_title = self.title
         self.title = new_title
+        self.metadata['title'] = new_title
         self.updated_at = time.time()
-
-        self.add_action(ActionType.CHANGE_TITLE, {
-            "old_title": old_title,
-            "new_title": new_title
-        })
-        self.emit_event(
-            "conversation.title_changed",
-            metadata={"old_title": old_title, "new_title": new_title},
-            entity_id=self.id,
-        )
+        self.emit_event(EventType.TITLE_CHANGED,
+                        {"old_title": old_title, "new_title": new_title})
 
     def change_prompt(self, new_prompt: Union[str, Dict[str, str]]) -> None:
-        """
-        Change the conversation prompt.
-
-        Args:
-            new_prompt: The new prompt for the conversation (string or dictionary)
-        """
         old_prompt = self.prompt.get("system", "")
         self.prompt = self._format_prompt(new_prompt)
         self.updated_at = time.time()
-
-        self.add_action(ActionType.CHANGE_SYSTEM_PROMPT, {
+        self.emit_event(EventType.PROMPT_CHANGED, {
             "old_prompt": old_prompt,
-            "new_prompt": self.prompt.get("system", "")
+            "new_prompt": self.prompt.get("system", ""),
         })
-        self.emit_event(
-            "conversation.prompt_changed",
-            metadata={
-                "old_prompt": old_prompt,
-                "new_prompt": self.prompt.get("system", ""),
-            },
-            entity_id=self.id,
-        )
 
     def update_settings(self, settings: ConversationSettings) -> None:
-        """
-        Update conversation settings and record the action.
-
-        Args:
-            settings: A ConversationSettings object with the new settings
-        """
         changes = {}
-
         if settings.streaming != self.settings.streaming:
             self.settings.streaming = settings.streaming
             changes["streaming"] = settings.streaming
 
         for key, value in settings.text_settings.items():
-            if key not in self.settings.text_settings or self.settings.text_settings[key] != value:
+            if self.settings.text_settings.get(key) != value:
                 self.settings.text_settings[key] = value
-                if "text_settings" not in changes:
-                    changes["text_settings"] = {}
-                changes["text_settings"][key] = value
+                changes.setdefault("text_settings", {})[key] = value
 
         for key, value in settings.image_settings.items():
-            if key not in self.settings.image_settings or self.settings.image_settings[key] != value:
+            if self.settings.image_settings.get(key) != value:
                 self.settings.image_settings[key] = value
-                if "image_settings" not in changes:
-                    changes["image_settings"] = {}
-                changes["image_settings"][key] = value
+                changes.setdefault("image_settings", {})[key] = value
 
         if changes:
             self.updated_at = time.time()
-            self.add_action(ActionType.UPDATE_SETTINGS, changes)
-            self.emit_event(
-                "conversation.settings_updated",
-                metadata=changes,
-                entity_id=self.id,
-            )
+            self.emit_event(EventType.SETTINGS_UPDATED, changes)
 
     def get_settings(self) -> ConversationSettings:
-        """
-        Get the current conversation settings.
-
-        Returns:
-            ConversationSettings: The current settings
-        """
         return self.settings
 
     # ---------------------------------------------------------------------- #
@@ -943,88 +559,22 @@ class Conversation(TextArtifact):
     # ---------------------------------------------------------------------- #
 
     def load_message_files(self, message_id: str, file_repo, load_content: bool = False) -> List:
-        """
-        Load all files attached to a message.
-
-        Generic method that works with any artifact type (ImageArtifact, TextArtifact, etc.).
-
-        Args:
-            message_id: The ID of the message
-            file_repo: ArtifactStore-like instance for loading artifacts
-            load_content: Whether to pre-load file content
-
-        Returns:
-            List[BaseArtifact]: List of artifacts attached to the message
-        """
         message = self.get_message(message_id)
-        if not message:
-            logger.warning(f"Message not found: {message_id}")
+        if not message or not message.file_ids:
             return []
-
-        if not message.file_ids:
-            return []
-
-        files = file_repo.load_multiple(message.file_ids, load_content=load_content)
-
-        return files
+        return file_repo.load_multiple(message.file_ids, load_content=load_content)
 
     def load_all_files(self, file_repo, load_content: bool = False) -> Dict[str, List]:
-        """
-        Load all files for all messages in the active thread.
-
-        Args:
-            file_repo: ArtifactStore-like instance for loading artifacts
-            load_content: Whether to pre-load file content
-
-        Returns:
-            Dict[str, List[BaseArtifact]]: Dictionary mapping message_id -> list of artifacts
-        """
         result = {}
-
         for message in self.get_thread():
             if message.file_ids:
                 files = file_repo.load_multiple(message.file_ids, load_content=load_content)
                 if files:
                     result[message.message_id] = files
-
         return result
 
     def get_all_file_ids(self) -> List[str]:
-        """
-        Get all file IDs referenced across the entire message tree.
-
-        Returns:
-            List[str]: List of all unique file IDs
-        """
         file_ids = set()
         for message in self.messages:
             file_ids.update(message.file_ids)
         return list(file_ids)
-
-    # ---------------------------------------------------------------------- #
-    # Action tracking for audit trail                                          #
-    # ---------------------------------------------------------------------- #
-
-    def add_action(self, action_type: ActionType, metadata: Optional[Dict[str, Any]] = None) -> Action:
-        """
-        Add an action to the conversation history.
-
-        Args:
-            action_type: The type of action
-            metadata: Optional metadata for the action
-
-        Returns:
-            Action: The created action
-        """
-        action = Action(action_type=action_type, metadata=metadata or {})
-        self.actions.append(action)
-        self.emit_event(
-            "conversation.action_added",
-            metadata={
-                "action_type": action.action_type.value,
-                "action_id": action.action_id,
-                "action_metadata": action.metadata,
-            },
-            entity_id=self.id,
-        )
-        return action

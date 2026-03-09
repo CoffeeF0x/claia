@@ -765,9 +765,9 @@ class CLIModulePlugin:
     if tool_definitions:
       output_lines.append(f"\n  Tool Definitions: {len(tool_definitions)}")
     
-    actions = getattr(conversation, 'actions', None)
-    if actions:
-      output_lines.append(f"  Actions (audit trail): {len(actions)}")
+    events = getattr(conversation, 'events', None)
+    if events:
+      output_lines.append(f"  Events (audit trail): {len(events)}")
     
     if messages:
       role_counts = {}
