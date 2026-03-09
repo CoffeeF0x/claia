@@ -50,29 +50,16 @@ class Conversation(TextArtifact):
     """
     Pure data model for conversations.
 
-    Extends TextArtifact to store conversation data as JSON text, following the same
-    pattern as Prompt. This eliminates code duplication and enables consistent
-    file handling across the system.
-
-    Represents a conversation with messages, settings, and an audit trail of
-    actions. This is a pure Python object without file or database dependencies -
-    persistence is handled by Repository classes.
+    Extends TextArtifact to store conversation data as JSON text, following the
+    same pattern as Prompt. Persistence is handled externally by host runtimes
+    (CLI, API) via domain events and/or direct serialization.
 
     Message tree:
         All messages are stored in the messages list. Each message has a parent_id
         pointing to its predecessor. Multiple messages may share a parent_id,
         creating branches. active_head_id tracks the leaf of the currently active
-        branch. The messages property returns the active linear thread by walking
-        backwards from active_head_id.
-
-    Features:
-    - Message management (add, update, delete, search)
-    - Branch/revision support via parent_id tree
-    - Settings management
-    - Action tracking for audit trail
-    - Domain event emission for host-runtime persistence triggers
-    - System prompt generation with substitutions
-    - Streaming support via thread-safe message updates
+        branch. get_thread() returns the active linear thread by walking backwards
+        from active_head_id.
     """
 
     @staticmethod
@@ -109,40 +96,19 @@ class Conversation(TextArtifact):
                  created_at: Optional[float] = None,
                  updated_at: Optional[float] = None,
                  **kwargs):
-        """
-        Initialize a conversation.
-
-        Args:
-            id: Optional ID for the conversation (generated if not provided)
-            title: Title of the conversation
-            prompt: System prompt dictionary for the conversation (will be converted to dict with 'system' key)
-            messages: Optional list of initial messages (all nodes in the tree)
-            actions: Optional list of initial actions
-            settings: Optional conversation settings
-            active_head_id: ID of the leaf message on the active branch
-            created_at: Optional creation timestamp
-            updated_at: Optional last update timestamp
-            **kwargs: Additional arguments for TextArtifact
-        """
-        # Initialize TextArtifact - BaseArtifact handles ID generation and naming
-        # The file_name is primarily for persistence; repositories can override it
         super().__init__(
-            file_name=kwargs.pop('file_name', f"conversation-{id or 'new'}"),
-            file_id=id,  # BaseArtifact generates UUID if None
-            mime_type='application/json',
+            name=kwargs.pop('name', f"conversation-{id or 'new'}"),
+            id=id,
+            media_type='application/json',
             encoding='utf-8',
             created_at=created_at,
             updated_at=updated_at,
             **kwargs
         )
 
-        # Conversation-specific fields
         self.title = title
         self.prompt = self._format_prompt(prompt)
-
-        # Store conversation metadata in the file metadata
         self.metadata['title'] = title
-        self.metadata['conversation_type'] = 'conversation'
 
         # ------------------------------------------------------------------ #
         # Message tree                                                         #
@@ -192,11 +158,6 @@ class Conversation(TextArtifact):
                 "title": self.title,
                 "system_prompt": self.prompt.get("system", "")
             })
-
-    def get_file_type(self):
-        """Override to return CONVERSATION file type."""
-        from ....enums.file import FileSubdirectory
-        return FileSubdirectory.CONVERSATION
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -279,17 +240,17 @@ class Conversation(TextArtifact):
         return cls(
             id=data.get("id"),
             title=data.get("title", DEFAULT_CONVERSATION_TITLE),
-            prompt=data.get("prompt"),  # _format_prompt will handle conversion in __init__
+            prompt=data.get("prompt"),
             messages=data.get("messages", []),
             actions=data.get("actions", []),
             settings=data.get("settings"),
             active_head_id=data.get("active_head_id"),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
-            file_name=data.get("name") or data.get("file_name"),
+            name=data.get("name"),
             is_reference=data.get("is_reference", False),
-            source_path=data.get("source_uri") or data.get("source_path"),
-            metadata=data.get("metadata", {})
+            source_uri=data.get("source_uri"),
+            metadata=data.get("metadata", {}),
         )
 
     def load_content(self) -> str:

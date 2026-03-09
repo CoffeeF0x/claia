@@ -31,17 +31,10 @@ class FileSystemStore(ArtifactStore):
     Storage structure:
         base_directory/
           ├── texts/
-          │   ├── {id}.json
           ├── images/
-          │   ├── {id}.json
-          │   └── {id}.png
           ├── audio/
-          │   ├── {id}.json
-          │   └── {id}.mp3
           ├── prompts/
-          │   └── {id}.json
           └── conversations/
-              └── {id}.json
     """
 
     INLINE_THRESHOLD = 10 * 1024
@@ -50,17 +43,21 @@ class FileSystemStore(ArtifactStore):
         self.base_directory = base_directory
         os.makedirs(self.base_directory, exist_ok=True)
 
-    def _get_type_directory(self, artifact: BaseArtifact) -> str:
-        type_dirs = {
-            "text": os.path.join(self.base_directory, "texts"),
-            "images": os.path.join(self.base_directory, "images"),
-            "audio": os.path.join(self.base_directory, "audio"),
-            "prompts": os.path.join(self.base_directory, "prompts"),
-            "conversations": os.path.join(self.base_directory, "conversations"),
-        }
+    def _resolve_subdir(self, artifact: BaseArtifact) -> str:
+        """Determine the storage subdirectory based on artifact type."""
+        if isinstance(artifact, Conversation):
+            return "conversations"
+        if isinstance(artifact, Prompt):
+            return "prompts"
+        if isinstance(artifact, ImageArtifact):
+            return "images"
+        if isinstance(artifact, AudioArtifact):
+            return "audio"
+        return "texts"
 
-        artifact_type = artifact.get_file_type().value
-        dir_path = type_dirs.get(artifact_type, os.path.join(self.base_directory, artifact_type))
+    def _get_type_directory(self, artifact: BaseArtifact) -> str:
+        subdir = self._resolve_subdir(artifact)
+        dir_path = os.path.join(self.base_directory, subdir)
         os.makedirs(dir_path, exist_ok=True)
         return dir_path
 
@@ -70,11 +67,11 @@ class FileSystemStore(ArtifactStore):
 
     def _get_content_path(self, artifact: BaseArtifact) -> str:
         type_dir = self._get_type_directory(artifact)
-        ext = os.path.splitext(artifact.file_name)[1]
+        ext = os.path.splitext(artifact.name)[1]
         if not ext:
-            if artifact.mime_type.startswith("image/"):
+            if artifact.media_type.startswith("image/"):
                 ext = ".jpg"
-            elif artifact.mime_type.startswith("audio/"):
+            elif artifact.media_type.startswith("audio/"):
                 ext = ".mp3"
             else:
                 ext = ".dat"
@@ -92,6 +89,9 @@ class FileSystemStore(ArtifactStore):
             metadata_path = self._get_metadata_path(artifact)
             metadata = artifact.to_dict()
 
+            # Tag with storage-level type hint for rehydration on load
+            metadata["artifact_type"] = self._resolve_subdir(artifact)
+
             if artifact.has_content_loaded():
                 if self._should_inline_content(artifact):
                     metadata["_inline_content"] = artifact._content
@@ -100,8 +100,8 @@ class FileSystemStore(ArtifactStore):
                     self._save_content_file(artifact, content_path)
                     metadata["_content_file"] = os.path.basename(content_path)
 
-            if artifact.is_reference and artifact.source_path:
-                metadata["_reference_source"] = artifact.source_path
+            if artifact.is_reference and artifact.source_uri:
+                metadata["_reference_source"] = artifact.source_uri
 
             temp_fd, temp_path = tempfile.mkstemp(
                 dir=os.path.dirname(metadata_path),
@@ -171,14 +171,14 @@ class FileSystemStore(ArtifactStore):
         return None
 
     def _create_artifact_from_metadata(self, metadata: Dict[str, Any]) -> BaseArtifact:
-        file_type = metadata.get("file_type", "texts")
-        if file_type == "conversations":
+        artifact_type = metadata.get("artifact_type", "texts")
+        if artifact_type == "conversations":
             return Conversation.from_dict(metadata)
-        if file_type == "prompts" or metadata.get("prompt_name"):
+        if artifact_type == "prompts" or metadata.get("prompt_name"):
             return Prompt.from_dict(metadata)
-        if file_type == "images":
+        if artifact_type == "images":
             return ImageArtifact.from_dict(metadata)
-        if file_type == "audio":
+        if artifact_type == "audio":
             return AudioArtifact.from_dict(metadata)
         return TextArtifact.from_dict(metadata)
 
@@ -191,11 +191,11 @@ class FileSystemStore(ArtifactStore):
             if os.path.exists(content_path):
                 self._load_content_from_file(artifact, content_path)
                 return
-        if artifact.is_reference and artifact.source_path:
-            if artifact.is_url(artifact.source_path):
+        if artifact.is_reference and artifact.source_uri:
+            if artifact.is_url(artifact.source_uri):
                 return
-            if os.path.exists(artifact.source_path):
-                self._load_content_from_file(artifact, artifact.source_path)
+            if os.path.exists(artifact.source_uri):
+                self._load_content_from_file(artifact, artifact.source_uri)
 
     def _load_content_from_file(self, artifact: BaseArtifact, content_path: str) -> None:
         try:
@@ -236,16 +236,10 @@ class FileSystemStore(ArtifactStore):
     def exists(self, artifact_id: str) -> bool:
         return self._find_metadata_file(artifact_id) is not None
 
-    def list_all(
-        self,
-        file_type: Optional[str] = None,
-        artifact_type: Optional[str] = None,
-    ) -> List[dict]:
+    def list_all(self, artifact_type: Optional[str] = None) -> List[dict]:
         try:
             artifacts = []
-            # Accept both naming styles; file_type takes precedence.
-            type_filter = file_type if file_type is not None else artifact_type
-            subdirs = [type_filter] if type_filter else ["texts", "images", "audio", "prompts", "conversations"]
+            subdirs = [artifact_type] if artifact_type else ["texts", "images", "audio", "prompts", "conversations"]
 
             for subdir in subdirs:
                 dir_path = os.path.join(self.base_directory, subdir)

@@ -4,60 +4,39 @@ Image artifact data model.
 Handles image content with PIL Image support.
 """
 
-# External dependencies
 import logging
 import time
 from typing import Dict, Any, Optional, Tuple
 
-# Internal dependencies
 from .base import BaseArtifact
 
 
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
 
 
-########################################################################
-#                             IMAGE FILE                               #
-########################################################################
 class ImageArtifact(BaseArtifact):
     """
     Image artifact model.
 
-    Handles image files with PIL Image support.
+    Handles image artifacts with PIL Image support.
     Content is loaded as a PIL Image object.
     """
 
     def __init__(self,
-                 file_name: str,
+                 name: str = "untitled.jpg",
                  width: Optional[int] = None,
                  height: Optional[int] = None,
                  format: Optional[str] = None,
                  **kwargs):
-        """
-        Initialize an image artifact.
+        if 'media_type' not in kwargs:
+            kwargs['media_type'] = self._detect_image_media_type(name)
 
-        Args:
-            file_name: Name of the artifact
-            width: Image width in pixels
-            height: Image height in pixels
-            format: Image format (PNG, JPEG, etc.)
-            **kwargs: Additional arguments for BaseArtifact
-        """
-        # Set image MIME type if not provided
-        if 'mime_type' not in kwargs:
-            kwargs['mime_type'] = self._detect_image_mime_type(file_name)
-        
-        super().__init__(file_name=file_name, **kwargs)
-        
-        # Image-specific metadata
+        super().__init__(name=name, **kwargs)
+
         self.width = width
         self.height = height
-        self.format = format or self._detect_format(file_name)
-        
-        # Store in metadata as well
+        self.format = format or self._detect_format(name)
+
         if width:
             self.metadata['width'] = width
         if height:
@@ -65,10 +44,8 @@ class ImageArtifact(BaseArtifact):
         if self.format:
             self.metadata['format'] = self.format
 
-    def _detect_image_mime_type(self, file_name: str) -> str:
-        """Detect MIME type for image files."""
-        ext = file_name.lower().split('.')[-1] if '.' in file_name else ''
-        
+    def _detect_image_media_type(self, name: str) -> str:
+        ext = name.lower().split('.')[-1] if '.' in name else ''
         image_types = {
             'jpg': 'image/jpeg',
             'jpeg': 'image/jpeg',
@@ -81,13 +58,10 @@ class ImageArtifact(BaseArtifact):
             'tif': 'image/tiff',
             'ico': 'image/x-icon',
         }
-        
         return image_types.get(ext, 'image/jpeg')
 
-    def _detect_format(self, file_name: str) -> str:
-        """Detect image format from file name."""
-        ext = file_name.lower().split('.')[-1] if '.' in file_name else ''
-        
+    def _detect_format(self, name: str) -> str:
+        ext = name.lower().split('.')[-1] if '.' in name else ''
         format_map = {
             'jpg': 'JPEG',
             'jpeg': 'JPEG',
@@ -98,67 +72,37 @@ class ImageArtifact(BaseArtifact):
             'tiff': 'TIFF',
             'tif': 'TIFF',
         }
-        
         return format_map.get(ext, 'JPEG')
 
     def load_content(self):
-        """
-        Load image content as PIL Image.
-
-        This is called by the repository when loading content.
-        The repository will set self._content with the PIL Image.
-
-        Returns:
-            PIL Image or None if not loaded
-        """
         if self._content_loaded and self._content is not None:
             return self._content
-        
-        # Content should be loaded by repository
-        logger.warning(f"Content not loaded for file {self.id}. Use repository.load() with load_content=True")
+        logger.warning(f"Content not loaded for artifact {self.id}.")
         return None
 
     def set_content(self, image_obj) -> None:
-        """
-        Set the content (used by repository after loading).
-
-        Args:
-            image_obj: PIL Image object
-        """
         self._content = image_obj
         self._content_loaded = True
-        
-        # Update dimensions if available
         if hasattr(image_obj, 'size'):
             self.width, self.height = image_obj.size
             self.metadata['width'] = self.width
             self.metadata['height'] = self.height
-        
         if hasattr(image_obj, 'format'):
             self.format = image_obj.format
             self.metadata['format'] = self.format
-        
         self.updated_at = time.time()
 
     @property
     def content(self):
-        """
-        Get content (loads if not already loaded).
-
-        Returns:
-            PIL Image object
-        """
         return self.load_content()
 
     @property
     def dimensions(self) -> Optional[Tuple[int, int]]:
-        """Get image dimensions (width, height)."""
         if self.width and self.height:
             return (self.width, self.height)
         return None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
         data = super().to_dict()
         if self.width:
             data['width'] = self.width
@@ -170,143 +114,57 @@ class ImageArtifact(BaseArtifact):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ImageArtifact':
-        """
-        Create image artifact from dictionary.
-
-        Args:
-            data: Dictionary containing file data
-
-        Returns:
-            ImageArtifact: New image artifact instance
-        """
         return cls(
-            file_name=data.get('name') or data.get('file_name', 'untitled.jpg'),
-            file_id=data.get('id'),
-            mime_type=data.get('media_type') or data.get('mime_type'),
+            name=data.get('name', 'untitled.jpg'),
+            id=data.get('id'),
+            media_type=data.get('media_type'),
             size=data.get('size', 0),
             is_reference=data.get('is_reference', False),
-            source_path=data.get('source_uri') or data.get('source_path'),
+            source_uri=data.get('source_uri'),
             width=data.get('width') or data.get('metadata', {}).get('width'),
             height=data.get('height') or data.get('metadata', {}).get('height'),
             format=data.get('format') or data.get('metadata', {}).get('format'),
             metadata=data.get('metadata', {}),
             created_at=data.get('created_at'),
-            updated_at=data.get('updated_at')
+            updated_at=data.get('updated_at'),
         )
 
     @classmethod
-    def from_image(cls, image_obj, file_name: str, **kwargs) -> 'ImageArtifact':
-        """
-        Create an image artifact from a PIL Image object.
-
-        Args:
-            image_obj: PIL Image object
-            file_name: Name for the artifact
-            **kwargs: Additional arguments for BaseArtifact
-
-        Returns:
-            ImageArtifact: New image artifact with content set
-        """
-        # Extract dimensions
+    def from_image(cls, image_obj, name: str, **kwargs) -> 'ImageArtifact':
         width, height = image_obj.size if hasattr(image_obj, 'size') else (None, None)
-        format = image_obj.format if hasattr(image_obj, 'format') else None
-        
-        file = cls(
-            file_name=file_name,
-            width=width,
-            height=height,
-            format=format,
-            **kwargs
-        )
-        
-        file._content = image_obj
-        file._content_loaded = True
-        file.updated_at = time.time()
-        
-        return file
+        fmt = image_obj.format if hasattr(image_obj, 'format') else None
+        artifact = cls(name=name, width=width, height=height, format=fmt, **kwargs)
+        artifact._content = image_obj
+        artifact._content_loaded = True
+        artifact.updated_at = time.time()
+        return artifact
 
     @classmethod
     def from_path(cls, source: str, is_reference: bool = False, **kwargs) -> 'ImageArtifact':
-        """
-        Create an image artifact referencing a path.
-
-        Args:
-            source: Path to the file
-            is_reference: Whether to just reference (True) or import (False)
-            **kwargs: Additional arguments
-
-        Returns:
-            ImageArtifact: New image artifact instance
-        """
         import os
-        
-        file_name = kwargs.pop('file_name', os.path.basename(source))
-        
-        return cls(
-            file_name=file_name,
-            is_reference=is_reference,
-            source_path=source,
-            **kwargs
-        )
+        name = kwargs.pop('name', os.path.basename(source))
+        return cls(name=name, is_reference=is_reference, source_uri=source, **kwargs)
 
     @classmethod
     def from_url(cls, url: str, is_reference: bool = True, **kwargs) -> 'ImageArtifact':
-        """
-        Create an image artifact referencing a URL.
-
-        Args:
-            url: URL to the file
-            is_reference: Whether to just reference (True) or download (False)
-            **kwargs: Additional arguments
-
-        Returns:
-            ImageArtifact: New image artifact instance
-        """
-        file_name = kwargs.pop('file_name', url.split('/')[-1] or 'download.jpg')
-        
-        return cls(
-            file_name=file_name,
-            is_reference=is_reference,
-            source_path=url,
-            **kwargs
-        )
+        name = kwargs.pop('name', url.split('/')[-1] or 'download.jpg')
+        return cls(name=name, is_reference=is_reference, source_uri=url, **kwargs)
 
     @classmethod
     def from_bytes(cls,
                    image_data: bytes,
-                   file_name: str,
+                   name: str,
                    format: Optional[str] = None,
                    **kwargs) -> 'ImageArtifact':
-        """
-        Create an ImageArtifact from binary image data.
-        
-        This is a convenience method that creates an ImageArtifact and stores the
-        content in memory. The file should be saved to a repository for persistence.
-
-        Args:
-            image_data: Raw image bytes
-            file_name: Name for the file
-            format: Image format (e.g., 'PNG', 'JPEG'). Detected if not provided.
-            **kwargs: Additional arguments for ImageArtifact
-
-        Returns:
-            ImageArtifact: New image artifact with content loaded
-        """
         try:
             from PIL import Image
             import io
-            
-            # Open image from bytes
+
             img = Image.open(io.BytesIO(image_data))
-            
-            # Detect format if not provided
             if format is None:
                 format = img.format
-            
-            # Extract dimensions
             width, height = img.size
-            
-            # Update metadata
+
             if 'metadata' not in kwargs:
                 kwargs['metadata'] = {}
             kwargs['metadata'].update({
@@ -315,28 +173,23 @@ class ImageArtifact(BaseArtifact):
                 'format': format,
                 'size_bytes': len(image_data)
             })
-            
-            # Create the file
-            file = cls(
-                file_name=file_name,
+
+            artifact = cls(
+                name=name,
                 width=width,
                 height=height,
                 format=format,
                 size=len(image_data),
                 **kwargs
             )
-            
-            # Store the image content
-            file._content = img
-            file._content_loaded = True
-            file.updated_at = time.time()
-            
-            return file
-            
+            artifact._content = img
+            artifact._content_loaded = True
+            artifact.updated_at = time.time()
+            return artifact
+
         except ImportError:
             logger.error("PIL not available, cannot create image from bytes")
             raise
         except Exception as e:
             logger.error(f"Failed to create image from bytes: {e}")
             raise
-

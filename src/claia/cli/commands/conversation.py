@@ -110,7 +110,7 @@ class ConversationCommand(BaseCommand):
       
       # If not found, try by title
       if not conv:
-        conversations = file_repo.list_all(file_type='conversations')
+        conversations = file_repo.list_all(artifact_type='conversations')
         for meta in conversations:
           if meta.get('title', '').lower() == identifier.lower():
             conv = file_repo.load(meta.get('id'), load_content=True)
@@ -170,7 +170,7 @@ class ConversationCommand(BaseCommand):
       if conv and isinstance(conv, Conversation):
         conv_id, conv_title = conv.id, conv.title
       else:
-        conversations = file_repo.list_all(file_type='conversations')
+        conversations = file_repo.list_all(artifact_type='conversations')
         for meta in conversations:
           if meta.get('title', '').lower() == identifier.lower():
             conv_id, conv_title = meta.get('id'), meta.get('title')

@@ -56,17 +56,12 @@ class MemoryStore(ArtifactStore):
     def exists(self, artifact_id: str) -> bool:
         return artifact_id in self._artifacts
 
-    def list_all(
-        self,
-        file_type: Optional[str] = None,
-        artifact_type: Optional[str] = None,
-    ) -> List[dict]:
+    def list_all(self, artifact_type: Optional[str] = None) -> List[dict]:
         try:
             artifacts = []
-            type_filter = file_type if file_type is not None else artifact_type
             for artifact in self._artifacts.values():
                 metadata = artifact.to_dict()
-                if type_filter and metadata.get("file_type") != type_filter:
+                if artifact_type and metadata.get("artifact_type") != artifact_type:
                     continue
                 artifacts.append(metadata)
             artifacts.sort(key=lambda x: x.get("updated_at", 0), reverse=True)

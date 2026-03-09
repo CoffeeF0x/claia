@@ -39,9 +39,5 @@ class ArtifactStore(ABC):
         return artifacts
 
     @abstractmethod
-    def list_all(
-        self,
-        file_type: Optional[str] = None,
-        artifact_type: Optional[str] = None,
-    ) -> List[dict]:
+    def list_all(self, artifact_type: Optional[str] = None) -> List[dict]:
         pass

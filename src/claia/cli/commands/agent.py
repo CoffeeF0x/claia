@@ -141,7 +141,7 @@ class PromptCommand(BaseCommand):
       file_repo = FileSystemStore(self.settings.files_directory)
       
       # Find and load the prompt
-      prompts = file_repo.list_all(file_type='prompts')
+      prompts = file_repo.list_all(artifact_type='prompts')
       prompt_id = next((p.get('id') for p in prompts if p.get('prompt_name') == validated_name), None)
       
       if not prompt_id:
@@ -178,7 +178,7 @@ class PromptCommand(BaseCommand):
       file_repo = FileSystemStore(self.settings.files_directory)
       
       # Find the prompt
-      prompts = file_repo.list_all(file_type='prompts')
+      prompts = file_repo.list_all(artifact_type='prompts')
       prompt_id = next((p.get('id') for p in prompts if p.get('prompt_name') == validated_name), None)
       
       if not prompt_id:

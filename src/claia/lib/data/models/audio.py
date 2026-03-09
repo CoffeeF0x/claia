@@ -4,63 +4,41 @@ Audio artifact data model.
 Handles audio content with metadata support.
 """
 
-# External dependencies
 import logging
 import time
 from typing import Dict, Any, Optional
 
-# Internal dependencies
 from .base import BaseArtifact
 
 
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
 
 
-########################################################################
-#                             AUDIO FILE                               #
-########################################################################
 class AudioArtifact(BaseArtifact):
     """
     Audio artifact model.
 
-    Handles audio files with duration and format metadata.
+    Handles audio artifacts with duration and format metadata.
     Content is loaded as bytes.
     """
 
     def __init__(self,
-                 file_name: str,
+                 name: str = "untitled.mp3",
                  duration: Optional[float] = None,
                  format: Optional[str] = None,
                  sample_rate: Optional[int] = None,
                  channels: Optional[int] = None,
                  **kwargs):
-        """
-        Initialize an audio artifact.
+        if 'media_type' not in kwargs:
+            kwargs['media_type'] = self._detect_audio_media_type(name)
 
-        Args:
-            file_name: Name of the artifact
-            duration: Duration in seconds
-            format: Audio format (MP3, WAV, etc.)
-            sample_rate: Sample rate in Hz
-            channels: Number of audio channels
-            **kwargs: Additional arguments for BaseArtifact
-        """
-        # Set audio MIME type if not provided
-        if 'mime_type' not in kwargs:
-            kwargs['mime_type'] = self._detect_audio_mime_type(file_name)
-        
-        super().__init__(file_name=file_name, **kwargs)
-        
-        # Audio-specific metadata
+        super().__init__(name=name, **kwargs)
+
         self.duration = duration
-        self.format = format or self._detect_format(file_name)
+        self.format = format or self._detect_format(name)
         self.sample_rate = sample_rate
         self.channels = channels
-        
-        # Store in metadata as well
+
         if duration:
             self.metadata['duration'] = duration
         if self.format:
@@ -70,10 +48,8 @@ class AudioArtifact(BaseArtifact):
         if channels:
             self.metadata['channels'] = channels
 
-    def _detect_audio_mime_type(self, file_name: str) -> str:
-        """Detect MIME type for audio files."""
-        ext = file_name.lower().split('.')[-1] if '.' in file_name else ''
-        
+    def _detect_audio_media_type(self, name: str) -> str:
+        ext = name.lower().split('.')[-1] if '.' in name else ''
         audio_types = {
             'mp3': 'audio/mpeg',
             'wav': 'audio/wav',
@@ -84,38 +60,19 @@ class AudioArtifact(BaseArtifact):
             'wma': 'audio/x-ms-wma',
             'opus': 'audio/opus',
         }
-        
         return audio_types.get(ext, 'audio/mpeg')
 
-    def _detect_format(self, file_name: str) -> str:
-        """Detect audio format from file name."""
-        ext = file_name.lower().split('.')[-1] if '.' in file_name else ''
+    def _detect_format(self, name: str) -> str:
+        ext = name.lower().split('.')[-1] if '.' in name else ''
         return ext.upper() if ext else 'MP3'
 
     def load_content(self) -> bytes:
-        """
-        Load audio content as bytes.
-
-        This is called by the repository when loading content.
-        The repository will set self._content with the audio data.
-
-        Returns:
-            bytes: The audio data
-        """
         if self._content_loaded and self._content is not None:
             return self._content
-        
-        # Content should be loaded by repository
-        logger.warning(f"Content not loaded for file {self.id}. Use repository.load() with load_content=True")
+        logger.warning(f"Content not loaded for artifact {self.id}.")
         return b""
 
     def set_content(self, audio_data: bytes) -> None:
-        """
-        Set the content (used by repository after loading).
-
-        Args:
-            audio_data: The audio data as bytes
-        """
         self._content = audio_data
         self._content_loaded = True
         self.size = len(audio_data)
@@ -123,16 +80,9 @@ class AudioArtifact(BaseArtifact):
 
     @property
     def content(self) -> bytes:
-        """
-        Get content (loads if not already loaded).
-
-        Returns:
-            bytes: The audio data
-        """
         return self.load_content()
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
         data = super().to_dict()
         if self.duration:
             data['duration'] = self.duration
@@ -146,95 +96,38 @@ class AudioArtifact(BaseArtifact):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'AudioArtifact':
-        """
-        Create audio artifact from dictionary.
-
-        Args:
-            data: Dictionary containing file data
-
-        Returns:
-            AudioArtifact: New audio artifact instance
-        """
         return cls(
-            file_name=data.get('name') or data.get('file_name', 'untitled.mp3'),
-            file_id=data.get('id'),
-            mime_type=data.get('media_type') or data.get('mime_type'),
+            name=data.get('name', 'untitled.mp3'),
+            id=data.get('id'),
+            media_type=data.get('media_type'),
             size=data.get('size', 0),
             is_reference=data.get('is_reference', False),
-            source_path=data.get('source_uri') or data.get('source_path'),
+            source_uri=data.get('source_uri'),
             duration=data.get('duration') or data.get('metadata', {}).get('duration'),
             format=data.get('format') or data.get('metadata', {}).get('format'),
             sample_rate=data.get('sample_rate') or data.get('metadata', {}).get('sample_rate'),
             channels=data.get('channels') or data.get('metadata', {}).get('channels'),
             metadata=data.get('metadata', {}),
             created_at=data.get('created_at'),
-            updated_at=data.get('updated_at')
+            updated_at=data.get('updated_at'),
         )
 
     @classmethod
-    def from_bytes(cls, audio_data: bytes, file_name: str, **kwargs) -> 'AudioArtifact':
-        """
-        Create an audio artifact from bytes.
-
-        Args:
-            audio_data: The audio data as bytes
-            file_name: Name for the artifact
-            **kwargs: Additional arguments for BaseArtifact
-
-        Returns:
-            AudioArtifact: New audio artifact with content set
-        """
-        file = cls(file_name=file_name, **kwargs)
-        file._content = audio_data
-        file._content_loaded = True
-        file.size = len(audio_data)
-        file.updated_at = time.time()
-        
-        return file
+    def from_bytes(cls, audio_data: bytes, name: str, **kwargs) -> 'AudioArtifact':
+        artifact = cls(name=name, **kwargs)
+        artifact._content = audio_data
+        artifact._content_loaded = True
+        artifact.size = len(audio_data)
+        artifact.updated_at = time.time()
+        return artifact
 
     @classmethod
     def from_path(cls, source: str, is_reference: bool = False, **kwargs) -> 'AudioArtifact':
-        """
-        Create an audio artifact referencing a path.
-
-        Args:
-            source: Path to the file
-            is_reference: Whether to just reference (True) or import (False)
-            **kwargs: Additional arguments
-
-        Returns:
-            AudioArtifact: New audio artifact instance
-        """
         import os
-        
-        file_name = kwargs.pop('file_name', os.path.basename(source))
-        
-        return cls(
-            file_name=file_name,
-            is_reference=is_reference,
-            source_path=source,
-            **kwargs
-        )
+        name = kwargs.pop('name', os.path.basename(source))
+        return cls(name=name, is_reference=is_reference, source_uri=source, **kwargs)
 
     @classmethod
     def from_url(cls, url: str, is_reference: bool = True, **kwargs) -> 'AudioArtifact':
-        """
-        Create an audio artifact referencing a URL.
-
-        Args:
-            url: URL to the file
-            is_reference: Whether to just reference (True) or download (False)
-            **kwargs: Additional arguments
-
-        Returns:
-            AudioArtifact: New audio artifact instance
-        """
-        file_name = kwargs.pop('file_name', url.split('/')[-1] or 'download.mp3')
-        
-        return cls(
-            file_name=file_name,
-            is_reference=is_reference,
-            source_path=url,
-            **kwargs
-        )
-
+        name = kwargs.pop('name', url.split('/')[-1] or 'download.mp3')
+        return cls(name=name, is_reference=is_reference, source_uri=url, **kwargs)

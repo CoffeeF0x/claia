@@ -580,7 +580,7 @@ class CLIModulePlugin:
     """List all available prompts."""
     try:
       file_repo = FileSystemStore(files_directory)
-      prompts = file_repo.list_all(file_type='prompts')
+      prompts = file_repo.list_all(artifact_type='prompts')
       
       if not prompts:
         return "No prompts found."
@@ -618,7 +618,7 @@ class CLIModulePlugin:
       
       # Find and load the prompt
       validated_name = Prompt.validate_prompt_name(target_name)
-      prompts = file_repo.list_all(file_type='prompts')
+      prompts = file_repo.list_all(artifact_type='prompts')
       prompt_id = None
       
       for prompt_meta in prompts:
@@ -651,7 +651,7 @@ class CLIModulePlugin:
     """List all saved conversations."""
     try:
       file_repo = FileSystemStore(files_directory)
-      conversations = file_repo.list_all(file_type='conversations')
+      conversations = file_repo.list_all(artifact_type='conversations')
       
       if not conversations:
         return "No saved conversations found."

@@ -10,7 +10,7 @@ from diffusers import StableDiffusionPipeline
 # Internal dependencies
 from .base import TransformersModel
 from claia.lib.data import Conversation
-from claia.lib.files.image import ImageFile
+from claia.lib.data.models import ImageArtifact
 from claia.lib.enums.conversation import MessageRole
 from claia.lib.enums.model import ModelCapability
 
@@ -217,20 +217,21 @@ class DiffusionModel(TransformersModel):
       image.save(image_bytes, format="PNG")
       image_bytes.seek(0)
 
-      # Create an image file from the bytes
-      file_name = f"generated_image_{len(user_messages)}.png"
-      image_file = self._save_image_to_file(image_bytes.getvalue(),
-                                         conversation.base_directory,
-                                         file_name)
+      name = f"generated_image_{len(user_messages)}.png"
+      image_artifact = ImageArtifact.from_bytes(
+        image_data=image_bytes.getvalue(),
+        name=name,
+        format="PNG",
+        media_type="image/png",
+        metadata={"source": "diffusion_model", "model": self.model_name},
+      )
 
-      # Create a response message
       response = f"Generated image from prompt: '{prompt[:100]}...' (truncated)"
       message = conversation.add_message(MessageRole.ASSISTANT, response)
 
-      # Attach the image to the message
-      if image_file and message:
-        conversation.attach_file(message.message_id, image_file.file_id)
-        logger.info(f"Attached image {image_file.file_id} to message {message.message_id}")
+      if image_artifact and message:
+        conversation.attach_file(message.message_id, image_artifact.id)
+        logger.info(f"Attached image {image_artifact.id} to message {message.message_id}")
 
       return response
 
@@ -244,43 +245,6 @@ class DiffusionModel(TransformersModel):
 
       conversation.add_message(MessageRole.ASSISTANT, error_message)
       return error_message
-
-
-  def _save_image_to_file(
-    self,
-    image_data: bytes,
-    base_directory: str,
-    file_name: str) -> Optional[ImageFile]:
-
-    """
-    Save image data to a file and return the ImageFile object.
-
-    Args:
-        image_data: Binary image data
-        base_directory: Base directory for file storage
-        file_name: Name for the file
-
-    Returns:
-        Optional[ImageFile]: The created ImageFile, or None if creation failed
-    """
-
-    try:
-      # Create an ImageFile from the bytes
-      image_file = ImageFile.from_bytes(
-        image_data=image_data,
-        base_directory=base_directory,
-        file_name=file_name,
-        format="png",
-        mime_type="image/png",
-        metadata={"source": "diffusion_model", "model": self.model_name}
-      )
-
-      logger.debug(f"Created image file: {image_file.file_id}")
-      return image_file
-
-    except Exception as e:
-      logger.error(f"Failed to create image file: {str(e)}")
-      return None
 
 
   def _download_image_model(self, model_path: str) -> None:

@@ -104,7 +104,7 @@ def initialize_default_prompts(settings: Settings) -> None:
   file_repo = FileSystemStore(settings.files_directory)
 
   # Load existing prompts from repository
-  existing_prompts_metadata = file_repo.list_all(file_type='prompts')
+  existing_prompts_metadata = file_repo.list_all(artifact_type='prompts')
   existing_prompt_names = {metadata.get('prompt_name') for metadata in existing_prompts_metadata}
   
   logger.debug(f"Found {len(existing_prompts_metadata)} existing prompts")
