@@ -19,3 +19,5 @@ claia_*demo_*/
 /temp/
 /artifacts/
 /storage/
+
+/build/
