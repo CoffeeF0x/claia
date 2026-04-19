@@ -4,7 +4,7 @@ A Process represents a unit of work to be executed by an agent.
 """
 
 # External dependencies
-import uuid, time, logging
+import uuid, time, logging, threading
 from typing import Optional, Dict, Any, Callable, List
 
 # Internal dependencies
@@ -53,6 +53,13 @@ class Process:
     self.started_at = None
     self.completed_at = None
     self._callbacks: Dict[str, List[Callable]] = {}
+    # Cooperative cancellation. Hosts running an agent on a worker thread
+    # can call request_cancel() to ask the agent to stop at the next
+    # safe point. Long-running agents should poll cancel_requested
+    # between unit-of-work steps (e.g. between streamed tokens) and
+    # break cleanly. Implemented via threading.Event so it is safe to
+    # set from a different thread than the one running the agent.
+    self.cancel_event: threading.Event = threading.Event()
 
   # ── Callback API ──────────────────────────────────────────────────
 
@@ -95,3 +102,20 @@ class Process:
     """Mark the process as cancelled."""
     self.status = ProcessStatus.CANCELLED
     self.completed_at = time.time()
+
+  # ── Cancellation ──────────────────────────────────────────────────
+
+  @property
+  def cancel_requested(self) -> bool:
+    """True once a host has called :meth:`request_cancel`."""
+    return self.cancel_event.is_set()
+
+  def request_cancel(self) -> None:
+    """
+    Request cooperative cancellation of the running agent.
+
+    Setting the event does not preempt the agent; the agent must
+    poll :attr:`cancel_requested` and break out of its work loop.
+    Safe to call from any thread.
+    """
+    self.cancel_event.set()

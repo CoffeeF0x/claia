@@ -55,14 +55,24 @@ class SimpleAgent(BaseAgent):
       streaming_message = conversation.start_streaming_message(MessageRole.ASSISTANT)
       process.emit("stream_start", streaming_message.message_id)
 
+      cancelled = False
       for token in registry.run(model_id, conversation, streaming=True, **kwargs):
+        if process.cancel_requested:
+          cancelled = True
+          break
         full_response += token
         conversation.append_stream_chunk(streaming_message.message_id, token)
         process.emit("token", token)
 
-      conversation.end_streaming_message(streaming_message.message_id)
-      process.emit("stream_end", streaming_message.message_id)
-      process.mark_completed(full_response)
+      if cancelled:
+        conversation.end_streaming_message(streaming_message.message_id, error="cancelled")
+        process.emit("stream_end", streaming_message.message_id)
+        process.emit("cancelled", full_response)
+        process.mark_cancelled()
+      else:
+        conversation.end_streaming_message(streaming_message.message_id)
+        process.emit("stream_end", streaming_message.message_id)
+        process.mark_completed(full_response)
 
     except Exception as e:
       logging.exception(f"Error in SimpleAgent for {process.id}: {str(e)}")
