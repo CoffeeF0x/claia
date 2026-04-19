@@ -35,20 +35,45 @@ class SimpleAgent(BaseAgent):
 
   @classmethod
   def process_request(cls, process, registry=None, **kwargs) -> object:
-    """Process a model inference request by streaming tokens from the registry."""
+    """
+    Process a model inference request by streaming tokens from the registry.
+
+    The conversation is mutated through the dedicated streaming methods so
+    that the conversation observer (if any) sees a single STREAM_START with
+    an empty placeholder message before tokens flow, and a single STREAM_END
+    once the response completes. Per-token appends are intentionally silent
+    to avoid flooding observers; consumers that need real-time progress
+    listen for the process's "token" callback instead.
+    """
+    conversation = process.conversation
+    streaming_message = None
+
     try:
       model_id = process.parameters["model_id"]
       full_response = ""
 
-      for token in registry.run(model_id, process.conversation, streaming=True, **kwargs):
+      streaming_message = conversation.start_streaming_message(MessageRole.ASSISTANT)
+      process.emit("stream_start", streaming_message.message_id)
+
+      for token in registry.run(model_id, conversation, streaming=True, **kwargs):
         full_response += token
+        conversation.append_stream_chunk(streaming_message.message_id, token)
         process.emit("token", token)
 
-      process.conversation.add_message(MessageRole.ASSISTANT, full_response)
+      conversation.end_streaming_message(streaming_message.message_id)
+      process.emit("stream_end", streaming_message.message_id)
       process.mark_completed(full_response)
 
     except Exception as e:
       logging.exception(f"Error in SimpleAgent for {process.id}: {str(e)}")
+      if streaming_message is not None:
+        try:
+          conversation.end_streaming_message(streaming_message.message_id, error=str(e))
+          process.emit("stream_end", streaming_message.message_id)
+        except Exception:
+          logging.exception(
+            f"Failed to mark streaming message ended after error: {streaming_message.message_id}"
+          )
       process.mark_failed(str(e))
 
     return process

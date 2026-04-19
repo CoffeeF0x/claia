@@ -31,6 +31,10 @@ DEFAULT_CONVERSATION_TITLE = "New Conversation"
 
 logger = logging.getLogger(__name__)
 
+# Type alias for the observer callback. Receives the domain event and the
+# message it relates to (or None for conversation-level events).
+EventCallback = Callable[[DomainEvent, Optional["Message"]], None]
+
 
 class Conversation(TextArtifact):
     """
@@ -42,8 +46,44 @@ class Conversation(TextArtifact):
 
     Domain events serve two purposes:
       1. Audit trail — every mutation is recorded in self.events and serialized.
-      2. Runtime notifications — listeners can react to mutations for
-         persistence, sync, or other side effects.
+      2. Runtime notifications — a single observer callback (set via the
+         ``on_event`` constructor argument or :meth:`observe`) is invoked for
+         every domain event so integrators can persist or sync mutations as
+         they happen.
+
+    Observer contract (event_type -> message argument passed to the callback):
+
+      ====================== ==========================================
+      Event                  message argument
+      ====================== ==========================================
+      MESSAGE_CREATED        the new message
+      MESSAGE_UPDATED        post-mutation state of the message
+      MESSAGE_DELETED        state of the message just before deletion
+      MESSAGE_STREAM_START   the empty message being streamed into
+      MESSAGE_STREAM_END     final state of the streamed message
+      ATTACHMENT_ADDED       the message the attachment was added to
+      ATTACHMENT_REMOVED     the message the attachment was removed from
+      CONVERSATION_CREATED   None (conversation-level)
+      TITLE_CHANGED          None
+      PROMPT_CHANGED         None
+      SETTINGS_UPDATED       None
+      ====================== ==========================================
+
+    Streaming mutations -- :meth:`append_stream_chunk` -- intentionally do not
+    fire the observer or emit events. Per-chunk notifications would flood the
+    audit trail and the callback. Applications that need to persist streamed
+    content as it arrives should call :meth:`append_stream_chunk` for the
+    in-memory update and flush content to durable storage on their own
+    cadence (e.g. every N characters or every M milliseconds).
+
+    Observer exceptions are caught and logged so a misbehaving observer
+    cannot corrupt conversation state. Observers are expected to handle
+    their own errors.
+
+    :meth:`pull_events` remains available as an alternative pull-based API
+    for integrators that prefer to drain pending events at request boundaries
+    instead of reacting in real time. Use one pattern or the other -- not
+    both -- for a given conversation.
 
     Message tree:
         All messages are stored in the messages list. Each message has a parent_id
@@ -74,6 +114,7 @@ class Conversation(TextArtifact):
                  active_head_id: Optional[str] = None,
                  created_at: Optional[float] = None,
                  updated_at: Optional[float] = None,
+                 on_event: Optional[EventCallback] = None,
                  **kwargs):
         super().__init__(
             name=kwargs.pop('name', f"conversation-{id or 'new'}"),
@@ -114,54 +155,89 @@ class Conversation(TextArtifact):
         else:
             self.settings = ConversationSettings.from_dict(settings)
 
-        # Transient runtime queue (not serialized) + listeners
+        # Transient runtime queue (not serialized) + single observer.
         self._pending_events: List[DomainEvent] = []
-        self._event_listeners: List[Callable[[DomainEvent], None]] = []
+        self._on_event: Optional[EventCallback] = on_event
 
         if not self.events:
-            self.emit_event(EventType.CONVERSATION_CREATED, {
-                "title": self.title,
-                "system_prompt": self.prompt.get("system", ""),
-            })
+            self._record(
+                EventType.CONVERSATION_CREATED,
+                None,
+                {
+                    "title": self.title,
+                    "system_prompt": self.prompt.get("system", ""),
+                },
+            )
 
     # ---------------------------------------------------------------------- #
     # Domain events                                                            #
     # ---------------------------------------------------------------------- #
 
-    def emit_event(self, event_type: EventType,
-                   metadata: Optional[Dict[str, Any]] = None,
-                   entity_id: Optional[str] = None,
-                   parent_id: Optional[str] = None) -> DomainEvent:
-        """Record a domain event in the audit trail and notify listeners."""
+    def _record(self,
+                event_type: EventType,
+                message: Optional[Message],
+                metadata: Optional[Dict[str, Any]] = None,
+                entity_id: Optional[str] = None,
+                parent_id: Optional[str] = None) -> DomainEvent:
+        """
+        Internal: record a domain event and notify the observer.
+
+        Centralizes event creation so every mutation goes through the same
+        path: append to the audit trail, append to the transient pending
+        queue, and invoke the observer callback (if any) with the event and
+        the related message.
+        """
         event = DomainEvent(
             event_type=event_type,
-            entity_id=entity_id or self.id,
+            entity_id=entity_id or (message.message_id if message else self.id),
             parent_id=parent_id,
             metadata=metadata or {},
         )
         self.events.append(event)
         self._pending_events.append(event)
-        for listener in list(self._event_listeners):
+        if self._on_event is not None:
             try:
-                listener(event)
+                self._on_event(event, message)
             except Exception as e:
-                logger.warning(f"Event listener failed: {e}")
+                logger.warning(f"Event observer failed: {e}")
         return event
 
-    def add_event_listener(self, listener: Callable[[DomainEvent], None]) -> None:
-        if listener not in self._event_listeners:
-            self._event_listeners.append(listener)
+    def emit_event(self, event_type: EventType,
+                   metadata: Optional[Dict[str, Any]] = None,
+                   entity_id: Optional[str] = None,
+                   parent_id: Optional[str] = None) -> DomainEvent:
+        """
+        Record a domain event in the audit trail and notify the observer.
 
-    def remove_event_listener(self, listener: Callable[[DomainEvent], None]) -> None:
-        if listener in self._event_listeners:
-            self._event_listeners.remove(listener)
+        Public escape hatch for emitting events that aren't covered by the
+        built-in mutation methods. Most callers should use the dedicated
+        mutation methods (add_message, update_message, ...) instead.
+        """
+        return self._record(event_type, None, metadata, entity_id, parent_id)
+
+    def observe(self, on_event: Optional[EventCallback]) -> None:
+        """
+        Set (or clear) the single observer callback.
+
+        Pass ``None`` to remove the current observer. The callback is invoked
+        for every domain event with ``(event, message)`` where ``message`` is
+        the related Message (or ``None`` for conversation-level events). See
+        the class docstring for the full event-to-message contract.
+        """
+        self._on_event = on_event
 
     def peek_events(self) -> List[DomainEvent]:
         """Return pending events without clearing."""
         return list(self._pending_events)
 
     def pull_events(self) -> List[DomainEvent]:
-        """Return and clear pending events (recommended runtime API)."""
+        """
+        Return and clear pending events.
+
+        Pull-based alternative to the observer callback for integrators that
+        prefer to drain events at request boundaries. Use one pattern or the
+        other -- not both -- for a given conversation.
+        """
         events = list(self._pending_events)
         self._pending_events.clear()
         return events
@@ -344,8 +420,8 @@ class Conversation(TextArtifact):
         if message.has_inline_args():
             meta["inline_args_count"] = len(message.inline_args)
 
-        self.emit_event(EventType.MESSAGE_CREATED, meta,
-                        entity_id=message.message_id, parent_id=message.parent_id)
+        self._record(EventType.MESSAGE_CREATED, message, meta,
+                     entity_id=message.message_id, parent_id=message.parent_id)
         return message
 
     def update_message(self, message_id: str, content: Optional[str] = None,
@@ -370,8 +446,8 @@ class Conversation(TextArtifact):
                 if message.has_inline_args():
                     meta["inline_args_count"] = len(message.inline_args)
 
-                self.emit_event(EventType.MESSAGE_UPDATED, meta,
-                                entity_id=message.message_id, parent_id=message.parent_id)
+                self._record(EventType.MESSAGE_UPDATED, message, meta,
+                             entity_id=message.message_id, parent_id=message.parent_id)
                 return message
 
         logger.error(f"Message not found for update: {message_id}")
@@ -386,7 +462,7 @@ class Conversation(TextArtifact):
                 if self.active_head_id == message_id:
                     self.active_head_id = deleted.parent_id
 
-                self.emit_event(EventType.MESSAGE_DELETED, {
+                self._record(EventType.MESSAGE_DELETED, deleted, {
                     "message_id": message_id,
                     "speaker": deleted.speaker.value,
                 }, entity_id=message_id, parent_id=deleted.parent_id)
@@ -417,43 +493,84 @@ class Conversation(TextArtifact):
         speakers = [s if isinstance(s, MessageRole) else MessageRole(s) for s in speakers]
         return [m for m in thread if m.speaker in speakers]
 
-    def stream_message(self, message_id: str, content: str, append: bool = False,
-                       end: bool = False) -> Optional[Message]:
-        """Update a message's content for streaming.
+    def start_streaming_message(self,
+                                speaker: Union[MessageRole, str],
+                                parent_id: Optional[str] = None,
+                                file_ids: Optional[List[str]] = None) -> Message:
+        """
+        Create an empty message that subsequent ``append_stream_chunk`` calls
+        will fill in, and emit MESSAGE_STREAM_START.
 
-        Emits MESSAGE_STREAM_START on the first call per message, and
-        MESSAGE_STREAM_END when end=True.  Intermediate chunks are silent
-        to avoid flooding the audit trail.
+        The message is appended to the tree with the resolved parent_id and
+        becomes the active head. The observer is invoked once with the
+        empty message so integrators can persist a placeholder row before
+        any tokens arrive.
+        """
+        effective_parent_id = parent_id if parent_id is not None else self.active_head_id
+
+        message = Message(
+            speaker=speaker,
+            content="",
+            file_ids=file_ids or [],
+            parent_id=effective_parent_id,
+        )
+
+        self.messages.append(message)
+        self.active_head_id = message.message_id
+        self.updated_at = time.time()
+
+        self._record(EventType.MESSAGE_STREAM_START, message, {
+            "message_id": message.message_id,
+            "speaker": message.speaker.value,
+            "parent_id": message.parent_id,
+        }, entity_id=message.message_id, parent_id=message.parent_id)
+
+        return message
+
+    def append_stream_chunk(self, message_id: str, chunk: str) -> Optional[Message]:
+        """
+        Append a chunk to a streaming message's content. Silent: this method
+        does not emit a domain event or invoke the observer.
+
+        Per-chunk notifications would flood the event log and the observer.
+        Applications that need to persist streamed content as it arrives
+        should flush content on their own cadence (every N characters or
+        every M milliseconds) outside of the observer pipeline.
         """
         for message in self.messages:
             if message.message_id == message_id:
-                if append:
-                    message.safe_append_content(content)
-                else:
-                    message.safe_update_content(content)
+                message.safe_append_content(chunk)
                 self.updated_at = time.time()
-
-                has_start = any(
-                    e.event_type == EventType.MESSAGE_STREAM_START and
-                    e.metadata.get("message_id") == message_id
-                    for e in self.events
-                )
-                if not has_start:
-                    self.emit_event(EventType.MESSAGE_STREAM_START, {
-                        "message_id": message_id,
-                        "speaker": message.speaker.value,
-                    }, entity_id=message_id, parent_id=message.parent_id)
-
-                if end:
-                    self.emit_event(EventType.MESSAGE_STREAM_END, {
-                        "message_id": message_id,
-                        "speaker": message.speaker.value,
-                        "content_preview": message.content[:50] + ("..." if len(message.content) > 50 else ""),
-                    }, entity_id=message_id, parent_id=message.parent_id)
-
                 return message
 
-        logger.error(f"Message not found for streaming update: {message_id}")
+        logger.error(f"Message not found for stream chunk: {message_id}")
+        return None
+
+    def end_streaming_message(self, message_id: str,
+                              error: Optional[str] = None) -> Optional[Message]:
+        """
+        Emit MESSAGE_STREAM_END for an in-progress streaming message.
+
+        Pass ``error`` (a short string) when the stream terminated abnormally;
+        the value is included in the event metadata so persistence layers can
+        record that the partial content reflects a failed run.
+        """
+        for message in self.messages:
+            if message.message_id == message_id:
+                self.updated_at = time.time()
+                meta: Dict[str, Any] = {
+                    "message_id": message_id,
+                    "speaker": message.speaker.value,
+                    "content_preview": message.content[:50] + ("..." if len(message.content) > 50 else ""),
+                }
+                if error is not None:
+                    meta["error"] = error
+
+                self._record(EventType.MESSAGE_STREAM_END, message, meta,
+                             entity_id=message_id, parent_id=message.parent_id)
+                return message
+
+        logger.error(f"Message not found for stream end: {message_id}")
         return None
 
     # ---------------------------------------------------------------------- #
@@ -472,9 +589,9 @@ class Conversation(TextArtifact):
         message.updated_at = time.time()
         self.updated_at = time.time()
 
-        self.emit_event(EventType.ATTACHMENT_ADDED,
-                        {"message_id": message_id, "file_id": file_id},
-                        entity_id=message_id, parent_id=message.parent_id)
+        self._record(EventType.ATTACHMENT_ADDED, message,
+                     {"message_id": message_id, "file_id": file_id},
+                     entity_id=message_id, parent_id=message.parent_id)
         return True
 
     def detach_file(self, message_id: str, file_id: str) -> bool:
@@ -489,9 +606,9 @@ class Conversation(TextArtifact):
         message.updated_at = time.time()
         self.updated_at = time.time()
 
-        self.emit_event(EventType.ATTACHMENT_REMOVED,
-                        {"message_id": message_id, "file_id": file_id},
-                        entity_id=message_id, parent_id=message.parent_id)
+        self._record(EventType.ATTACHMENT_REMOVED, message,
+                     {"message_id": message_id, "file_id": file_id},
+                     entity_id=message_id, parent_id=message.parent_id)
         return True
 
     # ---------------------------------------------------------------------- #
@@ -519,14 +636,14 @@ class Conversation(TextArtifact):
         self.title = new_title
         self.metadata['title'] = new_title
         self.updated_at = time.time()
-        self.emit_event(EventType.TITLE_CHANGED,
-                        {"old_title": old_title, "new_title": new_title})
+        self._record(EventType.TITLE_CHANGED, None,
+                     {"old_title": old_title, "new_title": new_title})
 
     def change_prompt(self, new_prompt: Union[str, Dict[str, str]]) -> None:
         old_prompt = self.prompt.get("system", "")
         self.prompt = self._format_prompt(new_prompt)
         self.updated_at = time.time()
-        self.emit_event(EventType.PROMPT_CHANGED, {
+        self._record(EventType.PROMPT_CHANGED, None, {
             "old_prompt": old_prompt,
             "new_prompt": self.prompt.get("system", ""),
         })
@@ -549,7 +666,7 @@ class Conversation(TextArtifact):
 
         if changes:
             self.updated_at = time.time()
-            self.emit_event(EventType.SETTINGS_UPDATED, changes)
+            self._record(EventType.SETTINGS_UPDATED, None, changes)
 
     def get_settings(self) -> ConversationSettings:
         return self.settings
