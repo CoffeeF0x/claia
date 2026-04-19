@@ -1,32 +1,31 @@
 """
-Hook specifications for agent plugins.
+Pluggy hookspecs for agent plugins.
+
+Agents are framework-level: they orchestrate calls through the
+``Registry`` and live in ``claia.agents``. ``AgentInfo`` therefore lives
+here in the framework rather than in ``claia_core.plugins.base`` — its
+``agent_class`` field references ``claia.agents.base.BaseAgent``.
 """
 
-# External dependencies
 import pluggy
-from typing import Type, Optional
 from dataclasses import dataclass, field
+from typing import Optional, Type
 
-# Internal dependencies
-from ..lib.base import BaseAgent
-from .base import ExtensionInfo
+from claia_core.plugins.base import ExtensionInfo
+from claia.agents.base import BaseAgent
 
 
-########################################################################
-#                            DATA CLASSES                              #
-########################################################################
 @dataclass
 class AgentInfo(ExtensionInfo):
   """Information about an agent implementation.
-  
-  Extends ExtensionInfo with the agent_class field.
+
+  Extends ``ExtensionInfo`` with the concrete ``agent_class`` to
+  instantiate. Agents are registered programmatically (see
+  ``Registry.register``) or via the ``claia.agents`` entry-point group.
   """
   agent_class: Optional[Type[BaseAgent]] = field(default=None)
 
 
-########################################################################
-#                            HOOK SPECS                                #
-########################################################################
 hookspec = pluggy.HookspecMarker("claia_agents")
 
 
@@ -35,21 +34,11 @@ class AgentHooks:
 
   @hookspec
   def get_agent_class(self, agent_name: str) -> Type[BaseAgent]:
-    """
-    Get the agent class for a specific agent name.
-
-    Args:
-        agent_name: The name of the agent to get the class for
-
-    Returns:
-        The agent class that can handle the specified agent type, or None if not supported
-    """
+    """Return the agent class for a given ``agent_name`` (or None)."""
 
   @hookspec
   def get_agent_info(self) -> AgentInfo:
-    """
-    Get information about this agent plugin.
+    """Return metadata describing this agent."""
 
-    Returns:
-        AgentInfo object with details about the agent implementation
-    """
+
+__all__ = ["AgentHooks", "AgentInfo"]

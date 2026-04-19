@@ -1,53 +1,29 @@
 """
-Hook specifications for tool-calling patterns.
+Pluggy hookspecs for tool-pattern plugins.
 
-A pattern plugin is responsible for detecting tool call invocations
-inside content (e.g., tags, JSON blocks, function_call markers).
+These specs mirror ``BasePattern`` in
+``claia_core.tools.patterns.base``.
 """
 
 import pluggy
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import List
 
-from .base import ExtensionInfo
-
-
-@dataclass
-class PatternInfo(ExtensionInfo):
-  """Information about a tool-calling pattern plugin.
-  
-  Extends ExtensionInfo with pattern-specific token definitions.
-  """
-  opening_token: str = field(default="")   # Token that starts a tool call
-  closing_token: str = field(default="")   # Token that ends a tool call
-  prompt_template: Optional[str] = field(default=None)  # Optional system/tool prompt template
+from claia_core.plugins.base import PatternInfo, ToolCallMatch
 
 
 hookspec = pluggy.HookspecMarker("claia_tool_patterns")
 
 
-@dataclass
-class ToolCallMatch:
-  # Inclusive start index and exclusive end index for replacement
-  start_index: int
-  end_index: int
-  tool_name: str
-  parameters: Dict[str, Any]
-  raw: Optional[str] = None
-
-
 class PatternHooks:
-  """Hook specifications for tool-calling pattern plugins."""
+  """Hook specifications for tool-pattern plugins."""
 
   @hookspec
   def get_pattern_info(self) -> PatternInfo:
-    """
-    Return information about this pattern plugin.
-    """
+    """Return metadata describing this pattern."""
 
   @hookspec
   def find_tool_calls(self, content: str, conversation, settings=None) -> List[ToolCallMatch]:
-    """
-    Find tool call invocations in the given content.
-    Return a list of ToolCallMatch, sorted by start_index.
-    """
+    """Return all tool-call invocations in ``content`` sorted by start index."""
+
+
+__all__ = ["PatternHooks", "PatternInfo", "ToolCallMatch"]

@@ -26,8 +26,8 @@ from .hooks import (
   PatternHooks, ProtocolHooks, ToolModuleHooks, AgentHooks,
   DeploymentInfo, SolverInfo, ModelDefinition, ArchitectureInfo, AgentInfo
 )
-from claia.lib.model.base import BaseModel
-from .lib import BaseAgent
+from claia_core.models.base import BaseModel
+from .agents.base import BaseAgent
 
 
 

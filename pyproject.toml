@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claia"
-version = "0.1.11"
+version = "0.1.12"
 description = "CLAIA Framework"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -13,13 +13,20 @@ authors = [
   { name = "ExoFox, LLC" }
 ]
 requires-python = ">=3.12"
+# Combined runtime deps for the CLI experience (the default `pip install .`
+# install). The split optional-deps below let downstream consumers install
+# only what each layer actually needs while we stay in monorepo form.
 dependencies = [
-  "pluggy",
+  # claia_core
   "requests",
   "python-dotenv",
-  "aia",
   "beautifulsoup4",
   "chardet<6",
+  # claia (framework)
+  "pluggy",
+  # claia_cli
+  "pyfiglet",
+  "pyreadline3",
 ]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
@@ -32,17 +39,35 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-local = [
-  "torch",
-  "diffusers",
-  "transformers>=4.50.0",
+# Per-layer extras — each lists ONLY the deps unique to that layer. The
+# default install above already covers all three layers; these are intended
+# for the future repo split, where each package will own its own
+# pyproject.toml and pull only its slice. Keeping them here documents the
+# boundary today.
+core = [
+  "requests",
+  "python-dotenv",
+  "beautifulsoup4",
+  "chardet<6",
+]
+framework = [
+  "pluggy",
 ]
 cli = [
   "pyfiglet",
   "pyreadline3",
 ]
+
+# Optional model backends
+local = [
+  "torch",
+  "diffusers",
+  "transformers>=4.50.0",
+]
+
+# Convenience meta-extras
 all = [
-  "claia[local,cli]",
+  "claia[local]",
 ]
 dev = [
   "claia[all]",
@@ -62,47 +87,51 @@ Issues = "https://gitlab.com/exofox/claia/claia/-/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["claia_core*", "claia*", "claia_cli*"]
 
 [tool.setuptools]
 license-files = ["LICENSE", "NOTICE*"]
 
 [project.scripts]
-claia = "claia.cli.__main__:main"
+claia = "claia_cli.__main__:main"
 
+# Plugin entry points. While in monorepo form, all built-in plugins live
+# under claia_core and register against the framework's pluggy groups.
+# When the repo splits, these tables move into claia_core's pyproject.toml.
 [project.entry-points."claia.architectures"]
-openai = "claia.architectures.openai:OpenAIPlugin"
-anthropic = "claia.architectures.anthropic:AnthropicPlugin"
-transformers_generic = "claia.architectures.transformers_generic:TransformersGenericPlugin"
-transformers_gemma3 = "claia.architectures.transformers_gemma3:TransformersGemma3Plugin"
-dummy = "claia.architectures.dummy:DummyArchitecturePlugin"
+openai = "claia_core.architectures.openai:OpenAIPlugin"
+anthropic = "claia_core.architectures.anthropic:AnthropicPlugin"
+transformers_generic = "claia_core.architectures.transformers_generic:TransformersGenericPlugin"
+transformers_gemma3 = "claia_core.architectures.transformers_gemma3:TransformersGemma3Plugin"
+dummy = "claia_core.architectures.dummy:DummyArchitecturePlugin"
 
 [project.entry-points."claia.deployments"]
-api = "claia.deployments.api:APIDeploymentPlugin"
-local = "claia.deployments.local:LocalDeploymentPlugin"
-remote = "claia.deployments.remote:RemoteDeploymentPlugin"
-dummy = "claia.deployments.dummy:DummyDeploymentPlugin"
+api = "claia_core.deployments.api:APIDeploymentPlugin"
+local = "claia_core.deployments.local:LocalDeploymentPlugin"
+remote = "claia_core.deployments.remote:RemoteDeploymentPlugin"
+dummy = "claia_core.deployments.dummy:DummyDeploymentPlugin"
 
 [project.entry-points."claia.solvers"]
-default = "claia.solvers.default:DefaultSolverPlugin"
+default = "claia_core.solvers.default:DefaultSolverPlugin"
 
 [project.entry-points."claia.definitions"]
-openai = "claia.definitions.openai:OpenAIDefinitionsPlugin"
-anthropic = "claia.definitions.anthropic:AnthropicDefinitionsPlugin"
-legacy = "claia.definitions.legacy:LegacyDefinitionsPlugin"
+openai = "claia_core.definitions.openai:OpenAIDefinitionsPlugin"
+anthropic = "claia_core.definitions.anthropic:AnthropicDefinitionsPlugin"
+legacy = "claia_core.definitions.legacy:LegacyDefinitionsPlugin"
 
 [project.entry-points."claia.agents"]
 simple = "claia.agents.simple:SimpleAgentPlugin"
 
 [project.entry-points."claia.tool_patterns"]
-default = "claia.tool_patterns.default:DefaultToolPatternPlugin"
+default = "claia_core.tools.patterns.default:DefaultToolPatternPlugin"
 
 [project.entry-points."claia.tool_protocols"]
-simple = "claia.tool_protocols.simple:SimpleProtocolPlugin"
+simple = "claia_core.tools.protocols.simple:SimpleProtocolPlugin"
 
 [project.entry-points."claia.tool_modules"]
-cli = "claia.cli.commands.extension:CLIModulePlugin"
-sample = "claia.tools.sample:SampleModulePlugin"
-system = "claia.tools.system:SystemModulePlugin"
+cli = "claia_cli.commands.extension:CLIModulePlugin"
+sample = "claia_core.tools.modules.sample:SampleModulePlugin"
+system = "claia_core.tools.modules.system:SystemModulePlugin"
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]

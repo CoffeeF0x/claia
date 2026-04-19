@@ -16,7 +16,9 @@ packages that live in one repository:
   pluggy dependency.
 - **`claia`** — the framework. Plugin discovery and lifecycle via pluggy, the
   `Registry` composition root, `Process`/worker execution model, agent
-  orchestration, and configuration plumbing.
+  orchestration, and configuration plumbing. Re-exports `claia_core` as
+  `claia.core` so call sites can use the prettier dotted form (see
+  [Import Path Convention](#import-path-convention-claiacore-as-an-alias)).
 - **`claia_cli`** — the command-line application built on top of the framework.
 
 This split preserves the flexibility that drove the project (users can compose
@@ -101,13 +103,63 @@ belongs in `claia_core` instead.
 
 ### Packaging
 
-- Each package has its own `pyproject.toml`.
-- Versions are synchronized across all three packages until external users of
-  `claia_core` alone emerge.
-- Entry points for built-in plugins are declared in `claia_core`'s
-  `pyproject.toml` (they register under `claia.*` groups that the framework
-  consumes). This is conventional — entry points are passive metadata until
-  something asks for them.
+- The monorepo ships **one** `pyproject.toml` at the root. This declares the
+  `claia` distribution and includes all three packages (`claia_core`,
+  `claia`, `claia_cli`) via `[tool.setuptools.packages.find]`.
+- Per-layer dependencies are declared as **optional-dependency extras**
+  (`[project.optional-dependencies].core`, `.framework`, `.cli`) for
+  documentation and to make the future repo-split mechanical. The default
+  `pip install .` still installs the union (since today everything ships
+  together).
+- The console script (`[project.scripts].claia`) points at
+  `claia_cli.__main__:main`.
+- Entry points for built-in plugins are declared in this single
+  `pyproject.toml` under the framework's plugin groups (`claia.architectures`,
+  `claia.deployments`, etc.). When the repo eventually splits, each
+  distribution owns its own entry-point block; nothing about the runtime
+  behaviour changes.
+
+### Import Path Convention: `claia.core` as an Alias
+
+Top-level package names follow the file system: `claia_core`, `claia`,
+`claia_cli`. To keep call sites readable and to communicate the layered
+relationship, the framework's `claia/__init__.py` re-exports `claia_core`
+under the name `core` *and* registers it in `sys.modules` so dotted-path
+imports work too:
+
+```python
+# src/claia/__init__.py
+import sys as _sys
+import claia_core
+core = claia_core
+_sys.modules[__name__ + ".core"] = claia_core
+```
+
+The result: a single module object, four equivalent ways to reach it.
+
+```python
+# Direct distribution-name import (always works, even with only claia_core
+# installed):
+from claia_core.data import Conversation
+
+# Via attribute on the framework package:
+from claia import core
+conv = core.data.Conversation(title="x")
+
+# Dotted-path import through the framework:
+from claia.core.data import Conversation
+from claia.core.enums.conversation import MessageRole
+```
+
+All four forms resolve to the same module — no double-import hazard, no
+two-copies-of-the-same-class `isinstance` failures.
+
+When the repo splits and `claia_core` is installed standalone, only the
+`claia_core` form will work (the alias lives in the framework's
+`__init__.py`). This is the intended boundary: standalone library users
+import `claia_core` directly; framework users get the prettier
+`claia.core` form for free. No callers need to change between the two
+worlds — `from claia_core.X import Y` is portable across both.
 
 ## The Conversation Model (claia_core)
 

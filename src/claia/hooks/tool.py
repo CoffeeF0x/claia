@@ -1,65 +1,38 @@
 """
-Hook specifications for command module plugins.
+Pluggy hookspecs for tool-module plugins.
 
-A command module can implement multiple commands and exposes them through
-a get_module_tools() method that returns a dictionary of ToolDefinition objects.
-This allows a single module to efficiently handle multiple related commands.
+These specs mirror ``BaseToolModule`` in
+``claia_core.tools.modules.base``.
 """
 
 import pluggy
-from dataclasses import dataclass
-from typing import Optional, Dict, Any, Callable
+from typing import Dict
 
-from .base import ExtensionInfo
-
-
-@dataclass
-class ArgumentDefinition:
-  """Definition of a command argument."""
-  name: str
-  description: str
-  data_type: str  # e.g., "str", "int", "float", "bool", "custom"
-  required: bool = False
-  default_value: Optional[Any] = None
-
-
-@dataclass
-class ToolDefinition:
-  """Defines a tool within a module.
-  
-  The callable must return either:
-  - A Result object (from claia.lib.results) - used as-is
-  - A string - wrapped in Result.ok(data=string)
-  
-  Any other return type will result in an error.
-  """
-  name: str
-  description: str
-  callable: Callable
-  arguments: Dict[str, ArgumentDefinition]
-
-
-@dataclass
-class ToolModuleInfo(ExtensionInfo):
-  """Metadata for a tool module."""
-  pass
+from claia_core.plugins.base import (
+    ToolModuleInfo,
+    ToolDefinition,
+    ArgumentDefinition,
+)
 
 
 hookspec = pluggy.HookspecMarker("claia_tool_modules")
 
 
 class ToolModuleHooks:
-  """Hook specs for tool module plugins."""
+  """Hook specifications for tool-module plugins."""
 
   @hookspec
   def get_module_info(self) -> ToolModuleInfo:
-    """Return module info for registration and dispatch."""
+    """Return metadata describing this tool module."""
 
   @hookspec
   def get_module_tools(self) -> Dict[str, ToolDefinition]:
-    """
-    Return a dictionary of available tools in this module.
+    """Return the tools provided by this module keyed by tool name."""
 
-    The key is the tool name, value is ToolDefinition.
-    This allows a single module to provide multiple tools efficiently.
-    """
+
+__all__ = [
+    "ToolModuleHooks",
+    "ToolModuleInfo",
+    "ToolDefinition",
+    "ArgumentDefinition",
+]

@@ -9,11 +9,11 @@ import json
 from typing import Any, Dict, Iterator, Optional, Union
 
 from claia.manager import Manager
-from claia.lib.results import Result, DeploymentError
-from claia.lib.process import Process
-from claia.lib.queue import ProcessQueue
-from claia.lib.enums.process import ProcessStatus
-from claia.lib.data import Conversation
+from claia_core.results import Result, DeploymentError
+from claia.process import Process
+from claia.queue import ProcessQueue
+from claia_core.enums.process import ProcessStatus
+from claia_core.data import Conversation
 
 
 
@@ -481,7 +481,7 @@ class Registry:
     Returns:
         Result with the full response in data, or an error.
     """
-    from claia.lib.enums.conversation import MessageRole
+    from claia_core.enums.conversation import MessageRole
 
     if conversation is None:
       conversation = Conversation()
@@ -597,7 +597,7 @@ class Registry:
     The agent class must inherit from BaseAgent and implement the process_request method.
     
     Example:
-        from claia.lib import BaseAgent
+        from claia.agents.base import BaseAgent
         from claia import registry
         
         class MyCustomAgent(BaseAgent):

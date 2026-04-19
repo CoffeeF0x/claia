@@ -7,10 +7,10 @@ import pytest
 from types import SimpleNamespace
 
 # Internal dependencies
-from claia.lib.results import Result, DeploymentError
-from claia.lib.data import Conversation
-from claia.lib.process import Process
-from claia.lib.enums.process import ProcessStatus
+from claia_core.results import Result, DeploymentError
+from claia_core.data import Conversation
+from claia.process import Process
+from claia_core.enums.process import ProcessStatus
 
 
 # ---------------------------------------------------------------------------

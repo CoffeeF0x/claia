@@ -1,25 +1,19 @@
 """
-Hook specifications for architecture plugins.
+Pluggy hookspecs for architecture plugins.
 
-Architecture plugins implement specific AI model architectures
-(e.g., OpenAI models, Anthropic models, Transformers, etc.)
+These specs mirror the ``BaseArchitecture`` ABC defined in
+``claia_core.architectures.base``: the ABC defines what a plugin must
+implement; the hookspec defines how the framework discovers and dispatches
+to those plugins.
 """
 
 import pluggy
 from typing import Type
-from dataclasses import dataclass
 
-from .base import ExtensionInfo
+from claia_core.plugins.base import ArchitectureInfo
 
 
-# Create hookspec decorator
 hookspec = pluggy.HookspecMarker("claia_architectures")
-
-
-@dataclass
-class ArchitectureInfo(ExtensionInfo):
-  """Information about an architecture plugin."""
-  pass
 
 
 class ArchitectureHooks:
@@ -27,18 +21,11 @@ class ArchitectureHooks:
 
   @hookspec
   def get_architecture_info(self) -> ArchitectureInfo:
-    """
-    Get information about this architecture plugin.
-
-    Returns:
-        ArchitectureInfo describing this plugin
-    """
+    """Return metadata describing this architecture."""
 
   @hookspec
   def get_model_class(self) -> Type:
-    """
-    Get the model class implemented by this architecture plugin.
+    """Return the concrete model class implemented by this architecture."""
 
-    Returns:
-        Model class type
-    """
+
+__all__ = ["ArchitectureHooks", "ArchitectureInfo"]

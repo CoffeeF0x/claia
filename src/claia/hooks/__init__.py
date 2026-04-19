@@ -1,21 +1,12 @@
 """
-Hook system for CLAIA plugins.
+Pluggy hookspecs for the CLAIA framework.
 
-ExtensionInfo is the base class for all plugin info types. It provides a
-consistent interface for configuration and discovery:
-- name: str (unique identifier)
-- title: str (human-readable display name)
-- description: str (what the plugin does)
-- required_args: Optional[List[str]] (settings the plugin needs)
-
-All info classes extend ExtensionInfo:
-- ArchitectureInfo, DeploymentInfo, ProtocolInfo, ToolModuleInfo (no extra fields)
-- SolverInfo: adds 'settings' dict
-- PatternInfo: adds 'opening_token', 'closing_token', 'prompt_template'
-- AgentInfo: adds 'agent_class'
-
-The required_args field enables plugins to declare their configuration needs,
-allowing the Manager to filter kwargs and Settings to dynamically add options.
+Each module in this package defines a ``*Hooks`` class that pluggy uses
+for plugin discovery and dispatch. The data classes returned by these
+hooks (``ArchitectureInfo``, ``DeploymentInfo``, ``ModelDefinition``,
+``ToolDefinition``, etc.) live in ``claia_core.plugins.base`` so that
+plugin implementations can construct them without depending on the
+framework. They are re-exported here for convenience.
 """
 
 from .base import ExtensionInfo
@@ -29,13 +20,13 @@ from .tool import ToolModuleHooks, ToolModuleInfo, ToolDefinition, ArgumentDefin
 from .agent import AgentHooks, AgentInfo
 
 __all__ = [
-  'ExtensionInfo',
-  'ArchitectureHooks', 'ArchitectureInfo',
-  'DeploymentHooks', 'DeploymentInfo',
-  'SolverHooks', 'SolverInfo', 'DeploymentParams',
-  'DefinitionHooks', 'ModelDefinition',
-  'PatternHooks', 'PatternInfo',
-  'ProtocolHooks', 'ProtocolInfo',
-  'ToolModuleHooks', 'ToolModuleInfo', 'ToolDefinition', 'ArgumentDefinition',
-  'AgentHooks', 'AgentInfo'
+    'ExtensionInfo',
+    'ArchitectureHooks', 'ArchitectureInfo',
+    'DeploymentHooks', 'DeploymentInfo',
+    'SolverHooks', 'SolverInfo', 'DeploymentParams',
+    'DefinitionHooks', 'ModelDefinition',
+    'PatternHooks', 'PatternInfo',
+    'ProtocolHooks', 'ProtocolInfo',
+    'ToolModuleHooks', 'ToolModuleInfo', 'ToolDefinition', 'ArgumentDefinition',
+    'AgentHooks', 'AgentInfo',
 ]

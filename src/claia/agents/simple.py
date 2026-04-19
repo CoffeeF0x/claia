@@ -9,8 +9,9 @@ import pluggy
 from typing import Type
 
 # Internal dependencies
-from ..lib import BaseAgent, Process
-from ..lib.enums.conversation import MessageRole
+from .base import BaseAgent
+from ..process import Process
+from claia_core.enums.conversation import MessageRole
 from ..hooks import AgentHooks, AgentInfo
 
 

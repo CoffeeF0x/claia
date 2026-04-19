@@ -1,7 +1,12 @@
 # Tests
 
-Pytest-based tests.
+Pytest-based tests, organised to mirror the three packages.
 
 Layout:
-- `agents/`, `lib/`, `models/` — component tests
-- `conftest.py` — shared fixtures
+- `claia_core/` — tests for the pure-library layer (data models, plugin
+  contracts, results, enums).
+- `claia/` — tests for the framework layer (`Registry`, `Process`,
+  `ProcessQueue`, agents, hooks, manager).
+- `claia_cli/` — tests for the CLI application (commands, settings,
+  argument parsing).
+- `conftest.py` — shared fixtures used across packages.
