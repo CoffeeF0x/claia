@@ -83,6 +83,7 @@ from claia_cli.commands import Commands
 from claia_cli.defaults import initialize_defaults
 from claia_cli.logger import initialize_logging
 from claia_cli.agents import register_cli_agents
+from claia_cli.paced_renderer import PacedRenderer
 from claia.registry import Registry
 
 
@@ -410,11 +411,15 @@ def main() -> None:
           }
         )
 
-        # Register callbacks for streaming output
-        process.on("token", lambda token: print(token, end='', flush=True))
+        # Stream tokens through a paced renderer so bursty deltas
+        # (e.g. multiple SSE events landing in one TCP segment) appear
+        # as smooth typing rather than chunky bursts.
+        renderer = PacedRenderer()
+        renderer.start()
+        process.on("token", renderer.feed)
 
         def on_complete(full_response):
-          # Ensure a newline after the streamed output
+          renderer.finish(drain=True)
           if full_response and not full_response.endswith('\n'):
             print()
           # Persist only if domain events indicate conversation mutations.
@@ -433,6 +438,7 @@ def main() -> None:
           done_event.set()
 
         def on_error(error_msg):
+          renderer.finish(drain=False)
           print(f"\nError: {error_msg}")
           done_event.set()
 
