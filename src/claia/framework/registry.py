@@ -6,7 +6,7 @@ that provides a unified interface for tools, models, and agents.
 import logging
 import threading
 import json
-from typing import Any, Dict, Iterator, Optional, Union
+from typing import Any, Dict, Iterator, List, Optional, Union
 
 from claia.framework.manager import Manager
 from claia.core.results import Result, DeploymentError
@@ -14,6 +14,7 @@ from claia.framework.process import Process
 from claia.framework.queue import ProcessQueue
 from claia.core.enums.process import ProcessStatus
 from claia.core.data import Conversation
+from claia.core.plugins.base import ParamScope, ParamSpec
 
 
 
@@ -51,42 +52,42 @@ class Registry:
     self._workers = []
     self._shutdown = threading.Event()
 
-    # Discover plugins (metadata only) but don't load them yet
-    # This allows get_extension_required_args() to work before settings are loaded
+    # Discover plugins (metadata only) but don't load them yet. This
+    # lets ``get_extension_params()`` work before settings are loaded,
+    # breaking the circular dependency between extensions and settings.
     self.manager.discover_plugins()
-    
+
     logger.info("Registry initialized")
 
   def load_plugins(self, **kwargs) -> None:
     """
     Load all plugins with the provided kwargs.
-    
-    This method should be called after settings are available to provide
-    the required_args values to plugins that need them.
-    
+
+    Each plugin receives only the kwargs matching its ``INIT``-scoped
+    ``ParamSpec`` declarations. Call after settings are available.
+
     Args:
-        **kwargs: User settings/configuration to pass to plugins
+        **kwargs: User settings/configuration to pass to plugins.
     """
     if self._plugins_loaded:
       logger.debug("Plugins already loaded")
       return
-    
+
     self._user_kwargs.update(kwargs)
     self.manager.load_all_plugins(**self._user_kwargs)
     self._plugins_loaded = True
     logger.debug("Plugins loaded with user kwargs")
 
-  def get_extension_required_args(self) -> list:
+  def get_extension_params(self, scope: Optional[ParamScope] = None) -> List[ParamSpec]:
     """
-    Get a flat list of all unique required_args from all extensions.
-    
-    This delegates to the manager and is useful for extending settings
-    configuration with dynamic settings from extensions.
-    
-    Returns:
-        List of unique required_arg names across all extensions.
+    Return the flat list of ``ParamSpec`` declarations from all
+    extensions (deduplicated by ``name``, first declaration wins).
+
+    Settings/CLI layers use this to build flags, env lookups, and
+    help text dynamically. Filter by ``scope`` to get only
+    ``INIT`` or ``RUNTIME`` specs.
     """
-    return self.manager.get_extension_required_args()
+    return self.manager.get_extension_params(scope=scope)
 
   def update_user_kwargs(self, new_kwargs: Dict[str, Any]) -> None:
     """
@@ -361,7 +362,7 @@ class Registry:
       raise DeploymentError(f"No solver available (requested: {solver})")
 
     solver_info = selected_solver.get_solver_info()
-    solver_kwargs = self._filter_kwargs(combined_kwargs, getattr(solver_info, 'required_args', None))
+    solver_kwargs = Manager.filter_init_kwargs(combined_kwargs, getattr(solver_info, 'params', None))
 
     params_result = selected_solver.solve_deployment(
       model_name=model_name,
@@ -396,15 +397,29 @@ class Registry:
       raise DeploymentError(f"Deployment method '{deployment_params.deployment_name}' not available")
 
     deployment_info = selected_deployment.get_deployment_info()
-    deployment_kwargs = self._filter_kwargs(combined_kwargs, getattr(deployment_info, 'required_args', None))
+    deployment_params_specs = getattr(deployment_info, 'params', None)
+    deployment_init_kwargs = Manager.filter_init_kwargs(combined_kwargs, deployment_params_specs)
 
     available_architectures = self.manager.get_available_architectures()
     architecture_info = available_architectures.get(deployment_params.architecture_name)
     if architecture_info:
-      architecture_kwargs = self._filter_kwargs(combined_kwargs, getattr(architecture_info, 'required_args', None))
-      final_kwargs = {**architecture_kwargs, **deployment_kwargs}
+      arch_init_kwargs = Manager.filter_init_kwargs(combined_kwargs, getattr(architecture_info, 'params', None))
+      arch_runtime_kwargs = Manager.filter_runtime_kwargs(combined_kwargs, getattr(architecture_info, 'params', None))
     else:
-      final_kwargs = deployment_kwargs
+      arch_init_kwargs = {}
+      arch_runtime_kwargs = {}
+
+    deployment_runtime_kwargs = Manager.filter_runtime_kwargs(combined_kwargs, deployment_params_specs)
+
+    # Merge order: architecture INIT + deployment INIT form the model's
+    # construction kwargs; RUNTIME specs (from both deployment and
+    # architecture) are generation-time overrides.
+    final_kwargs = {
+      **arch_init_kwargs,
+      **deployment_init_kwargs,
+      **arch_runtime_kwargs,
+      **deployment_runtime_kwargs,
+    }
 
     return selected_deployment.run(
       model_name=provider_model_name,
@@ -571,14 +586,6 @@ class Registry:
       "cached_models": list(self.cache.keys())
     }
 
-  def _filter_kwargs(self, kwargs: Dict[str, Any], required_args: Optional[list]) -> Dict[str, Any]:
-    """Filter kwargs to only include those specified in required_args.
-    
-    Delegates to Manager's implementation to avoid duplication.
-    """
-    return self.manager._filter_kwargs(kwargs, required_args)
-
-
   ######################################################################
   #                             AGENTS API                             #
   ######################################################################
@@ -588,50 +595,56 @@ class Registry:
     name: Optional[str] = None,
     title: Optional[str] = None,
     description: Optional[str] = None,
-    required_args: Optional[list] = None
+    params: Optional[List[ParamSpec]] = None,
   ) -> None:
     """
     Register a custom agent class programmatically.
-    
-    This allows developers to register agents without creating pluggy extensions.
-    The agent class must inherit from BaseAgent and implement the process_request method.
-    
+
+    This allows developers to register agents without creating pluggy
+    extensions. The agent class must inherit from ``BaseAgent`` and
+    implement the ``process_request`` method.
+
     Example:
         from claia.framework.agents.base import BaseAgent
-        from claia.framework import registry
-        
+        from claia.framework import Registry, ParamSpec, ParamScope
+
         class MyCustomAgent(BaseAgent):
             '''My custom agent implementation.'''
-            
+
             @classmethod
             def process_request(cls, process, registry=None, **kwargs):
-                # Your custom logic here
                 process.mark_completed(result="Done!")
                 return process
-        
-        # Register the agent
-        registry.register(MyCustomAgent, name="my_agent")
-        
-        # Now you can use it
+
+        registry = Registry()
+        registry.register(
+            MyCustomAgent,
+            name="my_agent",
+            params=[ParamSpec(name="base_url", scope=ParamScope.INIT)],
+        )
+
         process = Process(agent_type="my_agent", ...)
         registry.process(process)
-    
+
     Args:
-        agent_class: The agent class to register (must inherit from BaseAgent)
-        name: The name to register the agent under (defaults to class name)
-        title: Human-readable display name (defaults to class name)
-        description: Description of the agent (defaults to class docstring)
-        required_args: Optional list of required arguments for the agent
-    
+        agent_class: The agent class to register (must inherit from BaseAgent).
+        name: The name to register the agent under (defaults to class name).
+        title: Human-readable display name (defaults to class name).
+        description: Description of the agent (defaults to class docstring).
+        params: Optional list of ``ParamSpec`` declarations. Names
+          matching an ``INIT``-scoped spec are forwarded to the agent
+          during dispatch; ``RUNTIME``-scoped specs are used to filter
+          per-call overrides.
+
     Raises:
-        ValueError: If the agent class is invalid
+        ValueError: If the agent class is invalid.
     """
     self.manager.register_agent(
       agent_class=agent_class,
       name=name,
       title=title,
       description=description,
-      required_args=required_args
+      params=params,
     )
 
   def process(self, process: Process) -> Process:
@@ -650,17 +663,18 @@ class Registry:
         process.mark_failed(error_msg)
         return process
 
-      # Get agent info to filter kwargs based on required_args
       agent_info = self.get_agent_info_by_name(process.agent_type)
 
-      # Combine process parameters with user kwargs from registry initialization
       combined_kwargs = {**self._user_kwargs, **process.parameters}
 
-      # Filter kwargs based on agent's required_args (only if a non-empty list is provided)
-      if agent_info and getattr(agent_info, 'required_args', None):
-        filtered_kwargs = self._filter_kwargs(combined_kwargs, agent_info.required_args)
+      # Filter kwargs against the agent's declared ParamSpecs. If the
+      # agent has no declared params, forward the entire combined set
+      # so legacy agents keep working.
+      if agent_info and getattr(agent_info, 'params', None):
+        init_kwargs = Manager.filter_init_kwargs(combined_kwargs, agent_info.params)
+        runtime_kwargs = Manager.filter_runtime_kwargs(combined_kwargs, agent_info.params)
+        filtered_kwargs = {**init_kwargs, **runtime_kwargs}
       else:
-        # If no agent info or no required_args, pass through all combined kwargs
         filtered_kwargs = combined_kwargs
 
       # Process using the agent class, injecting this registry and filtered parameters

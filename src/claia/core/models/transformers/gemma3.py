@@ -11,6 +11,8 @@ from typing import List, Optional, Generator
 # Internal dependencies
 from claia.core.data import Conversation
 from claia.core.enums.conversation import MessageRole
+from claia.core.models.base.base import COMMON_TEXT_RUNTIME_PARAMS
+from claia.core.plugins.base import ParamScope, ParamSpec
 from .generic import GenericTransformerModel
 
 
@@ -26,16 +28,23 @@ logger = logging.getLogger(__name__)
 class Gemma3Model(GenericTransformerModel):
   """Specialized Gemma3 transformer model implementation."""
 
+  # Gemma3 overrides a handful of generation defaults; the rest are
+  # inherited from the common text runtime params.
+  runtime_params = [
+    ParamSpec(name="max_tokens", type=int, scope=ParamScope.RUNTIME, default=2048,
+              description="Maximum number of tokens to generate."),
+    ParamSpec(name="temperature", type=float, scope=ParamScope.RUNTIME, default=0.8,
+              description="Sampling temperature."),
+    ParamSpec(name="top_p", type=float, scope=ParamScope.RUNTIME, default=0.95,
+              description="Nucleus sampling probability mass."),
+    ParamSpec(name="top_k", type=int, scope=ParamScope.RUNTIME, default=40,
+              description="Restrict sampling to the top-k tokens."),
+    *[p for p in COMMON_TEXT_RUNTIME_PARAMS
+      if p.name not in {"max_tokens", "temperature", "top_p", "top_k"}],
+  ]
+
   def __init__(self, model_name: str, model_path: str, defer_loading: bool = False, device: str = "cpu", huggingface_api_token: Optional[str] = None):
     super().__init__(model_name, model_path, defer_loading, device, huggingface_api_token)
-
-    # Gemma3-specific default settings
-    self.default_settings.update({
-      "max_tokens": 2048,
-      "temperature": 0.8,
-      "top_p": 0.95,
-      "top_k": 40
-    })
 
   def _convert_conversation_to_prompt(self, conversation: Conversation) -> str:
     """Convert a Conversation object to Gemma3-specific prompt format."""
@@ -84,7 +93,7 @@ class Gemma3Model(GenericTransformerModel):
       self.load()
 
     try:
-      settings = self.update_settings({}, conversation, **kwargs)
+      settings = self.update_settings({}, **kwargs)
       prompt = self._convert_conversation_to_prompt(conversation)
 
       inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)

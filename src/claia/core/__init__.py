@@ -23,7 +23,6 @@ from .data import (
     Prompt,
     Conversation,
     Message,
-    ConversationSettings,
     DomainEvent,
     EventType,
 )
@@ -39,6 +38,9 @@ from .plugins.base import (
     ArgumentDefinition,
     ToolCallMatch,
     DeploymentParams,
+    ParamSpec,
+    ParamScope,
+    SettingCategory,
 )
 from .definitions.model_definition import ModelDefinition
 
@@ -47,12 +49,13 @@ __all__ = [
     "Result", "DeploymentError",
     # Data
     "BaseArtifact", "TextArtifact", "ImageArtifact", "AudioArtifact", "Prompt",
-    "Conversation", "Message", "ConversationSettings",
+    "Conversation", "Message",
     "DomainEvent", "EventType",
     # Plugin metadata + contracts
     "ExtensionInfo",
     "ArchitectureInfo", "DeploymentInfo", "SolverInfo",
     "PatternInfo", "ProtocolInfo", "ToolModuleInfo",
     "ToolDefinition", "ArgumentDefinition", "ToolCallMatch", "DeploymentParams",
+    "ParamSpec", "ParamScope", "SettingCategory",
     "ModelDefinition",
 ]

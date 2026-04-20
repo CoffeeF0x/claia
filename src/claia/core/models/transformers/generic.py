@@ -81,7 +81,7 @@ class GenericTransformerModel(LocalModel):
       self.load()
 
     try:
-      settings = self.update_settings({}, conversation, **kwargs)
+      settings = self.update_settings({}, **kwargs)
       prompt = self._convert_conversation_to_prompt(conversation)
 
       inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)

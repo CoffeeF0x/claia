@@ -10,31 +10,13 @@ import os
 import argparse
 import json
 from collections import defaultdict
-from enum import Enum
 from typing import Dict, Any, List, Tuple
 from dotenv import load_dotenv
 
 # Internal dependencies
 from claia.core.enums.logging import LogLevel, LogFormat
+from claia.core.plugins.base import ParamScope, ParamSpec, SettingCategory
 from claia.framework.registry import Registry
-
-
-
-########################################################################
-#                               ENUMS                                  #
-########################################################################
-class SettingCategory(Enum):
-  """Categories for grouping configuration settings."""
-  API = "API Credentials"
-  ENDPOINT = "Endpoints & URLs"
-  DIRECTORY = "Directories"
-  MODEL = "Model Settings"
-  PROMPT = "Prompt Settings"
-  AGENT = "Agent Settings"
-  VLLM = "VLLM Settings"
-  APPLICATION = "Application Settings"
-  INTEGRATION = "External Integrations"
-  EXTENSION = "Extension Settings"
 
 
 
@@ -48,16 +30,21 @@ DEFAULT_SETTINGS_FILE = "settings.json"
 ENV_PREFIX = "CLAIA_"
 
 # Format: (variable_name, default_value, externally_settable, category, help_text)
-# Base configuration - extension settings are added dynamically via Settings._extend_with_extensions()
+#
+# Base configuration for CLI-level / app-level settings.
+#
+# Plugin-owned parameters (credentials, endpoints, model knobs that belong
+# to a specific architecture/deployment/tool-module) are NOT listed here —
+# plugins declare them via ``ParamSpec`` and ``Settings._extend_with_extensions``
+# pulls them in at startup. This keeps a single source of truth per param.
 CONFIG_VARS: List[Tuple[str, Any, bool, SettingCategory, str]] = [
-  # API Tokens
-  ("openai_api_token",                  "",            True,  SettingCategory.API,          "OpenAI API Token"),
-  ("anthropic_api_token",               "",            True,  SettingCategory.API,          "Anthropic API Token"),
+  # API Tokens — only entries NOT yet owned by a built-in plugin remain
+  # here. They'll migrate to ParamSpec declarations in Phase 3 (γ) when
+  # the corresponding architectures/deployments land.
   ("local_llm_api_token",               "",            True,  SettingCategory.API,          "LocalLLM API Token"),
   ("runpod_api_token",                  "",            True,  SettingCategory.API,          "RunPod API Token"),
   ("massed_compute_api_token",          "",            True,  SettingCategory.API,          "Massed Compute API Token"),
   ("openrouter_api_token",              "",            True,  SettingCategory.API,          "OpenRouter API Token"),
-  ("huggingface_api_token",             "",            True,  SettingCategory.API,          "Hugging Face API Token"),
   ("cloudflare_api_token",              "",            True,  SettingCategory.API,          "Cloudflare API Token"),
 
   # URLs and Endpoints
@@ -109,7 +96,8 @@ class Settings:
 
     Args:
       registry: Optional Registry instance for discovering extension settings.
-                If provided, extension required_args will be added as dynamic settings.
+                If provided, every plugin-declared ``ParamSpec`` is
+                absorbed as a dynamic setting.
     """
     self.loaded_local_models: Dict[str, Any] = {}
 
@@ -131,6 +119,11 @@ class Settings:
     self.config_vars: List[Tuple[str, Any, bool, SettingCategory, str]] = list(CONFIG_VARS)
     self._extension_settings: List[str] = []
 
+    # Track secret ParamSpecs by name so sensitive values get masked in
+    # display output regardless of whether their name contains
+    # 'token'/'password'.
+    self._secret_settings: set = set()
+
     # Extend with extension settings if registry is provided
     if registry is not None:
       self._extend_with_extensions(registry)
@@ -144,33 +137,45 @@ class Settings:
 
   def _extend_with_extensions(self, registry: 'Registry') -> None:
     """
-    Extend config_vars with settings from extension required_args.
+    Absorb plugin-declared ``ParamSpec`` objects into ``config_vars``.
+
+    Every ``INIT``-scoped ``ParamSpec`` declared by a discovered plugin
+    becomes a dynamic setting. Rich metadata from the spec (default,
+    category, description, ``externally_settable``) is preserved, so
+    plugin-owned settings get first-class CLI/env/JSON support without
+    having to duplicate them in ``CONFIG_VARS``.
+
+    When a plugin spec clashes with an existing ``config_vars`` entry,
+    the first declaration wins (``CONFIG_VARS`` or the first plugin to
+    declare it).
 
     Args:
-      registry: The CLAIA registry instance
+      registry: The CLAIA registry instance.
     """
-    # Get all required args from extensions via registry
-    extension_args = registry.get_extension_required_args()
+    specs = registry.get_extension_params(scope=ParamScope.INIT)
 
-    # Track existing setting names to avoid duplicates
     existing_names = {var[0] for var in self.config_vars}
 
-    for arg_name in extension_args:
-      if arg_name not in existing_names:
-        # Generate a human-readable help text from the arg name
-        help_text = self._generate_help_text(arg_name)
+    for spec in specs:
+      if spec.name in existing_names:
+        continue
 
-        # Add to instance config_vars
-        self.config_vars.append((arg_name, "", True, SettingCategory.EXTENSION, help_text))
-        self._extension_settings.append(arg_name)
-        existing_names.add(arg_name)
+      default = spec.default if spec.default is not None else ""
+      category = spec.category if spec.category is not None else SettingCategory.EXTENSION
+      help_text = spec.description or self._generate_help_text(spec.name)
+
+      self.config_vars.append(
+        (spec.name, default, spec.externally_settable, category, help_text)
+      )
+      self._extension_settings.append(spec.name)
+      existing_names.add(spec.name)
+      if spec.secret:
+        self._secret_settings.add(spec.name)
 
   @staticmethod
   def _generate_help_text(arg_name: str) -> str:
-    """Generate a human-readable help text from an argument name."""
-    # Convert snake_case to Title Case
-    words = arg_name.replace('_', ' ').title()
-    return words
+    """Fallback help text: snake_case -> Title Case."""
+    return arg_name.replace('_', ' ').title()
 
   def get_extension_settings(self) -> List[str]:
     """Get the list of setting names that were added from extensions."""
@@ -538,7 +543,12 @@ class Settings:
     Returns:
         Masked value if sensitive, otherwise original value
     """
-    if 'token' in var_name.lower() or 'password' in var_name.lower():
+    is_secret = (
+      var_name in self._secret_settings
+      or 'token' in var_name.lower()
+      or 'password' in var_name.lower()
+    )
+    if is_secret:
       if value and value != "":
         return "***" + value[-4:] if len(str(value)) > 4 else "***"
     return value

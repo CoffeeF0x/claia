@@ -11,4 +11,4 @@ Local transformer model wrappers.
 These models typically:
 - wrap a local/hosted transformer model
 - implement the base model interfaces from `lib/model/base/`
-- may expose `required_args` (e.g., model path, device) for safe configuration.
+- may expose INIT `ParamSpec`s (e.g., model path, device) for safe configuration.

@@ -62,7 +62,7 @@ class OpenRouterModel(APIModel):
   def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
     """Generate a response using the OpenRouter API. Yields tokens, returns full response."""
     try:
-      settings = self.update_settings(DEFAULT_SETTINGS, conversation, **kwargs)
+      settings = self.update_settings(DEFAULT_SETTINGS, **kwargs)
       messages = self._format_messages(conversation)
 
       data = {

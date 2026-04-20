@@ -52,7 +52,7 @@ class AnthropicModel(APIModel):
   def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
     """Generate a response using Anthropic's API. Yields tokens, returns full response."""
     try:
-      settings = self.update_settings({}, conversation, **kwargs)
+      settings = self.update_settings({}, **kwargs)
       system_message, messages = self._convert_conversation_to_messages(conversation)
 
       request_data = {

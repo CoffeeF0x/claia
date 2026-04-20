@@ -120,7 +120,6 @@ def register_cli_agents(registry) -> None:
     name="writer",
     title="Writer Agent",
     description="A specialized agent for writing tasks with enhanced literary capabilities",
-    required_args=None  # Uses all available kwargs
   )
   
   logger.debug("Successfully registered writer agent")

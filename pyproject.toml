@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claia"
-version = "0.1.14"
+version = "0.1.15"
 description = "CLAIA Framework"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -17,14 +17,14 @@ requires-python = ">=3.12"
 # install). The split optional-deps below let downstream consumers install
 # only what each layer actually needs while we stay in monorepo form.
 dependencies = [
-  # claia_core
+  # claia.core
   "requests",
   "python-dotenv",
   "beautifulsoup4",
   "chardet<6",
-  # claia (framework)
+  # claia.framework
   "pluggy",
-  # claia_cli
+  # claia.cli
   "pyfiglet",
   "pyreadline3",
 ]

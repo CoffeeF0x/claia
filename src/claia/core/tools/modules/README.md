@@ -21,7 +21,7 @@ Each module provides a **plugin class** implementing `claia.hooks.tool.ToolModul
 ## Implementing a new tool module (TL;DR)
 
 1. Create a plugin class with `hookimpl` methods:
-   - `get_module_info() -> ToolModuleInfo` (name, title, description, required_args if any).
+   - `get_module_info() -> ToolModuleInfo` (name, title, description, `params: List[ParamSpec]`).
    - `get_module_tools() -> Dict[str, ToolDefinition]`.
 2. For each tool:
    - define a `ToolDefinition` with `name`, `description`, `callable`, and `arguments` (`ArgumentDefinition`).

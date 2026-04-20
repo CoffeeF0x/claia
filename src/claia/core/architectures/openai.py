@@ -10,7 +10,7 @@ from typing import Type
 
 # Internal dependencies
 from ..models.api import OpenAIModel
-from ..plugins.base import ArchitectureInfo
+from ..plugins.base import ArchitectureInfo, ParamScope, ParamSpec, SettingCategory
 
 
 ########################################################################
@@ -34,7 +34,17 @@ class OpenAIPlugin:
       name="openai",
       title="OpenAI API Architecture",
       description="Implements OpenAI chat/completions API-backed models",
-      required_args=["openai_api_token"]
+      params=[
+        ParamSpec(
+          name="openai_api_token",
+          type=str,
+          scope=ParamScope.INIT,
+          required=True,
+          secret=True,
+          category=SettingCategory.API,
+          description="OpenAI API Token",
+        ),
+      ],
     )
 
   @hookimpl

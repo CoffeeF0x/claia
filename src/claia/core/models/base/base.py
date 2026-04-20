@@ -1,99 +1,90 @@
 """
 Base model abstract class.
 
-This module defines the foundational BaseModel class that all model implementations inherit from.
+Defines the ``BaseModel`` abstract base class that every concrete model
+implementation inherits from. Concrete models declare the generation
+parameters they understand via ``runtime_params`` (a list of
+``ParamSpec`` with ``scope=ParamScope.RUNTIME``); ``update_settings``
+consumes those specs to build the settings dict used by the model's
+``generate`` method.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Generator
+from typing import Any, Dict, Generator, List
 
-# Internal dependencies
 from claia.core.data import Conversation
+from claia.core.plugins.base import ParamScope, ParamSpec
 
 
 ########################################################################
-#                              CONSTANTS                               #
+#                         COMMON RUNTIME PARAMS                        #
 ########################################################################
-# Common model defaults
-DEFAULT_SETTINGS = {
-  "max_tokens": 1000,
-  "temperature": 0.7,
-  "top_p": 1.0,
-  "top_k": None,
-  "n": 1,
-  "stop": None,
-  "stream": True
-}
+# Sensible defaults that apply to most chat-style text models. Concrete
+# model classes extend or override this list by defining their own
+# ``runtime_params`` class attribute.
+COMMON_TEXT_RUNTIME_PARAMS: List[ParamSpec] = [
+  ParamSpec(name="max_tokens", type=int, scope=ParamScope.RUNTIME, default=1000,
+            description="Maximum number of tokens to generate."),
+  ParamSpec(name="temperature", type=float, scope=ParamScope.RUNTIME, default=0.7,
+            description="Sampling temperature; higher values produce more varied output."),
+  ParamSpec(name="top_p", type=float, scope=ParamScope.RUNTIME, default=1.0,
+            description="Nucleus sampling probability mass."),
+  ParamSpec(name="top_k", type=int, scope=ParamScope.RUNTIME, default=None,
+            description="Restrict sampling to the top-k tokens."),
+  ParamSpec(name="n", type=int, scope=ParamScope.RUNTIME, default=1,
+            description="Number of completions to request per call."),
+  ParamSpec(name="stop", type=list, scope=ParamScope.RUNTIME, default=None,
+            description="Sequence(s) at which generation should stop."),
+  ParamSpec(name="stream", type=bool, scope=ParamScope.RUNTIME, default=True,
+            description="Whether the model should stream partial output."),
+]
 
 
 ########################################################################
-#                               CLASSES                                #
+#                              CLASSES                                 #
 ########################################################################
 class BaseModel(ABC):
   """Abstract base class for all model implementations."""
 
+  # RUNTIME ``ParamSpec`` declarations for this model. Subclasses may
+  # replace or extend this list to advertise their generation knobs.
+  runtime_params: List[ParamSpec] = COMMON_TEXT_RUNTIME_PARAMS
+
   def __init__(self, model_name: str):
     self.model_name = model_name
-    self.default_settings = DEFAULT_SETTINGS.copy()
 
   @abstractmethod
   def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
     """Generate a response based on the given conversation.
 
-    Yields individual tokens/chunks as they become available.
-    Returns the full response string when the generator is exhausted.
-    The model should NOT modify the Conversation — that is the
-    deployment layer's responsibility.
+    Yields individual tokens/chunks as they become available. Returns
+    the full response string when the generator is exhausted. The model
+    must NOT modify the ``Conversation``; that is the deployment
+    layer's responsibility.
     """
     pass
 
-  def update_settings(self, model_settings: Dict[str, Any], conversation: Conversation, **kwargs) -> Dict[str, Any]:
+  def update_settings(self, model_settings: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     """
-    Extract settings from the conversation object, falling back to defaults.
+    Build a settings dict for a generation call.
 
-    Args:
-        model_settings: Model-specific settings to override default settings
-        conversation: The conversation containing settings
-        **kwargs: Additional keyword arguments to override settings
+    Starts from this model's ``runtime_params`` defaults, layers in any
+    caller-provided ``model_settings`` (typically hard-coded per-call
+    overrides from the concrete model's ``generate`` method), then
+    applies ``kwargs`` for every name present in the declared specs.
 
-    Returns:
-        Dict[str, Any]: The settings dictionary with defaults applied where needed
+    Undeclared kwargs are ignored — the filtering keeps the settings
+    dict anchored to the model's published contract.
     """
-    # Start with our base defaults
-    settings = self.default_settings.copy()
+    settings: Dict[str, Any] = {p.name: p.default for p in self.runtime_params}
 
-    # Apply model-specific settings
     if model_settings:
-      settings.update(model_settings)
+      for key, value in model_settings.items():
+        settings[key] = value
 
-    # Get conversation settings if available
-    conversation_settings = conversation.get_settings()
-    if conversation_settings:
-      # Override with streaming setting
-      settings["stream"] = conversation_settings.streaming
-
-      # Override with text settings if available
-      text_settings = conversation_settings.text_settings
-      if text_settings:
-        if "max_tokens" in text_settings and text_settings["max_tokens"] is not None:
-          settings["max_tokens"] = text_settings["max_tokens"]
-
-        if "temperature" in text_settings and text_settings["temperature"] is not None:
-          settings["temperature"] = text_settings["temperature"]
-
-        if "top_p" in text_settings and text_settings["top_p"] is not None:
-          settings["top_p"] = text_settings["top_p"]
-
-        if "top_k" in text_settings and text_settings["top_k"] is not None:
-          settings["top_k"] = text_settings["top_k"]
-
-        if "presence_penalty" in text_settings and text_settings["presence_penalty"] is not None:
-          settings["presence_penalty"] = text_settings["presence_penalty"]
-
-        if "frequency_penalty" in text_settings and text_settings["frequency_penalty"] is not None:
-          settings["frequency_penalty"] = text_settings["frequency_penalty"]
-
-    # Apply any additional overrides from kwargs
-    settings.update({k: v for k, v in kwargs.items() if k in settings})
+    declared_names = {p.name for p in self.runtime_params}
+    for key, value in kwargs.items():
+      if key in declared_names:
+        settings[key] = value
 
     return settings

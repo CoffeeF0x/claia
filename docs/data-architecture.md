@@ -97,7 +97,11 @@ The most complex model. Extends `TextArtifact` (serializes as JSON text).
 | `messages` | `List[Message]` | All message nodes (full tree, all branches) |
 | `active_head_id` | `str \| None` | Leaf message ID of the active branch |
 | `events` | `List[DomainEvent]` | Persisted audit trail of all mutations |
-| `settings` | `ConversationSettings` | Generation parameters |
+
+Generation parameters (temperature, max_tokens, streaming, ...) do not
+live on `Conversation`. Architectures/models declare them as RUNTIME
+`ParamSpec`s and callers supply them per-call via `Process.parameters`
+or `Registry.run(..., **kwargs)`.
 
 ### Message Tree
 
@@ -133,14 +137,6 @@ Key tree methods:
 
 Thread-safe methods for streaming: `safe_append_content(chunk)`, `safe_update_content(text)`, `safe_get_content()`.
 
-### ConversationSettings
-
-| Field | Type | Default |
-|---|---|---|
-| `streaming` | `bool` | `True` |
-| `text_settings` | `dict` | `{}` (keys like `max_tokens`, `temperature`) |
-| `image_settings` | `dict` | `{}` (keys like `width`, `height`, `steps`) |
-
 ### Mutation Methods
 
 Every mutation emits exactly one `DomainEvent` (recorded + dispatched):
@@ -155,7 +151,6 @@ Every mutation emits exactly one `DomainEvent` (recorded + dispatched):
 | `detach_file(message_id, file_id)` | `ATTACHMENT_REMOVED` | Unlink artifact from message |
 | `change_title(new_title)` | `TITLE_CHANGED` | Update title |
 | `change_prompt(new_prompt)` | `PROMPT_CHANGED` | Update system prompt |
-| `update_settings(settings)` | `SETTINGS_UPDATED` | Merge setting changes |
 
 ---
 
@@ -177,7 +172,6 @@ class EventType(Enum):
     ATTACHMENT_REMOVED
     TITLE_CHANGED
     PROMPT_CHANGED
-    SETTINGS_UPDATED
 ```
 
 ### DomainEvent
@@ -376,10 +370,9 @@ claia/lib/data/
     audio.py               — AudioArtifact
     prompt.py              — Prompt
     conversation/
-      __init__.py          — re-exports Conversation, Message, ConversationSettings
+      __init__.py          — re-exports Conversation, Message
       conversation.py      — Conversation (main model)
       message.py           — Message
-      conversation_settings.py — ConversationSettings
   utils/
     image.py               — image processing utilities
     text.py                — text processing utilities

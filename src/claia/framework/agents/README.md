@@ -27,4 +27,4 @@ Agent implementations that orchestrate processes, models, and tools.
 - Subclass `lib.BaseAgent` and implement a class method like `process_request(process, registry, **kwargs)`.
 - Provide a plugin class with `hookimpl` methods from `hooks.agent`:
   - `get_agent_class(agent_name) -> Type[BaseAgent]`
-  - `get_agent_info() -> AgentInfo` (name, description, required_args).
+  - `get_agent_info() -> AgentInfo` (name, description, `params: List[ParamSpec]`).

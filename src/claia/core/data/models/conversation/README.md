@@ -4,10 +4,13 @@ Pure data models for conversations, built on top of the media/data layer.
 
 ## What lives here
 
-- `conversation.py` — `Conversation` model (title, prompt, messages, actions, settings).
+- `conversation.py` — `Conversation` model (title, prompt, messages, actions).
 - `message.py` — `Message` model with thread-safe operations.
 - `action.py` — `Action` model for audit trail events.
-- `conversation_settings.py` — `ConversationSettings` configuration object.
+
+Generation parameters are not stored on `Conversation`. Architectures/models
+declare them as RUNTIME `ParamSpec`s and callers supply them per-call via
+`Process.parameters` or `Registry.run(..., **kwargs)`.
 
 All are re-exported via `claia.lib.data` (see `lib/data/__init__.py`).
 

@@ -41,13 +41,13 @@ Step 1: Implement or reuse a model class
 - Base interfaces live in `claia/lib/model/base/`.
 
 Step 2: Create an architecture plugin
-Create `claia/architectures/my_provider.py` that returns the model class and declares `required_args` for safe kwarg filtering.
+Create `claia/architectures/my_provider.py` that returns the model class and declares its `ParamSpec`s for safe kwarg filtering.
 
 ```python
 import pluggy
 from typing import Type
 from claia.lib.model.api import OpenAIModel  # or your own model class
-from claia.hooks.architecture import ArchitectureInfo
+from claia.core.plugins.base import ArchitectureInfo, ParamScope, ParamSpec, SettingCategory
 
 hookimpl = pluggy.HookimplMarker("claia_architectures")
 
@@ -58,7 +58,17 @@ class MyProviderPlugin:
       name="my_provider",
       title="My Provider API",
       description="My provider models",
-      required_args=["my_provider_api_token"]  # forwarded from CLI settings
+      params=[
+        ParamSpec(
+          name="my_provider_api_token",
+          type=str,
+          scope=ParamScope.INIT,
+          required=True,
+          secret=True,
+          category=SettingCategory.API,
+          description="My Provider API Token",
+        ),
+      ],
     )
 
   @hookimpl
@@ -80,7 +90,7 @@ my_provider = "claia.architectures.my_provider:MyProviderPlugin"
 my_provider = "claia.definitions.my_provider:MyProviderDefinitionsPlugin"
 ```
 
-Credentials and config are provided via CLI flags or env vars (see CLI section). The registry forwards only the `required_args` declared by the plugin.
+Credentials and config are provided via CLI flags or env vars (see CLI section). The registry forwards only the kwargs that match a `ParamSpec` declared by the plugin.
 
 ## Create an Agent
 

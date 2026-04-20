@@ -9,5 +9,8 @@ Model architecture layer and adapters.
 - `dummy/` — test/dummy models.
 - `transformers/` — local transformer-based models.
 
-Model implementations typically expose `required_args` so the `Registry`/`Manager` can filter
-kwargs and avoid leaking unrelated configuration into plugins.
+Model implementations expose their generation knobs as RUNTIME `ParamSpec`
+declarations via `BaseModel.runtime_params`. Architectures declare their
+INIT-scoped `ParamSpec`s (API tokens, endpoints) via `ArchitectureInfo.params`
+so the `Registry`/`Manager` can filter kwargs and avoid leaking unrelated
+configuration into plugins.

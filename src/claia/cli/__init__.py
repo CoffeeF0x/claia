@@ -18,7 +18,6 @@ from claia.core import (
     DeploymentError,
     Conversation,
     Message,
-    ConversationSettings,
     DomainEvent,
     EventType,
     BaseArtifact,
@@ -37,6 +36,9 @@ from claia.core import (
     ArgumentDefinition,
     ToolCallMatch,
     DeploymentParams,
+    ParamSpec,
+    ParamScope,
+    SettingCategory,
     ModelDefinition,
 )
 from claia.framework import (
@@ -51,7 +53,7 @@ __all__ = [
     "Registry", "Process", "ProcessQueue", "BaseAgent",
     # Library — results & conversation
     "Result", "DeploymentError",
-    "Conversation", "Message", "ConversationSettings",
+    "Conversation", "Message",
     "DomainEvent", "EventType",
     # Library — artifacts
     "BaseArtifact", "TextArtifact", "ImageArtifact", "AudioArtifact", "Prompt",
@@ -60,5 +62,6 @@ __all__ = [
     "ArchitectureInfo", "DeploymentInfo", "SolverInfo",
     "PatternInfo", "ProtocolInfo", "ToolModuleInfo",
     "ToolDefinition", "ArgumentDefinition", "ToolCallMatch", "DeploymentParams",
+    "ParamSpec", "ParamScope", "SettingCategory",
     "ModelDefinition",
 ]

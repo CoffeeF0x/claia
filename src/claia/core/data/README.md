@@ -9,7 +9,7 @@ text, images, audio, prompts, and conversations.
   - `base.py` — `BaseFile` (common file metadata + IDs).
   - `text.py`, `image.py`, `audio.py` — `TextFile`, `ImageFile`, `AudioFile`.
   - `prompt.py` — `Prompt` template model.
-  - `conversation/` — `Conversation`, `Message`, `Action`, `ConversationSettings`.
+  - `conversation/` — `Conversation`, `Message`, `Action`.
 - `repositories/`:
   - `base.py`, `file_system.py`, `memory.py` — `FileRepository`, `FileSystemRepository`, `MemoryRepository`.
 - `utils/` — helpers for text/image/media handling.

@@ -11,7 +11,7 @@ from typing import Type
 
 # Internal dependencies
 from ..models.transformers import GenericTransformerModel
-from ..plugins.base import ArchitectureInfo
+from ..plugins.base import ArchitectureInfo, ParamScope, ParamSpec, SettingCategory
 
 
 ########################################################################
@@ -35,7 +35,16 @@ class TransformersGenericPlugin:
       name="transformers_generic",
       title="Generic Transformers Architecture",
       description="Generic HF Transformers implementation",
-      required_args=["huggingface_api_token"]
+      params=[
+        ParamSpec(
+          name="huggingface_api_token",
+          type=str,
+          scope=ParamScope.INIT,
+          secret=True,
+          category=SettingCategory.API,
+          description="Hugging Face API Token (required for gated models)",
+        ),
+      ],
     )
 
   @hookimpl

@@ -11,7 +11,7 @@ from typing import Type
 
 # Internal dependencies
 from ..models.transformers import Gemma3Model
-from ..plugins.base import ArchitectureInfo
+from ..plugins.base import ArchitectureInfo, ParamScope, ParamSpec, SettingCategory
 
 
 ########################################################################
@@ -35,7 +35,16 @@ class TransformersGemma3Plugin:
       name="transformers_gemma3",
       title="Gemma3 Transformers Architecture",
       description="Specialized implementation for Gemma3 transformer models",
-      required_args=["huggingface_api_token"]
+      params=[
+        ParamSpec(
+          name="huggingface_api_token",
+          type=str,
+          scope=ParamScope.INIT,
+          secret=True,
+          category=SettingCategory.API,
+          description="Hugging Face API Token (required for gated Gemma3 checkpoints)",
+        ),
+      ],
     )
 
   @hookimpl

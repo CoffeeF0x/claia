@@ -1,18 +1,26 @@
 """
 Conversation data model.
 
-A pure data model representing a conversation between users and AI assistants,
-with support for messages, settings, and an event-based audit trail.
+A pure data model representing a conversation between users and AI
+assistants, with support for messages, a prompt, and an event-based
+audit trail.
 
-Messages are stored as a directed tree: each Message has a parent_id that
-points to the preceding message. Multiple messages may share the same parent_id,
-creating branches (used for message editing / versioning).  The currently active
-branch is identified by active_head_id — the ID of the leaf message on the active
-path. To get the active linear thread, call get_thread().
+Messages are stored as a directed tree: each Message has a parent_id
+that points to the preceding message. Multiple messages may share the
+same parent_id, creating branches (used for message editing /
+versioning). The currently active branch is identified by
+active_head_id — the ID of the leaf message on the active path. To get
+the active linear thread, call get_thread().
 
-This is a pure Python object that can exist in memory without file operations.
-Persistence is handled by host runtimes (CLI, API, workers) using emitted
-domain events and/or direct serialization.
+Conversation is a pure data carrier. Generation parameters (temperature,
+max_tokens, streaming, etc.) do not live on the Conversation; they are
+declared by architectures/models via ``ParamSpec`` (see
+``claia.core.plugins.base``) and supplied per-call via
+``Process.parameters`` or ``Registry.run`` kwargs.
+
+This is a pure Python object that can exist in memory without file
+operations. Persistence is handled by host runtimes (CLI, API, workers)
+using emitted domain events and/or direct serialization.
 """
 
 from typing import Dict, Any, Optional, List, Union, Callable
@@ -23,7 +31,6 @@ import time
 from ..text import TextArtifact
 from ...events import DomainEvent, EventType
 from .message import Message
-from .conversation_settings import ConversationSettings
 from ....enums.conversation import MessageRole
 
 
@@ -66,7 +73,6 @@ class Conversation(TextArtifact):
       CONVERSATION_CREATED   None (conversation-level)
       TITLE_CHANGED          None
       PROMPT_CHANGED         None
-      SETTINGS_UPDATED       None
       ====================== ==========================================
 
     Streaming mutations -- :meth:`append_stream_chunk` -- intentionally do not
@@ -110,12 +116,18 @@ class Conversation(TextArtifact):
                  prompt: Optional[Union[str, Dict[str, str]]] = None,
                  messages: Optional[List[Union[Message, Dict[str, Any]]]] = None,
                  events: Optional[List[Union[DomainEvent, Dict[str, Any]]]] = None,
-                 settings: Optional[Union[ConversationSettings, Dict[str, Any]]] = None,
                  active_head_id: Optional[str] = None,
                  created_at: Optional[float] = None,
                  updated_at: Optional[float] = None,
                  on_event: Optional[EventCallback] = None,
                  **kwargs):
+        # Legacy serialized conversations may still carry a ``settings``
+        # blob (pre-Phase-3 ConversationSettings). Drop it silently so
+        # old JSON stores continue to load.
+        legacy_settings = kwargs.pop('settings', None)
+        if legacy_settings is not None:
+            logger.debug("Ignoring legacy conversation 'settings' field (removed in Phase 3)")
+
         super().__init__(
             name=kwargs.pop('name', f"conversation-{id or 'new'}"),
             id=id,
@@ -147,13 +159,6 @@ class Conversation(TextArtifact):
         if events:
             for e in events:
                 self.events.append(e if isinstance(e, DomainEvent) else DomainEvent.from_dict(e))
-
-        if settings is None:
-            self.settings = ConversationSettings()
-        elif isinstance(settings, ConversationSettings):
-            self.settings = settings
-        else:
-            self.settings = ConversationSettings.from_dict(settings)
 
         # Transient runtime queue (not serialized) + single observer.
         self._pending_events: List[DomainEvent] = []
@@ -257,7 +262,6 @@ class Conversation(TextArtifact):
             "messages": [m.to_dict() for m in self.messages],
             "active_head_id": self.active_head_id,
             "events": [e.to_dict() for e in self.events],
-            "settings": self.settings.to_dict(),
         })
         return data
 
@@ -269,7 +273,6 @@ class Conversation(TextArtifact):
             prompt=data.get("prompt"),
             messages=data.get("messages", []),
             events=data.get("events", []),
-            settings=data.get("settings"),
             active_head_id=data.get("active_head_id"),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
@@ -306,12 +309,8 @@ class Conversation(TextArtifact):
         for e in data.get("events", []):
             self.events.append(e if isinstance(e, DomainEvent) else DomainEvent.from_dict(e))
 
-        settings_data = data.get("settings")
-        if settings_data:
-            if isinstance(settings_data, ConversationSettings):
-                self.settings = settings_data
-            else:
-                self.settings = ConversationSettings.from_dict(settings_data)
+        if data.get("settings") is not None:
+            logger.debug("Ignoring legacy conversation 'settings' field during content reload")
 
         self._content = content
         self._content_loaded = True
@@ -612,7 +611,7 @@ class Conversation(TextArtifact):
         return True
 
     # ---------------------------------------------------------------------- #
-    # Prompt and settings management                                           #
+    # Prompt management                                                        #
     # ---------------------------------------------------------------------- #
 
     def get_system_prompt(self, **kwargs) -> Optional[str]:
@@ -647,29 +646,6 @@ class Conversation(TextArtifact):
             "old_prompt": old_prompt,
             "new_prompt": self.prompt.get("system", ""),
         })
-
-    def update_settings(self, settings: ConversationSettings) -> None:
-        changes = {}
-        if settings.streaming != self.settings.streaming:
-            self.settings.streaming = settings.streaming
-            changes["streaming"] = settings.streaming
-
-        for key, value in settings.text_settings.items():
-            if self.settings.text_settings.get(key) != value:
-                self.settings.text_settings[key] = value
-                changes.setdefault("text_settings", {})[key] = value
-
-        for key, value in settings.image_settings.items():
-            if self.settings.image_settings.get(key) != value:
-                self.settings.image_settings[key] = value
-                changes.setdefault("image_settings", {})[key] = value
-
-        if changes:
-            self.updated_at = time.time()
-            self._record(EventType.SETTINGS_UPDATED, None, changes)
-
-    def get_settings(self) -> ConversationSettings:
-        return self.settings
 
     # ---------------------------------------------------------------------- #
     # File management convenience methods                                      #

@@ -22,12 +22,12 @@
 # - (Consider the posibility of a hybrid deployment, where model is loaded into cpu memory, but moved to gpu memory when processing requests to allow several models to run on a single machine)
 # - (or perhaps there's a deployment manager, and the deployment object contains methods to move the model between cpu and gpu as needed)
 
-# - add required_arg filtering back for the command modules
-# - add arg checking in settings module (add arg checking for required_args before loading extension?)
+# - add ParamSpec-backed filtering for the command modules
+# - add arg checking in settings module (validate required INIT ParamSpecs before loading extension?)
 # - switch extension loading to be guid based, and show names on console with appended guid if name conflicts, support guid or name loading if no conflicts (select first if conflicts)
 
 # - make command input separate from actual text and scrolling (think vim) to allow interacting with AI while it's processing (things like commands to show multiple agent workers at once)
-# - throw error if agent required_args aren't found, but don't filter (agents need to pass kwargs to models). Otherwise, find a way to create some kind of secret store (singleton?) to pull args from
+# - throw error if required INIT ParamSpecs aren't provided to an agent, but don't filter (agents need to pass kwargs to models). Otherwise, find a way to create some kind of secret store (singleton?) to pull args from
 
 # - use pluggy for file types?
 # - double check metadata updates when adding new content to files
@@ -269,7 +269,7 @@ def main() -> None:
     logger.info("Initializing CLAIA...")
     
     # Create registry (discovers extensions but doesn't load them yet)
-    # This allows Settings to collect required_args from extensions
+    # This allows Settings to collect ParamSpec declarations from extensions
     logger.debug("Initializing registry")
     registry = Registry()
     

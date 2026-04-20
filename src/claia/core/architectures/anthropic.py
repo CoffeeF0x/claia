@@ -10,7 +10,7 @@ from typing import Type
 
 # Internal dependencies
 from ..models.api import AnthropicModel
-from ..plugins.base import ArchitectureInfo
+from ..plugins.base import ArchitectureInfo, ParamScope, ParamSpec, SettingCategory
 
 
 ########################################################################
@@ -34,7 +34,17 @@ class AnthropicPlugin:
       name="anthropic",
       title="Anthropic API Architecture",
       description="Implements Anthropic Claude API-backed models",
-      required_args=["anthropic_api_token"]
+      params=[
+        ParamSpec(
+          name="anthropic_api_token",
+          type=str,
+          scope=ParamScope.INIT,
+          required=True,
+          secret=True,
+          category=SettingCategory.API,
+          description="Anthropic API Token",
+        ),
+      ],
     )
 
   @hookimpl

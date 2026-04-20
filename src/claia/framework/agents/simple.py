@@ -110,5 +110,4 @@ class SimpleAgentPlugin:
       title="Simple Agent",
       description="A simple agent that directly calls a model for inference",
       agent_class=SimpleAgent,
-      required_args=None
     )

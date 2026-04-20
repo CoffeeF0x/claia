@@ -63,11 +63,6 @@ def fake_manager():
     def load_all_plugins(self, **kwargs):
       return None
 
-    def _filter_kwargs(self, kwargs, required_args):
-      if not required_args:
-        return {}
-      return {k: v for k, v in kwargs.items() if k in required_args}
-
     def get_supported_models(self):
       return {"dummy": {"aliases": ["alias1"]}}
 
@@ -79,7 +74,7 @@ def fake_manager():
         def get_solver_info(self):
           class Info:
             name = "default"
-            required_args = []
+            params = []
           return Info()
 
         def solve_deployment(self, model_name, available_deployments, available_models, cache, deployment_preference=None, deployment_method=None, **kwargs):
@@ -100,7 +95,7 @@ def fake_manager():
         def get_deployment_info(self):
           class Info:
             name = "api"
-            required_args = []
+            params = []
           return Info()
 
         def run(self, model_name, model_class, conversation, cache, **kwargs):
@@ -109,7 +104,7 @@ def fake_manager():
 
     def get_available_architectures(self):
       class ArchInfo:
-        required_args = []
+        params = []
       return {"dummy_arch": ArchInfo()}
 
   return FakeManager()

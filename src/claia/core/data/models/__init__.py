@@ -13,7 +13,6 @@ from .prompt import Prompt
 from .conversation import (
     Conversation,
     Message,
-    ConversationSettings,
 )
 
 __all__ = [
@@ -24,5 +23,4 @@ __all__ = [
     "Prompt",
     "Conversation",
     "Message",
-    "ConversationSettings",
 ]

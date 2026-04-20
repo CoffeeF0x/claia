@@ -53,7 +53,6 @@ from claia.core.results import Result, DeploymentError
 from claia.core.data import (
     Conversation,
     Message,
-    ConversationSettings,
     BaseArtifact,
     TextArtifact,
     ImageArtifact,
@@ -74,6 +73,9 @@ from claia.core.plugins.base import (
     ArgumentDefinition,
     ToolCallMatch,
     DeploymentParams,
+    ParamSpec,
+    ParamScope,
+    SettingCategory,
 )
 from claia.core.definitions.model_definition import ModelDefinition
 
@@ -90,7 +92,7 @@ __all__ = [
     # Results
     "Result", "DeploymentError",
     # Data
-    "Conversation", "Message", "ConversationSettings",
+    "Conversation", "Message",
     "BaseArtifact", "TextArtifact", "ImageArtifact", "AudioArtifact", "Prompt",
     "DomainEvent", "EventType",
     # Plugin metadata
@@ -98,5 +100,6 @@ __all__ = [
     "ArchitectureInfo", "DeploymentInfo", "SolverInfo",
     "PatternInfo", "ProtocolInfo", "ToolModuleInfo",
     "ToolDefinition", "ArgumentDefinition", "ToolCallMatch", "DeploymentParams",
+    "ParamSpec", "ParamScope", "SettingCategory",
     "ModelDefinition",
 ]

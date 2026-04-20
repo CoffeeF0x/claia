@@ -13,7 +13,6 @@ from .models import (
     Prompt,
     Conversation,
     Message,
-    ConversationSettings,
 )
 
 from .events import DomainEvent, EventType
@@ -28,7 +27,6 @@ __all__ = [
     "Prompt",
     "Conversation",
     "Message",
-    "ConversationSettings",
     "DomainEvent",
     "EventType",
     "utils",

@@ -16,7 +16,7 @@ Each deployment plugin exposes a `DeploymentInfo` and is discovered via the
 
 - A solver chooses a `deployment_name` and `architecture_name`.
 - The deployment:
-  - validates/filters kwargs using its `required_args`
+  - validates/filters kwargs against its declared `ParamSpec` list
   - instantiates the architecture or client
   - executes the request and returns a result.
 

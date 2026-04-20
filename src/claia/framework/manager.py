@@ -10,16 +10,17 @@ This module handles loading and coordinating all plugin types:
 - Tool protocols (handle tool execution)
 - Tool modules (provide tool implementations)
 
-Extensions are lazy-loaded: definitions/metadata are discovered first without
-instantiation, allowing required_args to be collected for dynamic settings.
-Full instantiation occurs when the extension is first accessed.
+Extensions are lazy-loaded: definitions/metadata are discovered first
+without instantiation, allowing each plugin's declared ``ParamSpec``
+list to be collected for dynamic settings. Full instantiation occurs
+when the extension is first accessed.
 """
 
 import pluggy
 import logging
 import importlib.metadata as metadata
-from dataclasses import dataclass
-from typing import Dict, Optional, List, Type, Any, Callable, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, Optional, List, Type, Any, Tuple
 
 from .hooks import (
   ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHooks,
@@ -27,6 +28,7 @@ from .hooks import (
   DeploymentInfo, SolverInfo, ModelDefinition, ArchitectureInfo, AgentInfo
 )
 from claia.core.models.base import BaseModel
+from claia.core.plugins.base import ParamScope, ParamSpec
 from .agents.base import BaseAgent
 
 
@@ -36,17 +38,12 @@ from .agents.base import BaseAgent
 ########################################################################
 DEFAULT_SOLVER = "default"
 
-# Map entry point group -> plugin info method name
-# 
-# All info objects returned by these methods should have a consistent structure:
-# - name: str (identifier)
-# - title: str (display name)
-# - description: str
-# - required_args: Optional[List[str]] (kwargs the plugin needs from settings)
-#
-# The required_args field allows plugins to declare which settings they need,
-# enabling the Manager to filter kwargs and the Settings to dynamically add
-# extension-specific configuration options.
+# Map entry point group -> plugin info method name. All info objects
+# returned by these methods share the ``ExtensionInfo`` shape and
+# advertise their parameters via ``ExtensionInfo.params`` (a list of
+# ``ParamSpec``). The Manager filters constructor kwargs against the
+# ``INIT``-scoped specs and surfaces the specs themselves so Settings
+# can build CLI flags / env lookups dynamically.
 INFO_METHOD_BY_GROUP: Dict[str, Optional[str]] = {
   'claia.architectures': 'get_architecture_info',   # -> ArchitectureInfo
   'claia.deployments': 'get_deployment_info',       # -> DeploymentInfo
@@ -71,7 +68,7 @@ class LazyPluginEntry:
   plugin_class: Type = None    # Loaded class (after load())
   info: Any = None             # Plugin info object (from get_*_info())
   instance: Any = None         # Instantiated plugin (lazy)
-  required_args: Optional[List[str]] = None  # Cached required_args from info
+  params: List[ParamSpec] = field(default_factory=list)  # Cached ParamSpecs
 
 
 
@@ -94,9 +91,10 @@ class Manager:
   - Tools: Pattern, Protocol, CommandModule plugins
   - Agents: Agent plugins
   
-  Extensions are lazy-loaded: discover_plugins() collects metadata without
-  instantiation, allowing required_args to be collected for dynamic settings.
-  Full instantiation occurs when load_all_plugins() is called with settings.
+  Extensions are lazy-loaded: ``discover_plugins()`` collects metadata
+  without instantiation, allowing ``ParamSpec`` declarations to be
+  collected for dynamic settings. Full instantiation occurs when
+  ``load_all_plugins()`` is called with settings.
   """
 
   def __init__(self):
@@ -144,113 +142,102 @@ class Manager:
   def discover_plugins(self) -> None:
     """
     Discover all plugins from entry points without fully instantiating them.
-    
+
     This method:
     1. Loads each plugin class from entry points
     2. Creates a temporary no-arg instance to introspect its info
-    3. Extracts required_args and stores them for later use
+    3. Extracts ``ParamSpec`` declarations and stores them for later use
     4. Does NOT register the plugin with pluggy yet
-    
-    This allows collecting required_args before settings are fully loaded,
-    breaking the circular dependency between settings and extensions.
+
+    This allows collecting parameter specs before settings are fully
+    loaded, breaking the circular dependency between settings and
+    extensions.
     """
     if self._plugins_discovered:
       logger.debug("Plugins already discovered")
       return
 
     groups = list(INFO_METHOD_BY_GROUP.keys())
-    
+
     for group in groups:
       self._lazy_plugins[group] = []
-      
+
       for ep in metadata.entry_points().select(group=group):
         entry = LazyPluginEntry(
           name=ep.name,
           group=group,
           entry_point=ep
         )
-        
+
         try:
-          # Load the class
           entry.plugin_class = ep.load()
-          
-          # Create temporary instance to get info (no kwargs)
+
           try:
             temp_instance = entry.plugin_class()
-            
-            # Get info object if available
+
             info_method = INFO_METHOD_BY_GROUP.get(group)
             if info_method and hasattr(temp_instance, info_method):
               try:
                 entry.info = getattr(temp_instance, info_method)()
-                entry.required_args = getattr(entry.info, 'required_args', None)
+                params = getattr(entry.info, 'params', None) or []
+                entry.params = list(params)
               except Exception as e:
                 logger.debug(f"Could not get info for {ep.name}: {e}")
-            
+
           except Exception as e:
             logger.debug(f"Could not create temp instance for {ep.name}: {e}")
-            # Still keep the entry - might work with kwargs later
-            
+
         except Exception as e:
           logger.warning(f"Failed to load plugin class {ep.name} from {group}: {e}")
           continue
-        
+
         self._lazy_plugins[group].append(entry)
         logger.debug(f"Discovered {group} plugin: {ep.name}")
-    
+
     self._plugins_discovered = True
     logger.info(f"Discovered plugins from {len(groups)} groups")
 
 
-  def get_all_required_args(self) -> Dict[str, List[str]]:
+  def get_all_plugin_params(self) -> Dict[str, List[ParamSpec]]:
     """
-    Get all required_args from all discovered plugins.
-    
-    Returns:
-      Dict mapping plugin identifier (group:name) to list of required_args.
-      Empty list for plugins with no required_args.
-    
-    Example:
-      {
-        'claia.tool_modules:zammad': ['zammad_api_token', 'zammad_base_url'],
-        'claia.deployments:openai': ['openai_api_token'],
-      }
+    Return every discovered plugin's declared ``ParamSpec`` list.
+
+    Keys are ``"{group}:{name}"`` strings, values are (possibly empty)
+    lists of ``ParamSpec`` objects. Useful for diagnostics and for
+    settings code that needs to know which plugin owns a given param.
     """
     self.discover_plugins()
-    
-    result: Dict[str, List[str]] = {}
-    
+    result: Dict[str, List[ParamSpec]] = {}
     for group, entries in self._lazy_plugins.items():
       for entry in entries:
         key = f"{group}:{entry.name}"
-        if entry.required_args:
-          result[key] = list(entry.required_args)
-        else:
-          result[key] = []
-    
+        result[key] = list(entry.params)
     return result
 
 
-  def get_extension_required_args(self) -> List[str]:
+  def get_extension_params(self, scope: Optional[ParamScope] = None) -> List[ParamSpec]:
     """
-    Get a flat list of all unique required_args from all extensions.
-    
-    This is useful for extending the settings configuration with
-    dynamic settings from extensions.
-    
-    Returns:
-      List of unique required_arg names across all extensions.
+    Return the flat list of ``ParamSpec`` objects declared by all
+    discovered extensions.
+
+    When the same parameter ``name`` is declared by multiple plugins,
+    the first occurrence wins (subsequent declarations are treated as
+    aliases and ignored for metadata purposes). Settings/CLI layers use
+    this list to build flags, env lookups, help text, etc.
+
+    Args:
+      scope: If provided, only return specs whose scope matches.
     """
     self.discover_plugins()
-    
-    unique_args = set()
-    
-    for group, entries in self._lazy_plugins.items():
+    seen: Dict[str, ParamSpec] = {}
+    for _, entries in self._lazy_plugins.items():
       for entry in entries:
-        if entry.required_args:
-          unique_args.update(entry.required_args)
-    
-    return list(sorted(unique_args))
+        for spec in entry.params:
+          if scope is not None and spec.scope != scope:
+            continue
+          if spec.name not in seen:
+            seen[spec.name] = spec
+    return list(seen.values())
 
 
   def load_all_plugins(self, **kwargs) -> None:
@@ -272,7 +259,7 @@ class Manager:
       # Load definition plugins first (they're optional)
       self._load_plugins(group='claia.definitions', pm=self.definition_pm, label='definition', allow_empty=True, ctor_kwargs=kwargs)
 
-      # Load tool plugins (pass in kwargs to process required_args)
+      # Load tool plugins (pass in kwargs; each plugin receives only its INIT-scoped params)
       self._load_plugins(group='claia.tool_patterns', pm=self.pattern_pm, label='pattern', allow_empty=True, ctor_kwargs=kwargs)
       self._load_plugins(group='claia.tool_protocols', pm=self.protocol_pm, label='protocol', allow_empty=True, ctor_kwargs=kwargs)
       self._load_plugins(group='claia.tool_modules', pm=self.module_pm, label='module', allow_empty=True, ctor_kwargs=kwargs)
@@ -298,58 +285,53 @@ class Manager:
   ######################################################################
   # Generic plugin loading helper
   def _load_plugins(self, group: str, pm: pluggy.PluginManager, label: str, allow_empty: bool = False, ctor_kwargs: Optional[Dict[str, Any]] = None) -> None:
-    """Load plugins securely by filtering ctor kwargs based on required_args.
+    """Load plugins securely by filtering ctor kwargs against INIT ParamSpecs.
 
-    Uses the lazy plugin entries discovered by discover_plugins() if available.
-    Instantiates each plugin with only the kwargs specified in its required_args.
+    Uses the lazy plugin entries discovered by ``discover_plugins()``.
+    Each plugin is instantiated with only the kwargs whose names match
+    an ``INIT``-scoped ``ParamSpec`` declared by that plugin.
     """
     loaded_count = 0
-    
+
     try:
-      # Use cached lazy entries if available
       entries = self._lazy_plugins.get(group, [])
-      
+
       for entry in entries:
         try:
           cls = entry.plugin_class
           if cls is None:
             logger.warning(f"No plugin class loaded for {entry.name}")
             continue
-          
+
           inst = None
-          
-          # Get filtered kwargs based on cached required_args
+
           filtered_kwargs: Dict[str, Any] = {}
-          if entry.required_args and ctor_kwargs:
-            filtered_kwargs = self._filter_kwargs(ctor_kwargs, entry.required_args)
-          
-          # Instantiate with filtered kwargs if we have any
+          if entry.params and ctor_kwargs:
+            filtered_kwargs = self.filter_init_kwargs(ctor_kwargs, entry.params)
+
           if filtered_kwargs:
             try:
               inst = cls(**filtered_kwargs)
             except Exception as e:
               logger.debug(f"Instantiating {label} plugin {entry.name} with kwargs failed: {e}")
-              # Fall back to no-arg instance
               try:
                 inst = cls()
               except Exception as e2:
                 logger.warning(f"Failed to instantiate {label} plugin {entry.name}: {e2}")
                 continue
           else:
-            # No required args or none provided — use no-arg instance
             try:
               inst = cls()
             except Exception as e:
               logger.warning(f"Failed to instantiate {label} plugin {entry.name}: {e}")
               continue
-          
-          # Cache the instance in the lazy entry
+
           entry.instance = inst
-          
+
           pm.register(inst)
           loaded_count += 1
           logger.debug(f"Loaded {label} plugin: {entry.name} from {entry.entry_point.value}")
-          
+
         except Exception as e:
           logger.warning(f"Failed to load {label} plugin {entry.name}: {e}")
 
@@ -370,26 +352,57 @@ class Manager:
     """Return the instance info method name for a given entry point group."""
     return INFO_METHOD_BY_GROUP.get(group)
 
-  def _filter_kwargs(self, kwargs: Dict[str, Any], required_args: Optional[List[str]]) -> Dict[str, Any]:
-    """Filter kwargs to only include those specified in required_args.
-    
-    This is a central utility used by both Manager and Registry to ensure
-    plugins only receive the kwargs they've declared via required_args.
-    
-    Args:
-        kwargs: Dictionary of all available kwargs
-        required_args: List of argument names the plugin has declared it needs
-        
-    Returns:
-        Filtered dict containing only the kwargs in required_args
+  @staticmethod
+  def filter_init_kwargs(kwargs: Dict[str, Any], params: Optional[List[ParamSpec]]) -> Dict[str, Any]:
+    """Return the subset of ``kwargs`` matching a plugin's INIT specs.
+
+    Any kwarg whose name does not match an ``INIT``-scoped ``ParamSpec``
+    in ``params`` is dropped. Unmatched kwargs are logged at debug level
+    so noisy caller sites are visible under verbose logging without
+    spamming normal runs.
     """
-    if required_args is None or len(required_args) == 0:
+    if not params:
       return {}
 
-    filtered = {}
-    for arg_name in required_args:
-      if arg_name in kwargs:
-        filtered[arg_name] = kwargs[arg_name]
+    init_names = {p.name for p in params if p.scope == ParamScope.INIT}
+    if not init_names:
+      return {}
+
+    filtered: Dict[str, Any] = {}
+    for name in init_names:
+      if name in kwargs:
+        filtered[name] = kwargs[name]
+
+    if logger.isEnabledFor(logging.DEBUG):
+      undeclared = [k for k in kwargs if k not in init_names]
+      if undeclared:
+        logger.debug(f"Dropping undeclared init kwargs: {sorted(undeclared)}")
+    return filtered
+
+  @staticmethod
+  def filter_runtime_kwargs(kwargs: Dict[str, Any], params: Optional[List[ParamSpec]]) -> Dict[str, Any]:
+    """Return the subset of ``kwargs`` matching a plugin's RUNTIME specs.
+
+    Mirrors ``filter_init_kwargs`` but for per-call generation
+    parameters. Defaults from the ParamSpecs are NOT applied here — use
+    :meth:`BaseModel.update_settings` to overlay declared defaults.
+    """
+    if not params:
+      return {}
+
+    runtime_names = {p.name for p in params if p.scope == ParamScope.RUNTIME}
+    if not runtime_names:
+      return {}
+
+    filtered: Dict[str, Any] = {}
+    for name in runtime_names:
+      if name in kwargs:
+        filtered[name] = kwargs[name]
+
+    if logger.isEnabledFor(logging.DEBUG):
+      undeclared = [k for k in kwargs if k not in runtime_names]
+      if undeclared:
+        logger.debug(f"Dropping undeclared runtime kwargs: {sorted(undeclared)}")
     return filtered
 
   # Generic helpers for lookups and info collection
@@ -630,53 +643,49 @@ class Manager:
     name: Optional[str] = None,
     title: Optional[str] = None,
     description: Optional[str] = None,
-    required_args: Optional[List[str]] = None
+    params: Optional[List[ParamSpec]] = None,
   ) -> None:
     """
     Register an agent class programmatically without using pluggy.
-    
+
     This allows developers to register custom agents directly:
         registry.register(MyCustomAgent, name="my_agent", description="My custom agent")
-    
+
     Args:
-        agent_class: The agent class to register (must inherit from BaseAgent)
-        name: The name to register the agent under (defaults to class name)
-        title: Human-readable display name (defaults to class name)
-        description: Description of the agent (defaults to class docstring)
-        required_args: Optional list of required arguments for the agent
-    
+        agent_class: The agent class to register (must inherit from BaseAgent).
+        name: The name to register the agent under (defaults to class name).
+        title: Human-readable display name (defaults to class name).
+        description: Description of the agent (defaults to class docstring).
+        params: Optional list of ``ParamSpec`` declarations for the
+          agent. ``INIT``-scoped specs are used to filter construction
+          kwargs; ``RUNTIME``-scoped specs describe per-call params.
+
     Raises:
-        ValueError: If the agent class is invalid or name is already registered
+        ValueError: If the agent class does not inherit from BaseAgent.
     """
-    # Validate that the agent class inherits from BaseAgent
     if not issubclass(agent_class, BaseAgent):
       raise ValueError(f"Agent class {agent_class.__name__} must inherit from BaseAgent")
-    
-    # Use class name if no name provided
+
     if name is None:
       name = agent_class.__name__
-    
-    # Use class name as title if no title provided
+
     if title is None:
       title = agent_class.__name__
-    
-    # Use class docstring if no description provided
+
     if description is None:
       description = agent_class.get_description()
-    
-    # Check if name is already registered
+
     if name in self._registered_agents:
       logger.warning(f"Agent '{name}' is already registered, overwriting")
-    
-    # Create AgentInfo and store it
+
     agent_info = AgentInfo(
       name=name,
       title=title,
       description=description,
       agent_class=agent_class,
-      required_args=required_args
+      params=list(params) if params else [],
     )
-    
+
     self._registered_agents[name] = agent_info
     logger.info(f"Registered agent '{name}' ({agent_class.__name__})")
 

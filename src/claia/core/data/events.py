@@ -27,7 +27,6 @@ class EventType(Enum):
     ATTACHMENT_REMOVED     = auto()
     TITLE_CHANGED          = auto()
     PROMPT_CHANGED         = auto()
-    SETTINGS_UPDATED       = auto()
 
 
 @dataclass

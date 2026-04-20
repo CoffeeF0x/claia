@@ -106,7 +106,7 @@ Examples:
 - `--openai-api-token YOUR_TOKEN`
 - `CLAIA_OPENAI_API_TOKEN=YOUR_TOKEN`
 
-These values are passed to plugins through the `Registry` and filtered by the plugin’s `required_args`.
+These values are passed to plugins through the `Registry` and filtered by each plugin's declared `ParamSpec` list — plugins only receive the kwargs whose names match a spec they've advertised.
 
 ## Core Concepts
 

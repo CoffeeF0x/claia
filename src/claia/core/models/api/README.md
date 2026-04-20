@@ -10,4 +10,4 @@ Clients/adapters for hosted LLM APIs.
 
 These classes typically:
 - inherit from base API model types (see `lib/model/base/`)
-- declare `required_args` (e.g., API keys, base URLs) so the `Registry` only passes the kwargs they need.
+- declare INIT-scoped `ParamSpec` entries (e.g., API keys, base URLs) so the `Registry` only passes the kwargs they need.
