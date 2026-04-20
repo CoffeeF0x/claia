@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claia"
-version = "0.1.13"
+version = "0.1.14"
 description = "CLAIA Framework"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -87,51 +87,63 @@ Issues = "https://gitlab.com/exofox/claia/claia/-/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["claia_core*", "claia*", "claia_cli*"]
+# `claia` itself is an implicit (PEP 420) namespace package — it has no
+# top-level `__init__.py`. setuptools' find with `namespaces = true`
+# (the default) picks up the `claia.core`, `claia.framework`, and
+# `claia.cli` subpackages without requiring `claia` to be a regular
+# package. When the repo splits, each subpackage moves into its own
+# distribution and continues to ship under the same `claia.*` namespace.
+include = ["claia*"]
+namespaces = true
 
 [tool.setuptools]
 license-files = ["LICENSE", "NOTICE*"]
 
 [project.scripts]
-claia = "claia_cli.__main__:main"
+claia = "claia.cli.__main__:main"
 
 # Plugin entry points. While in monorepo form, all built-in plugins live
-# under claia_core and register against the framework's pluggy groups.
-# When the repo splits, these tables move into claia_core's pyproject.toml.
+# under claia.core and register against the framework's pluggy groups.
+# When the repo splits, these tables move into claia.core's pyproject.toml.
+#
+# Group names are stable identifiers (e.g. `claia.architectures`) — they
+# are NOT module paths and remain unchanged across the namespace
+# migration so external plugins that already register against them keep
+# working.
 [project.entry-points."claia.architectures"]
-openai = "claia_core.architectures.openai:OpenAIPlugin"
-anthropic = "claia_core.architectures.anthropic:AnthropicPlugin"
-transformers_generic = "claia_core.architectures.transformers_generic:TransformersGenericPlugin"
-transformers_gemma3 = "claia_core.architectures.transformers_gemma3:TransformersGemma3Plugin"
-dummy = "claia_core.architectures.dummy:DummyArchitecturePlugin"
+openai = "claia.core.architectures.openai:OpenAIPlugin"
+anthropic = "claia.core.architectures.anthropic:AnthropicPlugin"
+transformers_generic = "claia.core.architectures.transformers_generic:TransformersGenericPlugin"
+transformers_gemma3 = "claia.core.architectures.transformers_gemma3:TransformersGemma3Plugin"
+dummy = "claia.core.architectures.dummy:DummyArchitecturePlugin"
 
 [project.entry-points."claia.deployments"]
-api = "claia_core.deployments.api:APIDeploymentPlugin"
-local = "claia_core.deployments.local:LocalDeploymentPlugin"
-remote = "claia_core.deployments.remote:RemoteDeploymentPlugin"
-dummy = "claia_core.deployments.dummy:DummyDeploymentPlugin"
+api = "claia.core.deployments.api:APIDeploymentPlugin"
+local = "claia.core.deployments.local:LocalDeploymentPlugin"
+remote = "claia.core.deployments.remote:RemoteDeploymentPlugin"
+dummy = "claia.core.deployments.dummy:DummyDeploymentPlugin"
 
 [project.entry-points."claia.solvers"]
-default = "claia_core.solvers.default:DefaultSolverPlugin"
+default = "claia.core.solvers.default:DefaultSolverPlugin"
 
 [project.entry-points."claia.definitions"]
-openai = "claia_core.definitions.openai:OpenAIDefinitionsPlugin"
-anthropic = "claia_core.definitions.anthropic:AnthropicDefinitionsPlugin"
-legacy = "claia_core.definitions.legacy:LegacyDefinitionsPlugin"
+openai = "claia.core.definitions.openai:OpenAIDefinitionsPlugin"
+anthropic = "claia.core.definitions.anthropic:AnthropicDefinitionsPlugin"
+legacy = "claia.core.definitions.legacy:LegacyDefinitionsPlugin"
 
 [project.entry-points."claia.agents"]
-simple = "claia.agents.simple:SimpleAgentPlugin"
+simple = "claia.framework.agents.simple:SimpleAgentPlugin"
 
 [project.entry-points."claia.tool_patterns"]
-default = "claia_core.tools.patterns.default:DefaultToolPatternPlugin"
+default = "claia.core.tools.patterns.default:DefaultToolPatternPlugin"
 
 [project.entry-points."claia.tool_protocols"]
-simple = "claia_core.tools.protocols.simple:SimpleProtocolPlugin"
+simple = "claia.core.tools.protocols.simple:SimpleProtocolPlugin"
 
 [project.entry-points."claia.tool_modules"]
-cli = "claia_cli.commands.extension:CLIModulePlugin"
-sample = "claia_core.tools.modules.sample:SampleModulePlugin"
-system = "claia_core.tools.modules.system:SystemModulePlugin"
+cli = "claia.cli.commands.extension:CLIModulePlugin"
+sample = "claia.core.tools.modules.sample:SampleModulePlugin"
+system = "claia.core.tools.modules.system:SystemModulePlugin"
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]

@@ -7,10 +7,10 @@ import pytest
 from types import SimpleNamespace
 
 # Internal dependencies
-from claia_core.results import Result, DeploymentError
-from claia_core.data import Conversation
-from claia.process import Process
-from claia_core.enums.process import ProcessStatus
+from claia.core.results import Result, DeploymentError
+from claia.core.data import Conversation
+from claia.framework.process import Process
+from claia.core.enums.process import ProcessStatus
 
 
 # ---------------------------------------------------------------------------
@@ -135,17 +135,17 @@ def fake_manager_no_solver():
 @pytest.fixture
 def registry_with_fake_manager(fake_manager, monkeypatch):
   """Unified Registry instance wired to the fake manager via monkeypatching."""
-  import claia.registry as regmod
+  import claia.framework.registry as regmod
   # Ensure Registry.__init__ uses our fake manager
   monkeypatch.setattr(regmod, "Manager", lambda: fake_manager)
-  from claia.registry import Registry
+  from claia.framework.registry import Registry
   return Registry()
 
 
 @pytest.fixture
 def registry_with_no_solver(fake_manager_no_solver, monkeypatch):
   """Unified Registry instance whose manager returns no solver plugin."""
-  import claia.registry as regmod
+  import claia.framework.registry as regmod
   monkeypatch.setattr(regmod, "Manager", lambda: fake_manager_no_solver)
-  from claia.registry import Registry
+  from claia.framework.registry import Registry
   return Registry()

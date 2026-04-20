@@ -1,12 +1,12 @@
 # Tests
 
-Pytest-based tests, organised to mirror the three packages.
+Pytest-based tests, organised to mirror the three subpackages under the
+`claia` namespace.
 
 Layout:
-- `claia_core/` — tests for the pure-library layer (data models, plugin
-  contracts, results, enums).
-- `claia/` — tests for the framework layer (`Registry`, `Process`,
+- `core/` — tests for `claia.core` (data models, plugin contracts,
+  results, enums).
+- `framework/` — tests for `claia.framework` (`Registry`, `Process`,
   `ProcessQueue`, agents, hooks, manager).
-- `claia_cli/` — tests for the CLI application (commands, settings,
-  argument parsing).
+- `cli/` — tests for `claia.cli` (commands, settings, argument parsing).
 - `conftest.py` — shared fixtures used across packages.
