@@ -24,6 +24,7 @@ from dotenv import load_dotenv
 from claia.core.enums.logging import LogLevel, LogFormat
 from claia.core.plugins.base import ParamScope, ParamSpec, SettingCategory
 from claia.cli.params import APP_PARAMS
+from claia.framework.manager import Manager
 from claia.framework.registry import Registry
 
 
@@ -155,28 +156,6 @@ class Settings:
     """Get the list of setting names that were added from extensions."""
     return list(self._extension_settings)
 
-  # ----------------------------------------------------------------
-  # Backward-compatible tuple view
-  # ----------------------------------------------------------------
-  @property
-  def config_vars(self) -> List[Tuple[str, Any, bool, SettingCategory, str]]:
-    """
-    Backward-compatible view of ``config_specs`` as 5-tuples.
-
-    Format: ``(name, default, externally_settable, category, help_text)``.
-
-    Prefer iterating ``self.config_specs.values()`` directly in new
-    code. This shim preserves the original CONFIG_VARS contract for
-    callers that haven't been migrated yet.
-    """
-    out: List[Tuple[str, Any, bool, SettingCategory, str]] = []
-    for spec in self.config_specs.values():
-      default = spec.default if spec.default is not None else ("" if spec.type is str else spec.default)
-      category = spec.category if spec.category is not None else SettingCategory.MISC
-      help_text = spec.description or self._generate_help_text(spec.name)
-      out.append((spec.name, default, spec.externally_settable, category, help_text))
-    return out
-
   def _spec_default(self, spec: ParamSpec) -> Any:
     """
     Return the value to seed a setting with at boot.
@@ -292,17 +271,19 @@ class Settings:
     if value is None or value == "":
       return seeded_default
 
-    coerced = _coerce_value(value, spec)
-    if coerced is _COERCE_FAIL:
+    coerced = Manager.coerce_value(value, spec.type or str)
+    if coerced is Manager._COERCE_FAIL:
+      display = Manager._mask_for_log(value, spec)
       logger.warning(
-        f"Could not coerce setting {spec.name}={value!r} to {spec.type.__name__}; "
+        f"Could not coerce setting {spec.name}={display!r} to {spec.type.__name__}; "
         f"falling back to default {seeded_default!r}"
       )
       return seeded_default
 
     if spec.choices and coerced not in spec.choices:
+      display = Manager._mask_for_log(coerced, spec)
       logger.warning(
-        f"Setting {spec.name}={coerced!r} not in allowed choices {spec.choices}; "
+        f"Setting {spec.name}={display!r} not in allowed choices {spec.choices}; "
         f"falling back to default {seeded_default!r}"
       )
       return seeded_default
@@ -518,9 +499,10 @@ class Settings:
     if spec is None or not spec.externally_settable:
       return (False, f"Unknown setting: {setting_name}", None)
 
-    coerced = _coerce_value(value, spec)
-    if coerced is _COERCE_FAIL:
-      return (False, f"Invalid value for {setting_name}: {value!r}", None)
+    coerced = Manager.coerce_value(value, spec.type or str)
+    if coerced is Manager._COERCE_FAIL:
+      display = Manager._mask_for_log(value, spec)
+      return (False, f"Invalid value for {setting_name}: {display!r}", None)
 
     if spec.choices and coerced not in spec.choices:
       return (
@@ -608,62 +590,3 @@ class Settings:
       if value and value != "":
         return "***" + str(value)[-4:] if len(str(value)) > 4 else "***"
     return value
-
-
-########################################################################
-#                          MODULE HELPERS                              #
-########################################################################
-class _CoerceFail:
-  """Sentinel returned from ``_coerce_value`` when conversion fails."""
-  __slots__ = ()
-
-_COERCE_FAIL = _CoerceFail()
-
-
-_TRUTHY = {"true", "1", "yes", "on", "y", "t"}
-_FALSY = {"false", "0", "no", "off", "n", "f"}
-
-
-def _coerce_value(value: Any, spec: ParamSpec) -> Any:
-  """
-  Best-effort coerce ``value`` to ``spec.type``.
-
-  Returns ``_COERCE_FAIL`` if conversion is not possible. Strings are the
-  most common input shape (CLI / env / JSON) so we handle them
-  explicitly; other input types fall through to ``spec.type(value)``.
-  """
-  if value is None:
-    return None
-
-  target = spec.type or str
-
-  if isinstance(value, target):
-    return value
-
-  try:
-    if target is bool:
-      if isinstance(value, str):
-        v = value.strip().lower()
-        if v in _TRUTHY:
-          return True
-        if v in _FALSY:
-          return False
-        return _COERCE_FAIL
-      return bool(value)
-
-    if target is int:
-      if isinstance(value, str):
-        return int(value.strip())
-      return int(value)
-
-    if target is float:
-      if isinstance(value, str):
-        return float(value.strip())
-      return float(value)
-
-    if target is str:
-      return str(value)
-
-    return target(value)
-  except (TypeError, ValueError):
-    return _COERCE_FAIL

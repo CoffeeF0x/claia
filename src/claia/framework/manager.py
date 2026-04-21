@@ -20,7 +20,7 @@ import pluggy
 import logging
 import importlib.metadata as metadata
 from dataclasses import dataclass, field
-from typing import Dict, Optional, List, Type, Any, Tuple
+from typing import Dict, Optional, List, Type, Any, Tuple, ClassVar
 
 from .hooks import (
   ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHooks,
@@ -386,6 +386,117 @@ class Manager:
     """Return the instance info method name for a given entry point group."""
     return INFO_METHOD_BY_GROUP.get(group)
 
+  # ------------------------------------------------------------------
+  # Kwarg coercion / validation
+  #
+  # These live on the Manager class (rather than as free functions) so
+  # every layer that needs to reason about plugin params — Registry at
+  # dispatch time, Settings at config-load time — has a single source
+  # of truth reachable via ``registry.manager.<method>``.
+  # ------------------------------------------------------------------
+  _COERCE_FAIL: ClassVar[object] = object()
+  _TRUTHY: ClassVar[frozenset] = frozenset({"true", "1", "yes", "on", "y", "t"})
+  _FALSY: ClassVar[frozenset] = frozenset({"false", "0", "no", "off", "n", "f"})
+
+  @staticmethod
+  def coerce_value(value: Any, target: type) -> Any:
+    """Best-effort coerce ``value`` to ``target``.
+
+    Returns ``Manager._COERCE_FAIL`` on failure so callers can
+    distinguish "coercion could not be performed" from a legitimate
+    falsy result (``0``, ``""``, ``False``, ...).
+    """
+    if value is None:
+      return None
+    if target is None:
+      return value
+    if isinstance(value, target) and not (target is int and isinstance(value, bool)):
+      return value
+    try:
+      if target is bool:
+        if isinstance(value, str):
+          v = value.strip().lower()
+          if v in Manager._TRUTHY:
+            return True
+          if v in Manager._FALSY:
+            return False
+          return Manager._COERCE_FAIL
+        return bool(value)
+      if target is int:
+        if isinstance(value, str):
+          return int(value.strip())
+        return int(value)
+      if target is float:
+        if isinstance(value, str):
+          return float(value.strip())
+        return float(value)
+      if target is str:
+        return str(value)
+      return target(value)
+    except (TypeError, ValueError):
+      return Manager._COERCE_FAIL
+
+  @staticmethod
+  def _mask_for_log(value: Any, spec: ParamSpec) -> Any:
+    """Return a log-safe rendering of ``value`` for ``spec``.
+
+    When ``spec.secret`` is True the value is shortened to ``***<last4>``
+    so a malformed API token never lands in plaintext warnings.
+    """
+    if not getattr(spec, 'secret', False):
+      return value
+    s = str(value)
+    if not s:
+      return "***"
+    return "***" + s[-4:] if len(s) > 4 else "***"
+
+  @staticmethod
+  def _filter_by_scope(
+    kwargs: Dict[str, Any],
+    params: Optional[List[ParamSpec]],
+    scope: ParamScope,
+    label: str,
+  ) -> Dict[str, Any]:
+    """Shared implementation behind ``filter_init_kwargs`` / ``filter_runtime_kwargs``.
+
+    Returns the subset of ``kwargs`` matching ``params`` of the given
+    scope, coerced to each spec's declared type and validated against
+    its ``choices``. Coerce/choice failures log at WARNING and drop the
+    value so the plugin's own default applies.
+    """
+    if not params:
+      return {}
+
+    scoped = {p.name: p for p in params if p.scope == scope}
+    if not scoped:
+      return {}
+
+    filtered: Dict[str, Any] = {}
+    for name, spec in scoped.items():
+      if name not in kwargs:
+        continue
+      raw = kwargs[name]
+      coerced = Manager.coerce_value(raw, spec.type or str)
+      if coerced is Manager._COERCE_FAIL:
+        logger.warning(
+          f"Dropping {label} kwarg {name}={Manager._mask_for_log(raw, spec)!r}: "
+          f"could not coerce to {(spec.type or str).__name__}"
+        )
+        continue
+      if spec.choices is not None and coerced not in spec.choices:
+        logger.warning(
+          f"Dropping {label} kwarg {name}={Manager._mask_for_log(coerced, spec)!r}: "
+          f"not in allowed choices {spec.choices}"
+        )
+        continue
+      filtered[name] = coerced
+
+    if logger.isEnabledFor(logging.DEBUG):
+      undeclared = [k for k in kwargs if k not in scoped]
+      if undeclared:
+        logger.debug(f"Dropping undeclared {label} kwargs: {sorted(undeclared)}")
+    return filtered
+
   @staticmethod
   def filter_init_kwargs(kwargs: Dict[str, Any], params: Optional[List[ParamSpec]]) -> Dict[str, Any]:
     """Return the coerced subset of ``kwargs`` matching a plugin's INIT specs.
@@ -393,15 +504,15 @@ class Manager:
     Any kwarg whose name does not match an ``INIT``-scoped ``ParamSpec``
     in ``params`` is dropped. Matching values are coerced to the spec's
     declared type and validated against ``choices`` (if present). Coerce
-    or choice failures are logged as warnings and the offending value is
-    dropped — the plugin's own constructor default applies.
+    or choice failures log as warnings and the value is dropped — the
+    plugin's own constructor default applies.
 
     ``required=True`` is NOT enforced here (filtering is a partial
     operation and may be called before all sources have been merged).
     Use :meth:`validate_required_init_kwargs` immediately before
     instantiation to enforce required specs.
     """
-    return _filter_by_scope(kwargs, params, ParamScope.INIT, label="init")
+    return Manager._filter_by_scope(kwargs, params, ParamScope.INIT, label="init")
 
   @staticmethod
   def filter_runtime_kwargs(kwargs: Dict[str, Any], params: Optional[List[ParamSpec]]) -> Dict[str, Any]:
@@ -411,7 +522,7 @@ class Manager:
     parameters. Defaults from the ParamSpecs are NOT applied here — use
     :meth:`BaseModel.update_settings` to overlay declared defaults.
     """
-    return _filter_by_scope(kwargs, params, ParamScope.RUNTIME, label="runtime")
+    return Manager._filter_by_scope(kwargs, params, ParamScope.RUNTIME, label="runtime")
 
   @staticmethod
   def validate_required_init_kwargs(kwargs: Dict[str, Any], params: Optional[List[ParamSpec]]) -> List[str]:
@@ -800,118 +911,3 @@ class Manager:
       if agent_info.name == agent_name:
         return agent_info
     return None
-
-
-########################################################################
-#                  KWARG COERCION / VALIDATION HELPERS                 #
-########################################################################
-class _CoerceFail:
-  """Sentinel returned from ``_coerce_value`` when conversion fails."""
-  __slots__ = ()
-
-
-_COERCE_FAIL = _CoerceFail()
-_TRUTHY = {"true", "1", "yes", "on", "y", "t"}
-_FALSY = {"false", "0", "no", "off", "n", "f"}
-
-
-def _mask_for_log(value: Any, spec: ParamSpec) -> str:
-  """
-  Mask ``value`` for inclusion in log output if ``spec`` is marked secret.
-
-  Returns the original value otherwise. Used by ``_filter_by_scope``
-  warnings so a malformed API token never lands in plaintext logs.
-  """
-  if not getattr(spec, 'secret', False):
-    return value
-  s = str(value)
-  if not s:
-    return "***"
-  return "***" + s[-4:] if len(s) > 4 else "***"
-
-
-def _coerce_value(value: Any, target: type) -> Any:
-  """Best-effort coerce ``value`` to ``target``. Returns ``_COERCE_FAIL`` on failure."""
-  if value is None:
-    return None
-  if target is None:
-    return value
-  if isinstance(value, target) and not (target is int and isinstance(value, bool)):
-    return value
-  try:
-    if target is bool:
-      if isinstance(value, str):
-        v = value.strip().lower()
-        if v in _TRUTHY:
-          return True
-        if v in _FALSY:
-          return False
-        return _COERCE_FAIL
-      return bool(value)
-    if target is int:
-      if isinstance(value, str):
-        return int(value.strip())
-      return int(value)
-    if target is float:
-      if isinstance(value, str):
-        return float(value.strip())
-      return float(value)
-    if target is str:
-      return str(value)
-    return target(value)
-  except (TypeError, ValueError):
-    return _COERCE_FAIL
-
-
-def _filter_by_scope(
-  kwargs: Dict[str, Any],
-  params: Optional[List[ParamSpec]],
-  scope: ParamScope,
-  label: str,
-) -> Dict[str, Any]:
-  """
-  Return the subset of ``kwargs`` matching ``params`` of the given scope.
-
-  Coerces each value to its spec's declared type and validates
-  ``choices``. Coerce/choice failures are logged at WARNING and the
-  value is dropped (so the plugin's own default applies).
-  """
-  if not params:
-    return {}
-
-  scoped = {p.name: p for p in params if p.scope == scope}
-  if not scoped:
-    return {}
-
-  filtered: Dict[str, Any] = {}
-  for name, spec in scoped.items():
-    if name not in kwargs:
-      continue
-    raw = kwargs[name]
-    coerced = _coerce_value(raw, spec.type or str)
-    if coerced is _COERCE_FAIL:
-      logger.warning(
-        f"Dropping {label} kwarg {name}={_mask_for_log(raw, spec)!r}: "
-        f"could not coerce to {(spec.type or str).__name__}"
-      )
-      continue
-    if spec.choices is not None and coerced not in spec.choices:
-      logger.warning(
-        f"Dropping {label} kwarg {name}={_mask_for_log(coerced, spec)!r}: "
-        f"not in allowed choices {spec.choices}"
-      )
-      continue
-    filtered[name] = coerced
-
-  if logger.isEnabledFor(logging.DEBUG):
-    undeclared = [k for k in kwargs if k not in scoped]
-    if undeclared:
-      logger.debug(f"Dropping undeclared {label} kwargs: {sorted(undeclared)}")
-  return filtered
-
-
-# Module-level aliases so callers don't have to go through the Manager
-# class (and aren't affected by Manager being monkeypatched in tests).
-filter_init_kwargs = Manager.filter_init_kwargs
-filter_runtime_kwargs = Manager.filter_runtime_kwargs
-validate_required_init_kwargs = Manager.validate_required_init_kwargs

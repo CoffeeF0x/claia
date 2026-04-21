@@ -7,7 +7,7 @@ from typing import List, Optional, Any
 from collections import defaultdict
 
 from claia.core.results import Result
-from claia.cli.settings import SettingCategory
+from claia.core.plugins.base import SettingCategory
 from .base import BaseCommand
 
 
@@ -92,17 +92,20 @@ class HelpCommand(BaseCommand):
     
     lines.append("")
     
-    # Group settings by category
+    # Group settings by category (ParamSpec-driven).
     categorized = defaultdict(list)
-    for var_name, default, externally_settable, category, help_desc in self.settings.config_vars:
-      if externally_settable:
-        if is_interactive:
-          setting_line = f"    {var_name:30s} {help_desc}"
-        else:
-          cli_name = var_name.replace('_', '-')
-          setting_line = f"    --{cli_name:30s} {help_desc}"
-        categorized[category].append(setting_line)
-    
+    for spec in self.settings.config_specs.values():
+      if not spec.externally_settable:
+        continue
+      help_desc = spec.description or ""
+      if is_interactive:
+        setting_line = f"    {spec.name:30s} {help_desc}"
+      else:
+        cli_name = spec.name.replace('_', '-')
+        setting_line = f"    --{cli_name:30s} {help_desc}"
+      category = spec.category if spec.category is not None else SettingCategory.MISC
+      categorized[category].append(setting_line)
+
     for category in SettingCategory:
       if category in categorized:
         lines.append(f"  {category.value}:")

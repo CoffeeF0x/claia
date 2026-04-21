@@ -8,12 +8,7 @@ import threading
 import json
 from typing import Any, Dict, Iterator, List, Optional, Union
 
-from claia.framework.manager import (
-  Manager,
-  filter_init_kwargs,
-  filter_runtime_kwargs,
-  validate_required_init_kwargs,
-)
+from claia.framework.manager import Manager
 from claia.core.results import Result, DeploymentError
 from claia.framework.process import Process
 from claia.framework.queue import ProcessQueue
@@ -44,7 +39,7 @@ class Registry:
 
   def __init__(self, process_queue: Optional[ProcessQueue] = None):
     # Core manager and caches
-    self.manager = Manager()
+    self._manager = Manager()
     self.cache: Dict[str, Any] = {}
 
     # Tool-related
@@ -60,9 +55,21 @@ class Registry:
     # Discover plugins (metadata only) but don't load them yet. This
     # lets ``get_extension_params()`` work before settings are loaded,
     # breaking the circular dependency between extensions and settings.
-    self.manager.discover_plugins()
+    self._manager.discover_plugins()
 
     logger.info("Registry initialized")
+
+  @property
+  def manager(self) -> Manager:
+    """
+    The underlying ``Manager`` instance.
+
+    Exposed as a read-only property so downstream layers (Settings,
+    CLI commands, service endpoints) can reach the manager's
+    parameter-introspection and coercion helpers without the Registry
+    having to re-export each one.
+    """
+    return self._manager
 
   def load_plugins(self, **kwargs) -> None:
     """
@@ -367,7 +374,7 @@ class Registry:
       raise DeploymentError(f"No solver available (requested: {solver})")
 
     solver_info = selected_solver.get_solver_info()
-    solver_kwargs = filter_init_kwargs(combined_kwargs, getattr(solver_info, 'params', None))
+    solver_kwargs = Manager.filter_init_kwargs(combined_kwargs, getattr(solver_info, 'params', None))
 
     params_result = selected_solver.solve_deployment(
       model_name=model_name,
@@ -403,18 +410,18 @@ class Registry:
 
     deployment_info = selected_deployment.get_deployment_info()
     deployment_params_specs = getattr(deployment_info, 'params', None)
-    deployment_init_kwargs = filter_init_kwargs(combined_kwargs, deployment_params_specs)
+    deployment_init_kwargs = Manager.filter_init_kwargs(combined_kwargs, deployment_params_specs)
 
     available_architectures = self.manager.get_available_architectures()
     architecture_info = available_architectures.get(deployment_params.architecture_name)
     if architecture_info:
-      arch_init_kwargs = filter_init_kwargs(combined_kwargs, getattr(architecture_info, 'params', None))
-      arch_runtime_kwargs = filter_runtime_kwargs(combined_kwargs, getattr(architecture_info, 'params', None))
+      arch_init_kwargs = Manager.filter_init_kwargs(combined_kwargs, getattr(architecture_info, 'params', None))
+      arch_runtime_kwargs = Manager.filter_runtime_kwargs(combined_kwargs, getattr(architecture_info, 'params', None))
     else:
       arch_init_kwargs = {}
       arch_runtime_kwargs = {}
 
-    deployment_runtime_kwargs = filter_runtime_kwargs(combined_kwargs, deployment_params_specs)
+    deployment_runtime_kwargs = Manager.filter_runtime_kwargs(combined_kwargs, deployment_params_specs)
 
     # Merge order: architecture INIT + deployment INIT form the model's
     # construction kwargs; RUNTIME specs (from both deployment and
@@ -676,8 +683,8 @@ class Registry:
       # agent has no declared params, forward the entire combined set
       # so legacy agents keep working.
       if agent_info and getattr(agent_info, 'params', None):
-        init_kwargs = filter_init_kwargs(combined_kwargs, agent_info.params)
-        runtime_kwargs = filter_runtime_kwargs(combined_kwargs, agent_info.params)
+        init_kwargs = Manager.filter_init_kwargs(combined_kwargs, agent_info.params)
+        runtime_kwargs = Manager.filter_runtime_kwargs(combined_kwargs, agent_info.params)
         filtered_kwargs = {**init_kwargs, **runtime_kwargs}
       else:
         filtered_kwargs = combined_kwargs

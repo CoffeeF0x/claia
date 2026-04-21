@@ -127,12 +127,37 @@ def fake_manager_no_solver():
   return FM()
 
 
+def _make_fake_manager_class(fake_manager):
+  """
+  Wrap ``fake_manager`` in a thin class so ``regmod.Manager`` still
+  resolves to a class (not a bare callable). This matters because the
+  Registry reaches for class-level static methods on ``Manager`` (e.g.
+  ``Manager.filter_init_kwargs``) at dispatch time; a plain lambda
+  wouldn't expose those.
+  """
+  from claia.framework.manager import Manager as RealManager
+
+  class _FakeManagerFactory:
+    # Delegate kwarg-shaping statics to the real Manager so dispatch
+    # still performs spec-aware filtering and validation under test.
+    coerce_value = staticmethod(RealManager.coerce_value)
+    filter_init_kwargs = staticmethod(RealManager.filter_init_kwargs)
+    filter_runtime_kwargs = staticmethod(RealManager.filter_runtime_kwargs)
+    validate_required_init_kwargs = staticmethod(RealManager.validate_required_init_kwargs)
+    _COERCE_FAIL = RealManager._COERCE_FAIL
+    _mask_for_log = staticmethod(RealManager._mask_for_log)
+
+    def __new__(cls):
+      return fake_manager
+
+  return _FakeManagerFactory
+
+
 @pytest.fixture
 def registry_with_fake_manager(fake_manager, monkeypatch):
   """Unified Registry instance wired to the fake manager via monkeypatching."""
   import claia.framework.registry as regmod
-  # Ensure Registry.__init__ uses our fake manager
-  monkeypatch.setattr(regmod, "Manager", lambda: fake_manager)
+  monkeypatch.setattr(regmod, "Manager", _make_fake_manager_class(fake_manager))
   from claia.framework.registry import Registry
   return Registry()
 
@@ -141,6 +166,6 @@ def registry_with_fake_manager(fake_manager, monkeypatch):
 def registry_with_no_solver(fake_manager_no_solver, monkeypatch):
   """Unified Registry instance whose manager returns no solver plugin."""
   import claia.framework.registry as regmod
-  monkeypatch.setattr(regmod, "Manager", lambda: fake_manager_no_solver)
+  monkeypatch.setattr(regmod, "Manager", _make_fake_manager_class(fake_manager_no_solver))
   from claia.framework.registry import Registry
   return Registry()
