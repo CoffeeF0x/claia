@@ -42,7 +42,6 @@
 # - Swap prompt inside of conversation to the actual prompt object (should be a reference?)
 # - Add dictionary support to the prompt object
 # - Clean up onboarding
-# - command character by itself should show help (code exists, but never gets called)
 
 # - BASEFILE:
 #   - Add a validate function to the that verifies that everything is as
@@ -117,7 +116,7 @@ def setup_command_history(settings: Settings) -> None:
   try:
     # Create history file path in the files directory
     history_file = os.path.join(settings.files_directory, HISTORY_FILE)
-    
+
     # Ensure the history file directory exists
     history_dir = os.path.dirname(history_file)
     if history_dir and not os.path.exists(history_dir):
@@ -189,14 +188,14 @@ def print_header(settings: Settings) -> None:
   print(line(subtitle))
   print(line(f"Version v{ver} • Python {pyver} • https://claia.dev"))
   print(line(""))
-  
+
   # Show active configuration
   active_model = settings.active_model or settings.default_model or "None"
   active_agent = settings.active_agent or settings.default_agent or "None"
   print(line(f"Active Model: {active_model}"))
   print(line(f"Active Agent: {active_agent}"))
   print("╟" + ("─" * (width - 2)) + "╢")
-  
+
   # Quick start guide
   print(line("QUICK START"))
   print(line("  • Chat: Just type your message"))
@@ -204,7 +203,7 @@ def print_header(settings: Settings) -> None:
   print(line(f"  • Tools: Type '{COMMAND_CHARACTER}tool' to see modules, '{COMMAND_CHARACTER}tool <module>' for tools"))
   print(line(f"  • Setup: Type '{COMMAND_CHARACTER}setup' to configure API keys"))
   print(line(f"  • Exit: Press Ctrl+C or type '{COMMAND_CHARACTER}quit'"))
-  
+
   # Check for unset API keys and show notice if not suppressed
   if not settings.suppress_setup_notice:
     unset_keys = settings.get_unset_api_keys()
@@ -213,7 +212,7 @@ def print_header(settings: Settings) -> None:
       print(line("⚠ Notice: Some API keys are not configured"))
       print(line(f"  Run '{COMMAND_CHARACTER}setup' to configure {len(unset_keys)} API key(s)"))
       print(line(f"  Or use '{COMMAND_CHARACTER}set suppress_setup_notice true' to hide this"))
-  
+
   print("╚" + ("═" * (width - 2)) + "╝")
   print()
 
@@ -226,7 +225,7 @@ def process_final_message_tools(final_message, process: Process, settings: Setti
 
   # Note: Tool pattern/protocol configuration is now handled by the registry extensions
   # We simply try to process the content and let the registry handle detection
-  
+
   # Get user configuration parameters to pass to tools
   user_kwargs = settings.get_user_kwargs()
 
@@ -267,18 +266,18 @@ def main() -> None:
   try:
     # Initialize the application
     logger.info("Initializing CLAIA...")
-    
+
     # Create registry (discovers extensions but doesn't load them yet)
     # This allows Settings to collect ParamSpec declarations from extensions
     logger.debug("Initializing registry")
     registry = Registry()
-    
+
     # Create Settings with registry - extension settings are handled internally
     settings = Settings(registry=registry)
     settings.root_logger = initialize_logging(settings.log_level, settings.log_format)
     settings = initialize_defaults(settings)
     user_kwargs = settings.get_user_kwargs()
-    
+
     # Now load plugins with the settings
     registry.load_plugins(**user_kwargs)
 
@@ -306,11 +305,11 @@ def main() -> None:
 
     # Build commands catalog
     _ = registry.get_commands_catalog() # NOTE: Can probably be removed later
-    
+
     # Register CLI-specific agents using the programmatic registration API
     logger.debug("Registering CLI-specific agents")
     register_cli_agents(registry)
-    
+
     registry.start_workers(2)  # Start n worker threads
 
     # Initialize command processor
@@ -371,24 +370,19 @@ def main() -> None:
       if user_input and user_input[0] == COMMAND_CHARACTER:
         logger.debug(f"Processing as command: {user_input[1:]}")
         tokens = user_input[1:].split()
-        
         if not tokens:
-          setup_conversation(settings, registry)
-          cmd_result = commands.run(['help'], settings.active_conversation, is_interactive=True)
-          if cmd_result.is_exit():
-            result = cmd_result
-          continue
-        
+          tokens = ["help"]
+
         setup_conversation(settings, registry)
         cmd_result = commands.run(tokens, settings.active_conversation, is_interactive=True)
-        
+
         if cmd_result.is_success():
           data = cmd_result.get_data()
           if data is not None:
             print(data)
         else:
           print(f"Error: {cmd_result.get_message()}")
-        
+
         if cmd_result.is_exit():
           result = cmd_result
       else:
