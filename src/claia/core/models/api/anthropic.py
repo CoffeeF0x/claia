@@ -64,12 +64,19 @@ class AnthropicModel(APIModel):
       if system_message:
         request_data["system"] = system_message
 
-      if settings.get("temperature") is not None:
-        request_data["temperature"] = settings["temperature"]
-      if settings.get("top_p") is not None:
-        request_data["top_p"] = settings["top_p"]
-      if settings.get("top_k") is not None:
-        request_data["top_k"] = settings["top_k"]
+      # Anthropic rejects requests that include both temperature and top_p.
+      # Prefer temperature; only send top_p when temperature is absent.
+      temperature = settings.get("temperature")
+      top_p = settings.get("top_p")
+      top_k = settings.get("top_k")
+
+      if temperature is not None:
+        request_data["temperature"] = temperature
+      elif top_p is not None:
+        request_data["top_p"] = top_p
+
+      if top_k is not None:
+        request_data["top_k"] = top_k
 
       if settings.get("stream", False):
         request_data["stream"] = True
