@@ -94,6 +94,8 @@ HISTORY_FILE = ".claia_history"
 MAX_HISTORY_LEN = 1000
 COMMAND_CHARACTER = ":"
 INPUT_CHARACTER = ":"
+NEWLINE_CHARACTER = "\\"
+CONTINUATION_PROMPT = ">"
 DEFAULT_AGENT = "simple"
 TOOL_PATTERN_NAME = "default"
 TOOL_PROTOCOL_NAME = "simple"
@@ -136,11 +138,51 @@ def setup_command_history(settings: Settings) -> None:
   atexit.register(readline.write_history_file, history_file)
   logger.debug("Registered history file write on exit")
 
+  # Bind Shift+Enter to insert a trailing backslash then accept the line.
+  # This triggers the multiline continuation loop in get_user_input().
+  # The sequences are terminal-dependent (KKP and xterm variants); failures
+  # are silently ignored so the app still runs normally if unsupported.
+  try:
+    readline.parse_and_bind(r'"\e[13;2u": "\\\C-j"')    # Kitty Keyboard Protocol
+    readline.parse_and_bind(r'"\e[27;2;13~": "\\\C-j"') # xterm / some VTE terminals
+  except Exception:
+    pass
+
 
 def get_user_input() -> str:
-  """Get and return user input using a standardized prompt symbol."""
+  """Get user input, with multiline support via trailing backslash continuation.
+
+  A line ending with NEWLINE_CHARACTER is treated as a continuation: further lines are
+  collected (shown with an indented prompt) and all parts are joined with a return character
+  before being returned to the main loop.
+
+  Shift+Enter is bound in setup_command_history() to insert NEWLINE_CHARACTER and accept
+  the current line, which triggers the same continuation flow in terminals that
+  support the relevant escape sequences.
+  """
   logger.debug("Waiting for user input")
-  return input(INPUT_CHARACTER)
+  try:
+    line = input(INPUT_CHARACTER)
+  except EOFError:
+    return ""
+
+  if not line.endswith(NEWLINE_CHARACTER):
+    return line
+
+  # Continuation mode: strip the trailing newline character and keep collecting.
+  parts = [line[:-1]]
+  while True:
+    try:
+      line = input(CONTINUATION_PROMPT)
+    except EOFError:
+      break
+    if line.endswith(NEWLINE_CHARACTER):
+      parts.append(line[:-1])
+    else:
+      parts.append(line)
+      break
+
+  return "\n".join(parts)
 
 
 
@@ -385,6 +427,8 @@ def main() -> None:
 
         if cmd_result.is_exit():
           result = cmd_result
+      elif not user_input.strip():
+        pass  # Blank / whitespace-only line — behave like a normal shell newline
       else:
         setup_conversation(settings, registry)
 
