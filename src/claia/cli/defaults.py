@@ -106,9 +106,9 @@ def initialize_default_prompts(settings: Settings) -> None:
   # Load existing prompts from repository
   existing_prompts_metadata = file_repo.list_all(artifact_type='prompts')
   existing_prompt_names = {metadata.get('prompt_name') for metadata in existing_prompts_metadata}
-  
+
   logger.debug(f"Found {len(existing_prompts_metadata)} existing prompts")
-  
+
   # Load existing prompts and add to prompt store
   for metadata in existing_prompts_metadata:
     try:
@@ -124,14 +124,14 @@ def initialize_default_prompts(settings: Settings) -> None:
   for prompt_data in DEFAULT_PROMPTS:
     prompt_name = prompt_data["name"]
     validated_name = Prompt.validate_prompt_name(prompt_name)
-    
+
     # Skip if prompt already exists
     if validated_name in existing_prompt_names:
       logger.debug(f"Prompt '{prompt_name}' already exists, skipping creation")
       continue
-    
+
     logger.debug(f"Creating new prompt '{prompt_name}'")
-    
+
     try:
       # Create the prompt with content using the repository pattern
       new_prompt = Prompt.from_content(
@@ -139,15 +139,15 @@ def initialize_default_prompts(settings: Settings) -> None:
         prompt_name=validated_name,
         prompt_type="text"
       )
-      
+
       # Save to repository (repository handles directory creation and file management)
       file_repo.save(new_prompt)
-      
+
       # Add to prompt store for in-memory access
       settings.prompt_store.append(new_prompt)
-      
+
       logger.debug(f"Successfully created prompt '{prompt_name}' (ID: {new_prompt.id})")
-      
+
     except Exception as e:
       logger.error(f"Failed to create prompt '{prompt_name}': {e}")
 

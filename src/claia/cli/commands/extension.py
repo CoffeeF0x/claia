@@ -325,40 +325,40 @@ class CLIModulePlugin:
   # ======================================================================
   # Model Tools
   # ======================================================================
-  def _model_list(self, filter: str = None, active_model: str = None, 
+  def _model_list(self, filter: str = None, active_model: str = None,
                   default_model: str = None, registry=None, **kwargs) -> str:
     """List all available models."""
     if not registry:
       return "Error: Registry not available"
-    
+
     try:
       models = registry.get_supported_models()
-      
+
       if not models:
         return "No models available."
-      
+
       filter_text = filter.lower() if filter else None
-      
+
       output_lines = []
       output_lines.append("\nAvailable models:")
       output_lines.append(DIVIDER)
-      
+
       # Sort models by company and then name
       sorted_models = sorted(
         models.items(),
         key=lambda x: (getattr(x[1], 'company', None) or 'Unknown', x[0])
       )
-      
+
       current_company = None
       model_count = 0
-      
+
       for model_name, model_def in sorted_models:
         # Apply filter
         if filter_text:
           searchable = f"{model_name} {getattr(model_def, 'title', '') or ''} {getattr(model_def, 'company', '') or ''} {getattr(model_def, 'description', '') or ''}".lower()
           if filter_text not in searchable:
             continue
-        
+
         # Group by company
         company = getattr(model_def, 'company', None)
         if company != current_company:
@@ -367,19 +367,19 @@ class CLIModulePlugin:
           current_company = company
           output_lines.append(f"\n{current_company or 'Other'}:")
           output_lines.append("-" * 40)
-        
+
         # Mark the current active model
         marker = " (active)" if model_name == active_model else ""
         marker += " (default)" if model_name == default_model else ""
-        
+
         # Build model line
         title = getattr(model_def, 'title', None) or model_name
         line = f"  • {model_name}{marker}"
         if title != model_name:
           line += f" - {title}"
-        
+
         output_lines.append(line)
-        
+
         # Add description if available
         description = getattr(model_def, 'description', None)
         if description:
@@ -387,13 +387,13 @@ class CLIModulePlugin:
           if len(description) > 80:
             desc_preview += "..."
           output_lines.append(f"    {desc_preview}")
-        
+
         # Add key metadata on one line
         meta_parts = []
         parameters = getattr(model_def, 'parameters', None)
         context_length = getattr(model_def, 'context_length', None)
         capabilities = getattr(model_def, 'capabilities', None)
-        
+
         if parameters:
           meta_parts.append(f"Size: {parameters}")
         if context_length:
@@ -401,21 +401,21 @@ class CLIModulePlugin:
           meta_parts.append(f"Context: {context_kb:.0f}k")
         if capabilities:
           meta_parts.append(f"Capabilities: {', '.join(capabilities[:3])}")
-        
+
         if meta_parts:
           output_lines.append(f"    {' | '.join(meta_parts)}")
-        
+
         model_count += 1
-      
+
       if model_count == 0:
         output_lines.append(f"\nNo models matching filter: {filter_text}")
       else:
         output_lines.append("")
         output_lines.append(f"Total: {model_count} model(s)")
-      
+
       output_lines.append("")
       return "\n".join(output_lines)
-      
+
     except Exception as e:
       logger.error(f"Error listing models: {e}", exc_info=True)
       return f"Error listing models: {str(e)}"
@@ -424,13 +424,13 @@ class CLIModulePlugin:
     """Show detailed information about a specific model."""
     if not registry:
       return "Error: Registry not available"
-    
+
     try:
       models = registry.get_supported_models()
-      
+
       # Try to resolve as an alias
       resolved_name = self._resolve_model_alias(model_name, models)
-      
+
       if resolved_name:
         if resolved_name != model_name:
           logger.info(f"Resolved alias '{model_name}' to '{resolved_name}'")
@@ -438,7 +438,7 @@ class CLIModulePlugin:
         return self._format_model_details(resolved_name, model_def)
       else:
         return f"Model not found: {model_name}\nUse :tool cli.model_list to see available models."
-      
+
     except Exception as e:
       logger.error(f"Error getting model info: {e}", exc_info=True)
       return f"Error getting model info for '{model_name}': {str(e)}"
@@ -448,21 +448,21 @@ class CLIModulePlugin:
     """Show information about the current active model."""
     if not active_model:
       return "No active model selected."
-    
+
     try:
       if registry:
         models = registry.get_supported_models()
         model_def = models.get(active_model)
-        
+
         if model_def:
           return self._format_model_details(active_model, model_def)
-      
+
       output = f"\nActive model: {active_model}"
       if active_model_source:
         output += f"\nSource: {active_model_source}"
       output += "\n(No additional information available)"
       return output
-      
+
     except Exception as e:
       logger.error(f"Error getting model info: {e}", exc_info=True)
       return f"Error getting model info: {str(e)}"
@@ -472,46 +472,46 @@ class CLIModulePlugin:
     output_lines = []
     output_lines.append(f"\nModel: {model_name}")
     output_lines.append(DIVIDER)
-    
+
     if getattr(model_def, 'title', None):
       output_lines.append(f"Title: {model_def.title}")
-    
+
     if getattr(model_def, 'company', None):
       output_lines.append(f"Company: {model_def.company}")
-    
+
     if getattr(model_def, 'description', None):
       output_lines.append(f"\nDescription:")
       output_lines.append(f"  {model_def.description}")
-    
+
     if getattr(model_def, 'parameters', None):
       output_lines.append(f"\nParameters: {model_def.parameters}")
-    
+
     if getattr(model_def, 'context_length', None):
       output_lines.append(f"Context Length: {model_def.context_length:,} tokens")
-    
+
     if getattr(model_def, 'capabilities', None):
       output_lines.append(f"Capabilities: {', '.join(model_def.capabilities)}")
-    
+
     if getattr(model_def, 'aliases', None):
       output_lines.append(f"\nAliases: {', '.join(model_def.aliases)}")
-    
+
     if getattr(model_def, 'deployments', None):
       output_lines.append(f"\nSupported Deployments: {', '.join(model_def.deployments)}")
-    
+
     if getattr(model_def, 'architectures', None):
       output_lines.append(f"Architectures: {', '.join(model_def.architectures)}")
-    
+
     if getattr(model_def, 'license', None):
       output_lines.append(f"\nLicense: {model_def.license}")
-    
+
     if getattr(model_def, 'url', None):
       output_lines.append(f"URL: {model_def.url}")
-    
+
     if getattr(model_def, 'identifiers', None):
       output_lines.append(f"\nIdentifiers:")
       for arch, identifier in model_def.identifiers.items():
         output_lines.append(f"  {arch}: {identifier}")
-    
+
     output_lines.append("")
     return "\n".join(output_lines)
 
@@ -519,12 +519,12 @@ class CLIModulePlugin:
     """Resolve a model name or alias to its canonical name."""
     if model_name in models:
       return model_name
-    
+
     for canonical_name, model_def in models.items():
       aliases = getattr(model_def, 'aliases', None)
       if aliases and model_name in aliases:
         return canonical_name
-    
+
     return None
 
   # ======================================================================
@@ -535,30 +535,30 @@ class CLIModulePlugin:
     """List all available agents."""
     if not registry:
       return "Error: Registry not available"
-    
+
     try:
       agents_info = registry.manager.get_agents()
-      
+
       if not agents_info:
         return "No agents available."
-      
+
       output_lines = []
       output_lines.append("\nAvailable Agents:")
       output_lines.append(DIVIDER)
-      
+
       for agent_info in agents_info:
         agent_name = agent_info.name
         description = getattr(agent_info, 'description', 'No description available')
-        
+
         marker = " (active)" if agent_name == active_agent else ""
         marker += " (default)" if agent_name == default_agent else ""
-        
+
         output_lines.append(f"  • {agent_name}{marker}")
         output_lines.append(f"    {description}")
-      
+
       output_lines.append("")
       return "\n".join(output_lines)
-      
+
     except Exception as e:
       logger.error(f"Error listing agents: {e}", exc_info=True)
       return f"Error listing agents: {str(e)}"
@@ -567,7 +567,7 @@ class CLIModulePlugin:
     """Show the current active agent."""
     current = active_agent or "None"
     default = default_agent or "None"
-    
+
     output = f"\nCurrent active agent: {current}"
     output += f"\nDefault agent (from settings): {default}"
     return output
@@ -581,25 +581,25 @@ class CLIModulePlugin:
     try:
       file_repo = JsonStore(files_directory)
       prompts = file_repo.list_all(artifact_type='prompts')
-      
+
       if not prompts:
         return "No prompts found."
-      
+
       output_lines = []
       output_lines.append("\nAvailable prompts:")
       output_lines.append(DIVIDER)
-      
+
       for prompt_meta in prompts:
         prompt_name = prompt_meta.get('prompt_name', 'Unknown')
-        
+
         marker = " (active)" if prompt_name == active_prompt_name else ""
         marker += " (default)" if prompt_name == default_prompt else ""
-        
+
         output_lines.append(f"  • {prompt_name}{marker}")
-      
+
       output_lines.append("")
       return "\n".join(output_lines)
-      
+
     except Exception as e:
       logger.error(f"Error listing prompts: {e}", exc_info=True)
       return f"Error listing prompts: {str(e)}"
@@ -609,37 +609,37 @@ class CLIModulePlugin:
     """Print the content of a prompt."""
     try:
       file_repo = JsonStore(files_directory)
-      
+
       # Determine which prompt to print
       target_name = prompt_name or active_prompt_name
-      
+
       if not target_name:
         return "No prompt specified and no active prompt.\nUse :prompt set <name> to set an active prompt."
-      
+
       # Find and load the prompt
       validated_name = Prompt.validate_prompt_name(target_name)
       prompts = file_repo.list_all(artifact_type='prompts')
       prompt_id = None
-      
+
       for prompt_meta in prompts:
         if prompt_meta.get('prompt_name') == validated_name:
           prompt_id = prompt_meta.get('id')
           break
-      
+
       if not prompt_id:
         return f"Prompt '{validated_name}' not found.\nUse :prompt list to see available prompts."
-      
+
       prompt = file_repo.load(prompt_id)
       if not prompt:
         return f"Error loading prompt '{validated_name}'."
-      
+
       output = f"\n{prompt.prompt_name}:"
       output += f"\n{DIVIDER}"
       output += f"\n{prompt.content}"
       output += f"\n{DIVIDER}\n"
-      
+
       return output
-      
+
     except Exception as e:
       logger.error(f"Error printing prompt: {e}", exc_info=True)
       return f"Error printing prompt: {str(e)}"
@@ -652,33 +652,33 @@ class CLIModulePlugin:
     try:
       file_repo = JsonStore(files_directory)
       conversations = file_repo.list_all(artifact_type='conversations')
-      
+
       if not conversations:
         return "No saved conversations found."
-      
+
       output_lines = []
       output_lines.append("\nSaved conversations:")
       output_lines.append(DIVIDER)
-      
+
       # Sort by updated_at (most recent first)
       conversations.sort(key=lambda c: c.get('updated_at', 0), reverse=True)
-      
+
       for conv_meta in conversations:
         conv_id = conv_meta.get('id', 'Unknown')
         title = conv_meta.get('title', 'Untitled')
         updated_at = conv_meta.get('updated_at', 0)
-        
+
         marker = " (active)" if conv_id == active_conversation_id else ""
-        
+
         time_str = time.strftime('%Y-%m-%d %H:%M', time.localtime(updated_at)) if updated_at else "Unknown"
-        
+
         output_lines.append(f"  • {title}{marker}")
         output_lines.append(f"    ID: {conv_id}")
         output_lines.append(f"    Updated: {time_str}")
-      
+
       output_lines.append("")
       return "\n".join(output_lines)
-      
+
     except Exception as e:
       logger.error(f"Error listing conversations: {e}", exc_info=True)
       return f"Error listing conversations: {str(e)}"
@@ -687,15 +687,15 @@ class CLIModulePlugin:
     """Print the entire active conversation."""
     if not conversation:
       return "No active conversation."
-    
+
     output_lines = []
-    
+
     # Title header
     title = getattr(conversation, 'title', 'Untitled')
     output_lines.append(f"\n{'=' * 70}")
     output_lines.append(f"{title.center(70)}")
     output_lines.append(f"{'=' * 70}\n")
-    
+
     messages = getattr(conversation, 'messages', [])
     if not messages:
       output_lines.append("(No messages in conversation)")
@@ -704,53 +704,53 @@ class CLIModulePlugin:
         role = self._prettify_role(msg.speaker)
         output_lines.append(f"[{role}]")
         output_lines.append("-" * 70)
-        
+
         if msg.content:
           output_lines.append(msg.content)
         else:
           output_lines.append("(empty message)")
-        
+
         if i < len(messages) - 1:
           output_lines.append("")
-    
+
     output_lines.append("")
     output_lines.append(f"{'=' * 70}")
     output_lines.append(f"{f'{len(messages)} message(s)'.center(70)}")
     output_lines.append(f"{'=' * 70}\n")
-    
+
     return "\n".join(output_lines)
 
   def _conversation_details(self, conversation=None, **kwargs) -> str:
     """Show metadata and technical info about the active conversation."""
     if not conversation:
       return "No active conversation."
-    
+
     output_lines = []
     output_lines.append(f"\nConversation Details:")
     output_lines.append(DIVIDER)
     output_lines.append(f"  Title: {getattr(conversation, 'title', 'Untitled')}")
     output_lines.append(f"  ID: {getattr(conversation, 'id', 'Unknown')}")
-    
+
     messages = getattr(conversation, 'messages', [])
     output_lines.append(f"  Messages: {len(messages)}")
-    
+
     created_at = getattr(conversation, 'created_at', None)
     updated_at = getattr(conversation, 'updated_at', None)
-    
+
     if created_at:
       created_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created_at))
       output_lines.append(f"  Created: {created_str}")
     if updated_at:
       updated_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(updated_at))
       output_lines.append(f"  Updated: {updated_str}")
-    
+
     prompt = getattr(conversation, 'prompt', None)
     if prompt and isinstance(prompt, dict) and prompt.get('system'):
       prompt_preview = prompt['system'][:100]
       if len(prompt['system']) > 100:
         prompt_preview += "..."
       output_lines.append(f"\n  System Prompt: {prompt_preview}")
-    
+
     settings = getattr(conversation, 'settings', None)
     if settings:
       output_lines.append(f"\n  Settings:")
@@ -760,25 +760,25 @@ class CLIModulePlugin:
         output_lines.append(f"    Temperature: {settings.temperature}")
       if hasattr(settings, 'max_tokens'):
         output_lines.append(f"    Max Tokens: {settings.max_tokens or 'Default'}")
-    
+
     tool_definitions = getattr(conversation, 'tool_definitions', None)
     if tool_definitions:
       output_lines.append(f"\n  Tool Definitions: {len(tool_definitions)}")
-    
+
     events = getattr(conversation, 'events', None)
     if events:
       output_lines.append(f"  Events (audit trail): {len(events)}")
-    
+
     if messages:
       role_counts = {}
       for msg in messages:
         role_name = self._prettify_role(msg.speaker)
         role_counts[role_name] = role_counts.get(role_name, 0) + 1
-      
+
       output_lines.append(f"\n  Message Breakdown:")
       for role, count in sorted(role_counts.items()):
         output_lines.append(f"    {role}: {count}")
-    
+
     output_lines.append("")
     return "\n".join(output_lines)
 
@@ -797,16 +797,16 @@ class CLIModulePlugin:
     """Get the value of a setting or all settings."""
     if not settings:
       return "Error: Settings not available"
-    
+
     try:
       if setting_name:
         current_value, default_value, help_text, category = settings.get_setting_info(setting_name)
-        
+
         if current_value is None and not help_text:
           return f"Unknown setting: {setting_name}\nUse :help to see available settings."
-        
+
         display_value = settings._mask_sensitive_value(setting_name, current_value)
-        
+
         output = f"\n{setting_name}: {display_value}"
         if help_text:
           output += f"\n  ({help_text})"
@@ -814,14 +814,14 @@ class CLIModulePlugin:
       else:
         # Get all settings grouped by category
         from claia.cli.settings import SettingCategory
-        
+
         output_lines = []
         output_lines.append("\n" + "=" * 70)
         output_lines.append("                         CURRENT SETTINGS                           ")
         output_lines.append("=" * 70)
-        
+
         categorized = settings.get_all_settings_info()
-        
+
         for category in SettingCategory:
           if category in categorized:
             output_lines.append(f"{category.value}:")
@@ -829,10 +829,10 @@ class CLIModulePlugin:
             for var_name, display_value, help_text in categorized[category]:
               output_lines.append(f"  {var_name:30s} = {display_value}")
             output_lines.append("")
-        
+
         output_lines.append("=" * 70)
         return "\n".join(output_lines)
-        
+
     except Exception as e:
       logger.error(f"Error getting settings: {e}", exc_info=True)
       return f"Error getting settings: {str(e)}"
@@ -848,11 +848,11 @@ class CLIModulePlugin:
       version = "dev"
     except Exception:
       version = "unknown"
-    
+
     version_text = f"CLAIA version {version}"
     version_text += f"\nPython {sys.version.split()[0]}"
     version_text += f"\nPlatform: {sys.platform}"
-    
+
     return version_text
 
   def _help(self, registry=None, command_specs=None, current_mode: str = "interactive", **kwargs) -> str:
@@ -861,11 +861,11 @@ class CLIModulePlugin:
     output_lines.append("\n" + "=" * 70)
     output_lines.append("                             CLAIA HELP                              ")
     output_lines.append("=" * 70)
-    
+
     # Built-in Commands
     output_lines.append("BUILT-IN COMMANDS")
     output_lines.append("-" * 70)
-    
+
     if command_specs:
       if current_mode == 'interactive':
         output_lines.append("  Commands (prefix with ':'):")
@@ -880,13 +880,13 @@ class CLIModulePlugin:
           output_lines.append(f"    {aliases_str:25s} - {help_desc}")
     else:
       output_lines.append("  (Command specifications not available)")
-    
+
     output_lines.append("")
-    
+
     # Available Tools/Modules
     output_lines.append("AVAILABLE TOOLS & MODULES")
     output_lines.append("-" * 70)
-    
+
     if registry:
       catalog = registry.get_commands_catalog()
       if catalog:
@@ -895,14 +895,14 @@ class CLIModulePlugin:
           info = mod.get('module_info')
           title = getattr(info, 'title', None) if info else None
           desc = getattr(info, 'description', None) if info else None
-          
+
           line = f"  [{mod_name}]"
           if title:
             line += f" {title}"
           output_lines.append(line)
           if desc:
             output_lines.append(f"    {desc}")
-          
+
           tools = mod.get('list_of_tools', [])
           if tools:
             for tool in tools:
@@ -913,15 +913,15 @@ class CLIModulePlugin:
           else:
             output_lines.append(f"    (no tools available)")
           output_lines.append("")
-        
+
         output_lines.append(f"  Total: {len(catalog)} module(s), {total_tools} tool(s)")
       else:
         output_lines.append("  No modules loaded")
     else:
       output_lines.append("  (Registry not available)")
-    
+
     output_lines.append("")
     output_lines.append("=" * 70)
-    
+
     return "\n".join(output_lines)
 

@@ -8,10 +8,10 @@ without requiring pluggy extensions.
 Usage Example:
     # In the CLI, set the writer agent as active:
     :set active_agent writer
-    
+
     # Then interact with the writer agent:
     Help me write a professional email to my team about the new project.
-    
+
     # Or use it inline for a single request:
     :agent set writer
     Write a creative short story about a robot learning to paint.
@@ -61,7 +61,7 @@ You prioritize clarity, engagement, and effective communication while respecting
 class WriterAgent(BaseAgent):
   """
   A specialized agent for writing tasks with enhanced literary capabilities.
-  
+
   This agent applies a writer-focused system prompt to help with various
   writing tasks including creative writing, technical documentation,
   business communications, and more.
@@ -72,7 +72,7 @@ class WriterAgent(BaseAgent):
     """Process a writing request with specialized writing capabilities."""
     try:
       model_id = process.parameters.get("model_id")
-      
+
       if not model_id:
         raise ValueError("No model_id provided in process parameters")
 
@@ -105,15 +105,15 @@ class WriterAgent(BaseAgent):
 def register_cli_agents(registry) -> None:
   """
   Register all CLI-specific agents with the provided registry.
-  
+
   This demonstrates the programmatic agent registration approach using
   Registry.register() instead of pluggy extensions.
-  
+
   Args:
       registry: The Registry instance to register agents with
   """
   logger.info("Registering CLI-specific agents")
-  
+
   # Register the Writer agent
   registry.register(
     agent_class=WriterAgent,
@@ -121,6 +121,6 @@ def register_cli_agents(registry) -> None:
     title="Writer Agent",
     description="A specialized agent for writing tasks with enhanced literary capabilities",
   )
-  
+
   logger.debug("Successfully registered writer agent")
 
