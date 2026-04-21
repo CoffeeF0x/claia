@@ -82,7 +82,7 @@ from claia.cli.commands import Commands
 from claia.cli.defaults import initialize_defaults
 from claia.cli.logger import initialize_logging
 from claia.cli.agents import register_cli_agents
-from claia.cli.paced_renderer import PacedRenderer
+from claia.cli.renderer import PacedRenderer
 from claia.framework.registry import Registry
 
 
