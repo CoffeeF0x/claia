@@ -47,8 +47,10 @@ class OpenAIModel(APIModel):
       settings = self.update_settings({}, **kwargs)
       instructions, input_messages = self._convert_conversation(conversation)
 
-      # Build base request — excluded fields are handled explicitly below
-      _skip = {"stream", "max_tokens"}
+      # Build base request — excluded fields are handled explicitly below.
+      # n, stop, and top_k are Chat Completions params not supported by the
+      # Responses API; including them causes a 400 Bad Request.
+      _skip = {"stream", "max_tokens", "n", "stop", "top_k"}
       request_data: Dict[str, Any] = {
         "model": self.model_name,
         "input": input_messages,
@@ -89,6 +91,8 @@ class OpenAIModel(APIModel):
     for message in conversation.get_thread():
       if message.speaker not in (MessageRole.USER, MessageRole.ASSISTANT):
         continue
+      if not message.content:
+        continue
       role = "user" if message.speaker == MessageRole.USER else "assistant"
       input_messages.append({"role": role, "content": message.content})
 
@@ -99,6 +103,15 @@ class OpenAIModel(APIModel):
 
     The Responses API SSE stream emits typed events. Text deltas arrive as
     events with type == "response.output_text.delta" and a "delta" string field.
+
+    The stream can also terminate with non-delta events that the caller needs
+    to know about:
+      - "error" / "response.failed": API returned 200 but the run failed
+        partway through (e.g. quota, content filter). These carry a nested
+        ``error.message`` that we surface so it reaches the user.
+      - "response.completed": clean end of stream; no [DONE] sentinel is sent.
+    Without explicit handling these events were silently dropped, leaving
+    the CLI with a long pause and an empty assistant message.
     """
     try:
       response = self.post("responses", {**request_data, "stream": True}, stream=True)
@@ -118,12 +131,27 @@ class OpenAIModel(APIModel):
 
         try:
           data = json.loads(data_text)
-          if data.get("type") == "response.output_text.delta":
-            delta = data.get("delta", "")
-            full_response += delta
-            yield delta
         except json.JSONDecodeError:
           continue
+
+        event_type = data.get("type")
+
+        if event_type == "response.output_text.delta":
+          delta = data.get("delta", "")
+          full_response += delta
+          yield delta
+
+        elif event_type in ("error", "response.failed"):
+          err = data.get("error") or data.get("response", {}).get("error") or {}
+          message = err.get("message") or "Unknown error from OpenAI Responses API"
+          code = err.get("code") or err.get("type")
+          error_msg = f"OpenAI error ({code}): {message}" if code else f"OpenAI error: {message}"
+          logger.error(error_msg)
+          yield error_msg
+          return error_msg
+
+        elif event_type in ("response.completed", "response.incomplete"):
+          break
 
       return full_response
 
@@ -142,6 +170,19 @@ class OpenAIModel(APIModel):
     try:
       response = self.post("responses", request_data)
       data = response.json()
+
+      # Non-streaming runs can still report a failure inline via top-level
+      # error or response.status == "failed" with a nested error block.
+      err = data.get("error") or (
+        data.get("response", {}).get("error") if data.get("status") == "failed" else None
+      )
+      if err:
+        message = err.get("message") or "Unknown error from OpenAI Responses API"
+        code = err.get("code") or err.get("type")
+        error_msg = f"OpenAI error ({code}): {message}" if code else f"OpenAI error: {message}"
+        logger.error(error_msg)
+        yield error_msg
+        return error_msg
 
       content = ""
       for item in data.get("output", []):
