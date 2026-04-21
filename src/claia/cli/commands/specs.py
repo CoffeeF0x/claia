@@ -27,6 +27,7 @@ COMMAND_SPECS: List[Tuple[List[str], str, str, bool, bool, CommandPriority]] = [
   (['t', 'tool'],         'tool',         'List available modules or execute tool commands',                 True,  True,  CommandPriority.ACTION),
   (['g', 'get'],          'get',          'View current settings (optionally specify setting name)',         True,  False, CommandPriority.CONFIG),
   (['s', 'set'],          'set',          'Update a setting (usage: set <key> <value> or key=value)',        True,  False, CommandPriority.CONFIG),
+  (['reset'],             'reset',        'Reset a setting (usage: reset <key>) or all RUNTIME settings (--runtime)', True, False, CommandPriority.CONFIG),
   (['a', 'agent'],        'agent',        'Manage agents',                                                   True,  False, CommandPriority.CONFIG),
   (['p', 'prompt'],       'prompt',       'Manage prompts',                                                  True,  False, CommandPriority.CONFIG),
   (['c', 'conversation'], 'conversation', 'Manage conversations',                                            True,  False, CommandPriority.CONFIG),

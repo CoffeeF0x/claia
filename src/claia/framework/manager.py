@@ -184,6 +184,31 @@ class Manager:
               except Exception as e:
                 logger.debug(f"Could not get info for {ep.name}: {e}")
 
+            # Architectures carry their RUNTIME generation knobs on the
+            # model class itself (BaseModel.runtime_params), not in
+            # ArchitectureInfo. Pull those in so they're discoverable as
+            # extension params (CLI flags, dispatch-time filtering)
+            # without forcing every architecture to redeclare them.
+            # We mirror the merged list back onto entry.info.params so
+            # consumers that read ``ArchitectureInfo`` directly (e.g.
+            # ``Registry._run_stream``) also see the runtime specs.
+            if group == "claia.architectures" and hasattr(temp_instance, "get_model_class"):
+              try:
+                model_cls = temp_instance.get_model_class()
+                model_runtime = getattr(model_cls, "runtime_params", None) or []
+                seen_names = {p.name for p in entry.params}
+                for spec in model_runtime:
+                  if spec.name not in seen_names:
+                    entry.params.append(spec)
+                    seen_names.add(spec.name)
+                if entry.info is not None and hasattr(entry.info, 'params'):
+                  try:
+                    entry.info.params = list(entry.params)
+                  except Exception:
+                    pass
+              except Exception as e:
+                logger.debug(f"Could not collect runtime_params for {ep.name}: {e}")
+
           except Exception as e:
             logger.debug(f"Could not create temp instance for {ep.name}: {e}")
 
@@ -309,6 +334,15 @@ class Manager:
           if entry.params and ctor_kwargs:
             filtered_kwargs = self.filter_init_kwargs(ctor_kwargs, entry.params)
 
+          # Required-kwargs validation is deliberately NOT enforced
+          # here — most plugin classes (Architectures, Deployments,
+          # Solvers, Agents) take no constructor args and merely return
+          # a model/info class. The "required" credentials apply when
+          # the underlying model is actually constructed at request
+          # time, which is where Registry/Manager call sites should
+          # invoke ``validate_required_init_kwargs`` if they want to
+          # surface a clean error instead of letting the model class
+          # raise on its own.
           if filtered_kwargs:
             try:
               inst = cls(**filtered_kwargs)
@@ -354,56 +388,48 @@ class Manager:
 
   @staticmethod
   def filter_init_kwargs(kwargs: Dict[str, Any], params: Optional[List[ParamSpec]]) -> Dict[str, Any]:
-    """Return the subset of ``kwargs`` matching a plugin's INIT specs.
+    """Return the coerced subset of ``kwargs`` matching a plugin's INIT specs.
 
     Any kwarg whose name does not match an ``INIT``-scoped ``ParamSpec``
-    in ``params`` is dropped. Unmatched kwargs are logged at debug level
-    so noisy caller sites are visible under verbose logging without
-    spamming normal runs.
+    in ``params`` is dropped. Matching values are coerced to the spec's
+    declared type and validated against ``choices`` (if present). Coerce
+    or choice failures are logged as warnings and the offending value is
+    dropped — the plugin's own constructor default applies.
+
+    ``required=True`` is NOT enforced here (filtering is a partial
+    operation and may be called before all sources have been merged).
+    Use :meth:`validate_required_init_kwargs` immediately before
+    instantiation to enforce required specs.
     """
-    if not params:
-      return {}
-
-    init_names = {p.name for p in params if p.scope == ParamScope.INIT}
-    if not init_names:
-      return {}
-
-    filtered: Dict[str, Any] = {}
-    for name in init_names:
-      if name in kwargs:
-        filtered[name] = kwargs[name]
-
-    if logger.isEnabledFor(logging.DEBUG):
-      undeclared = [k for k in kwargs if k not in init_names]
-      if undeclared:
-        logger.debug(f"Dropping undeclared init kwargs: {sorted(undeclared)}")
-    return filtered
+    return _filter_by_scope(kwargs, params, ParamScope.INIT, label="init")
 
   @staticmethod
   def filter_runtime_kwargs(kwargs: Dict[str, Any], params: Optional[List[ParamSpec]]) -> Dict[str, Any]:
-    """Return the subset of ``kwargs`` matching a plugin's RUNTIME specs.
+    """Return the coerced subset of ``kwargs`` matching a plugin's RUNTIME specs.
 
-    Mirrors ``filter_init_kwargs`` but for per-call generation
+    Mirrors :meth:`filter_init_kwargs` for per-call generation
     parameters. Defaults from the ParamSpecs are NOT applied here — use
     :meth:`BaseModel.update_settings` to overlay declared defaults.
     """
+    return _filter_by_scope(kwargs, params, ParamScope.RUNTIME, label="runtime")
+
+  @staticmethod
+  def validate_required_init_kwargs(kwargs: Dict[str, Any], params: Optional[List[ParamSpec]]) -> List[str]:
+    """Return the names of any ``required=True`` INIT specs missing from ``kwargs``.
+
+    Empty-string and ``None`` values count as missing. Callers should
+    raise (or skip instantiation) if the returned list is non-empty.
+    """
     if not params:
-      return {}
-
-    runtime_names = {p.name for p in params if p.scope == ParamScope.RUNTIME}
-    if not runtime_names:
-      return {}
-
-    filtered: Dict[str, Any] = {}
-    for name in runtime_names:
-      if name in kwargs:
-        filtered[name] = kwargs[name]
-
-    if logger.isEnabledFor(logging.DEBUG):
-      undeclared = [k for k in kwargs if k not in runtime_names]
-      if undeclared:
-        logger.debug(f"Dropping undeclared runtime kwargs: {sorted(undeclared)}")
-    return filtered
+      return []
+    missing: List[str] = []
+    for spec in params:
+      if spec.scope != ParamScope.INIT or not spec.required:
+        continue
+      value = kwargs.get(spec.name)
+      if value is None or value == "":
+        missing.append(spec.name)
+    return missing
 
   # Generic helpers for lookups and info collection
   def _find_plugin_by_name(self, pm: pluggy.PluginManager, info_method: str, name: str) -> Tuple[Optional[Any], Optional[Any]]:
@@ -465,9 +491,37 @@ class Manager:
   ######################################################################
   # MODELS
   def get_available_architectures(self) -> Dict[str, ArchitectureInfo]:
-    """Get all available architecture plugins and their info keyed by name."""
+    """
+    Get all available architecture plugins and their info keyed by name.
+
+    The returned ``ArchitectureInfo.params`` lists are augmented with the
+    model class's ``runtime_params`` (collected during ``discover_plugins``)
+    so dispatch-time consumers see both INIT and RUNTIME specs for the
+    architecture without having to reach into the lazy plugin entries.
+    """
     self.load_all_plugins()
     all_arch = self._collect_info_dict(self.architecture_pm, 'get_architecture_info')
+
+    cached_by_name: Dict[str, List[ParamSpec]] = {}
+    for entry in self._lazy_plugins.get("claia.architectures", []):
+      info_name = getattr(entry.info, 'name', None) if entry.info else None
+      if info_name:
+        cached_by_name[info_name] = list(entry.params)
+
+    for name, info in all_arch.items():
+      cached = cached_by_name.get(name)
+      if cached and hasattr(info, 'params'):
+        seen = {p.name for p in (info.params or [])}
+        merged = list(info.params or [])
+        for spec in cached:
+          if spec.name not in seen:
+            merged.append(spec)
+            seen.add(spec.name)
+        try:
+          info.params = merged
+        except Exception:
+          pass
+
     logger.debug(f"Collected {len(all_arch)} architectures")
     return all_arch
 
@@ -746,3 +800,118 @@ class Manager:
       if agent_info.name == agent_name:
         return agent_info
     return None
+
+
+########################################################################
+#                  KWARG COERCION / VALIDATION HELPERS                 #
+########################################################################
+class _CoerceFail:
+  """Sentinel returned from ``_coerce_value`` when conversion fails."""
+  __slots__ = ()
+
+
+_COERCE_FAIL = _CoerceFail()
+_TRUTHY = {"true", "1", "yes", "on", "y", "t"}
+_FALSY = {"false", "0", "no", "off", "n", "f"}
+
+
+def _mask_for_log(value: Any, spec: ParamSpec) -> str:
+  """
+  Mask ``value`` for inclusion in log output if ``spec`` is marked secret.
+
+  Returns the original value otherwise. Used by ``_filter_by_scope``
+  warnings so a malformed API token never lands in plaintext logs.
+  """
+  if not getattr(spec, 'secret', False):
+    return value
+  s = str(value)
+  if not s:
+    return "***"
+  return "***" + s[-4:] if len(s) > 4 else "***"
+
+
+def _coerce_value(value: Any, target: type) -> Any:
+  """Best-effort coerce ``value`` to ``target``. Returns ``_COERCE_FAIL`` on failure."""
+  if value is None:
+    return None
+  if target is None:
+    return value
+  if isinstance(value, target) and not (target is int and isinstance(value, bool)):
+    return value
+  try:
+    if target is bool:
+      if isinstance(value, str):
+        v = value.strip().lower()
+        if v in _TRUTHY:
+          return True
+        if v in _FALSY:
+          return False
+        return _COERCE_FAIL
+      return bool(value)
+    if target is int:
+      if isinstance(value, str):
+        return int(value.strip())
+      return int(value)
+    if target is float:
+      if isinstance(value, str):
+        return float(value.strip())
+      return float(value)
+    if target is str:
+      return str(value)
+    return target(value)
+  except (TypeError, ValueError):
+    return _COERCE_FAIL
+
+
+def _filter_by_scope(
+  kwargs: Dict[str, Any],
+  params: Optional[List[ParamSpec]],
+  scope: ParamScope,
+  label: str,
+) -> Dict[str, Any]:
+  """
+  Return the subset of ``kwargs`` matching ``params`` of the given scope.
+
+  Coerces each value to its spec's declared type and validates
+  ``choices``. Coerce/choice failures are logged at WARNING and the
+  value is dropped (so the plugin's own default applies).
+  """
+  if not params:
+    return {}
+
+  scoped = {p.name: p for p in params if p.scope == scope}
+  if not scoped:
+    return {}
+
+  filtered: Dict[str, Any] = {}
+  for name, spec in scoped.items():
+    if name not in kwargs:
+      continue
+    raw = kwargs[name]
+    coerced = _coerce_value(raw, spec.type or str)
+    if coerced is _COERCE_FAIL:
+      logger.warning(
+        f"Dropping {label} kwarg {name}={_mask_for_log(raw, spec)!r}: "
+        f"could not coerce to {(spec.type or str).__name__}"
+      )
+      continue
+    if spec.choices is not None and coerced not in spec.choices:
+      logger.warning(
+        f"Dropping {label} kwarg {name}={_mask_for_log(coerced, spec)!r}: "
+        f"not in allowed choices {spec.choices}"
+      )
+      continue
+    filtered[name] = coerced
+
+  if logger.isEnabledFor(logging.DEBUG):
+    undeclared = [k for k in kwargs if k not in scoped]
+    if undeclared:
+      logger.debug(f"Dropping undeclared {label} kwargs: {sorted(undeclared)}")
+  return filtered
+
+
+# Module-level aliases so callers don't have to go through the Manager
+# class (and aren't affected by Manager being monkeypatched in tests).
+filter_init_kwargs = Manager.filter_init_kwargs
+filter_runtime_kwargs = Manager.filter_runtime_kwargs
+validate_required_init_kwargs = Manager.validate_required_init_kwargs

@@ -13,7 +13,7 @@ from claia.framework.registry import Registry
 from .specs import COMMAND_SPECS, CommandPriority, generate_cli_alias
 from .base import BaseCommand
 from .system import QuitCommand, HelpCommand, VersionCommand
-from .get_set import GetCommand, SetCommand
+from .get_set import GetCommand, SetCommand, ResetCommand
 from .setup import SetupCommand
 from .agent import AgentCommand, PromptCommand
 from .tool import ToolCommand
@@ -33,6 +33,7 @@ COMMAND_REGISTRY: Dict[str, Type[BaseCommand]] = {
   'version': VersionCommand,
   'get': GetCommand,
   'set': SetCommand,
+  'reset': ResetCommand,
   'setup': SetupCommand,
   'agent': AgentCommand,
   'prompt': PromptCommand,

@@ -1,23 +1,30 @@
 """
-This module manages the configuration settings for the CLAI application.
+This module manages the configuration settings for the CLAIA application.
 
-It maintains a list of settings for the various libraries and modules used by CLAI,
-and loads settings from various sources (environment variables and command-line arguments).
+It maintains a unified ``ParamSpec`` registry for all configurable
+settings — application-level (``claia.cli.params.APP_PARAMS``) plus any
+plugin-declared specs pulled in from the registry. Values are loaded
+from CLI args, environment variables, .env files, and ``settings.json``,
+with deterministic precedence.
+
+Single source of truth: every setting is described by a ``ParamSpec``;
+there is no parallel tuple list to keep in sync.
 """
 
 # External dependencies
 import os
 import argparse
 import json
-from collections import defaultdict
-from typing import Dict, Any, List, Tuple
+import logging
+from collections import defaultdict, OrderedDict
+from typing import Dict, Any, List, Tuple, Optional
 from dotenv import load_dotenv
 
 # Internal dependencies
 from claia.core.enums.logging import LogLevel, LogFormat
 from claia.core.plugins.base import ParamScope, ParamSpec, SettingCategory
+from claia.cli.params import APP_PARAMS
 from claia.framework.registry import Registry
-
 
 
 ########################################################################
@@ -29,57 +36,17 @@ DEFAULT_ENV_FILE = ".env"
 DEFAULT_SETTINGS_FILE = "settings.json"
 ENV_PREFIX = "CLAIA_"
 
-# Format: (variable_name, default_value, externally_settable, category, help_text)
-#
-# Base configuration for CLI-level / app-level settings.
-#
-# Plugin-owned parameters (credentials, endpoints, model knobs that belong
-# to a specific architecture/deployment/tool-module) are NOT listed here —
-# plugins declare them via ``ParamSpec`` and ``Settings._extend_with_extensions``
-# pulls them in at startup. This keeps a single source of truth per param.
-CONFIG_VARS: List[Tuple[str, Any, bool, SettingCategory, str]] = [
-  # API Tokens — only entries NOT yet owned by a built-in plugin remain
-  # here. They'll migrate to ParamSpec declarations in Phase 3 (γ) when
-  # the corresponding architectures/deployments land.
-  ("local_llm_api_token",               "",            True,  SettingCategory.API,          "LocalLLM API Token"),
-  ("runpod_api_token",                  "",            True,  SettingCategory.API,          "RunPod API Token"),
-  ("massed_compute_api_token",          "",            True,  SettingCategory.API,          "Massed Compute API Token"),
-  ("openrouter_api_token",              "",            True,  SettingCategory.API,          "OpenRouter API Token"),
-  ("cloudflare_api_token",              "",            True,  SettingCategory.API,          "Cloudflare API Token"),
-
-  # URLs and Endpoints
-  ("local_llm_base_url",                "",            True,  SettingCategory.ENDPOINT,     "LocalLLM Base URL"),
-
-  # Directories
-  ("files_directory",                   "storage",     True,  SettingCategory.DIRECTORY,    "Directory for generated, converted, or imported files"),
-  ("models_directory",                  "models",      True,  SettingCategory.DIRECTORY,    "Directory for model files"),
-
-  # Model Settings
-  ("default_model",                     "",            True,  SettingCategory.MODEL,        "Default model name"),
-  ("default_model_source",              "",            True,  SettingCategory.MODEL,        "Default model source"),
-
-  # Prompt Settings
-  ("default_prompt",                    "",            True,  SettingCategory.PROMPT,       "Default prompt name to use"),
-
-  # Agent Settings
-  ("default_agent",                     "",            True,  SettingCategory.AGENT,        "Default agent type"),
-
-  # VLLM Settings
-  ("vllm_zone",                         "",            True,  SettingCategory.VLLM,         "VLLM Zone"),
-  ("vllm_email",                        "",            True,  SettingCategory.VLLM,         "VLLM Email"),
-  ("vllm_subdomain",                    "",            True,  SettingCategory.VLLM,         "VLLM Subdomain"),
-  ("vllm_eab_kid",                      "",            True,  SettingCategory.VLLM,         "VLLM EAB Kid"),
-  ("vllm_eab_hmac_encoded",             "",            True,  SettingCategory.VLLM,         "VLLM EAB HMAC Encoded"),
-
-  # Application Settings
-  ("log_level",                         "",            True,  SettingCategory.APPLICATION,  "Logging level"),
-  ("log_format",                        "",            True,  SettingCategory.APPLICATION,  "Logging format (simple, standard, detailed)"),
-  ("log_file",                          "claia.log",   True,  SettingCategory.APPLICATION,  "Log file path (empty for console only)"),
-  ("env_file",                          "",            True,  SettingCategory.APPLICATION,  "Path to .env file for configuration"),
-  ("suppress_setup_notice",             False,         True,  SettingCategory.APPLICATION,  "Suppress API key setup notice on startup"),
-]
+# Sentinel "unset" values per type. RUNTIME params use these to indicate
+# "let the plugin's spec default apply" rather than "force this value".
+_RUNTIME_SENTINELS = {
+  str: "",
+  int: None,
+  float: None,
+  bool: None,
+}
 
 
+logger = logging.getLogger(__name__)
 
 
 ########################################################################
@@ -88,6 +55,11 @@ CONFIG_VARS: List[Tuple[str, Any, bool, SettingCategory, str]] = [
 class Settings:
   """
   Stores and manages configuration settings for the CLAIA application.
+
+  Internally backed by ``self.config_specs`` (an ordered mapping of
+  ``name -> ParamSpec``). All app-level and plugin-declared settings
+  share this single registry; RUNTIME-scoped specs are tracked
+  separately so they can be selectively threaded into per-call kwargs.
   """
 
   def __init__(self, registry: 'Registry' = None):
@@ -113,16 +85,22 @@ class Settings:
     self.root_logger = None
 
     # Track which settings came from CLI (to avoid saving them to file)
-    self._cli_sourced_settings = set()
+    self._cli_sourced_settings: set = set()
 
-    # Copy base CONFIG_VARS to instance and extend with extension settings
-    self.config_vars: List[Tuple[str, Any, bool, SettingCategory, str]] = list(CONFIG_VARS)
+    # Unified spec registry: name -> ParamSpec. Insertion order matters
+    # (preserves CONFIG_VARS-equivalent ordering for help output).
+    self.config_specs: "OrderedDict[str, ParamSpec]" = OrderedDict()
+    for spec in APP_PARAMS:
+      self.config_specs[spec.name] = spec
+
     self._extension_settings: List[str] = []
 
     # Track secret ParamSpecs by name so sensitive values get masked in
     # display output regardless of whether their name contains
     # 'token'/'password'.
-    self._secret_settings: set = set()
+    self._secret_settings: set = {
+      spec.name for spec in self.config_specs.values() if spec.secret
+    }
 
     # Extend with extension settings if registry is provided
     if registry is not None:
@@ -135,40 +113,36 @@ class Settings:
     # Save settings to file after loading (creates file if doesn't exist, updates if values changed)
     self._save_settings_to_file()
 
+  # ----------------------------------------------------------------
+  # Spec helpers
+  # ----------------------------------------------------------------
+  def _is_unset(self, spec: ParamSpec, value: Any) -> bool:
+    """True if ``value`` matches the sentinel-unset for ``spec``'s type."""
+    sentinel = _RUNTIME_SENTINELS.get(spec.type, None)
+    return value is None or value == sentinel
+
   def _extend_with_extensions(self, registry: 'Registry') -> None:
     """
-    Absorb plugin-declared ``ParamSpec`` objects into ``config_vars``.
+    Absorb plugin-declared ``ParamSpec`` objects into ``config_specs``.
 
-    Every ``INIT``-scoped ``ParamSpec`` declared by a discovered plugin
-    becomes a dynamic setting. Rich metadata from the spec (default,
-    category, description, ``externally_settable``) is preserved, so
-    plugin-owned settings get first-class CLI/env/JSON support without
-    having to duplicate them in ``CONFIG_VARS``.
+    Both ``INIT``- and ``RUNTIME``-scoped specs are absorbed:
+      - INIT specs configure the plugin at construction time (API
+        tokens, endpoints, ...). They flow through ``get_user_kwargs``
+        on every call.
+      - RUNTIME specs are per-call generation knobs (temperature,
+        max_tokens, ...). They flow through ``get_runtime_kwargs`` and
+        are merged with per-call overrides at dispatch time.
 
-    When a plugin spec clashes with an existing ``config_vars`` entry,
-    the first declaration wins (``CONFIG_VARS`` or the first plugin to
-    declare it).
-
-    Args:
-      registry: The CLAIA registry instance.
+    First declaration wins: if a plugin tries to redeclare an already-known
+    setting (either app-level or another plugin's), it is skipped.
     """
-    specs = registry.get_extension_params(scope=ParamScope.INIT)
-
-    existing_names = {var[0] for var in self.config_vars}
+    specs = registry.get_extension_params(scope=None)  # both INIT and RUNTIME
 
     for spec in specs:
-      if spec.name in existing_names:
+      if spec.name in self.config_specs:
         continue
-
-      default = spec.default if spec.default is not None else ""
-      category = spec.category if spec.category is not None else SettingCategory.EXTENSION
-      help_text = spec.description or self._generate_help_text(spec.name)
-
-      self.config_vars.append(
-        (spec.name, default, spec.externally_settable, category, help_text)
-      )
+      self.config_specs[spec.name] = spec
       self._extension_settings.append(spec.name)
-      existing_names.add(spec.name)
       if spec.secret:
         self._secret_settings.add(spec.name)
 
@@ -181,116 +155,159 @@ class Settings:
     """Get the list of setting names that were added from extensions."""
     return list(self._extension_settings)
 
+  # ----------------------------------------------------------------
+  # Backward-compatible tuple view
+  # ----------------------------------------------------------------
+  @property
+  def config_vars(self) -> List[Tuple[str, Any, bool, SettingCategory, str]]:
+    """
+    Backward-compatible view of ``config_specs`` as 5-tuples.
 
+    Format: ``(name, default, externally_settable, category, help_text)``.
+
+    Prefer iterating ``self.config_specs.values()`` directly in new
+    code. This shim preserves the original CONFIG_VARS contract for
+    callers that haven't been migrated yet.
+    """
+    out: List[Tuple[str, Any, bool, SettingCategory, str]] = []
+    for spec in self.config_specs.values():
+      default = spec.default if spec.default is not None else ("" if spec.type is str else spec.default)
+      category = spec.category if spec.category is not None else SettingCategory.MISC
+      help_text = spec.description or self._generate_help_text(spec.name)
+      out.append((spec.name, default, spec.externally_settable, category, help_text))
+    return out
+
+  def _spec_default(self, spec: ParamSpec) -> Any:
+    """
+    Return the value to seed a setting with at boot.
+
+    For RUNTIME specs we deliberately seed the sentinel-unset value (not
+    the plugin's true default) so that ``get_runtime_kwargs`` can
+    distinguish "user explicitly set this" from "unset, let the plugin
+    apply its own default". For INIT specs we seed the spec's actual
+    default.
+    """
+    if spec.scope == ParamScope.RUNTIME:
+      return _RUNTIME_SENTINELS.get(spec.type, None)
+    if spec.default is not None:
+      return spec.default
+    return "" if spec.type is str else spec.default
+
+  # ----------------------------------------------------------------
+  # Config loading
+  # ----------------------------------------------------------------
   def _load_config(self):
     """
-    Load configuration from command line arguments, .env file, and environment variables
-    Priority: Command line args > .env file > Environment variables > settings.json > Defaults
+    Load configuration from command line arguments, .env file, and environment variables.
+
+    Priority: CLI args > .env file > Environment variables > settings.json > spec defaults
     """
     # Disable argparse's automatic -h/--help so our custom help handler can take over
     # Disable allow_abbrev to prevent --model from matching --models-directory etc.
     parser = argparse.ArgumentParser(description='CLAIA Settings', add_help=False, allow_abbrev=False)
 
-    # Add arguments based on config_vars, but only for externally settable ones
-    for var_name, default, externally_settable, category, help_text in self.config_vars:
-      if externally_settable:
-        cli_name = f"--{var_name.replace('_', '-')}"
+    for spec in self.config_specs.values():
+      if not spec.externally_settable:
+        continue
 
-        # Handle special case for boolean values
-        if isinstance(default, bool):
-          parser.add_argument(
-            cli_name,
-            type=lambda x: x.lower() == 'true',
-            default=None,
-            help=help_text)
-        # Handle special case for integer values
-        elif isinstance(default, int):
-          parser.add_argument(
-            cli_name,
-            type=int,
-            default=None,
-            help=help_text)
-        else:
-          parser.add_argument(
-            cli_name,
-            default=None,
-            help=help_text)
+      cli_name = f"--{spec.name.replace('_', '-')}"
+      help_text = spec.description or self._generate_help_text(spec.name)
+      if spec.choices:
+        help_text = f"{help_text} (choices: {', '.join(str(c) for c in spec.choices)})"
+
+      if spec.type is bool:
+        parser.add_argument(
+          cli_name,
+          type=lambda x: x.lower() == 'true',
+          default=None,
+          help=help_text)
+      elif spec.type is int:
+        parser.add_argument(cli_name, type=int, default=None, help=help_text)
+      elif spec.type is float:
+        parser.add_argument(cli_name, type=float, default=None, help=help_text)
+      else:
+        parser.add_argument(cli_name, default=None, help=help_text)
 
     # Parse known args, and store unknown args for later command processing
     args, unknown = parser.parse_known_args()
     self.extra_args = unknown
 
     # Track which settings were explicitly provided via CLI
-    for var_name, default, externally_settable, category, help_text in self.config_vars:
-      if externally_settable:
-        cli_name = var_name.lower()
-        cli_value = getattr(args, cli_name, None)
-        if cli_value is not None:
-          self._cli_sourced_settings.add(var_name)
+    for spec in self.config_specs.values():
+      if not spec.externally_settable:
+        continue
+      cli_value = getattr(args, spec.name.lower(), None)
+      if cli_value is not None:
+        self._cli_sourced_settings.add(spec.name)
 
     # Load .env file if it exists (get env_file from args or use default)
-    env_file = self._get_config_value("env_file", DEFAULT_ENV_FILE, args, True, {})
+    env_spec = self.config_specs.get("env_file")
+    env_file = self._get_config_value(env_spec, args, {}) if env_spec else DEFAULT_ENV_FILE
+    if not env_file:
+      env_file = DEFAULT_ENV_FILE
     if os.path.exists(env_file):
       load_dotenv(env_file, override=True)
 
     # Load settings from settings.json file first (lowest priority after defaults)
     # Need to get files_directory first to know where to look for settings.json
-    files_dir = self._get_config_value("files_directory", "storage", args, True, {})
+    fd_spec = self.config_specs.get("files_directory")
+    files_dir = self._get_config_value(fd_spec, args, {}) if fd_spec else "storage"
+    if not files_dir:
+      files_dir = "storage"
     json_settings = self._load_settings_from_file(files_dir)
 
-    # Build config dictionary using helper function
-    config_dict = {
-      var_name: self._get_config_value(var_name, default, args, externally_settable, json_settings)
-      for var_name, default, externally_settable, category, help_text in self.config_vars
-    }
-
-    # Set all configuration values as instance attributes
-    for key, value in config_dict.items():
-      setattr(self, key, value)
+    # Resolve every spec to its final value
+    for spec in self.config_specs.values():
+      value = self._get_config_value(spec, args, json_settings)
+      setattr(self, spec.name, value)
 
 
-  def _get_config_value(self, var_name: str, default: Any, args: argparse.Namespace, externally_settable: bool, json_settings: Dict[str, Any]) -> Any:
+  def _get_config_value(self, spec: ParamSpec, args: argparse.Namespace, json_settings: Dict[str, Any]) -> Any:
     """
-    Helper function to get configuration value from CLI args, environment variables, or settings.json
-
-    Args:
-        var_name: The base variable name in snake_case
-        default: Default value if no other source sets it
-        args: Parsed command line arguments
-        externally_settable: Whether this setting can be set from outside the application
-        json_settings: Settings loaded from settings.json file
+    Resolve a single spec's value across all sources.
 
     Priority: CLI args > .env file > Environment variables > settings.json > Defaults
     """
-    # If not externally settable, just return the default
-    if not externally_settable:
-      return default
+    seeded_default = self._spec_default(spec)
 
-    # Convert naming conventions
-    env_name = var_name.upper()
-    prefixed_env_name = f"{ENV_PREFIX}{var_name.upper()}"
-    cli_name = var_name.lower()
+    if not spec.externally_settable:
+      return seeded_default
 
-    # Get value from CLI args (they're already parsed with defaults)
+    env_name = spec.name.upper()
+    prefixed_env_name = f"{ENV_PREFIX}{spec.name.upper()}"
+    cli_name = spec.name.lower()
+
     value = getattr(args, cli_name, None)
 
-    # If CLI value is None, try prefixed environment variable
     if value is None:
       value = os.getenv(prefixed_env_name)
-
-    # If prefixed environment variable is None, try unprefixed environment variable
     if value is None:
       value = os.getenv(env_name)
+    if value is None and spec.name in json_settings:
+      value = json_settings[spec.name]
 
-    # If still None, try settings.json
-    if value is None and var_name in json_settings:
-      value = json_settings[var_name]
-
-    # Strip quotes if present
-    if value and isinstance(value, str) and value[0] == value[-1] and value[0] in ('"', "'"):
+    if value and isinstance(value, str) and len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
       value = value[1:-1]
 
-    return value if value else default
+    if value is None or value == "":
+      return seeded_default
+
+    coerced = _coerce_value(value, spec)
+    if coerced is _COERCE_FAIL:
+      logger.warning(
+        f"Could not coerce setting {spec.name}={value!r} to {spec.type.__name__}; "
+        f"falling back to default {seeded_default!r}"
+      )
+      return seeded_default
+
+    if spec.choices and coerced not in spec.choices:
+      logger.warning(
+        f"Setting {spec.name}={coerced!r} not in allowed choices {spec.choices}; "
+        f"falling back to default {seeded_default!r}"
+      )
+      return seeded_default
+
+    return coerced
 
 
   def validate(self) -> bool:
@@ -316,34 +333,55 @@ class Settings:
 
     return True
 
-
+  # ----------------------------------------------------------------
+  # Kwargs surfaces
+  # ----------------------------------------------------------------
   def get_user_kwargs(self) -> Dict[str, Any]:
     """
-    Get all user-supplied configuration values as kwargs.
+    Return all user-supplied configuration values as kwargs.
 
-    Returns:
-        Dict[str, Any]: Dictionary of configuration values that can be passed as kwargs
+    Includes:
+      - All ``INIT`` specs (with their resolved values, including
+        defaults) so the registry can construct plugins correctly.
+      - All ``RUNTIME`` specs that the user has explicitly overridden
+        (i.e., values that differ from the unset sentinel). RUNTIME
+        specs left at the sentinel are omitted so that the model's
+        own spec defaults stay in effect.
     """
-    kwargs = {}
+    kwargs: Dict[str, Any] = {}
+    for spec in self.config_specs.values():
+      if not spec.externally_settable:
+        continue
+      value = getattr(self, spec.name, self._spec_default(spec))
+      if spec.scope == ParamScope.RUNTIME and self._is_unset(spec, value):
+        continue
+      kwargs[spec.name] = value
+    return kwargs
 
-    # Iterate through config_vars to get all user-configurable settings
-    for var_name, default, externally_settable, category, help_text in self.config_vars:
-      if externally_settable:
-        kwargs[var_name] = getattr(self, var_name, default)
+  def get_runtime_kwargs(self) -> Dict[str, Any]:
+    """
+    Return only the explicitly-set RUNTIME specs.
 
+    Used by callers that want to merge user-set generation knobs into a
+    per-call ``registry.run`` invocation without dragging the full INIT
+    surface along.
+    """
+    kwargs: Dict[str, Any] = {}
+    for spec in self.config_specs.values():
+      if spec.scope != ParamScope.RUNTIME or not spec.externally_settable:
+        continue
+      value = getattr(self, spec.name, self._spec_default(spec))
+      if self._is_unset(spec, value):
+        continue
+      kwargs[spec.name] = value
     return kwargs
 
 
+  # ----------------------------------------------------------------
+  # File persistence
+  # ----------------------------------------------------------------
   def _load_settings_from_file(self, files_directory: str) -> Dict[str, Any]:
-    """
-    Load settings from settings.json file in the files directory.
-
-    Args:
-        files_directory: The directory where settings.json should be located
-
-    Returns:
-        Dict[str, Any]: Dictionary of settings loaded from file, or empty dict if file doesn't exist
-    """
+    """Load settings from settings.json file in the files directory."""
     settings_path = os.path.join(files_directory, DEFAULT_SETTINGS_FILE)
 
     if not os.path.exists(settings_path):
@@ -360,16 +398,16 @@ class Settings:
   def _save_settings_to_file(self) -> None:
     """
     Save current settings to settings.json file in the files directory.
-    Only saves externally settable configuration values.
-    Excludes settings that were provided via CLI arguments (they should not persist).
-    Creates the file if it doesn't exist, updates if values have changed.
+
+    Only saves externally settable values. Excludes settings that were
+    provided via CLI arguments (those are ephemeral). RUNTIME specs at
+    their unset sentinel are also skipped so a clear/reset removes the
+    entry from disk entirely.
     """
     settings_path = os.path.join(self.files_directory, DEFAULT_SETTINGS_FILE)
 
-    # Ensure the directory exists
     os.makedirs(self.files_directory, exist_ok=True)
 
-    # Load existing settings to preserve CLI-sourced values that were previously saved
     existing_settings = {}
     if os.path.exists(settings_path):
       try:
@@ -378,20 +416,22 @@ class Settings:
       except (json.JSONDecodeError, IOError):
         pass  # If we can't read it, we'll overwrite it
 
-    # Build dictionary of current settings (excluding CLI-sourced ones)
-    current_settings = {}
-    for var_name, default, externally_settable, category, help_text in self.config_vars:
-      if externally_settable:
-        # If this setting came from CLI, preserve the existing file value (if any)
-        if var_name in self._cli_sourced_settings:
-          if var_name in existing_settings:
-            current_settings[var_name] = existing_settings[var_name]
-          # Otherwise skip it - don't save CLI values to file
-        else:
-          # Save non-CLI settings normally
-          current_settings[var_name] = getattr(self, var_name, default)
+    current_settings: Dict[str, Any] = {}
+    for spec in self.config_specs.values():
+      if not spec.externally_settable:
+        continue
+      value = getattr(self, spec.name, self._spec_default(spec))
 
-    # Only write if settings have changed or file doesn't exist
+      if spec.name in self._cli_sourced_settings:
+        if spec.name in existing_settings:
+          current_settings[spec.name] = existing_settings[spec.name]
+        continue
+
+      if spec.scope == ParamScope.RUNTIME and self._is_unset(spec, value):
+        continue
+
+      current_settings[spec.name] = value
+
     if current_settings != existing_settings:
       try:
         with open(settings_path, 'w') as f:
@@ -400,22 +440,19 @@ class Settings:
         print(f"Warning: Could not save settings to {settings_path}: {e}")
 
 
+  # ----------------------------------------------------------------
+  # Public introspection
+  # ----------------------------------------------------------------
   def get_unset_api_keys(self) -> List[Tuple[str, str]]:
-    """
-    Get a list of API tokens that are not set (empty or default value).
-
-    Returns:
-        List of tuples containing (var_name, help_text) for unset API tokens
-    """
+    """Return (name, help_text) for every API-category setting that is empty."""
     unset_keys = []
-
-    for var_name, default, externally_settable, category, help_text in self.config_vars:
-      # Only check API tokens
-      if category == SettingCategory.API and externally_settable:
-        value = getattr(self, var_name, default)
-        if not value or value == default:
-          unset_keys.append((var_name, help_text))
-
+    for spec in self.config_specs.values():
+      if spec.category != SettingCategory.API or not spec.externally_settable:
+        continue
+      value = getattr(self, spec.name, self._spec_default(spec))
+      help_text = spec.description or self._generate_help_text(spec.name)
+      if not value or value == self._spec_default(spec):
+        unset_keys.append((spec.name, help_text))
     return unset_keys
 
 
@@ -423,21 +460,18 @@ class Settings:
     """
     Get information about a specific setting.
 
-    Args:
-        setting_name: The setting name to look up
-
     Returns:
-        Tuple of (current_value, default_value, help_text, category)
-        Returns (None, None, "", None) if setting not found or not externally settable
+      (current_value, default_value, help_text, category) — all None/empty
+      if the setting is unknown or not externally settable.
     """
     setting_name = setting_name.lower().replace('-', '_')
-
-    for var_name, default, externally_settable, category, help_text in self.config_vars:
-      if var_name == setting_name and externally_settable:
-        current_value = getattr(self, var_name, default)
-        return (current_value, default, help_text, category)
-
-    return (None, None, "", None)
+    spec = self.config_specs.get(setting_name)
+    if spec is None or not spec.externally_settable:
+      return (None, None, "", None)
+    current_value = getattr(self, spec.name, self._spec_default(spec))
+    help_text = spec.description or self._generate_help_text(spec.name)
+    category = spec.category if spec.category is not None else SettingCategory.MISC
+    return (current_value, self._spec_default(spec), help_text, category)
 
 
   def get_all_settings_info(self) -> Dict[SettingCategory, List[Tuple[str, Any, str]]]:
@@ -445,104 +479,126 @@ class Settings:
     Get all externally settable settings grouped by category.
 
     Returns:
-        Dictionary mapping category to list of (var_name, current_value, help_text) tuples
+      Dictionary mapping category to list of (name, display_value, help_text) tuples.
+      RUNTIME specs are decorated with "(default)" when at the sentinel.
     """
-    categorized = defaultdict(list)
+    categorized: Dict[SettingCategory, List[Tuple[str, Any, str]]] = defaultdict(list)
+    for spec in self.config_specs.values():
+      if not spec.externally_settable:
+        continue
+      value = getattr(self, spec.name, self._spec_default(spec))
+      help_text = spec.description or self._generate_help_text(spec.name)
+      category = spec.category if spec.category is not None else SettingCategory.MISC
 
-    for var_name, default, externally_settable, category, help_text in self.config_vars:
-      if externally_settable:
-        value = getattr(self, var_name, default)
-        # Mask sensitive values
-        display_value = self._mask_sensitive_value(var_name, value)
-        categorized[category].append((var_name, display_value, help_text))
+      if spec.scope == ParamScope.RUNTIME and self._is_unset(spec, value):
+        display_value = "(plugin default)"
+      else:
+        display_value = self._mask_sensitive_value(spec.name, value)
 
+      categorized[category].append((spec.name, display_value, help_text))
     return categorized
 
 
   def is_valid_setting(self, setting_name: str) -> bool:
-    """
-    Check if a setting name is valid and externally settable.
-
-    Args:
-        setting_name: The setting name to check
-
-    Returns:
-        True if the setting is valid and externally settable, False otherwise
-    """
+    """Check whether ``setting_name`` is a known, externally settable spec."""
     setting_name = setting_name.lower().replace('-', '_')
-
-    for var_name, _, externally_settable, _, _ in self.config_vars:
-      if var_name == setting_name and externally_settable:
-        return True
-
-    return False
+    spec = self.config_specs.get(setting_name)
+    return spec is not None and spec.externally_settable
 
 
   def update_setting(self, setting_name: str, value: Any) -> Tuple[bool, str, Any]:
     """
-    Update a setting with type conversion and validation.
-
-    Args:
-        setting_name: The setting name to update
-        value: The new value (will be type-converted as needed)
+    Update a setting with type coercion and validation.
 
     Returns:
-        Tuple of (success, message, old_value)
+      (success, message, old_value). On failure the old value is preserved.
     """
     setting_name = setting_name.lower().replace('-', '_')
-
-    # Find the setting in config_vars
-    setting_found = False
-    default_value = None
-
-    for var_name, default, externally_settable, category, help_text in self.config_vars:
-      if var_name == setting_name and externally_settable:
-        setting_found = True
-        default_value = default
-        break
-
-    if not setting_found:
+    spec = self.config_specs.get(setting_name)
+    if spec is None or not spec.externally_settable:
       return (False, f"Unknown setting: {setting_name}", None)
 
-    # Type conversion
-    try:
-      if isinstance(default_value, bool):
-        value = value.lower() in ('true', '1', 'yes', 'on') if isinstance(value, str) else bool(value)
-      elif isinstance(default_value, int):
-        value = int(value)
-      # Otherwise keep as string
-    except (ValueError, AttributeError) as e:
-      return (False, f"Invalid value for {setting_name}: {value}", None)
+    coerced = _coerce_value(value, spec)
+    if coerced is _COERCE_FAIL:
+      return (False, f"Invalid value for {setting_name}: {value!r}", None)
 
-    # Get old value and update
+    if spec.choices and coerced not in spec.choices:
+      return (
+        False,
+        f"Invalid value for {setting_name}: {coerced!r}. "
+        f"Allowed: {spec.choices}",
+        None,
+      )
+
     old_value = getattr(self, setting_name, None)
-    setattr(self, setting_name, value)
+    setattr(self, setting_name, coerced)
 
     # Remove from CLI sourced settings if present (so it will be saved to file)
     if setting_name in self._cli_sourced_settings:
       self._cli_sourced_settings.remove(setting_name)
 
-    # Save to file
     try:
       self._save_settings_to_file()
       return (True, f"Setting '{setting_name}' updated successfully", old_value)
     except Exception as e:
-      # Revert on failure
       setattr(self, setting_name, old_value)
       return (False, f"Failed to save setting: {str(e)}", old_value)
 
 
-  def _mask_sensitive_value(self, var_name: str, value: Any) -> Any:
+  def reset_setting(self, setting_name: str) -> Tuple[bool, str, Any]:
     """
-    Mask sensitive values (tokens, passwords) for display.
-
-    Args:
-        var_name: The variable name
-        value: The value to potentially mask
+    Clear a setting back to its default (or, for RUNTIME specs, back to
+    "use plugin default").
 
     Returns:
-        Masked value if sensitive, otherwise original value
+      (success, message, old_value).
     """
+    setting_name = setting_name.lower().replace('-', '_')
+    spec = self.config_specs.get(setting_name)
+    if spec is None or not spec.externally_settable:
+      return (False, f"Unknown setting: {setting_name}", None)
+
+    old_value = getattr(self, setting_name, None)
+    setattr(self, setting_name, self._spec_default(spec))
+
+    if setting_name in self._cli_sourced_settings:
+      self._cli_sourced_settings.remove(setting_name)
+
+    try:
+      self._save_settings_to_file()
+      return (True, f"Setting '{setting_name}' reset to default", old_value)
+    except Exception as e:
+      setattr(self, setting_name, old_value)
+      return (False, f"Failed to save setting: {str(e)}", old_value)
+
+
+  def reset_runtime_settings(self) -> List[str]:
+    """
+    Reset every RUNTIME spec back to its unset sentinel. Returns the list
+    of setting names that were actually changed.
+    """
+    changed: List[str] = []
+    for spec in self.config_specs.values():
+      if spec.scope != ParamScope.RUNTIME or not spec.externally_settable:
+        continue
+      current = getattr(self, spec.name, self._spec_default(spec))
+      if self._is_unset(spec, current):
+        continue
+      setattr(self, spec.name, self._spec_default(spec))
+      if spec.name in self._cli_sourced_settings:
+        self._cli_sourced_settings.remove(spec.name)
+      changed.append(spec.name)
+
+    if changed:
+      try:
+        self._save_settings_to_file()
+      except Exception as e:
+        logger.warning(f"Failed to persist runtime reset: {e}")
+    return changed
+
+
+  def _mask_sensitive_value(self, var_name: str, value: Any) -> Any:
+    """Mask sensitive values (tokens, passwords) for display."""
     is_secret = (
       var_name in self._secret_settings
       or 'token' in var_name.lower()
@@ -550,5 +606,64 @@ class Settings:
     )
     if is_secret:
       if value and value != "":
-        return "***" + value[-4:] if len(str(value)) > 4 else "***"
+        return "***" + str(value)[-4:] if len(str(value)) > 4 else "***"
     return value
+
+
+########################################################################
+#                          MODULE HELPERS                              #
+########################################################################
+class _CoerceFail:
+  """Sentinel returned from ``_coerce_value`` when conversion fails."""
+  __slots__ = ()
+
+_COERCE_FAIL = _CoerceFail()
+
+
+_TRUTHY = {"true", "1", "yes", "on", "y", "t"}
+_FALSY = {"false", "0", "no", "off", "n", "f"}
+
+
+def _coerce_value(value: Any, spec: ParamSpec) -> Any:
+  """
+  Best-effort coerce ``value`` to ``spec.type``.
+
+  Returns ``_COERCE_FAIL`` if conversion is not possible. Strings are the
+  most common input shape (CLI / env / JSON) so we handle them
+  explicitly; other input types fall through to ``spec.type(value)``.
+  """
+  if value is None:
+    return None
+
+  target = spec.type or str
+
+  if isinstance(value, target):
+    return value
+
+  try:
+    if target is bool:
+      if isinstance(value, str):
+        v = value.strip().lower()
+        if v in _TRUTHY:
+          return True
+        if v in _FALSY:
+          return False
+        return _COERCE_FAIL
+      return bool(value)
+
+    if target is int:
+      if isinstance(value, str):
+        return int(value.strip())
+      return int(value)
+
+    if target is float:
+      if isinstance(value, str):
+        return float(value.strip())
+      return float(value)
+
+    if target is str:
+      return str(value)
+
+    return target(value)
+  except (TypeError, ValueError):
+    return _COERCE_FAIL

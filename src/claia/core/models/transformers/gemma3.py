@@ -12,7 +12,7 @@ from typing import List, Optional, Generator
 from claia.core.data import Conversation
 from claia.core.enums.conversation import MessageRole
 from claia.core.models.base.base import COMMON_TEXT_RUNTIME_PARAMS
-from claia.core.plugins.base import ParamScope, ParamSpec
+from claia.core.plugins.base import ParamScope, ParamSpec, SettingCategory
 from .generic import GenericTransformerModel
 
 
@@ -32,12 +32,16 @@ class Gemma3Model(GenericTransformerModel):
   # inherited from the common text runtime params.
   runtime_params = [
     ParamSpec(name="max_tokens", type=int, scope=ParamScope.RUNTIME, default=2048,
+              category=SettingCategory.GENERATION,
               description="Maximum number of tokens to generate."),
     ParamSpec(name="temperature", type=float, scope=ParamScope.RUNTIME, default=0.8,
+              category=SettingCategory.GENERATION,
               description="Sampling temperature."),
     ParamSpec(name="top_p", type=float, scope=ParamScope.RUNTIME, default=0.95,
+              category=SettingCategory.GENERATION,
               description="Nucleus sampling probability mass."),
     ParamSpec(name="top_k", type=int, scope=ParamScope.RUNTIME, default=40,
+              category=SettingCategory.GENERATION,
               description="Restrict sampling to the top-k tokens."),
     *[p for p in COMMON_TEXT_RUNTIME_PARAMS
       if p.name not in {"max_tokens", "temperature", "top_p", "top_k"}],
