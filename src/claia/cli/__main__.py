@@ -1,6 +1,5 @@
 # TODO:
 # - create an option to enable a server that serves and updates md files, and sync conversations to md files?
-# - Needs a way to filter models (since there are lots) (model list partname?)
 # - perhaps have the model layer compare the capabilities against the sent request, if there's content that the model doesn't support throw a warning, maybe also trim the request to the model's capabilities
 # - create a new image agent that exports the images after generation
 # - create a vix demo that uses a list off images to show reactions in a conversation, think emojis (this should be a tool call since it's not generating the images, thought it's an idea to train a lora and have images generated)
@@ -10,7 +9,7 @@
 # - update system command to allow settings updates (and save to .env file?)
 # - prompt doesn't apply to the active conversation (if there's an active conversation, it should apply to it)
 
-# - add ability to rename conversations, and perhaps have ai name conversations automatically
+# - have ai name conversations automatically?
 # - Need to clean input from user and models (set gpt-4 to temperature 2 causing issues)
 # - Add multi-gpu support for transformer models
 # - local models aren't using model path
