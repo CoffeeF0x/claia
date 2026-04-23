@@ -232,10 +232,15 @@ class Conversation:
     messages: List[Message]
     events: List[DomainEvent]
     active_head_id: Optional[str]
-    settings: ConversationSettings
     _pending_events: List[DomainEvent]
     _on_event: Optional[EventCallback]
 ```
+
+> The old `settings: ConversationSettings` field was removed in Phase 3.
+> Generation parameters (`temperature`, `max_tokens`, ...) are declared by
+> model/architecture plugins via `ParamSpec(scope=RUNTIME)` and flow
+> through `Process.parameters` / `registry.run(**kwargs)`, not through
+> the `Conversation` object.
 
 ### Observer API
 
@@ -396,6 +401,20 @@ class ParamScope(Enum):
     INIT = "init"        # Passed at plugin construction (credentials, config)
     RUNTIME = "runtime"  # Passed per call (generation params)
 
+class SettingCategory(Enum):
+    API = "API Credentials"
+    ENDPOINT = "Endpoints & URLs"
+    DIRECTORY = "Directories"
+    MODEL = "Model Settings"
+    PROMPT = "Prompt Settings"
+    AGENT = "Agent Settings"
+    VLLM = "VLLM Settings"
+    APPLICATION = "Application Settings"
+    INTEGRATION = "Integration Settings"
+    EXTENSION = "Extension Settings"
+    GENERATION = "Generation Parameters"
+    MISC = "Other"
+
 @dataclass
 class ParamSpec:
     name: str
@@ -404,8 +423,10 @@ class ParamSpec:
     required: bool = False
     default: Any = None
     description: str = ""
-    choices: Optional[List[Any]] = None
-    secret: bool = False   # Hint to Settings/CLI not to log this
+    choices: Optional[List[Any]] = None       # Order matters; used for CLI
+    secret: bool = False                      # Mask in logs / :get output
+    externally_settable: bool = True          # False = code-only, hidden from CLI/env/JSON
+    category: Optional[SettingCategory] = None  # Groups --help output
 
 @dataclass
 class ExtensionInfo:
@@ -417,14 +438,24 @@ class ExtensionInfo:
 
 **What this unlocks:**
 
-- Settings can auto-generate CLI flags, env vars, and validation from
-the schema. No more hand-maintaining `CONFIG_VARS`.
-- Clean init vs. runtime separation — Manager knows what to pass to
-`__init__` vs. what to forward to generation calls.
+- Settings auto-generates CLI flags, env vars, and validation from the
+schema. There is no parallel `CONFIG_VARS` tuple list; the only
+app-level declarations live as a `List[ParamSpec]` in
+`claia.cli.params.APP_PARAMS`, and everything else is discovered
+from plugins.
+- Clean init vs. runtime separation — `Manager.filter_init_kwargs` and
+`Manager.filter_runtime_kwargs` slice a single `combined_kwargs`
+dict by scope before dispatch.
+- Lenient coerce/validate at the boundary: values are coerced to
+`spec.type`, validated against `spec.choices`, and dropped (with a
+warning) on failure so the plugin's own default applies.
 - Third-party plugins are self-documenting; `claia inspect <plugin>`
-is a natural feature.
-- Secret handling is explicit — credentials are masked in logs.
-- Type validation at the boundary.
+is a natural feature, and slate exposes the same metadata over
+`GET /api/v1/{agents,architectures,deployments,solvers}`.
+- Secret handling is explicit — `secret=True` is masked in logs
+(`Manager._mask_for_log`) and in the CLI's `:get` output.
+- `externally_settable=False` keeps code-only knobs (defaults wired by
+plugins themselves) out of the user-facing surface.
 
 ### Modality as a First-Class Concept
 
@@ -598,17 +629,81 @@ reconnect. It composes on top of the Phase 2 building blocks
 (`load_claia_conv_observed`, `flush_streaming_content`,
 `MESSAGE_STREAM_`* events) without changing them.
 
-### Phase 3: ParamSpec Evolution
+### Phase 3: ParamSpec Evolution — **DONE**
 
-- Define `ParamSpec` and `ParamScope` in `claia.core.plugins.base`.
-- Update `ExtensionInfo` to use `params: List[ParamSpec]` (replacing
-`required_args`).
-- Update Manager to consume the new format: filter kwargs by
-`scope=INIT` for `__init__`, validate/forward `scope=RUNTIME` for
-generation calls.
-- Migrate built-in plugins to declare ParamSpecs.
-- Update Settings to build its var list from ParamSpec metadata
-rather than a hand-maintained `CONFIG_VARS`.
+What landed:
+
+- `ParamScope`, `ParamSpec`, and `SettingCategory` live in
+`claia.core.plugins.base`. `ExtensionInfo` now carries
+`params: List[ParamSpec]`; the old `required_args: List[str]` field
+is gone with no shim.
+- `ConversationSettings` was deleted outright. The `Conversation`
+object no longer carries `settings`, does not emit
+`SETTINGS_UPDATED` events, and slate's `AIConversation` table
+dropped its `settings` JSON column. Generation parameters flow
+purely through `ParamSpec(scope=RUNTIME)` on model/architecture
+plugins.
+- `Manager` is the single source of truth for kwarg handling. On it:
+  - `Manager.coerce_value(value, target)` — lenient type coercion
+  used everywhere (Settings, filter, CLI, `:set`).
+  - `Manager.filter_init_kwargs` / `filter_runtime_kwargs` — spec-
+  aware slicing that coerces values, validates `choices`, and
+  drops (with a `WARNING`) on failure so plugin defaults apply.
+  - `Manager.validate_required_init_kwargs` — separate explicit
+  check for missing `required=True` INIT params (called at
+  instantiation, not at discovery).
+  - `Manager._mask_for_log` — secret-aware rendering so
+  `spec.secret=True` values never land in plaintext warnings.
+- `Registry.manager` is a read-only `@property`; downstream layers
+(`Settings`, CLI commands, slate's API) reach coercion and
+parameter introspection via `registry.manager.<method>`.
+`Registry` calls the filter helpers as `Manager.filter_init_kwargs(...)`
+explicitly — no module-level aliases.
+- `Manager.discover_plugins()` collects `runtime_params` off each
+architecture's model class (`BaseModel.runtime_params`) and merges
+them into the `ArchitectureInfo.params` returned by
+`get_available_architectures()`. One unified param list per plugin,
+whether the declaration lives on the architecture or the model.
+- `BaseModel.update_settings(model_settings, **kwargs)` consumes
+declared `RUNTIME` `ParamSpec`s directly. `COMMON_TEXT_RUNTIME_PARAMS`
+(`temperature`, `max_tokens`, `top_p`, `top_k`, `frequency_penalty`,
+`presence_penalty`, `stop`, `seed`, ...) live on `BaseModel`; model
+subclasses override by shadowing the class attribute
+(e.g. `Gemma3Model.runtime_params`).
+- Built-in plugins migrated: OpenAI, Anthropic, OpenRouter, Cloudflare,
+RunPod, Massed Compute, LocalLLM, `transformers_generic`, and
+`transformers_gemma3` all declare their API tokens as
+`scope=INIT, required=True, secret=True, category=API`.
+- `claia.cli.settings.Settings` was rewritten around
+`OrderedDict[str, ParamSpec]`. App-level declarations moved to
+`claia.cli.params.APP_PARAMS`; the old `CONFIG_VARS` tuple list is
+gone, and so is the backward-compatible `config_vars` property.
+The CLI `--help` renders directly from `ParamSpec` metadata,
+grouped by `SettingCategory`.
+- CLI / env / `settings.json` precedence still applies, but all three
+sources run through `Manager.coerce_value` and spec-level `choices`
+validation. `RUNTIME` params use per-type sentinels
+(`""` / `None`) so "unset" reliably means "let the plugin's spec
+default apply".
+- New `reset` command (`:reset <key>`, `:reset --runtime`) clears
+individual settings back to their spec default or wipes all
+overridden RUNTIME params.
+- Slate exposes the full `ParamSpec` metadata over the REST API via a
+shared `_serialize_param_spec` / `_serialize_extension_info` pair.
+New endpoints: `GET /api/v1/architectures`,
+`/api/v1/deployments`, `/api/v1/solvers` (mirror the existing
+`/api/v1/agents`).
+- Tests: 27/27 claia tests still pass. Conftest's Registry fixture
+now monkeypatches `regmod.Manager` with a thin factory class that
+re-exposes the real Manager's static methods, so
+`Manager.filter_init_kwargs(...)` in `Registry` resolves under test
+without any module-level alias.
+
+Not included in this phase (deferred by choice):
+
+- New unit tests specifically for `ParamSpec` coercion, validation,
+and CLI round-trip. The existing suite was kept green; fresh
+coverage is a separate task.
 
 ### Phase 4: Modality + GenerationChunk
 
@@ -713,6 +808,10 @@ alongside the plugin system docs.
 | Plugin contracts            | ABCs in `claia.core`, hookspecs in `claia.framework`                                    | Two different concerns, both explicit                                                   |
 | Plugin metadata dataclasses | Live in `claia.core.plugins.base`                                                       | Plugin implementations can construct them without depending on the framework            |
 | Plugin metadata schema      | Custom `ParamSpec` (not Pydantic)                                                       | Avoids core dependency; can upgrade later                                               |
+| Runtime param delivery      | `ParamSpec(scope=RUNTIME)` forwarded via `registry.run(**kwargs)`                       | Replaces `ConversationSettings`; keeps the `Conversation` object purely a data carrier  |
+| Param validation posture    | Lenient coerce + drop-on-failure with WARNING                                           | Plugin defaults are the safety net; strict rejection was heavier than needed            |
+| Kwarg-handling ownership    | `Manager` owns coercion and filtering; `Settings` reuses it via `registry.manager`      | One source of truth; no duplicated helpers or module-level aliases                      |
+| Settings schema             | Single `ParamSpec` list; no parallel `CONFIG_VARS` tuples                               | Deleted the shim once the CLI `--help` was updated to render from `ParamSpec` directly  |
 | Plugin identifiers          | Friendly names only for now                                                             | Deferred reverse-DNS/namespacing discussion                                             |
 | Entry-point group names     | Stable `claia.*` strings (unchanged across migration)                                   | They are labels, not module paths; preserves external plugin compatibility              |
 | Plugin loading              | Two-phase (metadata eager, instance lazy)                                               | Startup performance + plays well with ParamSpec                                         |
