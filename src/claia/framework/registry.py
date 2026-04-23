@@ -454,8 +454,13 @@ class Registry:
     available_architectures = self.manager.get_available_architectures()
     architecture_info = available_architectures.get(deployment_params.architecture_name)
     if architecture_info:
-      arch_init_kwargs = Manager.filter_init_kwargs(combined_kwargs, getattr(architecture_info, 'params', None))
-      arch_runtime_kwargs = Manager.filter_runtime_kwargs(combined_kwargs, getattr(architecture_info, 'params', None))
+      arch_params = getattr(architecture_info, 'params', None)
+      arch_init_kwargs = Manager.filter_init_kwargs(combined_kwargs, arch_params)
+      # Architecture RUNTIME specs are the contract for per-call generation
+      # knobs (temperature, max_tokens, ...); resolve their declared
+      # defaults here so ``model.generate`` receives a complete settings
+      # dict and never has to re-derive defaults from a local spec copy.
+      arch_runtime_kwargs = Manager.resolve_runtime_kwargs(combined_kwargs, arch_params)
     else:
       arch_init_kwargs = {}
       arch_runtime_kwargs = {}
@@ -464,7 +469,8 @@ class Registry:
 
     # Merge order: architecture INIT + deployment INIT form the model's
     # construction kwargs; RUNTIME specs (from both deployment and
-    # architecture) are generation-time overrides.
+    # architecture) are generation-time overrides. Deployment runtime
+    # kwargs win over architecture defaults where the names collide.
     final_kwargs = {
       **arch_init_kwargs,
       **deployment_init_kwargs,

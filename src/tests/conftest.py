@@ -144,6 +144,7 @@ def _make_fake_manager_class(fake_manager):
     coerce_value = staticmethod(RealManager.coerce_value)
     filter_init_kwargs = staticmethod(RealManager.filter_init_kwargs)
     filter_runtime_kwargs = staticmethod(RealManager.filter_runtime_kwargs)
+    resolve_runtime_kwargs = staticmethod(RealManager.resolve_runtime_kwargs)
     validate_required_init_kwargs = staticmethod(RealManager.validate_required_init_kwargs)
     _COERCE_FAIL = RealManager._COERCE_FAIL
     _mask_for_log = staticmethod(RealManager._mask_for_log)

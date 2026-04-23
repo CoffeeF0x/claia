@@ -659,17 +659,22 @@ plugins.
 parameter introspection via `registry.manager.<method>`.
 `Registry` calls the filter helpers as `Manager.filter_init_kwargs(...)`
 explicitly — no module-level aliases.
-- `Manager.discover_plugins()` collects `runtime_params` off each
-architecture's model class (`BaseModel.runtime_params`) and merges
-them into the `ArchitectureInfo.params` returned by
-`get_available_architectures()`. One unified param list per plugin,
-whether the declaration lives on the architecture or the model.
-- `BaseModel.update_settings(model_settings, **kwargs)` consumes
-declared `RUNTIME` `ParamSpec`s directly. `COMMON_TEXT_RUNTIME_PARAMS`
-(`temperature`, `max_tokens`, `top_p`, `top_k`, `frequency_penalty`,
-`presence_penalty`, `stop`, `seed`, ...) live on `BaseModel`; model
-subclasses override by shadowing the class attribute
-(e.g. `Gemma3Model.runtime_params`).
+- Architecture plugins declare the full per-architecture param
+contract — both `INIT` (credentials, endpoints) and `RUNTIME`
+(generation knobs like `temperature`, `max_tokens`) — directly on
+`ArchitectureInfo.params`. The shared `COMMON_TEXT_RUNTIME_PARAMS`
+list is exported from `claia.core.plugins.base` and spread into each
+text architecture's params; per-architecture overrides
+(e.g. Gemma3's higher `max_tokens` default) are expressed by
+declaring the override `ParamSpec` alongside a filtered spread of
+the common list. Models themselves are metadata-free.
+- `Manager.resolve_runtime_kwargs(kwargs, params)` is the single
+entry point for building a fully-resolved RUNTIME kwarg dict: it
+seeds from each spec's declared `default` and overlays the coerced
+subset of `kwargs` produced by `filter_runtime_kwargs`.
+`Registry._run_stream` invokes it against the architecture's params
+so concrete `model.generate` implementations consume kwargs
+directly (no local spec list, no `update_settings` helper).
 - Built-in plugins migrated: OpenAI, Anthropic, OpenRouter, Cloudflare,
 RunPod, Massed Compute, LocalLLM, `transformers_generic`, and
 `transformers_gemma3` all declare their API tokens as
@@ -767,10 +772,11 @@ actually handed to pluggy.
 `Manager.discover_plugins()` walks every entry-point group listed in
 `PLUGIN_GROUPS` and calls `_populate_entry_metadata()`, which reads
 the class-level `info` attribute directly — no plugin is
-instantiated during discovery. Architecture entries additionally
-resolve the model class (via `cls.model_class` or, if absent, a
-temporary instance) to fold `BaseModel.runtime_params` into the
-entry's params list.
+instantiated during discovery. Architecture plugins declare their
+full param contract (both INIT and RUNTIME specs) on
+`ArchitectureInfo.params`, so there is no model-class fold-in step;
+the plugin itself is the single source of truth for every spec
+Settings/CLI/dispatch consumes.
 - **Registrar wrappers live in `claia.framework.registrars`.** One
 registrar per hook namespace (`ArchitectureRegistrar`,
 `DeploymentRegistrar`, `SolverRegistrar`, `DefinitionRegistrar`,

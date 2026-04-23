@@ -42,9 +42,13 @@ class OpenAIModel(APIModel):
       self.set_api_key(openai_api_token)
 
   def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
-    """Generate a response using OpenAI's Responses API. Yields tokens, returns full response."""
+    """Generate a response using OpenAI's Responses API. Yields tokens, returns full response.
+
+    ``kwargs`` arrive pre-filtered and pre-defaulted against the
+    architecture's RUNTIME ``ParamSpec`` declarations (see
+    ``Manager.resolve_runtime_kwargs``), so we consume them directly.
+    """
     try:
-      settings = self.update_settings({}, **kwargs)
       instructions, input_messages = self._convert_conversation(conversation)
 
       # Build base request — excluded fields are handled explicitly below.
@@ -55,18 +59,18 @@ class OpenAIModel(APIModel):
         "model": self.model_name,
         "input": input_messages,
         "store": False,
-        **{k: v for k, v in settings.items() if v is not None and k not in _skip},
+        **{k: v for k, v in kwargs.items() if v is not None and k not in _skip},
       }
 
       if instructions:
         request_data["instructions"] = instructions
 
       # Responses API uses max_output_tokens instead of max_tokens
-      max_tokens = settings.get("max_tokens")
+      max_tokens = kwargs.get("max_tokens")
       if max_tokens is not None:
         request_data["max_output_tokens"] = max_tokens
 
-      if settings.get("stream", False):
+      if kwargs.get("stream", False):
         full_response = yield from self._handle_streaming_response(request_data)
       else:
         full_response = yield from self._handle_non_streaming_response(request_data)

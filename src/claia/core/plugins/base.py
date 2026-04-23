@@ -98,6 +98,42 @@ class ParamSpec:
 
 
 ########################################################################
+#                    COMMON RUNTIME PARAM CONSTANTS                    #
+########################################################################
+# Sensible defaults that apply to most chat-style text models.
+# Architectures spread this list into their ``ArchitectureInfo.params``
+# alongside architecture-specific INIT specs. Per-architecture tweaks
+# (e.g. a higher ``max_tokens`` default) are expressed by declaring an
+# overriding ``ParamSpec`` with the same ``name`` *before* the spread;
+# ``ExtensionInfo.param`` / Registry kwarg resolution use first-match-
+# wins, so the override takes precedence while the rest of the list is
+# inherited unchanged.
+COMMON_TEXT_RUNTIME_PARAMS: List[ParamSpec] = [
+  ParamSpec(name="max_tokens", type=int, scope=ParamScope.RUNTIME, default=1000,
+            category=SettingCategory.GENERATION,
+            description="Maximum number of tokens to generate."),
+  ParamSpec(name="temperature", type=float, scope=ParamScope.RUNTIME, default=0.7,
+            category=SettingCategory.GENERATION,
+            description="Sampling temperature; higher values produce more varied output."),
+  ParamSpec(name="top_p", type=float, scope=ParamScope.RUNTIME, default=1.0,
+            category=SettingCategory.GENERATION,
+            description="Nucleus sampling probability mass."),
+  ParamSpec(name="top_k", type=int, scope=ParamScope.RUNTIME, default=None,
+            category=SettingCategory.GENERATION,
+            description="Restrict sampling to the top-k tokens."),
+  ParamSpec(name="n", type=int, scope=ParamScope.RUNTIME, default=1,
+            category=SettingCategory.GENERATION,
+            description="Number of completions to request per call."),
+  ParamSpec(name="stop", type=list, scope=ParamScope.RUNTIME, default=None,
+            category=SettingCategory.GENERATION,
+            description="Sequence(s) at which generation should stop."),
+  ParamSpec(name="stream", type=bool, scope=ParamScope.RUNTIME, default=True,
+            category=SettingCategory.GENERATION,
+            description="Whether the model should stream partial output."),
+]
+
+
+########################################################################
 #                       BASE EXTENSION METADATA                        #
 ########################################################################
 @dataclass

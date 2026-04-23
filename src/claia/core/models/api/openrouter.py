@@ -60,9 +60,15 @@ class OpenRouterModel(APIModel):
     return messages
 
   def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
-    """Generate a response using the OpenRouter API. Yields tokens, returns full response."""
+    """Generate a response using the OpenRouter API. Yields tokens, returns full response.
+
+    When invoked through the framework, ``kwargs`` arrive pre-resolved
+    against the architecture's RUNTIME ``ParamSpec`` declarations. When
+    invoked directly (bypassing the registry), the ``DEFAULT_SETTINGS``
+    fallback ensures ``max_tokens`` still has a reasonable default.
+    """
     try:
-      settings = self.update_settings(DEFAULT_SETTINGS, **kwargs)
+      settings = {**DEFAULT_SETTINGS, **kwargs}
       messages = self._format_messages(conversation)
 
       data = {

@@ -9,7 +9,13 @@ from typing import Type
 
 from .base import BaseArchitecture
 from ..models.api import OpenAIModel
-from ..plugins.base import ArchitectureInfo, ParamScope, ParamSpec, SettingCategory
+from ..plugins.base import (
+  COMMON_TEXT_RUNTIME_PARAMS,
+  ArchitectureInfo,
+  ParamScope,
+  ParamSpec,
+  SettingCategory,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -32,6 +38,7 @@ class OpenAIPlugin(BaseArchitecture):
         category=SettingCategory.API,
         description="OpenAI API Token",
       ),
+      *COMMON_TEXT_RUNTIME_PARAMS,
     ],
   )
 

@@ -50,15 +50,19 @@ class AnthropicModel(APIModel):
     self.set_custom_header("x-api-key", api_key)
 
   def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
-    """Generate a response using Anthropic's API. Yields tokens, returns full response."""
+    """Generate a response using Anthropic's API. Yields tokens, returns full response.
+
+    ``kwargs`` arrive pre-filtered and pre-defaulted against the
+    architecture's RUNTIME ``ParamSpec`` declarations, so we consume
+    them directly without a local defaults pass.
+    """
     try:
-      settings = self.update_settings({}, **kwargs)
       system_message, messages = self._convert_conversation_to_messages(conversation)
 
       request_data = {
         "model": self.model_name,
         "messages": messages,
-        "max_tokens": settings.get("max_tokens", 1000),
+        "max_tokens": kwargs.get("max_tokens", 1000),
       }
 
       if system_message:
@@ -66,9 +70,9 @@ class AnthropicModel(APIModel):
 
       # Anthropic rejects requests that include both temperature and top_p.
       # Prefer temperature; only send top_p when temperature is absent.
-      temperature = settings.get("temperature")
-      top_p = settings.get("top_p")
-      top_k = settings.get("top_k")
+      temperature = kwargs.get("temperature")
+      top_p = kwargs.get("top_p")
+      top_k = kwargs.get("top_k")
 
       if temperature is not None:
         request_data["temperature"] = temperature
@@ -78,7 +82,7 @@ class AnthropicModel(APIModel):
       if top_k is not None:
         request_data["top_k"] = top_k
 
-      if settings.get("stream", False):
+      if kwargs.get("stream", False):
         request_data["stream"] = True
         full_response = yield from self._handle_streaming_response(request_data)
       else:

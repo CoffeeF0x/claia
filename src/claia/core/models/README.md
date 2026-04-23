@@ -9,8 +9,17 @@ Model architecture layer and adapters.
 - `dummy/` — test/dummy models.
 - `transformers/` — local transformer-based models.
 
-Model implementations expose their generation knobs as RUNTIME `ParamSpec`
-declarations via `BaseModel.runtime_params`. Architectures declare their
-INIT-scoped `ParamSpec`s (API tokens, endpoints) via `ArchitectureInfo.params`
-so the `Registry`/`Manager` can filter kwargs and avoid leaking unrelated
-configuration into plugins.
+Generation knobs (`temperature`, `max_tokens`, ...) and credentials
+(API tokens, endpoints) are declared together on the **architecture
+plugin's** `ArchitectureInfo.params` as `ParamSpec` entries with the
+appropriate `scope` (`INIT` or `RUNTIME`). Models themselves are
+metadata-free: the `Registry`/`Manager` resolve RUNTIME kwargs against
+the architecture's specs (filtering + coercion + defaults) and hand the
+resulting dict to `BaseModel.generate`, which consumes it directly via
+`kwargs.get(...)`.
+
+`claia.core.plugins.base` exports a shared `COMMON_TEXT_RUNTIME_PARAMS`
+list that most text architectures spread into their params; per-
+architecture overrides (e.g. Gemma3's higher `max_tokens` default) are
+expressed by declaring the override spec alongside a filtered spread of
+the common list.

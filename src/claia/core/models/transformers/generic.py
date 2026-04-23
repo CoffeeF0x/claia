@@ -76,12 +76,16 @@ class GenericTransformerModel(LocalModel):
     logger.info(f"Unloaded transformer model: {self.model_name}")
 
   def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
-    """Generate a response using the transformer model. Yields the full response as a single token."""
+    """Generate a response using the transformer model. Yields the full response as a single token.
+
+    ``kwargs`` arrive pre-resolved against the architecture's RUNTIME
+    ``ParamSpec`` declarations (see ``Manager.resolve_runtime_kwargs``),
+    so we consume them directly.
+    """
     if not self.loaded:
       self.load()
 
     try:
-      settings = self.update_settings({}, **kwargs)
       prompt = self._convert_conversation_to_prompt(conversation)
 
       inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)
@@ -90,10 +94,10 @@ class GenericTransformerModel(LocalModel):
       with torch.no_grad():
         outputs = self.model.generate(
           **inputs,
-          max_new_tokens=settings.get("max_tokens", 1000),
-          temperature=settings.get("temperature", 0.7),
-          top_p=settings.get("top_p", 1.0),
-          top_k=settings.get("top_k", 50),
+          max_new_tokens=kwargs.get("max_tokens", 1000),
+          temperature=kwargs.get("temperature", 0.7),
+          top_p=kwargs.get("top_p", 1.0),
+          top_k=kwargs.get("top_k", 50),
           do_sample=True,
           pad_token_id=self.tokenizer.eos_token_id
         )

@@ -162,13 +162,12 @@ class Manager:
 
     1. Load the class (unavoidable).
     2. Read ``cls.info`` (subclass of ``ExtensionInfo``); no instance
-       is ever created during discovery.
-    3. For architectures, augment the declared ``params`` with the
-       model class's ``runtime_params`` so dispatch-time knobs like
-       ``temperature`` or ``max_tokens`` become visible to Settings
-       without every architecture having to redeclare them.
-    4. Record a :class:`PluginEntry`. Registration with pluggy
-       happens later, when ``load_all_plugins`` has real kwargs.
+       is ever created during discovery. Architectures are expected
+       to declare their full param contract — both INIT (credentials,
+       endpoints) and RUNTIME (generation knobs like ``temperature``)
+       — directly on ``ArchitectureInfo.params``.
+    3. Record a :class:`PluginEntry`. Registration with pluggy happens
+       later, when ``load_all_plugins`` has real kwargs.
     """
     if self._plugins_discovered:
       logger.debug("Plugins already discovered")
@@ -212,6 +211,11 @@ class Manager:
     ``info`` attribute; definition providers are the one exception
     (they publish their metadata via the ``get_definitions`` hook, so
     ``info`` stays ``None`` and their params list stays empty).
+
+    Architectures declare their full param contract — both INIT
+    (credentials, endpoints) and RUNTIME (generation knobs) — on the
+    ``ArchitectureInfo`` itself. There is no fold-in from the model
+    class; the architecture plugin is the single source of truth.
     """
     cls = entry.plugin_class
     class_info = getattr(cls, 'info', None)
@@ -219,52 +223,6 @@ class Manager:
       entry.info = class_info
 
     entry.params = list(getattr(entry.info, 'params', None) or [])
-
-    # Architectures carry RUNTIME generation knobs on the model class
-    # itself (BaseModel.runtime_params), not in ArchitectureInfo. Pull
-    # those in so they're discoverable as extension params (CLI flags,
-    # dispatch-time filtering) without forcing every architecture to
-    # redeclare them. We mirror the merged list back onto
-    # entry.info.params so consumers that read ``ArchitectureInfo``
-    # directly (e.g. ``Registry._run_stream``) also see the runtime
-    # specs.
-    if entry.group == "claia.architectures":
-      model_cls = self._resolve_model_class(cls)
-      if model_cls is not None:
-        runtime = getattr(model_cls, "runtime_params", None) or []
-        seen = {p.name for p in entry.params}
-        for spec in runtime:
-          if spec.name not in seen:
-            entry.params.append(spec)
-            seen.add(spec.name)
-        if entry.info is not None and hasattr(entry.info, 'params'):
-          try:
-            entry.info.params = list(entry.params)
-          except Exception:
-            pass
-
-  @staticmethod
-  def _resolve_model_class(cls: Type) -> Optional[Type]:
-    """Best-effort resolution of the model class for an architecture plugin.
-
-    Tries (in order):
-      * ``cls.model_class`` when declared as a class attribute,
-      * a no-arg instantiation followed by ``get_model_class()``.
-    """
-    model_cls = getattr(cls, 'model_class', None)
-    if isinstance(model_cls, type):
-      return model_cls
-    try:
-      temp = cls()
-    except Exception as e:
-      logger.debug(f"Could not instantiate {cls.__name__} to resolve model class: {e}")
-      return None
-    try:
-      resolved = temp.get_model_class()
-      return resolved if isinstance(resolved, type) else None
-    except Exception as e:
-      logger.debug(f"Could not resolve model class via {cls.__name__}.get_model_class(): {e}")
-      return None
 
   @staticmethod
   def _log_discovered_entry(entry: PluginEntry) -> None:
@@ -588,9 +546,41 @@ class Manager:
 
     Mirrors :meth:`filter_init_kwargs` for per-call generation
     parameters. Defaults from the ParamSpecs are NOT applied here — use
-    :meth:`BaseModel.update_settings` to overlay declared defaults.
+    :meth:`resolve_runtime_kwargs` when a fully-resolved settings dict
+    is needed (e.g. right before invoking ``model.generate``).
     """
     return Manager._filter_by_scope(kwargs, params, ParamScope.RUNTIME, label="runtime")
+
+  @staticmethod
+  def resolve_runtime_kwargs(kwargs: Dict[str, Any], params: Optional[List[ParamSpec]]) -> Dict[str, Any]:
+    """Return a fully-resolved RUNTIME kwargs dict for the given specs.
+
+    Starts from the declared default of every RUNTIME-scoped
+    ``ParamSpec`` in ``params``, then overlays the coerced subset of
+    ``kwargs`` produced by :meth:`filter_runtime_kwargs`. The result is
+    the dict a model's ``generate`` should consume directly — no
+    further spec-level filtering or defaulting is required.
+
+    First-declared-wins: when the same ``name`` appears more than once
+    in ``params`` (e.g. an architecture override plus a later spread of
+    ``COMMON_TEXT_RUNTIME_PARAMS``), the *first* occurrence supplies the
+    default, matching :meth:`ExtensionInfo.param`'s lookup semantics.
+    Downstream filtering already collapses duplicates by name, so the
+    overlay step is unaffected.
+    """
+    if not params:
+      return {}
+
+    resolved: Dict[str, Any] = {}
+    for spec in params:
+      if spec.scope != ParamScope.RUNTIME:
+        continue
+      if spec.name in resolved:
+        continue
+      resolved[spec.name] = spec.default
+
+    resolved.update(Manager.filter_runtime_kwargs(kwargs, params))
+    return resolved
 
   @staticmethod
   def validate_required_init_kwargs(kwargs: Dict[str, Any], params: Optional[List[ParamSpec]]) -> List[str]:
@@ -673,34 +663,13 @@ class Manager:
     """
     Get all available architecture plugins and their info keyed by name.
 
-    The returned ``ArchitectureInfo.params`` lists are augmented with the
-    model class's ``runtime_params`` (collected during ``discover_plugins``)
-    so dispatch-time consumers see both INIT and RUNTIME specs for the
-    architecture without having to reach into the lazy plugin entries.
+    Each ``ArchitectureInfo.params`` already carries the plugin's full
+    contract (both INIT and RUNTIME specs); there's no post-processing
+    here. Dispatch-time consumers (``Registry._run_stream``) filter
+    kwargs directly against this list.
     """
     self.load_all_plugins()
     all_arch = self._collect_info_dict(self.architecture_pm, 'get_architecture_info')
-
-    cached_by_name: Dict[str, List[ParamSpec]] = {}
-    for entry in self._lazy_plugins.get("claia.architectures", []):
-      info_name = getattr(entry.info, 'name', None) if entry.info else None
-      if info_name:
-        cached_by_name[info_name] = list(entry.params)
-
-    for name, info in all_arch.items():
-      cached = cached_by_name.get(name)
-      if cached and hasattr(info, 'params'):
-        seen = {p.name for p in (info.params or [])}
-        merged = list(info.params or [])
-        for spec in cached:
-          if spec.name not in seen:
-            merged.append(spec)
-            seen.add(spec.name)
-        try:
-          info.params = merged
-        except Exception:
-          pass
-
     logger.debug(f"Collected {len(all_arch)} architectures")
     return all_arch
 

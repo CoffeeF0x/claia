@@ -6,13 +6,11 @@ custom handling for their specific requirements and optimizations.
 """
 
 import logging
-from typing import List, Optional, Generator
+from typing import Optional, Generator
 
 # Internal dependencies
 from claia.core.data import Conversation
 from claia.core.enums.conversation import MessageRole
-from claia.core.models.base.base import COMMON_TEXT_RUNTIME_PARAMS
-from claia.core.plugins.base import ParamScope, ParamSpec, SettingCategory
 from .generic import GenericTransformerModel
 
 
@@ -26,26 +24,14 @@ logger = logging.getLogger(__name__)
 #                               CLASSES                                #
 ########################################################################
 class Gemma3Model(GenericTransformerModel):
-  """Specialized Gemma3 transformer model implementation."""
+  """Specialized Gemma3 transformer model implementation.
 
-  # Gemma3 overrides a handful of generation defaults; the rest are
-  # inherited from the common text runtime params.
-  runtime_params = [
-    ParamSpec(name="max_tokens", type=int, scope=ParamScope.RUNTIME, default=2048,
-              category=SettingCategory.GENERATION,
-              description="Maximum number of tokens to generate."),
-    ParamSpec(name="temperature", type=float, scope=ParamScope.RUNTIME, default=0.8,
-              category=SettingCategory.GENERATION,
-              description="Sampling temperature."),
-    ParamSpec(name="top_p", type=float, scope=ParamScope.RUNTIME, default=0.95,
-              category=SettingCategory.GENERATION,
-              description="Nucleus sampling probability mass."),
-    ParamSpec(name="top_k", type=int, scope=ParamScope.RUNTIME, default=40,
-              category=SettingCategory.GENERATION,
-              description="Restrict sampling to the top-k tokens."),
-    *[p for p in COMMON_TEXT_RUNTIME_PARAMS
-      if p.name not in {"max_tokens", "temperature", "top_p", "top_k"}],
-  ]
+  Generation defaults (``max_tokens``, ``temperature``, ``top_p``,
+  ``top_k``) for this model live on
+  ``TransformersGemma3Plugin.info.params`` as RUNTIME ``ParamSpec``
+  entries; the framework resolves them into ``kwargs`` before calling
+  ``generate``.
+  """
 
   def __init__(self, model_name: str, model_path: str, defer_loading: bool = False, device: str = "cpu", huggingface_api_token: Optional[str] = None):
     super().__init__(model_name, model_path, defer_loading, device, huggingface_api_token)
@@ -92,12 +78,17 @@ class Gemma3Model(GenericTransformerModel):
       raise
 
   def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
-    """Generate a response using the Gemma3 model. Yields the full response as a single token."""
+    """Generate a response using the Gemma3 model. Yields the full response as a single token.
+
+    ``kwargs`` arrive pre-resolved against
+    ``TransformersGemma3Plugin.info.params`` so the fallbacks below
+    mirror those declarations and only matter if a caller bypasses the
+    registry.
+    """
     if not self.loaded:
       self.load()
 
     try:
-      settings = self.update_settings({}, **kwargs)
       prompt = self._convert_conversation_to_prompt(conversation)
 
       inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)
@@ -107,10 +98,10 @@ class Gemma3Model(GenericTransformerModel):
       with torch.no_grad():
         outputs = self.model.generate(
           **inputs,
-          max_new_tokens=settings.get("max_tokens", 2048),
-          temperature=settings.get("temperature", 0.8),
-          top_p=settings.get("top_p", 0.95),
-          top_k=settings.get("top_k", 40),
+          max_new_tokens=kwargs.get("max_tokens", 2048),
+          temperature=kwargs.get("temperature", 0.8),
+          top_p=kwargs.get("top_p", 0.95),
+          top_k=kwargs.get("top_k", 40),
           do_sample=True,
           pad_token_id=self.tokenizer.eos_token_id,
           eos_token_id=self.tokenizer.eos_token_id,

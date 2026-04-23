@@ -10,7 +10,13 @@ from typing import Type
 
 from .base import BaseArchitecture
 from ..models.transformers import GenericTransformerModel
-from ..plugins.base import ArchitectureInfo, ParamScope, ParamSpec, SettingCategory
+from ..plugins.base import (
+  COMMON_TEXT_RUNTIME_PARAMS,
+  ArchitectureInfo,
+  ParamScope,
+  ParamSpec,
+  SettingCategory,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -32,6 +38,7 @@ class TransformersGenericPlugin(BaseArchitecture):
         category=SettingCategory.API,
         description="Hugging Face API Token (required for gated models)",
       ),
+      *COMMON_TEXT_RUNTIME_PARAMS,
     ],
   )
 
