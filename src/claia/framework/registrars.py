@@ -1,19 +1,16 @@
 """
 Pluggy registrar wrappers.
 
-Built-in plugin classes in ``claia.core`` are pure implementations of the
+Plugin classes in ``claia.core`` are pure implementations of the
 ``Base*`` ABCs — they depend only on ``claia.core`` and know nothing
 about pluggy. The framework is what turns them into pluggy plugins:
 for each plugin namespace there is a small registrar class that takes a
 plain plugin instance and exposes ``@hookimpl``-decorated methods that
 delegate to the wrapped instance.
 
-This keeps ``claia.core`` dependency-light (no pluggy in its public
-contract) while preserving pluggy-based discovery/dispatch in the
-framework layer. External plugins that prefer the old style (decorating
-their own methods with ``@hookimpl`` directly) still work — the manager
-only wraps a plugin in a registrar when the plugin itself does not carry
-hookimpl markers.
+Keeping pluggy confined to this module lets ``claia.core`` stay
+dependency-light (no pluggy in its public contract) while preserving
+pluggy-based discovery and hook dispatch in the framework layer.
 """
 
 from __future__ import annotations
@@ -60,9 +57,11 @@ _agt_impl = pluggy.HookimplMarker("claia_agents")
 class _BaseRegistrar:
   """Common surface for all registrars.
 
-  Exposing ``.plugin`` lets the manager reach back through the wrapper
-  when it needs the original (pure) implementation — for example to
-  call a method that isn't part of the pluggy hookspec.
+  ``plugin`` exposes the wrapped implementation so callers that need
+  methods outside the pluggy hookspec (for example, ``Manager`` code
+  reaching for ``get_module_tools`` directly) can reach through to
+  the pure plugin instance without caring that a wrapper is in the
+  way.
   """
 
   __slots__ = ("_plugin",)
@@ -75,10 +74,9 @@ class _BaseRegistrar:
     return self._plugin
 
   def __getattr__(self, name: str) -> Any:
-    # Allow duck-typed attribute access through to the wrapped plugin
-    # so callers that used to reach into the bare plugin instance
-    # (e.g. ``plugin.get_module_tools()``) keep working against the
-    # wrapped object.
+    # Delegate unknown attributes to the wrapped plugin so code that
+    # operates on the pure ABC surface keeps working against the
+    # registrar-wrapped object.
     return getattr(self._plugin, name)
 
 
@@ -275,47 +273,6 @@ REGISTRAR_BY_GROUP: Dict[str, Type[_BaseRegistrar]] = {
 }
 
 
-_HOOKIMPL_MARKER_ATTRS = tuple(
-  f"{ns}_impl"
-  for ns in (
-    "claia_architectures",
-    "claia_deployments",
-    "claia_solvers",
-    "claia_definitions",
-    "claia_tool_patterns",
-    "claia_tool_protocols",
-    "claia_tool_modules",
-    "claia_agents",
-  )
-)
-
-
-def plugin_has_hookimpls(plugin_or_cls: Any) -> bool:
-  """Return True if ``plugin_or_cls`` carries a pluggy hookimpl marker.
-
-  Used by the manager to decide whether a discovered plugin class
-  already speaks pluggy natively (legacy plugins still shipping with
-  ``@hookimpl`` decorators) or needs a registrar wrapper.
-  """
-  try:
-    cls = plugin_or_cls if isinstance(plugin_or_cls, type) else type(plugin_or_cls)
-    for attr in dir(cls):
-      if attr.startswith("__"):
-        continue
-      try:
-        value = getattr(cls, attr)
-      except Exception:
-        continue
-      if not callable(value):
-        continue
-      for marker in _HOOKIMPL_MARKER_ATTRS:
-        if hasattr(value, marker):
-          return True
-  except Exception:
-    return False
-  return False
-
-
 __all__ = [
   "ArchitectureRegistrar",
   "DeploymentRegistrar",
@@ -326,5 +283,4 @@ __all__ = [
   "ToolModuleRegistrar",
   "AgentRegistrar",
   "REGISTRAR_BY_GROUP",
-  "plugin_has_hookimpls",
 ]

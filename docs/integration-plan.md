@@ -759,17 +759,15 @@ Two-phase plugin loading is now the Manager's default path and
 default `get_*_info()` that returns `type(self).info`. Plugin authors
 override the class attribute; the method hook remains the public
 contract exposed to the framework.
-- **`PluginEntry` replaces `LazyPluginEntry`.** The new dataclass
+- **`PluginEntry` is the canonical discovery record.** The dataclass
 carries the entry point, loaded class, discovered `info`, flattened
-`ParamSpec` list, the lazy `instance`, and the object actually
-`registered` with pluggy (instance for legacy plugins, registrar
-wrapper for ABC-based plugins). `LazyPluginEntry` is kept as an alias
-for external importers.
+`ParamSpec` list, the lazy `instance`, and the registrar wrapper
+actually handed to pluggy.
 - **Discovery reads class attributes, not instances.**
-`Manager.discover_plugins()` walks every entry-point group and calls
-`_populate_entry_metadata()`, which prefers the class-level `info`
-attribute and only falls back to a no-arg instantiation plus
-`get_*_info()` for legacy plugins. Architecture entries additionally
+`Manager.discover_plugins()` walks every entry-point group listed in
+`PLUGIN_GROUPS` and calls `_populate_entry_metadata()`, which reads
+the class-level `info` attribute directly — no plugin is
+instantiated during discovery. Architecture entries additionally
 resolve the model class (via `cls.model_class` or, if absent, a
 temporary instance) to fold `BaseModel.runtime_params` into the
 entry's params list.
@@ -782,11 +780,11 @@ registrar per hook namespace (`ArchitectureRegistrar`,
 proxies unknown attributes to the wrapped plugin so code that used
 to reach into the raw instance (`plugin.get_module_tools()`) still
 works against the wrapper.
-- **Legacy `@hookimpl` plugins keep working.** `plugin_has_hookimpls`
-detects the pluggy marker attributes (`<ns>_impl`) and
-`Manager._wrap_with_registrar` only wraps plugins that don't already
-carry them, preserving backward compatibility for out-of-tree plugins
-shipping their own `@hookimpl` decorators.
+- **Every plugin goes through a registrar.** `_load_plugins` fetches
+the registrar class for the group, instantiates the plugin with the
+kwargs its specs allow, wraps it, and hands the wrapper to
+`pm.register`. No alternate "already uses `@hookimpl`" path exists —
+pluggy is fully encapsulated inside the framework.
 - **Core plugins are pluggy-free.** All five architectures
 (`openai`, `anthropic`, `transformers_generic`, `transformers_gemma3`,
 `dummy`), four deployments (`api`, `local`, `remote`, `dummy`), the

@@ -20,14 +20,14 @@ import pluggy
 import logging
 import importlib.metadata as metadata
 from dataclasses import dataclass, field
-from typing import Dict, Optional, List, Type, Any, Tuple, ClassVar
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
 
 from .hooks import (
   ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHooks,
   PatternHooks, ProtocolHooks, ToolModuleHooks, AgentHooks,
   DeploymentInfo, SolverInfo, ModelDefinition, ArchitectureInfo, AgentInfo
 )
-from .registrars import REGISTRAR_BY_GROUP, plugin_has_hookimpls
+from .registrars import REGISTRAR_BY_GROUP
 from claia.core.models.base import BaseModel
 from claia.core.plugins.base import ParamScope, ParamSpec
 from .agents.base import BaseAgent
@@ -39,22 +39,22 @@ from .agents.base import BaseAgent
 ########################################################################
 DEFAULT_SOLVER = "default"
 
-# Map entry point group -> plugin info method name. All info objects
-# returned by these methods share the ``ExtensionInfo`` shape and
-# advertise their parameters via ``ExtensionInfo.params`` (a list of
-# ``ParamSpec``). The Manager filters constructor kwargs against the
-# ``INIT``-scoped specs and surfaces the specs themselves so Settings
-# can build CLI flags / env lookups dynamically.
-INFO_METHOD_BY_GROUP: Dict[str, Optional[str]] = {
-  'claia.architectures': 'get_architecture_info',   # -> ArchitectureInfo
-  'claia.deployments': 'get_deployment_info',       # -> DeploymentInfo
-  'claia.solvers': 'get_solver_info',               # -> SolverInfo
-  'claia.definitions': None,                        # -> Dict[str, ModelDefinition] via hook
-  'claia.tool_patterns': 'get_pattern_info',        # -> PatternInfo
-  'claia.tool_protocols': 'get_protocol_info',      # -> ProtocolInfo
-  'claia.tool_modules': 'get_module_info',          # -> ToolModuleInfo
-  'claia.agents': 'get_agent_info',                 # -> AgentInfo
-}
+# All entry point groups the manager cares about. Plugins declare
+# their metadata via a class-level ``info`` attribute (subclass of
+# ``ExtensionInfo``); the ``info.params`` list drives Settings,
+# CLI flags, and init-kwarg filtering. Definition plugins are the one
+# exception — they don't carry an ``info`` object and expose their
+# metadata via the ``get_definitions`` hook instead.
+PLUGIN_GROUPS: Tuple[str, ...] = (
+  'claia.architectures',
+  'claia.deployments',
+  'claia.solvers',
+  'claia.definitions',
+  'claia.tool_patterns',
+  'claia.tool_protocols',
+  'claia.tool_modules',
+  'claia.agents',
+)
 
 
 ########################################################################
@@ -62,32 +62,22 @@ INFO_METHOD_BY_GROUP: Dict[str, Optional[str]] = {
 ########################################################################
 @dataclass
 class PluginEntry:
-  """Represents a discovered plugin.
+  """A discovered plugin and its cached metadata.
 
-  After :meth:`Manager.discover_plugins` the entry holds the class
-  reference, the metadata ``info`` object, and the (flat) list of
-  declared ``ParamSpec`` objects. The plugin itself is not yet
-  instantiated — that happens lazily in :meth:`Manager.load_all_plugins`
-  when the full kwarg environment is available.
-
-  ``instance`` is the pure plugin instance (subclass of the ABC) once
-  instantiated. ``registered`` is the object actually registered with
-  pluggy: either the instance itself (legacy ``@hookimpl`` plugins) or a
-  registrar wrapper from :mod:`claia.framework.registrars`.
+  Produced by :meth:`Manager.discover_plugins` without instantiation:
+  the class reference and ``info`` object are read from the plugin
+  class, never from an instance. Instantiation happens later in
+  :meth:`Manager.load_all_plugins` once the full kwarg environment
+  (Settings) is available.
   """
   name: str                    # Entry point name
-  group: str                   # Entry point group (e.g., 'claia.tool_modules')
-  entry_point: Any             # The entry point object
-  plugin_class: Type = None    # Loaded class (after load())
-  info: Any = None             # Plugin info object (from class-level or get_*_info())
-  instance: Any = None         # Instantiated plugin (lazy)
-  registered: Any = None       # Object registered with pluggy (instance or registrar)
-  params: List[ParamSpec] = field(default_factory=list)  # Cached ParamSpecs
-
-
-# Backwards-compatible alias: external callers may have imported the old
-# name. ``PluginEntry`` is the canonical name going forward.
-LazyPluginEntry = PluginEntry
+  group: str                   # Entry point group (e.g. ``claia.tool_modules``)
+  entry_point: Any             # Raw ``importlib.metadata`` entry point
+  plugin_class: Type = None    # Loaded plugin class
+  info: Any = None             # Class-level ``info`` (subclass of ExtensionInfo)
+  instance: Any = None         # Pure plugin instance (ABC subclass), set at load time
+  registered: Any = None       # Registrar wrapper actually handed to pluggy
+  params: List[ParamSpec] = field(default_factory=list)  # Flattened ParamSpec list
 
 
 
@@ -109,7 +99,7 @@ class Manager:
   - Model: Architecture, Deployment, Solver, Definition plugins
   - Tools: Pattern, Protocol, CommandModule plugins
   - Agents: Agent plugins
-  
+
   Extensions are lazy-loaded: ``discover_plugins()`` collects metadata
   without instantiation, allowing ``ParamSpec`` declarations to be
   collected for dynamic settings. Full instantiation occurs when
@@ -162,36 +152,32 @@ class Manager:
     """
     Discover all plugins from entry points without instantiating them.
 
-    This method:
+    Two-phase loading relies on reading class-level metadata here and
+    deferring instantiation to :meth:`load_all_plugins`. This is what
+    breaks the otherwise-circular dependency between Settings (which
+    needs to know every declared ``ParamSpec``) and plugins (which
+    need Settings to be constructed).
 
-    1. Loads each plugin class from entry points (unavoidable — we need
-       the class to eventually build an instance).
-    2. Reads the class-level ``info`` attribute when present, avoiding
-       instantiation entirely. Plugins that still return their metadata
-       from a ``get_*_info()`` method are handled by falling back to a
-       temporary no-arg instance (legacy path).
-    3. Extracts ``ParamSpec`` declarations and stores them on the
-       :class:`PluginEntry` for later use.
-    4. For architectures, pulls in the model class's ``runtime_params``
-       so dispatch-time knobs (temperature, max_tokens, ...) become
-       visible to settings/CLI without requiring every architecture to
-       redeclare them.
-    5. Does NOT register the plugin with pluggy — that is deferred to
-       :meth:`load_all_plugins` where construction kwargs are available.
+    Steps per entry point:
 
-    This two-phase layout breaks the otherwise-circular dependency
-    between settings (which need to know which plugin params exist) and
-    extensions (which need settings to construct their backing objects).
+    1. Load the class (unavoidable).
+    2. Read ``cls.info`` (subclass of ``ExtensionInfo``); no instance
+       is ever created during discovery.
+    3. For architectures, augment the declared ``params`` with the
+       model class's ``runtime_params`` so dispatch-time knobs like
+       ``temperature`` or ``max_tokens`` become visible to Settings
+       without every architecture having to redeclare them.
+    4. Record a :class:`PluginEntry`. Registration with pluggy
+       happens later, when ``load_all_plugins`` has real kwargs.
     """
     if self._plugins_discovered:
       logger.debug("Plugins already discovered")
       return
 
-    groups = list(INFO_METHOD_BY_GROUP.keys())
     total_discovered = 0
     total_secrets = 0
 
-    for group in groups:
+    for group in PLUGIN_GROUPS:
       self._lazy_plugins[group] = []
 
       for ep in metadata.entry_points().select(group=group):
@@ -212,7 +198,7 @@ class Manager:
 
     self._plugins_discovered = True
     logger.info(
-      f"Discovered {total_discovered} plugin(s) across {len(groups)} group(s) "
+      f"Discovered {total_discovered} plugin(s) across {len(PLUGIN_GROUPS)} group(s) "
       f"({total_secrets} secret parameter(s))"
     )
 
@@ -220,34 +206,17 @@ class Manager:
   # Discovery helpers
   # ------------------------------------------------------------------
   def _populate_entry_metadata(self, entry: PluginEntry) -> None:
-    """Populate ``entry.info`` and ``entry.params`` without instantiation when possible.
+    """Read ``entry.info`` and flatten ``entry.params`` from the class.
 
-    Strategy:
-      * If the plugin class carries a class-level ``info`` attribute,
-        use it directly (this is the preferred path for ABC-based
-        plugins).
-      * Otherwise fall back to instantiating the class with no args
-        and calling the legacy ``get_*_info()`` method — this keeps
-        external plugins that predate the class-level ``info``
-        convention working.
+    Plugins are required to expose metadata through a class-level
+    ``info`` attribute; definition providers are the one exception
+    (they publish their metadata via the ``get_definitions`` hook, so
+    ``info`` stays ``None`` and their params list stays empty).
     """
     cls = entry.plugin_class
-    info_method = INFO_METHOD_BY_GROUP.get(entry.group)
-
     class_info = getattr(cls, 'info', None)
     if class_info is not None and not isinstance(class_info, (property, classmethod, staticmethod)):
       entry.info = class_info
-    elif info_method is not None:
-      try:
-        temp = cls()
-      except Exception as e:
-        logger.debug(f"Could not create temp instance of {entry.name} to read info: {e}")
-        temp = None
-      if temp is not None and hasattr(temp, info_method):
-        try:
-          entry.info = getattr(temp, info_method)()
-        except Exception as e:
-          logger.debug(f"Could not read info for {entry.name} via {info_method}: {e}")
 
     entry.params = list(getattr(entry.info, 'params', None) or [])
 
@@ -371,7 +340,7 @@ class Manager:
   def load_all_plugins(self, **kwargs) -> None:
     """
     Load all plugins from entry points.
-    
+
     Uses lazy loading: if plugins were already discovered via discover_plugins(),
     uses the cached entries and instantiates them with the provided kwargs.
     Otherwise, discovers and loads in one step.
@@ -413,48 +382,36 @@ class Manager:
   ######################################################################
   # Generic plugin loading helper
   def _load_plugins(self, group: str, pm: pluggy.PluginManager, label: str, allow_empty: bool = False, ctor_kwargs: Optional[Dict[str, Any]] = None) -> None:
-    """Load plugins securely by filtering ctor kwargs against INIT ParamSpecs.
+    """Instantiate discovered plugins and register them with ``pm``.
 
-    Uses the lazy plugin entries discovered by ``discover_plugins()``.
-    Each plugin is instantiated with only the kwargs whose names match
-    an ``INIT``-scoped ``ParamSpec`` declared by that plugin. Pure ABC
-    plugins (those without pluggy hookimpl markers) are wrapped in the
-    matching registrar from :mod:`claia.framework.registrars` before
-    being registered with pluggy; legacy plugins that already carry
-    ``@hookimpl`` decorators are registered directly.
+    For every :class:`PluginEntry` in ``group``:
+
+    1. Filter ``ctor_kwargs`` against the plugin's declared
+       ``INIT``-scoped ``ParamSpec`` list so each plugin sees only
+       the kwargs it asked for. Required-kwarg enforcement is handled
+       at the model-construction layer, not here — most plugin classes
+       take no constructor args and just expose a model/info class.
+    2. Instantiate the plugin.
+    3. Wrap the instance in the matching registrar from
+       :mod:`claia.framework.registrars` (adds the ``@hookimpl``
+       markers pluggy needs) and hand the wrapper to ``pm.register``.
     """
+    registrar_cls = REGISTRAR_BY_GROUP[group]
     loaded_count = 0
-    registrar_cls = REGISTRAR_BY_GROUP.get(group)
 
     try:
-      entries = self._lazy_plugins.get(group, [])
-
-      for entry in entries:
+      for entry in self._lazy_plugins.get(group, []):
         try:
-          cls = entry.plugin_class
-          if cls is None:
-            logger.warning(f"No plugin class loaded for {entry.name}")
-            continue
-
           filtered_kwargs: Dict[str, Any] = {}
           if entry.params and ctor_kwargs:
             filtered_kwargs = self.filter_init_kwargs(ctor_kwargs, entry.params)
 
-          # Required-kwargs validation is deliberately NOT enforced
-          # here — most plugin classes (Architectures, Deployments,
-          # Solvers, Agents) take no constructor args and merely return
-          # a model/info class. The "required" credentials apply when
-          # the underlying model is actually constructed at request
-          # time, which is where Registry/Manager call sites should
-          # invoke ``validate_required_init_kwargs`` if they want to
-          # surface a clean error instead of letting the model class
-          # raise on its own.
-          inst = self._instantiate_plugin(cls, entry.name, label, filtered_kwargs)
+          inst = self._instantiate_plugin(entry.plugin_class, entry.name, label, filtered_kwargs)
           if inst is None:
             continue
 
           entry.instance = inst
-          entry.registered = self._wrap_with_registrar(inst, registrar_cls)
+          entry.registered = registrar_cls(inst)
 
           pm.register(entry.registered)
           loaded_count += 1
@@ -476,10 +433,6 @@ class Manager:
       if not allow_empty:
         raise
 
-  def _get_info_method_for_group(self, group: str) -> Optional[str]:
-    """Return the instance info method name for a given entry point group."""
-    return INFO_METHOD_BY_GROUP.get(group)
-
   @staticmethod
   def _instantiate_plugin(
     cls: Type,
@@ -487,44 +440,19 @@ class Manager:
     label: str,
     filtered_kwargs: Dict[str, Any],
   ) -> Optional[Any]:
-    """Instantiate ``cls`` with filtered kwargs, falling back to no-args on failure.
+    """Instantiate ``cls`` with the filtered kwargs.
 
-    Returns the instance, or ``None`` if instantiation failed entirely.
+    Returns the instance, or ``None`` if instantiation failed. Any
+    failure here is a configuration/coding bug (the kwargs have
+    already been filtered against the plugin's declared specs), so
+    we surface it at WARNING and skip the plugin rather than silently
+    masking it with a no-arg retry.
     """
-    if filtered_kwargs:
-      try:
-        return cls(**filtered_kwargs)
-      except Exception as e:
-        logger.debug(f"Instantiating {label} plugin {name} with kwargs failed: {e}")
     try:
-      return cls()
+      return cls(**filtered_kwargs)
     except Exception as e:
       logger.warning(f"Failed to instantiate {label} plugin {name}: {e}")
       return None
-
-  @staticmethod
-  def _wrap_with_registrar(inst: Any, registrar_cls: Optional[Type]) -> Any:
-    """Return ``inst`` wrapped in ``registrar_cls`` if appropriate.
-
-    Plugins that already carry ``@hookimpl`` markers are registered
-    unchanged (preserves backward compatibility with external plugins
-    that chose to speak pluggy directly). Pure ABC implementations are
-    wrapped in the matching registrar from
-    :mod:`claia.framework.registrars` so pluggy sees the hookimpl-
-    decorated methods on the wrapper while the core plugin itself stays
-    pluggy-free.
-    """
-    if registrar_cls is None:
-      return inst
-    if plugin_has_hookimpls(inst):
-      return inst
-    try:
-      return registrar_cls(inst)
-    except Exception as e:
-      logger.warning(
-        f"Could not wrap plugin {type(inst).__name__} with {registrar_cls.__name__}: {e}"
-      )
-      return inst
 
   # ------------------------------------------------------------------
   # Kwarg coercion / validation
@@ -996,13 +924,13 @@ class Manager:
 
   def get_agent_class(self, agent_name: str) -> Optional[Type[BaseAgent]]:
     """Get the agent class for a specific agent name.
-    
+
     Programmatically registered agents take priority over pluggy agents
     when the same name is used.
     """
     # Load all agents from all sources
     all_agents = self.get_agents()
-    
+
     # Search through all agents (programmatic ones are listed first, giving them priority)
     for agent_info in all_agents:
       if agent_info.name == agent_name:
@@ -1014,17 +942,17 @@ class Manager:
 
   def get_agents(self) -> List[AgentInfo]:
     """Get all available agents from all sources.
-    
+
     Returns both programmatically registered agents and pluggy-based agents.
     Programmatically registered agents are listed first, giving them priority
     when multiple agents share the same name.
     """
     self.load_all_plugins()
     agents = []
-    
+
     # Add programmatically registered agents first (priority)
     agents.extend(self._registered_agents.values())
-    
+
     # Add pluggy agents
     try:
       pluggy_agents = self.agent_pm.hook.get_agent_info()
@@ -1041,7 +969,7 @@ class Manager:
 
   def get_agent_info_by_name(self, agent_name: str) -> Optional[AgentInfo]:
     """Get agent info for a specific agent by name.
-    
+
     Searches through all available agents (both programmatic and pluggy).
     Programmatically registered agents take priority over pluggy agents
     when the same name is used.

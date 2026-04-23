@@ -121,13 +121,6 @@ class Conversation(TextArtifact):
                  updated_at: Optional[float] = None,
                  on_event: Optional[EventCallback] = None,
                  **kwargs):
-        # Legacy serialized conversations may still carry a ``settings``
-        # blob (pre-Phase-3 ConversationSettings). Drop it silently so
-        # old JSON stores continue to load.
-        legacy_settings = kwargs.pop('settings', None)
-        if legacy_settings is not None:
-            logger.debug("Ignoring legacy conversation 'settings' field (removed in Phase 3)")
-
         super().__init__(
             name=kwargs.pop('name', f"conversation-{id or 'new'}"),
             id=id,
@@ -308,9 +301,6 @@ class Conversation(TextArtifact):
         self.events = []
         for e in data.get("events", []):
             self.events.append(e if isinstance(e, DomainEvent) else DomainEvent.from_dict(e))
-
-        if data.get("settings") is not None:
-            logger.debug("Ignoring legacy conversation 'settings' field during content reload")
 
         self._content = content
         self._content_loaded = True
