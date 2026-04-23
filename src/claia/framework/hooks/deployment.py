@@ -29,9 +29,15 @@ class DeploymentHooks:
     model_class: Type,
     conversation: Conversation,
     cache: Dict[str, Any],
-    **kwargs,
+    init_kwargs: Dict[str, Any],
+    runtime_kwargs: Dict[str, Any],
   ) -> Iterator[GenerationChunk]:
-    """Deploy (if needed) and yield ``GenerationChunk`` items from the model."""
+    """Deploy (if needed) and yield ``GenerationChunk`` items from the model.
+
+    ``init_kwargs`` feed the model constructor; ``runtime_kwargs`` feed
+    ``model.generate``. Both are pre-filtered by ``ParamSpec`` scope at
+    the registry boundary.
+    """
 
 
 __all__ = ["DeploymentHooks", "DeploymentInfo"]

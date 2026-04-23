@@ -467,13 +467,16 @@ class Registry:
 
     deployment_runtime_kwargs = Manager.filter_runtime_kwargs(combined_kwargs, deployment_params_specs)
 
-    # Merge order: architecture INIT + deployment INIT form the model's
-    # construction kwargs; RUNTIME specs (from both deployment and
-    # architecture) are generation-time overrides. Deployment runtime
-    # kwargs win over architecture defaults where the names collide.
-    final_kwargs = {
+    # Split by spec scope so each layer gets only the kwargs it
+    # consumes: INIT specs feed the model constructor (credentials,
+    # endpoints, paths), RUNTIME specs feed ``model.generate``
+    # (temperature, max_tokens, ...). Deployment-scoped RUNTIME
+    # overrides win over architecture defaults on name collisions.
+    init_kwargs = {
       **arch_init_kwargs,
       **deployment_init_kwargs,
+    }
+    runtime_kwargs = {
       **arch_runtime_kwargs,
       **deployment_runtime_kwargs,
     }
@@ -483,7 +486,8 @@ class Registry:
       model_class=model_class,
       conversation=conversation,
       cache=self.cache,
-      **final_kwargs
+      init_kwargs=init_kwargs,
+      runtime_kwargs=runtime_kwargs,
     )
 
   def run(

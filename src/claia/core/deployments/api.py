@@ -31,7 +31,15 @@ class APIDeploymentPlugin(BaseDeployment):
     description="Deploy models via external API services (OpenAI, Anthropic, etc.)",
   )
 
-  def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[GenerationChunk]:
+  def run(
+    self,
+    model_name: str,
+    model_class: Type,
+    conversation: Conversation,
+    cache: Dict[str, Any],
+    init_kwargs: Dict[str, Any],
+    runtime_kwargs: Dict[str, Any],
+  ) -> Iterator[GenerationChunk]:
     """
     Deploy (if needed) and run inference on an API-based model.
 
@@ -49,11 +57,11 @@ class APIDeploymentPlugin(BaseDeployment):
       logger.debug(f"Deploying API model: {model_name}")
       model_instance = model_class(
         model_name=model_name,
-        **kwargs
+        **init_kwargs,
       )
       cache[cache_key] = model_instance
       logger.debug(f"Successfully deployed and cached API model: {model_name}")
 
     logger.debug(f"Running API model inference: {model_name}")
-    for token in model_instance.generate(conversation, **kwargs):
+    for token in model_instance.generate(conversation, **runtime_kwargs):
       yield token if isinstance(token, GenerationChunk) else text_chunk(token)

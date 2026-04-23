@@ -31,7 +31,15 @@ class LocalDeploymentPlugin(BaseDeployment):
     description="Deploy models locally using transformers/torch",
   )
 
-  def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[GenerationChunk]:
+  def run(
+    self,
+    model_name: str,
+    model_class: Type,
+    conversation: Conversation,
+    cache: Dict[str, Any],
+    init_kwargs: Dict[str, Any],
+    runtime_kwargs: Dict[str, Any],
+  ) -> Iterator[GenerationChunk]:
     """
     Deploy (if needed) and run inference on a local model.
 
@@ -48,23 +56,26 @@ class LocalDeploymentPlugin(BaseDeployment):
     else:
       logger.debug(f"Deploying local model: {model_name}")
 
-      device = kwargs.get('device', 'cpu')
-      model_path = kwargs.get('model_path', None)
-      defer_loading = kwargs.get('defer_loading', False)
-
-      extra_kwargs = {k: v for k, v in kwargs.items() if k not in ['device', 'model_path', 'defer_loading']}
+      # ``model_path`` / ``device`` / ``defer_loading`` are positional on
+      # ``LocalModel`` subclasses, so pluck them out of ``init_kwargs``
+      # and pass the remainder (e.g. ``huggingface_api_token``) as
+      # keywords.
+      ctor_kwargs = dict(init_kwargs)
+      device = ctor_kwargs.pop('device', 'cpu')
+      model_path = ctor_kwargs.pop('model_path', None)
+      defer_loading = ctor_kwargs.pop('defer_loading', False)
 
       model_instance = model_class(
         model_name=model_name,
         model_path=model_path,
         defer_loading=defer_loading,
         device=device,
-        **extra_kwargs
+        **ctor_kwargs,
       )
 
       cache[cache_key] = model_instance
       logger.debug(f"Successfully deployed and cached local model: {model_name}")
 
     logger.debug(f"Running local model inference: {model_name}")
-    for token in model_instance.generate(conversation, **kwargs):
+    for token in model_instance.generate(conversation, **runtime_kwargs):
       yield token if isinstance(token, GenerationChunk) else text_chunk(token)

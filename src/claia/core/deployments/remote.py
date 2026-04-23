@@ -32,7 +32,15 @@ class RemoteDeploymentPlugin(BaseDeployment):
     description="Deploy models on remote servers or cloud VMs",
   )
 
-  def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[GenerationChunk]:
+  def run(
+    self,
+    model_name: str,
+    model_class: Type,
+    conversation: Conversation,
+    cache: Dict[str, Any],
+    init_kwargs: Dict[str, Any],
+    runtime_kwargs: Dict[str, Any],
+  ) -> Iterator[GenerationChunk]:
     """
     Deploy (if needed) and run inference on a remote model.
 
@@ -47,9 +55,9 @@ class RemoteDeploymentPlugin(BaseDeployment):
       logger.debug(f"Using cached remote model instance for {cache_key}")
     else:
       server_url = (
-        kwargs.get('server_url') or
-        kwargs.get('remote_url') or
-        kwargs.get('base_url')
+        init_kwargs.get('server_url') or
+        init_kwargs.get('remote_url') or
+        init_kwargs.get('base_url')
       )
 
       if not server_url:
@@ -57,13 +65,13 @@ class RemoteDeploymentPlugin(BaseDeployment):
 
       logger.debug(f"Deploying remote model: {model_name} -> {server_url}")
 
-      extra_kwargs = dict(kwargs)
-      extra_kwargs.setdefault('server_url', server_url)
-      extra_kwargs.setdefault('base_url', server_url)
+      ctor_kwargs = dict(init_kwargs)
+      ctor_kwargs.setdefault('server_url', server_url)
+      ctor_kwargs.setdefault('base_url', server_url)
 
       model_instance = model_class(
         model_name=model_name,
-        **extra_kwargs
+        **ctor_kwargs,
       )
 
       if hasattr(model_instance, 'test_connection'):
@@ -75,5 +83,5 @@ class RemoteDeploymentPlugin(BaseDeployment):
       logger.debug(f"Successfully deployed and cached remote model: {model_name}")
 
     logger.debug(f"Running remote model inference: {model_name}")
-    for token in model_instance.generate(conversation, **kwargs):
+    for token in model_instance.generate(conversation, **runtime_kwargs):
       yield token if isinstance(token, GenerationChunk) else text_chunk(token)

@@ -112,14 +112,16 @@ class DeploymentRegistrar(_BaseRegistrar):
     model_class: Type,
     conversation: Conversation,
     cache: Dict[str, Any],
-    **kwargs,
+    init_kwargs: Dict[str, Any],
+    runtime_kwargs: Dict[str, Any],
   ) -> Iterator[GenerationChunk]:
     return self._plugin.run(
       model_name=model_name,
       model_class=model_class,
       conversation=conversation,
       cache=cache,
-      **kwargs,
+      init_kwargs=init_kwargs,
+      runtime_kwargs=runtime_kwargs,
     )
 
 

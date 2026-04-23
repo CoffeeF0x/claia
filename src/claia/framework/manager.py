@@ -342,29 +342,33 @@ class Manager:
   def _load_plugins(self, group: str, pm: pluggy.PluginManager, label: str, allow_empty: bool = False, ctor_kwargs: Optional[Dict[str, Any]] = None) -> None:
     """Instantiate discovered plugins and register them with ``pm``.
 
-    For every :class:`PluginEntry` in ``group``:
+    Plugin classes are stateless metadata + factory objects: they
+    expose an ``info`` attribute and (for architectures) a
+    ``get_model_class`` factory, but don't own the credentials or
+    runtime state themselves. INIT-scoped ``ParamSpec`` entries on
+    ``info.params`` describe what the *downstream* object (a model
+    instance, an outbound API call, ...) consumes; the registry
+    filters kwargs against those specs at dispatch time. The plugin
+    itself is always instantiated with no arguments.
 
-    1. Filter ``ctor_kwargs`` against the plugin's declared
-       ``INIT``-scoped ``ParamSpec`` list so each plugin sees only
-       the kwargs it asked for. Required-kwarg enforcement is handled
-       at the model-construction layer, not here — most plugin classes
-       take no constructor args and just expose a model/info class.
-    2. Instantiate the plugin.
-    3. Wrap the instance in the matching registrar from
+    ``ctor_kwargs`` is accepted for API compatibility with
+    :meth:`load_all_plugins` but intentionally unused here.
+
+    Steps per entry:
+
+    1. Instantiate the plugin class (no args).
+    2. Wrap the instance in the matching registrar from
        :mod:`claia.framework.registrars` (adds the ``@hookimpl``
        markers pluggy needs) and hand the wrapper to ``pm.register``.
     """
+    del ctor_kwargs  # plugins are stateless; kwargs flow through at dispatch
     registrar_cls = REGISTRAR_BY_GROUP[group]
     loaded_count = 0
 
     try:
       for entry in self._lazy_plugins.get(group, []):
         try:
-          filtered_kwargs: Dict[str, Any] = {}
-          if entry.params and ctor_kwargs:
-            filtered_kwargs = self.filter_init_kwargs(ctor_kwargs, entry.params)
-
-          inst = self._instantiate_plugin(entry.plugin_class, entry.name, label, filtered_kwargs)
+          inst = self._instantiate_plugin(entry.plugin_class, entry.name, label)
           if inst is None:
             continue
 
@@ -396,18 +400,17 @@ class Manager:
     cls: Type,
     name: str,
     label: str,
-    filtered_kwargs: Dict[str, Any],
   ) -> Optional[Any]:
-    """Instantiate ``cls`` with the filtered kwargs.
+    """Instantiate a plugin class with no arguments.
 
-    Returns the instance, or ``None`` if instantiation failed. Any
-    failure here is a configuration/coding bug (the kwargs have
-    already been filtered against the plugin's declared specs), so
-    we surface it at WARNING and skip the plugin rather than silently
-    masking it with a no-arg retry.
+    Plugins are stateless factories in this codebase; any INIT kwargs
+    they declare are consumed by the object the plugin constructs
+    (e.g. the model instance), not by the plugin class itself.
+    Returns ``None`` if instantiation fails so the caller can skip
+    the entry with a warning rather than aborting all plugin loading.
     """
     try:
-      return cls(**filtered_kwargs)
+      return cls()
     except Exception as e:
       logger.warning(f"Failed to instantiate {label} plugin {name}: {e}")
       return None

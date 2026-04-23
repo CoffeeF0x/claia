@@ -38,7 +38,8 @@ class BaseDeployment(ABC):
     model_class: Type,
     conversation: Conversation,
     cache: Dict[str, Any],
-    **kwargs,
+    init_kwargs: Dict[str, Any],
+    runtime_kwargs: Dict[str, Any],
   ) -> Iterator[GenerationChunk]:
     """
     Deploy (if needed) and run inference on a model.
@@ -47,6 +48,17 @@ class BaseDeployment(ABC):
     model. Text-only deployments wrap each token in a
     ``ChunkKind.TEXT`` chunk; multi-modal deployments may emit image,
     audio, video or progress chunks.
+
+    Kwargs are split by ``ParamSpec`` scope at the framework boundary
+    (``Registry._run_stream``) and handed in as two dicts so each one
+    reaches the layer that actually consumes it:
+
+    - ``init_kwargs`` — INIT-scoped kwargs (credentials, endpoints,
+      paths). Forwarded to the model class constructor when a fresh
+      instance is built.
+    - ``runtime_kwargs`` — RUNTIME-scoped kwargs (``temperature``,
+      ``max_tokens``, ...) already resolved against the architecture's
+      spec defaults. Forwarded to ``model.generate`` per call.
 
     Errors are raised as exceptions (typically ``DeploymentError``).
     """
