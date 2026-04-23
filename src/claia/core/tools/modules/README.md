@@ -7,7 +7,7 @@ Concrete tool integrations providing callable commands (the “tools” the mode
 - `sample.py` — sample module with multiple tools (`current_time`, `add`, `subtract`, `echo`).
 - `system.py` — terminal/CLI utilities (`clear`, `exit`).
 
-Each module provides a **plugin class** implementing `claia.hooks.tool.ToolModuleHooks` via pluggy.
+Each module subclasses `BaseToolModule` from `claia.core.tools.modules.base` and exposes a class-level `info: ToolModuleInfo` attribute plus a `get_module_tools()` method. The framework layer wraps it in a `ToolModuleRegistrar` that adds the `@hookimpl` markers pluggy needs, so the core plugin itself stays pluggy-free.
 
 ## How tools fit in
 
@@ -20,8 +20,8 @@ Each module provides a **plugin class** implementing `claia.hooks.tool.ToolModul
 
 ## Implementing a new tool module (TL;DR)
 
-1. Create a plugin class with `hookimpl` methods:
-   - `get_module_info() -> ToolModuleInfo` (name, title, description, `params: List[ParamSpec]`).
+1. Subclass `BaseToolModule` and declare:
+   - a class-level `info = ToolModuleInfo(name, title, description, params=[...])` (each `ParamSpec` in `params` describes a kwarg the module consumes).
    - `get_module_tools() -> Dict[str, ToolDefinition]`.
 2. For each tool:
    - define a `ToolDefinition` with `name`, `description`, `callable`, and `arguments` (`ArgumentDefinition`).

@@ -27,6 +27,7 @@ from .hooks import (
   PatternHooks, ProtocolHooks, ToolModuleHooks, AgentHooks,
   DeploymentInfo, SolverInfo, ModelDefinition, ArchitectureInfo, AgentInfo
 )
+from .registrars import REGISTRAR_BY_GROUP, plugin_has_hookimpls
 from claia.core.models.base import BaseModel
 from claia.core.plugins.base import ParamScope, ParamSpec
 from .agents.base import BaseAgent
@@ -60,15 +61,33 @@ INFO_METHOD_BY_GROUP: Dict[str, Optional[str]] = {
 #                            DATA CLASSES                              #
 ########################################################################
 @dataclass
-class LazyPluginEntry:
-  """Represents a discovered but not-yet-instantiated plugin."""
+class PluginEntry:
+  """Represents a discovered plugin.
+
+  After :meth:`Manager.discover_plugins` the entry holds the class
+  reference, the metadata ``info`` object, and the (flat) list of
+  declared ``ParamSpec`` objects. The plugin itself is not yet
+  instantiated — that happens lazily in :meth:`Manager.load_all_plugins`
+  when the full kwarg environment is available.
+
+  ``instance`` is the pure plugin instance (subclass of the ABC) once
+  instantiated. ``registered`` is the object actually registered with
+  pluggy: either the instance itself (legacy ``@hookimpl`` plugins) or a
+  registrar wrapper from :mod:`claia.framework.registrars`.
+  """
   name: str                    # Entry point name
   group: str                   # Entry point group (e.g., 'claia.tool_modules')
   entry_point: Any             # The entry point object
   plugin_class: Type = None    # Loaded class (after load())
-  info: Any = None             # Plugin info object (from get_*_info())
+  info: Any = None             # Plugin info object (from class-level or get_*_info())
   instance: Any = None         # Instantiated plugin (lazy)
+  registered: Any = None       # Object registered with pluggy (instance or registrar)
   params: List[ParamSpec] = field(default_factory=list)  # Cached ParamSpecs
+
+
+# Backwards-compatible alias: external callers may have imported the old
+# name. ``PluginEntry`` is the canonical name going forward.
+LazyPluginEntry = PluginEntry
 
 
 
@@ -130,7 +149,7 @@ class Manager:
     self._registered_agents: Dict[str, AgentInfo] = {}
 
     # Lazy loading state
-    self._lazy_plugins: Dict[str, List[LazyPluginEntry]] = {}  # group -> list of entries
+    self._lazy_plugins: Dict[str, List[PluginEntry]] = {}  # group -> list of entries
     self._plugins_discovered = False
     self._plugins_loaded = False
     logger.debug("Manager initialized")
@@ -141,86 +160,170 @@ class Manager:
   ######################################################################
   def discover_plugins(self) -> None:
     """
-    Discover all plugins from entry points without fully instantiating them.
+    Discover all plugins from entry points without instantiating them.
 
     This method:
-    1. Loads each plugin class from entry points
-    2. Creates a temporary no-arg instance to introspect its info
-    3. Extracts ``ParamSpec`` declarations and stores them for later use
-    4. Does NOT register the plugin with pluggy yet
 
-    This allows collecting parameter specs before settings are fully
-    loaded, breaking the circular dependency between settings and
-    extensions.
+    1. Loads each plugin class from entry points (unavoidable — we need
+       the class to eventually build an instance).
+    2. Reads the class-level ``info`` attribute when present, avoiding
+       instantiation entirely. Plugins that still return their metadata
+       from a ``get_*_info()`` method are handled by falling back to a
+       temporary no-arg instance (legacy path).
+    3. Extracts ``ParamSpec`` declarations and stores them on the
+       :class:`PluginEntry` for later use.
+    4. For architectures, pulls in the model class's ``runtime_params``
+       so dispatch-time knobs (temperature, max_tokens, ...) become
+       visible to settings/CLI without requiring every architecture to
+       redeclare them.
+    5. Does NOT register the plugin with pluggy — that is deferred to
+       :meth:`load_all_plugins` where construction kwargs are available.
+
+    This two-phase layout breaks the otherwise-circular dependency
+    between settings (which need to know which plugin params exist) and
+    extensions (which need settings to construct their backing objects).
     """
     if self._plugins_discovered:
       logger.debug("Plugins already discovered")
       return
 
     groups = list(INFO_METHOD_BY_GROUP.keys())
+    total_discovered = 0
+    total_secrets = 0
 
     for group in groups:
       self._lazy_plugins[group] = []
 
       for ep in metadata.entry_points().select(group=group):
-        entry = LazyPluginEntry(
-          name=ep.name,
-          group=group,
-          entry_point=ep
-        )
+        entry = PluginEntry(name=ep.name, group=group, entry_point=ep)
 
         try:
           entry.plugin_class = ep.load()
-
-          try:
-            temp_instance = entry.plugin_class()
-
-            info_method = INFO_METHOD_BY_GROUP.get(group)
-            if info_method and hasattr(temp_instance, info_method):
-              try:
-                entry.info = getattr(temp_instance, info_method)()
-                params = getattr(entry.info, 'params', None) or []
-                entry.params = list(params)
-              except Exception as e:
-                logger.debug(f"Could not get info for {ep.name}: {e}")
-
-            # Architectures carry their RUNTIME generation knobs on the
-            # model class itself (BaseModel.runtime_params), not in
-            # ArchitectureInfo. Pull those in so they're discoverable as
-            # extension params (CLI flags, dispatch-time filtering)
-            # without forcing every architecture to redeclare them.
-            # We mirror the merged list back onto entry.info.params so
-            # consumers that read ``ArchitectureInfo`` directly (e.g.
-            # ``Registry._run_stream``) also see the runtime specs.
-            if group == "claia.architectures" and hasattr(temp_instance, "get_model_class"):
-              try:
-                model_cls = temp_instance.get_model_class()
-                model_runtime = getattr(model_cls, "runtime_params", None) or []
-                seen_names = {p.name for p in entry.params}
-                for spec in model_runtime:
-                  if spec.name not in seen_names:
-                    entry.params.append(spec)
-                    seen_names.add(spec.name)
-                if entry.info is not None and hasattr(entry.info, 'params'):
-                  try:
-                    entry.info.params = list(entry.params)
-                  except Exception:
-                    pass
-              except Exception as e:
-                logger.debug(f"Could not collect runtime_params for {ep.name}: {e}")
-
-          except Exception as e:
-            logger.debug(f"Could not create temp instance for {ep.name}: {e}")
-
         except Exception as e:
           logger.warning(f"Failed to load plugin class {ep.name} from {group}: {e}")
           continue
 
+        self._populate_entry_metadata(entry)
+        self._log_discovered_entry(entry)
+        total_secrets += sum(1 for p in entry.params if getattr(p, 'secret', False))
+
         self._lazy_plugins[group].append(entry)
-        logger.debug(f"Discovered {group} plugin: {ep.name}")
+        total_discovered += 1
 
     self._plugins_discovered = True
-    logger.info(f"Discovered plugins from {len(groups)} groups")
+    logger.info(
+      f"Discovered {total_discovered} plugin(s) across {len(groups)} group(s) "
+      f"({total_secrets} secret parameter(s))"
+    )
+
+  # ------------------------------------------------------------------
+  # Discovery helpers
+  # ------------------------------------------------------------------
+  def _populate_entry_metadata(self, entry: PluginEntry) -> None:
+    """Populate ``entry.info`` and ``entry.params`` without instantiation when possible.
+
+    Strategy:
+      * If the plugin class carries a class-level ``info`` attribute,
+        use it directly (this is the preferred path for ABC-based
+        plugins).
+      * Otherwise fall back to instantiating the class with no args
+        and calling the legacy ``get_*_info()`` method — this keeps
+        external plugins that predate the class-level ``info``
+        convention working.
+    """
+    cls = entry.plugin_class
+    info_method = INFO_METHOD_BY_GROUP.get(entry.group)
+
+    class_info = getattr(cls, 'info', None)
+    if class_info is not None and not isinstance(class_info, (property, classmethod, staticmethod)):
+      entry.info = class_info
+    elif info_method is not None:
+      try:
+        temp = cls()
+      except Exception as e:
+        logger.debug(f"Could not create temp instance of {entry.name} to read info: {e}")
+        temp = None
+      if temp is not None and hasattr(temp, info_method):
+        try:
+          entry.info = getattr(temp, info_method)()
+        except Exception as e:
+          logger.debug(f"Could not read info for {entry.name} via {info_method}: {e}")
+
+    entry.params = list(getattr(entry.info, 'params', None) or [])
+
+    # Architectures carry RUNTIME generation knobs on the model class
+    # itself (BaseModel.runtime_params), not in ArchitectureInfo. Pull
+    # those in so they're discoverable as extension params (CLI flags,
+    # dispatch-time filtering) without forcing every architecture to
+    # redeclare them. We mirror the merged list back onto
+    # entry.info.params so consumers that read ``ArchitectureInfo``
+    # directly (e.g. ``Registry._run_stream``) also see the runtime
+    # specs.
+    if entry.group == "claia.architectures":
+      model_cls = self._resolve_model_class(cls)
+      if model_cls is not None:
+        runtime = getattr(model_cls, "runtime_params", None) or []
+        seen = {p.name for p in entry.params}
+        for spec in runtime:
+          if spec.name not in seen:
+            entry.params.append(spec)
+            seen.add(spec.name)
+        if entry.info is not None and hasattr(entry.info, 'params'):
+          try:
+            entry.info.params = list(entry.params)
+          except Exception:
+            pass
+
+  @staticmethod
+  def _resolve_model_class(cls: Type) -> Optional[Type]:
+    """Best-effort resolution of the model class for an architecture plugin.
+
+    Tries (in order):
+      * ``cls.model_class`` when declared as a class attribute,
+      * a no-arg instantiation followed by ``get_model_class()``.
+    """
+    model_cls = getattr(cls, 'model_class', None)
+    if isinstance(model_cls, type):
+      return model_cls
+    try:
+      temp = cls()
+    except Exception as e:
+      logger.debug(f"Could not instantiate {cls.__name__} to resolve model class: {e}")
+      return None
+    try:
+      resolved = temp.get_model_class()
+      return resolved if isinstance(resolved, type) else None
+    except Exception as e:
+      logger.debug(f"Could not resolve model class via {cls.__name__}.get_model_class(): {e}")
+      return None
+
+  @staticmethod
+  def _log_discovered_entry(entry: PluginEntry) -> None:
+    """Emit a compact log line for a freshly discovered plugin.
+
+    Secret-scoped parameters are surfaced at INFO level — without
+    values — so operators can see at startup which credentials each
+    plugin will consume. Non-secret parameters are logged at DEBUG to
+    avoid noisy startup output.
+    """
+    info_name = getattr(entry.info, 'name', None) or entry.name
+    title = getattr(entry.info, 'title', None) or info_name
+
+    secret_params = [p for p in entry.params if getattr(p, 'secret', False)]
+    other_params = [p for p in entry.params if not getattr(p, 'secret', False)]
+
+    if secret_params:
+      names = ", ".join(sorted(p.name for p in secret_params))
+      logger.info(
+        f"Discovered {entry.group}:{info_name} ({title}) "
+        f"— declares secret param(s): {names}"
+      )
+    else:
+      logger.debug(f"Discovered {entry.group}:{info_name} ({title})")
+
+    if other_params and logger.isEnabledFor(logging.DEBUG):
+      names = ", ".join(sorted(p.name for p in other_params))
+      logger.debug(f"  non-secret params for {entry.group}:{info_name}: {names}")
 
 
   def get_all_plugin_params(self) -> Dict[str, List[ParamSpec]]:
@@ -314,9 +417,14 @@ class Manager:
 
     Uses the lazy plugin entries discovered by ``discover_plugins()``.
     Each plugin is instantiated with only the kwargs whose names match
-    an ``INIT``-scoped ``ParamSpec`` declared by that plugin.
+    an ``INIT``-scoped ``ParamSpec`` declared by that plugin. Pure ABC
+    plugins (those without pluggy hookimpl markers) are wrapped in the
+    matching registrar from :mod:`claia.framework.registrars` before
+    being registered with pluggy; legacy plugins that already carry
+    ``@hookimpl`` decorators are registered directly.
     """
     loaded_count = 0
+    registrar_cls = REGISTRAR_BY_GROUP.get(group)
 
     try:
       entries = self._lazy_plugins.get(group, [])
@@ -327,8 +435,6 @@ class Manager:
           if cls is None:
             logger.warning(f"No plugin class loaded for {entry.name}")
             continue
-
-          inst = None
 
           filtered_kwargs: Dict[str, Any] = {}
           if entry.params and ctor_kwargs:
@@ -343,26 +449,14 @@ class Manager:
           # invoke ``validate_required_init_kwargs`` if they want to
           # surface a clean error instead of letting the model class
           # raise on its own.
-          if filtered_kwargs:
-            try:
-              inst = cls(**filtered_kwargs)
-            except Exception as e:
-              logger.debug(f"Instantiating {label} plugin {entry.name} with kwargs failed: {e}")
-              try:
-                inst = cls()
-              except Exception as e2:
-                logger.warning(f"Failed to instantiate {label} plugin {entry.name}: {e2}")
-                continue
-          else:
-            try:
-              inst = cls()
-            except Exception as e:
-              logger.warning(f"Failed to instantiate {label} plugin {entry.name}: {e}")
-              continue
+          inst = self._instantiate_plugin(cls, entry.name, label, filtered_kwargs)
+          if inst is None:
+            continue
 
           entry.instance = inst
+          entry.registered = self._wrap_with_registrar(inst, registrar_cls)
 
-          pm.register(inst)
+          pm.register(entry.registered)
           loaded_count += 1
           logger.debug(f"Loaded {label} plugin: {entry.name} from {entry.entry_point.value}")
 
@@ -385,6 +479,52 @@ class Manager:
   def _get_info_method_for_group(self, group: str) -> Optional[str]:
     """Return the instance info method name for a given entry point group."""
     return INFO_METHOD_BY_GROUP.get(group)
+
+  @staticmethod
+  def _instantiate_plugin(
+    cls: Type,
+    name: str,
+    label: str,
+    filtered_kwargs: Dict[str, Any],
+  ) -> Optional[Any]:
+    """Instantiate ``cls`` with filtered kwargs, falling back to no-args on failure.
+
+    Returns the instance, or ``None`` if instantiation failed entirely.
+    """
+    if filtered_kwargs:
+      try:
+        return cls(**filtered_kwargs)
+      except Exception as e:
+        logger.debug(f"Instantiating {label} plugin {name} with kwargs failed: {e}")
+    try:
+      return cls()
+    except Exception as e:
+      logger.warning(f"Failed to instantiate {label} plugin {name}: {e}")
+      return None
+
+  @staticmethod
+  def _wrap_with_registrar(inst: Any, registrar_cls: Optional[Type]) -> Any:
+    """Return ``inst`` wrapped in ``registrar_cls`` if appropriate.
+
+    Plugins that already carry ``@hookimpl`` markers are registered
+    unchanged (preserves backward compatibility with external plugins
+    that chose to speak pluggy directly). Pure ABC implementations are
+    wrapped in the matching registrar from
+    :mod:`claia.framework.registrars` so pluggy sees the hookimpl-
+    decorated methods on the wrapper while the core plugin itself stays
+    pluggy-free.
+    """
+    if registrar_cls is None:
+      return inst
+    if plugin_has_hookimpls(inst):
+      return inst
+    try:
+      return registrar_cls(inst)
+    except Exception as e:
+      logger.warning(
+        f"Could not wrap plugin {type(inst).__name__} with {registrar_cls.__name__}: {e}"
+      )
+      return inst
 
   # ------------------------------------------------------------------
   # Kwarg coercion / validation

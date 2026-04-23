@@ -6,48 +6,35 @@ architecture considerations beyond generic transformers handling.
 """
 
 import logging
-import pluggy
 from typing import Type
 
-# Internal dependencies
+from .base import BaseArchitecture
 from ..models.transformers import Gemma3Model
 from ..plugins.base import ArchitectureInfo, ParamScope, ParamSpec, SettingCategory
 
 
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
 
-# Create hookimpl decorator for this plugin namespace
-hookimpl = pluggy.HookimplMarker("claia_architectures")
 
-
-########################################################################
-#                               CLASSES                                #
-########################################################################
-class TransformersGemma3Plugin:
+class TransformersGemma3Plugin(BaseArchitecture):
   """Specialized transformers architecture plugin for Gemma3 models."""
 
-  @hookimpl
-  def get_architecture_info(self) -> ArchitectureInfo:
-    return ArchitectureInfo(
-      name="transformers_gemma3",
-      title="Gemma3 Transformers Architecture",
-      description="Specialized implementation for Gemma3 transformer models",
-      params=[
-        ParamSpec(
-          name="huggingface_api_token",
-          type=str,
-          scope=ParamScope.INIT,
-          secret=True,
-          category=SettingCategory.API,
-          description="Hugging Face API Token (required for gated Gemma3 checkpoints)",
-        ),
-      ],
-    )
+  info = ArchitectureInfo(
+    name="transformers_gemma3",
+    title="Gemma3 Transformers Architecture",
+    description="Specialized implementation for Gemma3 transformer models",
+    params=[
+      ParamSpec(
+        name="huggingface_api_token",
+        type=str,
+        scope=ParamScope.INIT,
+        secret=True,
+        category=SettingCategory.API,
+        description="Hugging Face API Token (required for gated Gemma3 checkpoints)",
+      ),
+    ],
+  )
 
-  @hookimpl
   def get_model_class(self) -> Type:
     logger.debug("Providing Gemma3Model class for transformers_gemma3 architecture")
     return Gemma3Model

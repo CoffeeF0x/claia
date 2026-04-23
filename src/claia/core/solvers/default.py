@@ -6,47 +6,32 @@ solver is requested or when other solvers cannot handle a request.
 """
 
 import logging
-import pluggy
-from typing import Optional, Dict, List, Any
+from typing import Any, Dict, List, Optional
 
-# Internal dependencies
+from .base import BaseSolver
 from claia.core.results import Result
 from ..plugins.base import SolverInfo, DeploymentParams
 from ..definitions.model_definition import ModelDefinition
 
 
-
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
-hookimpl = pluggy.HookimplMarker("claia_solvers")
 
 
-
-########################################################################
-#                               CLASSES                                #
-########################################################################
-class DefaultSolverPlugin:
+class DefaultSolverPlugin(BaseSolver):
   """
   Default solver plugin for basic deployment decisions.
   """
 
-  @hookimpl
-  def get_solver_info(self) -> SolverInfo:
-    """Get information about this solver."""
-    return SolverInfo(
-      name="default",
-      title="Default Solver",
-      description="Basic deployment decision logic with sensible defaults"
-    )
+  info = SolverInfo(
+    name="default",
+    title="Default Solver",
+    description="Basic deployment decision logic with sensible defaults",
+  )
 
-  @hookimpl
   def can_solve(self, model_name: str, deployment_preference: Optional[str] = None, **kwargs) -> bool:
     """Check if this solver can handle the request."""
     return True
 
-  @hookimpl
   def solve_deployment(
     self,
     model_name: str,
@@ -63,17 +48,14 @@ class DefaultSolverPlugin:
     try:
       logger.debug(f"Default solver processing: {model_name}")
 
-      # Resolve model name
       resolved_model_name = self._resolve_model_name(model_name, available_models)
       if not resolved_model_name:
         return Result.fail(f"Model '{model_name}' not found")
 
-      # Get model info
       model_info: ModelDefinition = available_models.get(resolved_model_name)
       if not model_info:
         return Result.fail(f"Model '{resolved_model_name}' not found")
 
-      # Resolve deployment method (treat as list)
       deployments = model_info.deployments or []
       if deployment_method and deployment_method not in available_deployments:
         return Result.fail(f"Deployment method '{deployment_method}' is not available.")
@@ -83,7 +65,6 @@ class DefaultSolverPlugin:
         return Result.fail(f"No deployment methods available for model '{resolved_model_name}'.")
       resolved_deployment_method = deployment_method or deployments[0]
 
-      # Resolve architecture name from definitions (first if multiple)
       architectures = model_info.architectures or []
       if not architectures:
         return Result.fail(f"No architecture specified for model '{resolved_model_name}'.")
@@ -104,16 +85,13 @@ class DefaultSolverPlugin:
 
   def _resolve_model_name(self, model_name: str, available_models: Dict[str, Any]) -> str:
     """Resolve a model name or alias to its canonical name."""
-    # Check if it's already a canonical name
     if model_name in available_models:
       return model_name
 
-    # Check aliases
     for canonical_name, model_info in available_models.items():
       if hasattr(model_info, 'aliases') and model_info.aliases and model_name in model_info.aliases:
         logger.debug(f"Resolved alias '{model_name}' to '{canonical_name}'")
         return canonical_name
 
-    # Return None if not found
     logger.debug(f"No resolution found for '{model_name}'")
     return None

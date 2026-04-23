@@ -6,28 +6,18 @@ to services like OpenAI, Anthropic, etc.
 """
 
 import logging
-from typing import Dict, Any, Type, Iterator
-import pluggy
+from typing import Any, Dict, Iterator, Type
 
-# Internal dependencies
+from .base import BaseDeployment
 from claia.core.data import Conversation
 from ..modality import GenerationChunk, text_chunk
 from ..plugins.base import DeploymentInfo
 
 
-
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
-hookimpl = pluggy.HookimplMarker("claia_deployments")
 
 
-
-########################################################################
-#                               CLASSES                                #
-########################################################################
-class APIDeploymentPlugin:
+class APIDeploymentPlugin(BaseDeployment):
   """
   API deployment method plugin for remote API-based models.
 
@@ -35,16 +25,12 @@ class APIDeploymentPlugin:
   external services like OpenAI, Anthropic, Google, etc.
   """
 
-  @hookimpl
-  def get_deployment_info(self) -> DeploymentInfo:
-    """Get information about this deployment method."""
-    return DeploymentInfo(
-      name="api",
-      title="API Deployment",
-      description="Deploy models via external API services (OpenAI, Anthropic, etc.)"
-    )
+  info = DeploymentInfo(
+    name="api",
+    title="API Deployment",
+    description="Deploy models via external API services (OpenAI, Anthropic, etc.)",
+  )
 
-  @hookimpl
   def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[GenerationChunk]:
     """
     Deploy (if needed) and run inference on an API-based model.

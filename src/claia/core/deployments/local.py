@@ -6,28 +6,18 @@ typically transformer models loaded via HuggingFace transformers.
 """
 
 import logging
-import pluggy
-from typing import Dict, Any, Type, Iterator
+from typing import Any, Dict, Iterator, Type
 
-# Internal dependencies
+from .base import BaseDeployment
 from claia.core.data import Conversation
 from ..modality import GenerationChunk, text_chunk
 from ..plugins.base import DeploymentInfo
 
 
-
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
-hookimpl = pluggy.HookimplMarker("claia_deployments")
 
 
-
-########################################################################
-#                               CLASSES                                #
-########################################################################
-class LocalDeploymentPlugin:
+class LocalDeploymentPlugin(BaseDeployment):
   """
   Local deployment method plugin for transformer-based models.
 
@@ -35,16 +25,12 @@ class LocalDeploymentPlugin:
   user's machine, typically using HuggingFace transformers.
   """
 
-  @hookimpl
-  def get_deployment_info(self) -> DeploymentInfo:
-    """Get information about this deployment method."""
-    return DeploymentInfo(
-      name="local",
-      title="Local Deployment",
-      description="Deploy models locally using transformers/torch"
-    )
+  info = DeploymentInfo(
+    name="local",
+    title="Local Deployment",
+    description="Deploy models locally using transformers/torch",
+  )
 
-  @hookimpl
   def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[GenerationChunk]:
     """
     Deploy (if needed) and run inference on a local model.

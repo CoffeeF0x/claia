@@ -4,26 +4,21 @@ current_time, add, subtract, and echo
 """
 
 from datetime import datetime
-from typing import Dict, Any
-import pluggy
+from typing import Dict
 
+from .base import BaseToolModule
 from ...plugins.base import ToolModuleInfo, ToolDefinition, ArgumentDefinition
 
-hookimpl = pluggy.HookimplMarker("claia_tool_modules")
 
-
-class SampleModulePlugin:
+class SampleModulePlugin(BaseToolModule):
   """Sample module implementing multiple utility tools."""
 
-  @hookimpl
-  def get_module_info(self) -> ToolModuleInfo:
-    return ToolModuleInfo(
-      name="sample",
-      title="Sample Utilities",
-      description="Sample module with utility tools for demonstration",
-    )
+  info = ToolModuleInfo(
+    name="sample",
+    title="Sample Utilities",
+    description="Sample module with utility tools for demonstration",
+  )
 
-  @hookimpl
   def get_module_tools(self) -> Dict[str, ToolDefinition]:
     """Return all available tools in this module."""
     return {
@@ -90,19 +85,15 @@ class SampleModulePlugin:
     }
 
   def _current_time(self, **kwargs) -> str:
-    """Get current UTC time."""
     return datetime.utcnow().isoformat() + "Z"
 
   def _add(self, a: float, b: float, **kwargs) -> str:
-    """Add two numbers."""
     result = a + b
     return f"{a} + {b} = {result}"
 
   def _subtract(self, a: float, b: float, **kwargs) -> str:
-    """Subtract two numbers."""
     result = a - b
     return f"{a} - {b} = {result}"
 
   def _echo(self, message: str, **kwargs) -> str:
-    """Echo back a message."""
     return str(message)

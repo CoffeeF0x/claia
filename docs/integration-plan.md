@@ -748,16 +748,69 @@ keep the defaults.
 gained coverage for `run(streaming=True)` yielding chunks and the
 `stream_text` flattener. Full suite: 36/36 passing.
 
-### Phase 5: Lazy Plugin Loading + Pluggy Decoupling
+### Phase 5: Lazy Plugin Loading + Pluggy Decoupling — **DONE**
 
-- Refactor Manager to discover plugin metadata without instantiating
-classes.
-- Introduce `PluginEntry` (class ref + info + optional instance).
-- Defer instantiation to first use.
-- Add logging for plugin discovery (especially secret params).
-- Decouple `claia.core` plugin implementations from `pluggy` by having
-`claia.framework` provide thin registrar wrappers around the
-pure-ABC plugin classes.
+Two-phase plugin loading is now the Manager's default path and
+`claia.core` plugins no longer depend on `pluggy`.
+
+- **ABCs expose class-level metadata.** `BaseArchitecture`,
+`BaseDeployment`, `BaseSolver`, `BasePattern`, `BaseProtocol`, and
+`BaseToolModule` each declare `info: ClassVar[<Info>]` and ship a
+default `get_*_info()` that returns `type(self).info`. Plugin authors
+override the class attribute; the method hook remains the public
+contract exposed to the framework.
+- **`PluginEntry` replaces `LazyPluginEntry`.** The new dataclass
+carries the entry point, loaded class, discovered `info`, flattened
+`ParamSpec` list, the lazy `instance`, and the object actually
+`registered` with pluggy (instance for legacy plugins, registrar
+wrapper for ABC-based plugins). `LazyPluginEntry` is kept as an alias
+for external importers.
+- **Discovery reads class attributes, not instances.**
+`Manager.discover_plugins()` walks every entry-point group and calls
+`_populate_entry_metadata()`, which prefers the class-level `info`
+attribute and only falls back to a no-arg instantiation plus
+`get_*_info()` for legacy plugins. Architecture entries additionally
+resolve the model class (via `cls.model_class` or, if absent, a
+temporary instance) to fold `BaseModel.runtime_params` into the
+entry's params list.
+- **Registrar wrappers live in `claia.framework.registrars`.** One
+registrar per hook namespace (`ArchitectureRegistrar`,
+`DeploymentRegistrar`, `SolverRegistrar`, `DefinitionRegistrar`,
+`PatternRegistrar`, `ProtocolRegistrar`, `ToolModuleRegistrar`,
+`AgentRegistrar`) wraps a pure plugin instance and carries the
+`@hookimpl` markers. `_BaseRegistrar.__getattr__` transparently
+proxies unknown attributes to the wrapped plugin so code that used
+to reach into the raw instance (`plugin.get_module_tools()`) still
+works against the wrapper.
+- **Legacy `@hookimpl` plugins keep working.** `plugin_has_hookimpls`
+detects the pluggy marker attributes (`<ns>_impl`) and
+`Manager._wrap_with_registrar` only wraps plugins that don't already
+carry them, preserving backward compatibility for out-of-tree plugins
+shipping their own `@hookimpl` decorators.
+- **Core plugins are pluggy-free.** All five architectures
+(`openai`, `anthropic`, `transformers_generic`, `transformers_gemma3`,
+`dummy`), four deployments (`api`, `local`, `remote`, `dummy`), the
+default solver, the three definition providers, the default pattern,
+the simple protocol, and the `sample`/`system` tool modules now
+inherit from their respective ABCs and declare their metadata as
+class-level `info` attributes. The `cli` tool module in
+`claia.cli.commands.extension` and the `simple` agent in
+`claia.framework.agents.simple` follow the same pattern for
+consistency.
+- **Secret-aware discovery logging.** `Manager._log_discovered_entry`
+emits an INFO-level line for every discovered plugin that declares a
+secret-scoped `ParamSpec`, surfacing which credentials will be
+consumed at startup without leaking values. Non-secret params stay at
+DEBUG.
+- **Plugins instantiate at load time, not discovery.**
+`_load_plugins()` still builds instances when `load_all_plugins()` is
+called — that's the natural point where the kwarg environment is
+available — but the intermediate registrar hop means the instance is
+only materialized once per plugin and only wrapped in a registrar
+right before `pm.register()`. Settings-sensitive callers
+(`Registry._run_stream`, settings bootstrap) keep using
+`get_extension_params()`, which needs only discovery and never forces
+full instantiation.
 
 ### Phase 6: Demos Folder
 

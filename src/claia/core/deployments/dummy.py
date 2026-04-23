@@ -5,53 +5,39 @@ Provides deployment capabilities for the dummy model.
 """
 
 import logging
-import pluggy
-from typing import Dict, Any, Type, Iterator
+from typing import Any, Dict, Iterator, Type
 
-# Internal dependencies
+from .base import BaseDeployment
 from claia.core.data import Conversation
 from ..modality import GenerationChunk, text_chunk
 from ..plugins.base import DeploymentInfo
 
 
-
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
-hookimpl = pluggy.HookimplMarker("claia_deployments")
 
 
+class DummyDeploymentPlugin(BaseDeployment):
+  """Deployment plugin for dummy models."""
 
-########################################################################
-#                         DEPLOYMENT PLUGIN                            #
-########################################################################
-class DummyDeploymentPlugin:
-    """Deployment plugin for dummy models."""
+  info = DeploymentInfo(
+    name="dummy",
+    title="Dummy Deployment",
+    description="Dummy local deployment for testing",
+  )
 
-    @hookimpl
-    def get_deployment_info(self) -> DeploymentInfo:
-        """Get deployment information for dummy models."""
-        return DeploymentInfo(
-            name="dummy",
-            title="Dummy Deployment",
-            description="Dummy local deployment for testing"
-        )
+  def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[GenerationChunk]:
+    """Deploy (if needed) and run inference for dummy model. Yields ``GenerationChunk`` items."""
+    cache_key = f"{model_name}:dummy"
 
-    @hookimpl
-    def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[GenerationChunk]:
-        """Deploy (if needed) and run inference for dummy model. Yields ``GenerationChunk`` items."""
-        cache_key = f"{model_name}:dummy"
+    if cache_key in cache:
+      model_instance = cache[cache_key]
+      logger.debug(f"Using cached dummy model instance for {cache_key}")
+    else:
+      logger.debug(f"Deploying dummy model: {model_name}")
+      model_instance = model_class(model_name=model_name)
+      cache[cache_key] = model_instance
+      logger.debug(f"Successfully deployed and cached dummy model: {model_name}")
 
-        if cache_key in cache:
-            model_instance = cache[cache_key]
-            logger.debug(f"Using cached dummy model instance for {cache_key}")
-        else:
-            logger.debug(f"Deploying dummy model: {model_name}")
-            model_instance = model_class(model_name=model_name)
-            cache[cache_key] = model_instance
-            logger.debug(f"Successfully deployed and cached dummy model: {model_name}")
-
-        logger.debug(f"Running dummy model inference: {model_name}")
-        for token in model_instance.generate(conversation, **kwargs):
-            yield token if isinstance(token, GenerationChunk) else text_chunk(token)
+    logger.debug(f"Running dummy model inference: {model_name}")
+    for token in model_instance.generate(conversation, **kwargs):
+      yield token if isinstance(token, GenerationChunk) else text_chunk(token)

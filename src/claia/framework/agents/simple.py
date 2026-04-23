@@ -3,23 +3,13 @@ Simple agent plugin for CLAIA.
 A simple agent that directly calls a model for inference.
 """
 
-# External dependencies
 import logging
-import pluggy
-from typing import Type
+from typing import Optional, Type
 
-# Internal dependencies
 from .base import BaseAgent
-from ..process import Process
 from claia.core.enums.conversation import MessageRole
 from claia.core.modality import ChunkKind
-from ..hooks import AgentHooks, AgentInfo
-
-
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
-hookimpl = pluggy.HookimplMarker("claia_agents")
+from ..hooks import AgentInfo
 
 
 ########################################################################
@@ -63,9 +53,6 @@ class SimpleAgent(BaseAgent):
         if process.cancel_requested:
           cancelled = True
           break
-        # Non-text chunks (images, audio, progress, ...) are forwarded
-        # to subscribers but do not contribute to the streamed text
-        # body of the assistant message.
         if chunk.kind is not ChunkKind.TEXT:
           process.emit("chunk", chunk)
           continue
@@ -103,21 +90,26 @@ class SimpleAgent(BaseAgent):
 #                            PLUGIN HOOKS                              #
 ########################################################################
 class SimpleAgentPlugin:
-  """Plugin implementation for the simple agent."""
+  """Plugin implementation for the simple agent.
 
-  @hookimpl
-  def get_agent_class(self, agent_name: str) -> Type[BaseAgent]:
-    """Get the agent class for the simple agent."""
+  The framework wraps this plain class in an :class:`AgentRegistrar`
+  before registering it with pluggy, so no ``@hookimpl`` decorators are
+  needed here.
+  """
+
+  info = AgentInfo(
+    name="simple",
+    title="Simple Agent",
+    description="A simple agent that directly calls a model for inference",
+    agent_class=SimpleAgent,
+  )
+
+  def get_agent_class(self, agent_name: str) -> Optional[Type[BaseAgent]]:
+    """Return the agent class for a given ``agent_name`` (or None)."""
     if agent_name.lower() == "simple":
       return SimpleAgent
     return None
 
-  @hookimpl
   def get_agent_info(self) -> AgentInfo:
-    """Get information about the simple agent."""
-    return AgentInfo(
-      name="simple",
-      title="Simple Agent",
-      description="A simple agent that directly calls a model for inference",
-      agent_class=SimpleAgent,
-    )
+    """Return metadata describing the simple agent."""
+    return type(self).info

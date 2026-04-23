@@ -6,29 +6,19 @@ cloud VMs, or other distributed systems.
 """
 
 import logging
-import pluggy
-from typing import Dict, Any, Type, Iterator
+from typing import Any, Dict, Iterator, Type
 
-# Internal dependencies
+from .base import BaseDeployment
 from claia.core.results import DeploymentError, Result
 from claia.core.data import Conversation
 from ..modality import GenerationChunk, text_chunk
 from ..plugins.base import DeploymentInfo
 
 
-
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
-hookimpl = pluggy.HookimplMarker("claia_deployments")
 
 
-
-########################################################################
-#                               CLASSES                                #
-########################################################################
-class RemoteDeploymentPlugin:
+class RemoteDeploymentPlugin(BaseDeployment):
   """
   Remote deployment method plugin for distributed models.
 
@@ -36,16 +26,12 @@ class RemoteDeploymentPlugin:
   servers, cloud VMs, or other distributed systems.
   """
 
-  @hookimpl
-  def get_deployment_info(self) -> DeploymentInfo:
-    """Get information about this deployment method."""
-    return DeploymentInfo(
-      name="remote",
-      title="Remote Deployment",
-      description="Deploy models on remote servers or cloud VMs"
-    )
+  info = DeploymentInfo(
+    name="remote",
+    title="Remote Deployment",
+    description="Deploy models on remote servers or cloud VMs",
+  )
 
-  @hookimpl
   def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[GenerationChunk]:
     """
     Deploy (if needed) and run inference on a remote model.

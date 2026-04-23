@@ -5,28 +5,16 @@ Provides comprehensive model definitions for legacy models including GPT, Claude
 """
 
 import logging
-import pluggy
-from typing import Dict, List, Optional
-from dataclasses import dataclass
+from typing import Dict
 
-# Internal dependencies
+from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from claia.core.enums.model import ModelCapability, IOType
 from ..modality import Modality
 
 
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
-hookimpl = pluggy.HookimplMarker("claia_definitions")
 
 
-########################################################################
-#                          DEFAULT SETTINGS                            #
-########################################################################
-# Default generation settings for models
-# Individual models can override specific settings as needed
 DEFAULT_SETTINGS = {
   "max_new_tokens": 8192,
   "top_p": 0.7,
@@ -34,13 +22,9 @@ DEFAULT_SETTINGS = {
 }
 
 
-########################################################################
-#                          MODEL DEFINITIONS                           #
-########################################################################
-class LegacyDefinitionsPlugin:
+class LegacyDefinitionsPlugin(BaseDefinitionProvider):
   """Legacy model definitions plugin containing comprehensive model metadata."""
 
-  @hookimpl
   def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get legacy model definitions."""
     definitions = {

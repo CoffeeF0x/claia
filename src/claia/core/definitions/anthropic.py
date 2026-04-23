@@ -20,28 +20,19 @@ API identifier notes:
 """
 
 import logging
-import pluggy
 from typing import Dict
 
-# Internal dependencies
+from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
 from ..modality import Modality
 
 
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
-hookimpl = pluggy.HookimplMarker("claia_definitions")
 
 
-########################################################################
-#                               CLASSES                                #
-########################################################################
-class AnthropicDefinitionsPlugin:
+class AnthropicDefinitionsPlugin(BaseDefinitionProvider):
   """Anthropic model definitions plugin."""
 
-  @hookimpl
   def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get Anthropic model definitions."""
     return {

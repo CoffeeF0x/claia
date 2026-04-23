@@ -15,28 +15,19 @@ Older releases carry no aliases — use the key directly to pin them.
 """
 
 import logging
-import pluggy
 from typing import Dict
 
-# Internal dependencies
+from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
 from ..modality import Modality
 
 
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
-hookimpl = pluggy.HookimplMarker("claia_definitions")
 
 
-########################################################################
-#                               CLASSES                                #
-########################################################################
-class OpenAIDefinitionsPlugin:
+class OpenAIDefinitionsPlugin(BaseDefinitionProvider):
   """OpenAI model definitions plugin."""
 
-  @hookimpl
   def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get OpenAI model definitions."""
     return {

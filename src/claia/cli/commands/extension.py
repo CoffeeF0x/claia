@@ -12,8 +12,8 @@ import logging
 import importlib.metadata as importlib_metadata
 from typing import Dict, Any, Optional, List
 from collections import defaultdict
-import pluggy
 
+from claia.core.tools.modules.base import BaseToolModule
 from claia.framework.hooks.tool import ToolModuleInfo, ToolDefinition, ArgumentDefinition
 from claia.core.results import Result
 from claia.core.data.models import Conversation, Prompt
@@ -21,26 +21,21 @@ from claia.cli.storage import JsonStore
 from claia.core.enums.conversation import MessageRole
 
 
-hookimpl = pluggy.HookimplMarker("claia_tool_modules")
 logger = logging.getLogger(__name__)
 
 
-# Constants
 DIVIDER = "-" * 70
 
 
-class CLIModulePlugin:
+class CLIModulePlugin(BaseToolModule):
   """CLI module implementing tools for models, agents, prompts, conversations, and settings."""
 
-  @hookimpl
-  def get_module_info(self) -> ToolModuleInfo:
-    return ToolModuleInfo(
-      name="cli",
-      title="CLI Tools",
-      description="Model, agent, prompt, conversation, and settings management tools",
-    )
+  info = ToolModuleInfo(
+    name="cli",
+    title="CLI Tools",
+    description="Model, agent, prompt, conversation, and settings management tools",
+  )
 
-  @hookimpl
   def get_module_tools(self) -> Dict[str, ToolDefinition]:
     """Return all available tools in this module."""
     return {

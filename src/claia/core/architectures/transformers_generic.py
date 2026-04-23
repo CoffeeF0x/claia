@@ -6,49 +6,35 @@ For models that need specialized handling, use specific architecture plugins.
 """
 
 import logging
-import pluggy
 from typing import Type
 
-# Internal dependencies
+from .base import BaseArchitecture
 from ..models.transformers import GenericTransformerModel
 from ..plugins.base import ArchitectureInfo, ParamScope, ParamSpec, SettingCategory
 
 
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
 
-# Create hookimpl decorator for this plugin namespace
-hookimpl = pluggy.HookimplMarker("claia_architectures")
 
-
-########################################################################
-#                               CLASSES                                #
-########################################################################
-class TransformersGenericPlugin:
+class TransformersGenericPlugin(BaseArchitecture):
   """Generic transformers architecture plugin for standard transformer models."""
 
-  @hookimpl
-  def get_architecture_info(self) -> ArchitectureInfo:
-    return ArchitectureInfo(
-      name="transformers_generic",
-      title="Generic Transformers Architecture",
-      description="Generic HF Transformers implementation",
-      params=[
-        ParamSpec(
-          name="huggingface_api_token",
-          type=str,
-          scope=ParamScope.INIT,
-          secret=True,
-          category=SettingCategory.API,
-          description="Hugging Face API Token (required for gated models)",
-        ),
-      ],
-    )
+  info = ArchitectureInfo(
+    name="transformers_generic",
+    title="Generic Transformers Architecture",
+    description="Generic HF Transformers implementation",
+    params=[
+      ParamSpec(
+        name="huggingface_api_token",
+        type=str,
+        scope=ParamScope.INIT,
+        secret=True,
+        category=SettingCategory.API,
+        description="Hugging Face API Token (required for gated models)",
+      ),
+    ],
+  )
 
-  @hookimpl
   def get_model_class(self) -> Type:
-    # Generic plugin that can handle a wide variety of transformer models
     logger.debug("Providing GenericTransformerModel class for transformers_generic architecture")
     return GenericTransformerModel
