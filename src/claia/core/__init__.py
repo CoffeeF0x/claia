@@ -43,6 +43,13 @@ from .plugins.base import (
     SettingCategory,
 )
 from .definitions.model_definition import ModelDefinition
+from .modality import (
+    Modality,
+    ChunkKind,
+    GenerationChunk,
+    text_chunk,
+    iter_text,
+)
 
 __all__ = [
     # Results
@@ -58,4 +65,6 @@ __all__ = [
     "ToolDefinition", "ArgumentDefinition", "ToolCallMatch", "DeploymentParams",
     "ParamSpec", "ParamScope", "SettingCategory",
     "ModelDefinition",
+    # Modality / multi-modal chunks
+    "Modality", "ChunkKind", "GenerationChunk", "text_chunk", "iter_text",
 ]

@@ -12,6 +12,7 @@ from typing import Type
 from .base import BaseAgent
 from ..process import Process
 from claia.core.enums.conversation import MessageRole
+from claia.core.modality import ChunkKind
 from ..hooks import AgentHooks, AgentInfo
 
 
@@ -28,9 +29,11 @@ class SimpleAgent(BaseAgent):
   """
   A simple agent that directly calls a model for inference.
 
-  Consumes the token generator from registry.run(), emitting "token"
-  callbacks on the process for each chunk. On completion emits
-  "complete"; on failure emits "error".
+  Consumes the ``GenerationChunk`` generator from ``registry.run``,
+  emitting ``"token"`` callbacks on the process for each text chunk
+  and forwarding non-text chunks (e.g. progress updates, image bytes)
+  via a ``"chunk"`` event for consumers that want the richer stream.
+  On completion emits ``"complete"``; on failure emits ``"error"``.
   """
 
   @classmethod
@@ -56,10 +59,17 @@ class SimpleAgent(BaseAgent):
       process.emit("stream_start", streaming_message.message_id)
 
       cancelled = False
-      for token in registry.run(model_id, conversation, streaming=True, **kwargs):
+      for chunk in registry.run(model_id, conversation, streaming=True, **kwargs):
         if process.cancel_requested:
           cancelled = True
           break
+        # Non-text chunks (images, audio, progress, ...) are forwarded
+        # to subscribers but do not contribute to the streamed text
+        # body of the assistant message.
+        if chunk.kind is not ChunkKind.TEXT:
+          process.emit("chunk", chunk)
+          continue
+        token = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
         full_response += token
         conversation.append_stream_chunk(streaming_message.message_id, token)
         process.emit("token", token)

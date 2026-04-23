@@ -10,6 +10,7 @@ from typing import Dict, Any, Type, Iterator
 
 # Internal dependencies
 from claia.core.data import Conversation
+from ..modality import GenerationChunk, text_chunk
 from ..plugins.base import DeploymentInfo
 
 
@@ -38,8 +39,8 @@ class DummyDeploymentPlugin:
         )
 
     @hookimpl
-    def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[str]:
-        """Deploy (if needed) and run inference for dummy model. Yields tokens."""
+    def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[GenerationChunk]:
+        """Deploy (if needed) and run inference for dummy model. Yields ``GenerationChunk`` items."""
         cache_key = f"{model_name}:dummy"
 
         if cache_key in cache:
@@ -52,4 +53,5 @@ class DummyDeploymentPlugin:
             logger.debug(f"Successfully deployed and cached dummy model: {model_name}")
 
         logger.debug(f"Running dummy model inference: {model_name}")
-        yield from model_instance.generate(conversation, **kwargs)
+        for token in model_instance.generate(conversation, **kwargs):
+            yield token if isinstance(token, GenerationChunk) else text_chunk(token)

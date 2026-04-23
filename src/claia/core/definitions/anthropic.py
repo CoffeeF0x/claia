@@ -25,6 +25,7 @@ from typing import Dict
 
 # Internal dependencies
 from .model_definition import ModelDefinition
+from ..modality import Modality
 
 
 ########################################################################
@@ -60,7 +61,9 @@ class AnthropicDefinitionsPlugin:
         capabilities=["chat", "reasoning", "analysis", "vision", "adaptive_thinking", "computer_use"],
         license="Commercial",
         url="https://www.anthropic.com/claude",
-        identifiers={"anthropic": "claude-opus-4-7"}
+        identifiers={"anthropic": "claude-opus-4-7"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
 
       "claude-opus-4-6": ModelDefinition(
@@ -74,7 +77,9 @@ class AnthropicDefinitionsPlugin:
         capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking", "computer_use"],
         license="Commercial",
         url="https://www.anthropic.com/claude",
-        identifiers={"anthropic": "claude-opus-4-6"}
+        identifiers={"anthropic": "claude-opus-4-6"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
 
       "claude-opus-4-5": ModelDefinition(
@@ -88,7 +93,9 @@ class AnthropicDefinitionsPlugin:
         capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking", "computer_use"],
         license="Commercial",
         url="https://www.anthropic.com/claude",
-        identifiers={"anthropic": "claude-opus-4-5-20251101"}
+        identifiers={"anthropic": "claude-opus-4-5-20251101"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
 
       "claude-opus-4-1": ModelDefinition(
@@ -102,7 +109,9 @@ class AnthropicDefinitionsPlugin:
         capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking"],
         license="Commercial",
         url="https://www.anthropic.com/claude",
-        identifiers={"anthropic": "claude-opus-4-1-20250805"}
+        identifiers={"anthropic": "claude-opus-4-1-20250805"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
 
       "claude-opus-4-0": ModelDefinition(
@@ -116,7 +125,9 @@ class AnthropicDefinitionsPlugin:
         capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking"],
         license="Commercial",
         url="https://www.anthropic.com/claude",
-        identifiers={"anthropic": "claude-opus-4-20250514"}
+        identifiers={"anthropic": "claude-opus-4-20250514"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
 
       # ----------------------------------------------------------------
@@ -135,7 +146,9 @@ class AnthropicDefinitionsPlugin:
         capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking", "adaptive_thinking"],
         license="Commercial",
         url="https://www.anthropic.com/claude",
-        identifiers={"anthropic": "claude-sonnet-4-6"}
+        identifiers={"anthropic": "claude-sonnet-4-6"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
 
       "claude-sonnet-4-5": ModelDefinition(
@@ -149,7 +162,9 @@ class AnthropicDefinitionsPlugin:
         capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking"],
         license="Commercial",
         url="https://www.anthropic.com/claude",
-        identifiers={"anthropic": "claude-sonnet-4-5-20250929"}
+        identifiers={"anthropic": "claude-sonnet-4-5-20250929"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
 
       "claude-sonnet-4-0": ModelDefinition(
@@ -163,7 +178,9 @@ class AnthropicDefinitionsPlugin:
         capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking"],
         license="Commercial",
         url="https://www.anthropic.com/claude",
-        identifiers={"anthropic": "claude-sonnet-4-20250514"}
+        identifiers={"anthropic": "claude-sonnet-4-20250514"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
 
       # ----------------------------------------------------------------
@@ -182,6 +199,8 @@ class AnthropicDefinitionsPlugin:
         capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking"],
         license="Commercial",
         url="https://www.anthropic.com/claude",
-        identifiers={"anthropic": "claude-haiku-4-5-20251001"}
+        identifiers={"anthropic": "claude-haiku-4-5-20251001"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
     }

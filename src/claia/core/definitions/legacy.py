@@ -12,6 +12,7 @@ from dataclasses import dataclass
 # Internal dependencies
 from .model_definition import ModelDefinition
 from claia.core.enums.model import ModelCapability, IOType
+from ..modality import Modality
 
 
 ########################################################################
@@ -63,7 +64,8 @@ class LegacyDefinitionsPlugin:
         aliases=["gemma3-4b", "gemma-4b", "gemma3-medium"],
         identifiers={
           "transformers_gemma3": "google/gemma-3-4b"
-        }
+        },
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
       ),
       "gemma-3-12b": ModelDefinition(
         title="Gemma 3 12B",
@@ -74,7 +76,8 @@ class LegacyDefinitionsPlugin:
         aliases=["gemma3-12b", "gemma-12b", "gemma3-large"],
         identifiers={
           "transformers_gemma3": "google/gemma-3-12b"
-        }
+        },
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
       ),
       "gemma-3-27b": ModelDefinition(
         title="Gemma 3 27B",
@@ -85,7 +88,8 @@ class LegacyDefinitionsPlugin:
         aliases=["gemma3-27b", "gemma-27b", "gemma3-xl", "gemma3-xlarge"],
         identifiers={
           "transformers_gemma3": "google/gemma-3-27b"
-        }
+        },
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
       ),
       "minicpm3-4b": ModelDefinition(
         title="MiniCPM3-4B",
@@ -137,7 +141,9 @@ class LegacyDefinitionsPlugin:
         capabilities=["text-to-image", "image-generation"],
         deployments=["local"],
         architectures=[],
-        aliases=["sd-v2", "sd2", "stable-diffusion-2"]
+        aliases=["sd-v2", "sd2", "stable-diffusion-2"],
+        input_modalities=[Modality.TEXT],
+        output_modalities=[Modality.IMAGE],
       ),
       "stable-diffusion-v1-5": ModelDefinition(
         title="Stable Diffusion v1.5",
@@ -145,7 +151,9 @@ class LegacyDefinitionsPlugin:
         capabilities=["text-to-image", "image-generation"],
         deployments=["local"],
         architectures=[],
-        aliases=["sd-v1.5", "sd1.5", "stable-diffusion-1.5"]
+        aliases=["sd-v1.5", "sd1.5", "stable-diffusion-1.5"],
+        input_modalities=[Modality.TEXT],
+        output_modalities=[Modality.IMAGE],
       ),
       "llama-3.2-1b": ModelDefinition(
         title="Llama 3.2 1B",

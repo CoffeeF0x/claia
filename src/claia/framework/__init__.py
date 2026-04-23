@@ -78,6 +78,13 @@ from claia.core.plugins.base import (
     SettingCategory,
 )
 from claia.core.definitions.model_definition import ModelDefinition
+from claia.core.modality import (
+    Modality,
+    ChunkKind,
+    GenerationChunk,
+    text_chunk,
+    iter_text,
+)
 
 # Framework primitives.
 from .process import Process
@@ -102,4 +109,6 @@ __all__ = [
     "ToolDefinition", "ArgumentDefinition", "ToolCallMatch", "DeploymentParams",
     "ParamSpec", "ParamScope", "SettingCategory",
     "ModelDefinition",
+    # Modality / multi-modal chunks
+    "Modality", "ChunkKind", "GenerationChunk", "text_chunk", "iter_text",
 ]

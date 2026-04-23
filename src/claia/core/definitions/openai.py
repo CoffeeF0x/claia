@@ -20,6 +20,7 @@ from typing import Dict
 
 # Internal dependencies
 from .model_definition import ModelDefinition
+from ..modality import Modality
 
 
 ########################################################################
@@ -53,7 +54,9 @@ class OpenAIDefinitionsPlugin:
         capabilities=["chat", "code", "reasoning", "vision", "web_search", "computer_use", "file_search"],
         license="Commercial",
         url="https://platform.openai.com/docs/models/gpt-5.4",
-        identifiers={"openai": "gpt-5.4-2026-03-05"}
+        identifiers={"openai": "gpt-5.4-2026-03-05"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
 
       "gpt-5.4-mini": ModelDefinition(
@@ -67,7 +70,9 @@ class OpenAIDefinitionsPlugin:
         capabilities=["chat", "code", "reasoning", "vision", "web_search", "computer_use", "file_search"],
         license="Commercial",
         url="https://platform.openai.com/docs/models/gpt-5.4-mini",
-        identifiers={"openai": "gpt-5.4-mini-2026-03-17"}
+        identifiers={"openai": "gpt-5.4-mini-2026-03-17"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
 
       "gpt-5.4-nano": ModelDefinition(
@@ -81,7 +86,9 @@ class OpenAIDefinitionsPlugin:
         capabilities=["chat", "code", "reasoning", "vision", "file_search"],
         license="Commercial",
         url="https://platform.openai.com/docs/models/gpt-5.4-nano",
-        identifiers={"openai": "gpt-5.4-nano-2026-03-17"}
+        identifiers={"openai": "gpt-5.4-nano-2026-03-17"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
 
       # ----------------------------------------------------------------
@@ -98,7 +105,9 @@ class OpenAIDefinitionsPlugin:
         capabilities=["chat", "code", "reasoning", "vision", "web_search", "file_search"],
         license="Commercial",
         url="https://platform.openai.com/docs/models/gpt-5",
-        identifiers={"openai": "gpt-5-2025-08-07"}
+        identifiers={"openai": "gpt-5-2025-08-07"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
 
       # ----------------------------------------------------------------
@@ -115,7 +124,9 @@ class OpenAIDefinitionsPlugin:
         capabilities=["chat", "code", "reasoning", "vision"],
         license="Commercial",
         url="https://platform.openai.com/docs/models/gpt-4o",
-        identifiers={"openai": "gpt-4o"}
+        identifiers={"openai": "gpt-4o"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
 
       "gpt-4o-mini": ModelDefinition(
@@ -129,6 +140,8 @@ class OpenAIDefinitionsPlugin:
         capabilities=["chat", "code", "vision"],
         license="Commercial",
         url="https://platform.openai.com/docs/models/gpt-4o-mini",
-        identifiers={"openai": "gpt-4o-mini"}
+        identifiers={"openai": "gpt-4o-mini"},
+        input_modalities=[Modality.TEXT, Modality.IMAGE],
+        output_modalities=[Modality.TEXT],
       ),
     }

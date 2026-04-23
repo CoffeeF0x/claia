@@ -14,6 +14,7 @@ from claia.framework.process import Process
 from claia.framework.queue import ProcessQueue
 from claia.core.enums.process import ProcessStatus
 from claia.core.data import Conversation
+from claia.core.modality import ChunkKind, GenerationChunk
 from claia.core.plugins.base import ParamScope, ParamSpec
 
 
@@ -357,10 +358,10 @@ class Registry:
     deployment_method: Optional[str] = None,
     deployment_preference: Optional[str] = None,
     **kwargs
-  ) -> Iterator[str]:
+  ) -> Iterator[GenerationChunk]:
     """
     Internal: resolve solver/deployment and return the deployment's
-    token iterator. Raises DeploymentError on failure.
+    ``GenerationChunk`` iterator. Raises DeploymentError on failure.
     """
     logger.debug(f"Running model {model_name}")
 
@@ -447,35 +448,60 @@ class Registry:
     conversation: Conversation,
     streaming: bool = False,
     **kwargs
-  ) -> Union[Result, Iterator[str]]:
+  ) -> Union[Result, Iterator[GenerationChunk]]:
     """
     Orchestrate model execution via solver -> deployment -> architecture.
 
     Args:
         model_name: Model identifier (e.g. "gpt-4")
         conversation: Conversation to process
-        streaming: If True, returns an Iterator[str] yielding tokens.
-                   If False (default), consumes all tokens and returns
-                   a Result with the full response.
-        **kwargs: Forwarded to solver/deployment/architecture (also accepts
-                  solver, deployment_method, deployment_preference)
+        streaming: If True, returns an ``Iterator[GenerationChunk]``
+                   yielding typed chunks (TEXT tokens, image bytes,
+                   progress updates, ...). If False (default), consumes
+                   the chunk stream and returns a ``Result`` with the
+                   concatenated text payload.
+        **kwargs: Forwarded to solver/deployment/architecture (also
+                  accepts solver, deployment_method,
+                  deployment_preference)
 
     Returns:
-        Result (streaming=False) or Iterator[str] (streaming=True).
-        Errors raise when streaming; errors are wrapped in Result.fail
-        when not streaming.
+        ``Result`` (streaming=False) or
+        ``Iterator[GenerationChunk]`` (streaming=True). Errors raise
+        when streaming; errors are wrapped in ``Result.fail`` when
+        not streaming.
+
+    For text-only consumers that want plain strings, prefer
+    :meth:`stream_text` or the module-level ``iter_text`` helper.
     """
     if streaming:
       return self._run_stream(model_name, conversation, **kwargs)
 
     try:
       full_response = ""
-      for token in self._run_stream(model_name, conversation, **kwargs):
-        full_response += token
+      for chunk in self._run_stream(model_name, conversation, **kwargs):
+        if chunk.kind is ChunkKind.TEXT and isinstance(chunk.data, str):
+          full_response += chunk.data
       return Result.ok(full_response)
     except Exception as e:
       logger.error(f"Error running model {model_name}: {e}")
       return Result.fail(str(e))
+
+  def stream_text(
+    self,
+    model_name: str,
+    conversation: Conversation,
+    **kwargs
+  ) -> Iterator[str]:
+    """
+    Convenience: stream only the text payload of a generation.
+
+    Wraps :meth:`run` with ``streaming=True`` and yields the string
+    data of each ``ChunkKind.TEXT`` chunk, skipping non-text chunks.
+    Errors from the underlying deployment propagate as exceptions.
+    """
+    for chunk in self._run_stream(model_name, conversation, **kwargs):
+      if chunk.kind is ChunkKind.TEXT:
+        yield chunk.data if isinstance(chunk.data, str) else str(chunk.data)
 
   def query(
     self,

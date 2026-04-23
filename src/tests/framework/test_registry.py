@@ -18,13 +18,25 @@ def test_model_registry_run_success(registry_with_fake_manager, tmp_path):
   assert "deployed dummy via api" in res.get_data()
 
 
-def test_model_registry_run_streaming_yields_tokens(registry_with_fake_manager, tmp_path):
+def test_model_registry_run_streaming_yields_generation_chunks(registry_with_fake_manager, tmp_path):
+  """registry.run(streaming=True) exposes the chunk stream as promised by Phase 4."""
+  from claia.core.modality import ChunkKind, GenerationChunk
   conv = Conversation(title="T")
   reg: Registry = registry_with_fake_manager
-  tokens = []
-  for token in reg.run("dummy", conv, streaming=True):
-    tokens.append(token)
+  chunks = list(reg.run("dummy", conv, streaming=True))
+  assert len(chunks) > 0
+  assert all(isinstance(c, GenerationChunk) for c in chunks)
+  assert all(c.kind is ChunkKind.TEXT for c in chunks)
+
+
+def test_model_registry_stream_text_flattens_to_strings(registry_with_fake_manager, tmp_path):
+  """The stream_text convenience yields plain strings from TEXT chunks."""
+  conv = Conversation(title="T")
+  reg: Registry = registry_with_fake_manager
+  tokens = list(reg.stream_text("dummy", conv))
   assert len(tokens) > 0
+  assert all(isinstance(t, str) for t in tokens)
+  assert any("deployed dummy via api" in t for t in tokens)
 
 
 def test_model_registry_no_solver(registry_with_no_solver, tmp_path):

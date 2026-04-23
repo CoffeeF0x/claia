@@ -705,19 +705,48 @@ Not included in this phase (deferred by choice):
 and CLI round-trip. The existing suite was kept green; fresh
 coverage is a separate task.
 
-### Phase 4: Modality + GenerationChunk
+### Phase 4: Modality + GenerationChunk — **DONE**
 
-- Add `Modality` enum and `GenerationChunk` types to
-`claia.core.modality`.
-- Extend `ModelDefinition` with modality fields (defaults preserve
-current behavior).
-- Change the Deployment hook signature from `Iterator[str]` to
-`Iterator[GenerationChunk]`. Text deployments wrap tokens in TEXT
-chunks.
-- Update the Registry's streaming API to expose chunks to consumers.
-For text-only use, add a convenience that flattens TEXT chunks back
-to strings.
-- Declare modalities on built-in model definitions.
+What landed:
+
+- New `claia.core.modality` module with `Modality`, `ChunkKind`,
+`GenerationChunk`, `text_chunk`, and `iter_text`. Re-exported from
+both `claia.core` and `claia.framework` so the convenience hub
+carries the new types.
+- `ModelDefinition` gained `input_modalities: List[Modality]` and
+`output_modalities: List[Modality]`, both defaulting to
+`[Modality.TEXT]`. Defaults preserve the text-in / text-out
+behaviour of existing definitions.
+- `BaseDeployment.run` and the `claia_deployments` hookspec now return
+`Iterator[GenerationChunk]`. Built-in deployments (`api`, `local`,
+`remote`, `dummy`) wrap each token yielded by their underlying model
+into a `ChunkKind.TEXT` chunk; if a model already yields
+`GenerationChunk` items they pass through unchanged, so future
+multi-modal models don't need a new deployment class.
+- `Registry._run_stream` returns the chunk stream directly.
+`Registry.run(streaming=True)` now yields `GenerationChunk`; the
+non-streaming path concatenates the TEXT chunks into the `Result`.
+A new `Registry.stream_text(...)` convenience flattens TEXT chunks
+back to `Iterator[str]` for text-only consumers.
+- `SimpleAgent` (framework) and `WriterAgent` (CLI) consume the chunk
+stream: TEXT chunks are appended to the streaming message and
+emitted via `process.emit("token", ...)` as before; non-text chunks
+are forwarded via a new `process.emit("chunk", chunk)` event for
+downstream consumers that want the richer stream.
+- Slate's `BobAgent` (only external consumer of the streaming
+registry API) was updated in lockstep. Other slate callers
+(`registry.run(..., streaming=False)`, the namer agent) use the
+non-streaming `Result`-returning path and were unaffected.
+- Built-in model definitions declare modalities: OpenAI and
+Anthropic chat models advertise `[TEXT, IMAGE] → [TEXT]`; Gemma-3
+multi-modal variants advertise `[TEXT, IMAGE]` input; Stable
+Diffusion declares `[TEXT] → [IMAGE]`. Other text-only definitions
+keep the defaults.
+- Tests: `src/tests/core/test_modality.py` covers the enums, the
+`GenerationChunk` / `text_chunk` / `iter_text` helpers, and the
+`ModelDefinition` modality defaults. `src/tests/framework/test_registry.py`
+gained coverage for `run(streaming=True)` yielding chunks and the
+`stream_text` flattener. Full suite: 36/36 passing.
 
 ### Phase 5: Lazy Plugin Loading + Pluggy Decoupling
 

@@ -11,6 +11,7 @@ import pluggy
 
 # Internal dependencies
 from claia.core.data import Conversation
+from ..modality import GenerationChunk, text_chunk
 from ..plugins.base import DeploymentInfo
 
 
@@ -44,10 +45,14 @@ class APIDeploymentPlugin:
     )
 
   @hookimpl
-  def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[str]:
+  def run(self, model_name: str, model_class: Type, conversation: Conversation, cache: Dict[str, Any], **kwargs) -> Iterator[GenerationChunk]:
     """
     Deploy (if needed) and run inference on an API-based model.
-    Yields tokens as they arrive from the model.
+
+    Yields ``GenerationChunk`` items. The underlying API models still
+    yield plain string tokens from ``generate``; this deployment wraps
+    each token into a ``ChunkKind.TEXT`` chunk so the framework-level
+    contract is uniform across text and multi-modal providers.
     """
     cache_key = f"{model_name}:api"
 
@@ -64,4 +69,5 @@ class APIDeploymentPlugin:
       logger.debug(f"Successfully deployed and cached API model: {model_name}")
 
     logger.debug(f"Running API model inference: {model_name}")
-    yield from model_instance.generate(conversation, **kwargs)
+    for token in model_instance.generate(conversation, **kwargs):
+      yield token if isinstance(token, GenerationChunk) else text_chunk(token)

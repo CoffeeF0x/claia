@@ -8,6 +8,7 @@ import pluggy
 from typing import Any, Dict, Iterator, Type
 
 from claia.core.data import Conversation
+from claia.core.modality import GenerationChunk
 from claia.core.plugins.base import DeploymentInfo
 
 
@@ -29,8 +30,8 @@ class DeploymentHooks:
     conversation: Conversation,
     cache: Dict[str, Any],
     **kwargs,
-  ) -> Iterator[str]:
-    """Deploy (if needed) and yield tokens from the model."""
+  ) -> Iterator[GenerationChunk]:
+    """Deploy (if needed) and yield ``GenerationChunk`` items from the model."""
 
 
 __all__ = ["DeploymentHooks", "DeploymentInfo"]
