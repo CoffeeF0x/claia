@@ -48,6 +48,14 @@ class Registry:
     self._user_kwargs: Dict[str, Any] = {}
     self._plugins_loaded = False
 
+    # Injectables visible to tool callables. Hosts (the CLI, an HTTP
+    # service, ...) populate this via ``set_tool_context`` so any tool
+    # that declares a matching ``ArgumentDefinition`` (e.g. ``settings``
+    # or ``command_specs``) receives the value automatically — no need
+    # to forward them through ``run_command`` params. ``registry`` is
+    # always injected from ``self`` in ``run_command``.
+    self._tool_context: Dict[str, Any] = {}
+
     # Agent-related (queue and workers)
     self.process_queue = process_queue or ProcessQueue()
     self._workers = []
@@ -113,6 +121,28 @@ class Registry:
     """
     self._user_kwargs.update(new_kwargs)
     logger.debug(f"Updated user kwargs with {len(new_kwargs)} new values")
+
+  def set_tool_context(self, **context: Any) -> None:
+    """Register host-supplied injectables visible to tool callables.
+
+    A tool declares the names it expects as ``ArgumentDefinition``
+    entries on its ``ToolDefinition``. When the user invokes the tool
+    (e.g. via ``:tool cli.help``) the registry auto-fills those
+    arguments from ``tool_context`` so the tool works the same whether
+    it's called through a CLI command wrapper or directly.
+
+    Typical CLI wiring::
+
+        registry.set_tool_context(
+          settings=settings,
+          command_specs=COMMAND_SPECS,
+        )
+
+    Per-invocation overrides (via ``run_command`` ``parameters`` or
+    ``kwargs``) still win over ``tool_context``.
+    """
+    self._tool_context.update(context)
+    logger.debug(f"Tool context updated with keys: {sorted(context.keys())}")
 
 
   ######################################################################
@@ -252,9 +282,17 @@ class Registry:
       if not (cmd_def and hasattr(cmd_def, 'callable') and callable(cmd_def.callable)):
         return Result.fail(f"Command '{command_name}' is not executable (no callable)")
 
-      # Prepare keyword args for the callable based on its command definition
-      extra = dict(kwargs)
-      # Allow commands to opt-in to receiving conversation by declaring an argument named 'conversation'
+      # Build the extras dict that ``_prepare_command_kwargs`` merges
+      # into the call. Later assignments override earlier ones, so the
+      # precedence (lowest -> highest) is:
+      #   tool_context (host-registered injectables, e.g. settings)
+      #   -> caller kwargs (per-invocation runtime values)
+      #   -> registry (always available, can't be shadowed by kwargs)
+      #   -> conversation (current conversation object)
+      extra: Dict[str, Any] = {}
+      extra.update(self._tool_context)
+      extra.update(kwargs)
+      extra['registry'] = self
       extra['conversation'] = conversation
       call_kwargs = self._prepare_command_kwargs(parameters or {}, cmd_def, extra_kwargs=extra)
 

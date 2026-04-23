@@ -322,6 +322,18 @@ def main() -> None:
     # Now load plugins with the settings
     registry.load_plugins(**user_kwargs)
 
+    # Register CLI-layer injectables that tools may request by name via
+    # their ``ArgumentDefinition`` declarations. ``registry`` is always
+    # injected from within ``run_command`` itself; the extras below let
+    # tools like ``cli.help`` or ``cli.settings_get`` work identically
+    # whether invoked through a command wrapper (``:help``) or directly
+    # (``:tool cli.help``).
+    from claia.cli.commands.specs import COMMAND_SPECS
+    registry.set_tool_context(
+      settings=settings,
+      command_specs=COMMAND_SPECS,
+    )
+
     # Log application startup with version and environment info
     logger.info("CLAIA application starting")
     logger.debug(f"Python version: {sys.version}")
