@@ -8,7 +8,7 @@
             "name": "CLAIA: CLI",
             "type": "debugpy",
             "request": "launch",
-            "module": "claia"
+            "module": "claia.cli"
         }
     ]
 }
