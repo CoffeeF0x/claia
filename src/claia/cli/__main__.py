@@ -466,11 +466,21 @@ def main() -> None:
         renderer = PacedRenderer()
         renderer.start()
         process.on("token", renderer.feed)
+        saved_artifacts = []
+
+        def on_artifact(artifact, message_id):
+          if file_repo and file_repo.save(artifact):
+            saved_artifacts.append(artifact)
+            logger.debug(f"Saved artifact {artifact.id} for message {message_id}")
+          else:
+            logger.error(f"Failed to save artifact for message {message_id}")
 
         def on_complete(full_response):
           renderer.finish(drain=True)
           if full_response and not full_response.endswith('\n'):
             print()
+          for artifact in saved_artifacts:
+            print(f"[Saved attachment: {artifact.name}]")
           # Persist only if domain events indicate conversation mutations.
           pending_events = process.conversation.pull_events()
           if file_repo and pending_events:
@@ -493,6 +503,7 @@ def main() -> None:
 
         process.on("complete", on_complete)
         process.on("error", on_error)
+        process.on("artifact", on_artifact)
 
         process_id = registry.add_process(process)
         logger.debug(f"Process added with ID: {process_id}")

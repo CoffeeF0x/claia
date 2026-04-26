@@ -12,6 +12,7 @@ from claia.core.enums.conversation import MessageRole
 from claia.core.enums.model import SourcePreference
 from claia.framework.process import Process
 from claia.cli.renderer import PacedRenderer
+from claia.cli.storage import JsonStore
 from .base import BaseCommand
 
 
@@ -55,11 +56,24 @@ class QueryCommand(BaseCommand):
       renderer = PacedRenderer()
       renderer.start()
       process.on("token", renderer.feed)
+      file_repo = JsonStore(self.settings.files_directory)
+      saved_artifacts = []
+
+      def on_artifact(artifact, message_id):
+        if file_repo.save(artifact):
+          saved_artifacts.append(artifact)
+          logger.debug(f"Saved artifact {artifact.id} for message {message_id}")
+        else:
+          logger.error(f"Failed to save artifact for message {message_id}")
 
       def on_complete(full_response):
         renderer.finish(drain=True)
         if full_response and not full_response.endswith('\n'):
           print()
+        for artifact in saved_artifacts:
+          print(f"[Saved attachment: {artifact.name}]")
+        if self.settings.active_conversation.pull_events():
+          file_repo.save(self.settings.active_conversation)
         done_event.set()
 
       def on_error(error_msg):
@@ -70,6 +84,7 @@ class QueryCommand(BaseCommand):
 
       process.on("complete", on_complete)
       process.on("error", on_error)
+      process.on("artifact", on_artifact)
 
       self.registry.add_process(process)
       done_event.wait()

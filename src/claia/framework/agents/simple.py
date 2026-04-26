@@ -7,8 +7,9 @@ import logging
 from typing import Optional, Type
 
 from .base import BaseAgent
+from claia.core.data.models import ImageArtifact
 from claia.core.enums.conversation import MessageRole
-from claia.core.modality import ChunkKind
+from claia.core.modality import ChunkKind, GenerationChunk
 from ..hooks import AgentInfo
 
 
@@ -54,6 +55,8 @@ class SimpleAgent(BaseAgent):
           cancelled = True
           break
         if chunk.kind is not ChunkKind.TEXT:
+          if chunk.kind is ChunkKind.IMAGE_BYTES:
+            cls._attach_image_chunk(process, streaming_message.message_id, chunk)
           process.emit("chunk", chunk)
           continue
         token = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
@@ -84,6 +87,33 @@ class SimpleAgent(BaseAgent):
       process.mark_failed(str(e))
 
     return process
+
+  @staticmethod
+  def _attach_image_chunk(process, message_id: str, chunk: GenerationChunk) -> None:
+    """Convert an image byte chunk into an artifact attached to the message."""
+    try:
+      metadata = dict(chunk.metadata or {})
+      output_format = (metadata.get("format") or "PNG").upper()
+      extension = {
+        "JPEG": "jpg",
+        "JPG": "jpg",
+        "PNG": "png",
+        "WEBP": "webp",
+      }.get(output_format, output_format.lower())
+      index = metadata.get("index", 0)
+      name = metadata.get("name") or f"generated-image-{index + 1}.{extension}"
+
+      artifact = ImageArtifact.from_bytes(
+        image_data=chunk.data,
+        name=name,
+        format=output_format,
+        media_type=metadata.get("media_type", "image/png"),
+        metadata=metadata,
+      )
+      process.conversation.attach_file(message_id, artifact.id)
+      process.emit("artifact", artifact, message_id)
+    except Exception as e:
+      logging.exception(f"Failed to attach generated image artifact: {e}")
 
 
 ########################################################################

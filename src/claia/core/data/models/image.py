@@ -4,6 +4,8 @@ Image artifact data model.
 Handles image content with PIL Image support.
 """
 
+import base64
+import io
 import logging
 import time
 from typing import Dict, Any, Optional, Tuple
@@ -27,6 +29,7 @@ class ImageArtifact(BaseArtifact):
                  width: Optional[int] = None,
                  height: Optional[int] = None,
                  format: Optional[str] = None,
+                 content_bytes: Optional[bytes] = None,
                  **kwargs):
         if 'media_type' not in kwargs:
             kwargs['media_type'] = self._detect_image_media_type(name)
@@ -36,6 +39,7 @@ class ImageArtifact(BaseArtifact):
         self.width = width
         self.height = height
         self.format = format or self._detect_format(name)
+        self._content_bytes = content_bytes
 
         if width:
             self.metadata['width'] = width
@@ -77,12 +81,38 @@ class ImageArtifact(BaseArtifact):
     def load_content(self):
         if self._content_loaded and self._content is not None:
             return self._content
+        if self._content_bytes:
+            try:
+                from PIL import Image
+                self._content = Image.open(io.BytesIO(self._content_bytes))
+                self._content_loaded = True
+                return self._content
+            except ImportError:
+                logger.warning("PIL not available, cannot load image object")
+                return None
+            except Exception as e:
+                logger.warning(f"Could not load image object for artifact {self.id}: {e}")
+                return None
         logger.warning(f"Content not loaded for artifact {self.id}.")
+        return None
+
+    def load_bytes(self) -> Optional[bytes]:
+        """Return the raw image bytes if available."""
+        if self._content_bytes:
+            return self._content_bytes
+        if self._content_loaded and self._content is not None:
+            buffer = io.BytesIO()
+            self._content.save(buffer, format=self.format or self._detect_format(self.name))
+            self._content_bytes = buffer.getvalue()
+            self.size = len(self._content_bytes)
+            self.metadata['size_bytes'] = self.size
+            return self._content_bytes
         return None
 
     def set_content(self, image_obj) -> None:
         self._content = image_obj
         self._content_loaded = True
+        self._content_bytes = None
         if hasattr(image_obj, 'size'):
             self.width, self.height = image_obj.size
             self.metadata['width'] = self.width
@@ -110,10 +140,21 @@ class ImageArtifact(BaseArtifact):
             data['height'] = self.height
         if self.format:
             data['format'] = self.format
+        content_bytes = self.load_bytes()
+        if content_bytes:
+            data['content_encoding'] = 'base64'
+            data['content'] = base64.b64encode(content_bytes).decode('ascii')
         return data
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ImageArtifact':
+        content_bytes = None
+        if data.get('content_encoding') == 'base64' and data.get('content'):
+            try:
+                content_bytes = base64.b64decode(data['content'])
+            except Exception as e:
+                logger.warning(f"Failed to decode image content for artifact {data.get('id')}: {e}")
+
         return cls(
             name=data.get('name', 'untitled.jpg'),
             id=data.get('id'),
@@ -124,6 +165,7 @@ class ImageArtifact(BaseArtifact):
             width=data.get('width') or data.get('metadata', {}).get('width'),
             height=data.get('height') or data.get('metadata', {}).get('height'),
             format=data.get('format') or data.get('metadata', {}).get('format'),
+            content_bytes=content_bytes,
             metadata=data.get('metadata', {}),
             created_at=data.get('created_at'),
             updated_at=data.get('updated_at'),
@@ -180,6 +222,7 @@ class ImageArtifact(BaseArtifact):
                 height=height,
                 format=format,
                 size=len(image_data),
+                content_bytes=image_data,
                 **kwargs
             )
             artifact._content = img
@@ -188,8 +231,20 @@ class ImageArtifact(BaseArtifact):
             return artifact
 
         except ImportError:
-            logger.error("PIL not available, cannot create image from bytes")
-            raise
+            logger.warning("PIL not available, storing image bytes without dimensions")
+            if 'metadata' not in kwargs:
+                kwargs['metadata'] = {}
+            kwargs['metadata'].update({
+                'format': format,
+                'size_bytes': len(image_data)
+            })
+            return cls(
+                name=name,
+                format=format,
+                size=len(image_data),
+                content_bytes=image_data,
+                **kwargs
+            )
         except Exception as e:
             logger.error(f"Failed to create image from bytes: {e}")
             raise

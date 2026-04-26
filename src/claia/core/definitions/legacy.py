@@ -127,7 +127,7 @@ class LegacyDefinitionsPlugin(BaseDefinitionProvider):
         architectures=["diffusers"],
         aliases=["sd-v2", "sd2", "stable-diffusion-2"],
         identifiers={
-          "diffusers": "stabilityai/stable-diffusion-2"
+          "diffusers": "sd2-community/stable-diffusion-2"
         },
         input_modalities=[Modality.TEXT],
         output_modalities=[Modality.IMAGE],

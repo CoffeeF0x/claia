@@ -90,7 +90,7 @@ def _conversation():
 def test_diffusers_model_yields_text_and_image_chunks(monkeypatch):
   diffusers = _import_diffusers_module(monkeypatch)
   model = diffusers.DiffusersModel(
-    "stabilityai/stable-diffusion-2",
+    "sd2-community/stable-diffusion-2",
     defer_loading=True,
     huggingface_api_token="hf_test",
   )
@@ -112,12 +112,12 @@ def test_diffusers_model_yields_text_and_image_chunks(monkeypatch):
   assert chunks[1].kind is ChunkKind.IMAGE_BYTES
   assert chunks[1].data == b"PNG:fake-image"
   assert chunks[1].metadata["media_type"] == "image/png"
-  assert chunks[1].metadata["model"] == "stabilityai/stable-diffusion-2"
+  assert chunks[1].metadata["model"] == "sd2-community/stable-diffusion-2"
   assert chunks[1].metadata["prompt"] == "A small fox in a library"
   assert chunks[1].metadata["seed"] == 123
 
   pipeline = FakePipeline.loaded[0]
-  assert pipeline.loaded_from == "stabilityai/stable-diffusion-2"
+  assert pipeline.loaded_from == "sd2-community/stable-diffusion-2"
   assert pipeline.load_kwargs["token"] == "hf_test"
   assert pipeline.device == "cpu"
   assert pipeline.calls[0]["prompt"] == "A small fox in a library"

@@ -83,7 +83,7 @@ def test_model_registry_resolves_diffusers_provider_identifier(monkeypatch):
         "stable-diffusion-v2": ModelDefinition(
           deployments=["local"],
           architectures=["diffusers"],
-          identifiers={"diffusers": "stabilityai/stable-diffusion-2"},
+          identifiers={"diffusers": "sd2-community/stable-diffusion-2"},
         )
       }
 
@@ -128,4 +128,4 @@ def test_model_registry_resolves_diffusers_provider_identifier(monkeypatch):
   result = reg.run("stable-diffusion-v2", Conversation(title="T"))
 
   assert result.is_success()
-  assert result.get_data() == "stabilityai/stable-diffusion-2"
+  assert result.get_data() == "sd2-community/stable-diffusion-2"
