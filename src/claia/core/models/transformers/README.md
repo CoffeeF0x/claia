@@ -63,8 +63,8 @@ pip install -e '.[audio]'
 ```
 
 Then run it through the registry and inspect the typed chunks. The base
-checkpoint uses voice cloning, so provide both a reference audio path and
-its transcript:
+checkpoint uses voice cloning, so provide a reference audio path. Claia
+passes the request text as the reference text by default:
 
 ```python
 from claia.core.data import Conversation
@@ -83,7 +83,6 @@ for chunk in registry.run(
     device="cuda",
     language="English",
     reference_audio_path="/path/to/reference.wav",
-    reference_text="Transcript for the reference audio.",
 ):
     if chunk.kind is ChunkKind.TEXT:
         print(chunk.data)

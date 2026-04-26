@@ -210,18 +210,18 @@ class Qwen3TTSBackend:
 
     language = kwargs.get("language") or "English"
     reference_audio_path = kwargs.get("reference_audio_path")
-    reference_text = kwargs.get("reference_text")
 
     if hasattr(self.model, "generate_voice_clone"):
-      if not reference_audio_path or not reference_text:
+      if not reference_audio_path:
         raise ValueError(
-          "Qwen3-TTS Base requires reference_audio_path and reference_text for voice cloning."
+          "Qwen3-TTS Base is a voice-cloning checkpoint and requires "
+          "reference_audio_path. From the CLI, pass "
+          "`--reference-audio-path /path/to/reference.wav`."
         )
       output = self.model.generate_voice_clone(
         text=text,
         language=language,
         ref_audio=reference_audio_path,
-        ref_text=reference_text,
       )
     elif hasattr(self.model, "generate"):
       output = self.model.generate(text=text, language=language)
@@ -234,7 +234,6 @@ class Qwen3TTSBackend:
       "voice": kwargs.get("voice"),
       "sample_rate": sample_rate,
       "reference_audio_path": reference_audio_path,
-      "reference_text": reference_text,
     }
 
   def _normalize_output(self, output: Any, response_format: str, requested_sample_rate: Optional[int]) -> Tuple[bytes, Optional[int]]:

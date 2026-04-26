@@ -103,15 +103,7 @@ class TTSPlugin(BaseArchitecture):
         scope=ParamScope.RUNTIME,
         default=None,
         category=SettingCategory.GENERATION,
-        description="Optional reference audio path for voice cloning.",
-      ),
-      ParamSpec(
-        name="reference_text",
-        type=str,
-        scope=ParamScope.RUNTIME,
-        default=None,
-        category=SettingCategory.GENERATION,
-        description="Transcript for the reference audio.",
+        description="Reference audio path for voice cloning. Required by Qwen3-TTS Base.",
       ),
       ParamSpec(
         name="response_format",

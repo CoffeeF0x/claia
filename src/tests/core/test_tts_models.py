@@ -25,12 +25,11 @@ class FakeQwen3TTSModel:
     cls.loaded.append(model)
     return model
 
-  def generate_voice_clone(self, text, language, ref_audio, ref_text):
+  def generate_voice_clone(self, text, language, ref_audio):
     self.calls.append({
       "text": text,
       "language": language,
       "ref_audio": ref_audio,
-      "ref_text": ref_text,
     })
     return (["fake-waveform"], 22050)
 
@@ -82,7 +81,6 @@ def test_local_tts_model_yields_text_and_audio_chunks(monkeypatch):
     _conversation(),
     language="English",
     reference_audio_path="/tmp/ref.wav",
-    reference_text="Reference transcript.",
     response_format="wav",
   ))
 
@@ -105,7 +103,6 @@ def test_local_tts_model_yields_text_and_audio_chunks(monkeypatch):
     "text": "Read this aloud.",
     "language": "English",
     "ref_audio": "/tmp/ref.wav",
-    "ref_text": "Reference transcript.",
   }
 
 
@@ -117,8 +114,20 @@ def test_local_tts_model_allows_prompt_override(monkeypatch):
     _conversation(),
     prompt="Override text.",
     reference_audio_path="/tmp/ref.wav",
-    reference_text="Reference transcript.",
   ))
 
   assert chunks[1].metadata["prompt"] == "Override text."
+  assert "reference_text" not in chunks[1].metadata
   assert FakeQwen3TTSModel.loaded[0].calls[0]["text"] == "Override text."
+
+
+def test_local_tts_model_explains_qwen_reference_audio_requirement(monkeypatch):
+  tts = _import_tts_module(monkeypatch)
+  model = tts.LocalTTSModel("Qwen/Qwen3-TTS-12Hz-0.6B-Base", defer_loading=True)
+
+  chunks = list(model.generate(_conversation()))
+
+  assert chunks[0].kind is ChunkKind.TEXT
+  assert "reference_audio_path" in chunks[0].data
+  assert "--reference-audio-path" in chunks[0].data
+  assert "--reference-text" not in chunks[0].data
