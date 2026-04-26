@@ -32,6 +32,9 @@ COMMAND_SPECS: List[Tuple[List[str], str, str, bool, bool, CommandPriority]] = [
   (['p', 'prompt'],       'prompt',       'Manage prompts',                                                  True,  False, CommandPriority.CONFIG),
   (['c', 'conversation'], 'conversation', 'Manage conversations',                                            True,  False, CommandPriority.CONFIG),
   (['m', 'model'],        'model',        'List and select models',                                          True,  False, CommandPriority.CONFIG),
+  (['f', 'file', 'artifact'], 'file',     'Import, export, and list stored file artifacts',                  True,  False, CommandPriority.CONFIG),
+  (['import'],            'import',       'Import an external file as an artifact',                          True,  False, CommandPriority.CONFIG),
+  (['export'],            'export',       'Export a stored artifact to a local file',                        True,  False, CommandPriority.CONFIG),
   (['query'],             'query',        'Send a one-shot query to the AI',                                 True,  False, CommandPriority.ACTION),
   (['setup'],             'setup',        'Interactive setup wizard for API keys and configuration',         False, False, CommandPriority.SETUP),
 ]

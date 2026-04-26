@@ -20,6 +20,7 @@ from .tool import ToolCommand
 from .conversation import ConversationCommand
 from .model import ModelCommand
 from .query import QueryCommand
+from .file import ExportFileCommand, FileCommand, ImportFileCommand
 
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,9 @@ COMMAND_REGISTRY: Dict[str, Type[BaseCommand]] = {
   'model': ModelCommand,
   'query': QueryCommand,
   'tool': ToolCommand,
+  'file': FileCommand,
+  'import': ImportFileCommand,
+  'export': ExportFileCommand,
 }
 
 
@@ -134,7 +138,7 @@ class Commands:
     
     groups, current = [], []
     for token in tokens:
-      if token.startswith('-') and current:
+      if token in self._cli_command_map and current:
         groups.append(current)
         current = [token]
       else:

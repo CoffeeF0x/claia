@@ -5,6 +5,7 @@ Handles audio content with metadata support.
 """
 
 import logging
+import base64
 import time
 from typing import Dict, Any, Optional
 
@@ -92,11 +93,14 @@ class AudioArtifact(BaseArtifact):
             data['sample_rate'] = self.sample_rate
         if self.channels:
             data['channels'] = self.channels
+        if self._content_loaded and self._content is not None:
+            data['content_encoding'] = 'base64'
+            data['content'] = base64.b64encode(self._content).decode('ascii')
         return data
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'AudioArtifact':
-        return cls(
+        artifact = cls(
             name=data.get('name', 'untitled.mp3'),
             id=data.get('id'),
             media_type=data.get('media_type'),
@@ -111,6 +115,13 @@ class AudioArtifact(BaseArtifact):
             created_at=data.get('created_at'),
             updated_at=data.get('updated_at'),
         )
+        if data.get('content_encoding') == 'base64' and data.get('content'):
+            try:
+                artifact._content = base64.b64decode(data['content'])
+                artifact._content_loaded = True
+            except Exception as e:
+                logger.warning(f"Failed to decode audio content for artifact {data.get('id')}: {e}")
+        return artifact
 
     @classmethod
     def from_bytes(cls, audio_data: bytes, name: str, **kwargs) -> 'AudioArtifact':

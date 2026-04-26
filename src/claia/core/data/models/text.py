@@ -72,11 +72,14 @@ class TextArtifact(BaseArtifact):
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()
         data['encoding'] = self.encoding
+        if self._content_loaded and self._content is not None:
+            data['content'] = self._content
+            data['content_encoding'] = self.encoding
         return data
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'TextArtifact':
-        return cls(
+        artifact = cls(
             name=data.get('name', 'untitled.txt'),
             id=data.get('id'),
             media_type=data.get('media_type'),
@@ -88,6 +91,10 @@ class TextArtifact(BaseArtifact):
             created_at=data.get('created_at'),
             updated_at=data.get('updated_at'),
         )
+        if data.get('content') is not None:
+            artifact._content = data.get('content')
+            artifact._content_loaded = True
+        return artifact
 
     @classmethod
     def from_content(cls, content: str, name: str, encoding: str = "utf-8", **kwargs) -> 'TextArtifact':
