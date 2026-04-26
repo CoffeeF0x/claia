@@ -142,6 +142,19 @@ class LegacyDefinitionsPlugin(BaseDefinitionProvider):
         input_modalities=[Modality.TEXT],
         output_modalities=[Modality.IMAGE],
       ),
+      "qwen3-tts-0.6b": ModelDefinition(
+        title="Qwen3 TTS 0.6B",
+        description="Qwen3-TTS 0.6B Base is a compact multilingual text-to-speech model with voice cloning support.",
+        capabilities=["text-to-speech", "audio-generation", "voice-cloning"],
+        deployments=["local"],
+        architectures=["tts"],
+        aliases=["qwen-tts", "qwen3-tts", "qwen-tts-0.6b"],
+        identifiers={
+          "tts": "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
+        },
+        input_modalities=[Modality.TEXT],
+        output_modalities=[Modality.AUDIO],
+      ),
       "llama-3.2-1b": ModelDefinition(
         title="Llama 3.2 1B",
         description="Meta's Llama 3.2 1B is a compact text generation model that delivers efficient performance for chat and text generation tasks while maintaining a small footprint.",

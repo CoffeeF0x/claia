@@ -7,7 +7,7 @@ import logging
 from typing import Optional, Type
 
 from .base import BaseAgent
-from claia.core.data.models import ImageArtifact
+from claia.core.data.models import AudioArtifact, ImageArtifact
 from claia.core.enums.conversation import MessageRole
 from claia.core.modality import ChunkKind, GenerationChunk
 from ..hooks import AgentInfo
@@ -57,6 +57,8 @@ class SimpleAgent(BaseAgent):
         if chunk.kind is not ChunkKind.TEXT:
           if chunk.kind is ChunkKind.IMAGE_BYTES:
             cls._attach_image_chunk(process, streaming_message.message_id, chunk)
+          elif chunk.kind is ChunkKind.AUDIO_BYTES:
+            cls._attach_audio_chunk(process, streaming_message.message_id, chunk)
           process.emit("chunk", chunk)
           continue
         token = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
@@ -114,6 +116,35 @@ class SimpleAgent(BaseAgent):
       process.emit("artifact", artifact, message_id)
     except Exception as e:
       logging.exception(f"Failed to attach generated image artifact: {e}")
+
+  @staticmethod
+  def _attach_audio_chunk(process, message_id: str, chunk: GenerationChunk) -> None:
+    """Convert an audio byte chunk into an artifact attached to the message."""
+    try:
+      metadata = dict(chunk.metadata or {})
+      output_format = (metadata.get("format") or "WAV").upper()
+      extension = {
+        "WAV": "wav",
+        "MP3": "mp3",
+        "OPUS": "opus",
+        "AAC": "aac",
+        "FLAC": "flac",
+      }.get(output_format, output_format.lower())
+      index = metadata.get("index", 0)
+      name = metadata.get("name") or f"generated-audio-{index + 1}.{extension}"
+
+      artifact = AudioArtifact.from_bytes(
+        audio_data=chunk.data,
+        name=name,
+        format=output_format,
+        sample_rate=metadata.get("sample_rate"),
+        media_type=metadata.get("media_type", "audio/wav"),
+        metadata=metadata,
+      )
+      process.conversation.attach_file(message_id, artifact.id)
+      process.emit("artifact", artifact, message_id)
+    except Exception as e:
+      logging.exception(f"Failed to attach generated audio artifact: {e}")
 
 
 ########################################################################

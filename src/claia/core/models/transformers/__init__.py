@@ -7,5 +7,6 @@ generic transformers and specialized implementations like Gemma3.
 
 from .generic import GenericTransformerModel
 from .gemma3 import Gemma3Model
+from .tts import LocalTTSModel
 
-__all__ = ['GenericTransformerModel', 'Gemma3Model']
+__all__ = ['GenericTransformerModel', 'Gemma3Model', 'LocalTTSModel']

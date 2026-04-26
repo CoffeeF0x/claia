@@ -7,6 +7,7 @@ Local transformer model wrappers.
 - `generic.py` — generic Hugging Face-style wrapper.
 - `gemma3.py` — example specialized adapter.
 - `diffusers.py` — generic Diffusers-backed image generation pipeline.
+- `tts.py` — generic local text-to-speech wrapper with backend adapters.
 
 These models typically:
 - wrap a local/hosted transformer model
@@ -51,3 +52,43 @@ for chunk in registry.run(
 ```
 
 Use `device="cpu"` for compatibility, though generation will be slow.
+
+## Qwen3 TTS Smoke Test
+
+Qwen3-TTS 0.6B is wired through the `tts` architecture and the `local`
+deployment. It requires the audio model extras:
+
+```bash
+pip install -e '.[audio]'
+```
+
+Then run it through the registry and inspect the typed chunks. The base
+checkpoint uses voice cloning, so provide both a reference audio path and
+its transcript:
+
+```python
+from claia.core.data import Conversation
+from claia.core.enums.conversation import MessageRole
+from claia.core.modality import ChunkKind
+from claia.framework.registry import Registry
+
+conversation = Conversation(title="Qwen TTS smoke")
+conversation.add_message(MessageRole.USER, "Hello from Claia.")
+
+registry = Registry()
+for chunk in registry.run(
+    "qwen3-tts-0.6b",
+    conversation,
+    streaming=True,
+    device="cuda",
+    language="English",
+    reference_audio_path="/path/to/reference.wav",
+    reference_text="Transcript for the reference audio.",
+):
+    if chunk.kind is ChunkKind.TEXT:
+        print(chunk.data)
+    elif chunk.kind is ChunkKind.AUDIO_BYTES:
+        print(chunk.metadata)
+        with open("qwen-tts-smoke.wav", "wb") as f:
+            f.write(chunk.data)
+```

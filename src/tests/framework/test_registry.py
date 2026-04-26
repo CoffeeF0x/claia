@@ -129,3 +129,79 @@ def test_model_registry_resolves_diffusers_provider_identifier(monkeypatch):
 
   assert result.is_success()
   assert result.get_data() == "sd2-community/stable-diffusion-2"
+
+
+def test_model_registry_resolves_tts_provider_identifier(monkeypatch):
+  """Qwen TTS resolves from Claia id to provider id before deployment."""
+  from claia.core.definitions.model_definition import ModelDefinition
+  from claia.core.plugins.base import ArchitectureInfo, DeploymentInfo
+  from claia.core.solvers.default import DefaultSolverPlugin
+  from claia.framework.manager import Manager as RealManager
+  import claia.framework.registry as registry_module
+
+  class FakeManager:
+    coerce_value = staticmethod(RealManager.coerce_value)
+    filter_init_kwargs = staticmethod(RealManager.filter_init_kwargs)
+    filter_runtime_kwargs = staticmethod(RealManager.filter_runtime_kwargs)
+    resolve_runtime_kwargs = staticmethod(RealManager.resolve_runtime_kwargs)
+    validate_required_init_kwargs = staticmethod(RealManager.validate_required_init_kwargs)
+    _COERCE_FAIL = RealManager._COERCE_FAIL
+    _mask_for_log = staticmethod(RealManager._mask_for_log)
+
+    def discover_plugins(self):
+      return None
+
+    def load_all_plugins(self, **kwargs):
+      return None
+
+    def get_supported_models(self):
+      return {
+        "qwen3-tts-0.6b": ModelDefinition(
+          deployments=["local"],
+          architectures=["tts"],
+          identifiers={"tts": "Qwen/Qwen3-TTS-12Hz-0.6B-Base"},
+        )
+      }
+
+    def get_available_deployments(self):
+      return {"local": object()}
+
+    def get_solver_plugin(self, solver_name=None):
+      return DefaultSolverPlugin()
+
+    def get_model_class(self, architecture_name):
+      class DummyModel:
+        pass
+      return DummyModel
+
+    def get_deployment_plugin(self, deployment_name):
+      class Deployment:
+        def get_deployment_info(self):
+          return DeploymentInfo(
+            name="local",
+            title="Local",
+            description="Local test deployment",
+          )
+
+        def run(self, model_name, model_class, conversation, cache, init_kwargs, runtime_kwargs):
+          from claia.core.modality import text_chunk
+          yield text_chunk(model_name)
+
+      return Deployment()
+
+    def get_available_architectures(self):
+      return {
+        "tts": ArchitectureInfo(
+          name="tts",
+          title="TTS",
+          description="TTS test architecture",
+        )
+      }
+
+  monkeypatch.setattr(registry_module, "Manager", FakeManager)
+
+  reg = Registry()
+  result = reg.run("qwen3-tts-0.6b", Conversation(title="T"))
+
+  assert result.is_success()
+  assert result.get_data() == "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
