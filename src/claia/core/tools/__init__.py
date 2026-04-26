@@ -8,5 +8,6 @@ Three plugin types compose the tool system:
 - ``modules``: provide groups of executable commands (the actual tools).
 
 ABCs for each live alongside their concrete implementations under this
-package; the framework exposes mirrored hookspecs in ``claia.hooks``.
+package; the framework exposes mirrored hookspecs in
+``claia.framework.hooks``.
 """

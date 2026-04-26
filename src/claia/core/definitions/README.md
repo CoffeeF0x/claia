@@ -7,7 +7,7 @@ Model metadata and configuration objects used by solvers, deployments, and archi
 - `openai.py`, `anthropic.py` — definitions for provider-specific models.
 - `legacy.py` — helpers/mappings for older model naming schemes.
 
-Definitions typically expose `ModelDefinition` objects via hooks in `hooks.definition` and are
+Definitions expose `ModelDefinition` objects through the contract mirrored by `claia.framework.hooks.definition` and are
 discovered through the `claia.definitions` entry point.
 
 ## How definitions fit in

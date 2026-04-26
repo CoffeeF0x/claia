@@ -31,7 +31,7 @@ Quick library example::
     registry.start_workers(2)
 
     conv = Conversation()
-    conv.add_message_from_role("user", "Hello!")
+    conv.add_message("user", "Hello!")
     result = registry.run("gpt-4", conv)
     print(result.get_data())
 

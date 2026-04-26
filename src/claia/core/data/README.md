@@ -1,41 +1,39 @@
-## Data/Media Package
+# Data
 
-Pure data models and repository interfaces for managing media-like data:
-text, images, audio, prompts, and conversations.
+Pure CLAIA data models: artifacts, prompts, conversations, messages, and domain events. Nothing here owns persistence; callers serialize models or observe events and store them wherever their runtime needs.
 
-## What lives here
+## What Lives Here
 
-- `models/`:
-  - `base.py` — `BaseFile` (common file metadata + IDs).
-  - `text.py`, `image.py`, `audio.py` — `TextFile`, `ImageFile`, `AudioFile`.
-  - `prompt.py` — `Prompt` template model.
-  - `conversation/` — `Conversation`, `Message`, `Action`.
-- `repositories/`:
-  - `base.py`, `file_system.py`, `memory.py` — `FileRepository`, `FileSystemRepository`, `MemoryRepository`.
-- `utils/` — helpers for text/image/media handling.
+- `models/` — `BaseArtifact`, `TextArtifact`, `ImageArtifact`, `AudioArtifact`, `Prompt`, `Conversation`, and `Message`.
+- `events.py` — `DomainEvent` and `EventType`, the audit/runtime event stream for mutable models.
+- `utils/` — text, image, and tool-call parsing helpers.
 
-## How it fits (TL;DR)
+`claia.core.data` re-exports the main model and event types. `claia.framework` re-exports the common ones too for app code that already imports the registry from there.
 
-- This package is a **pure data layer**:
-  - models know nothing about filesystems or databases
-  - repositories handle persistence and storage layout.
-- Higher-level code (CLI, registry, agents) works with these models via repository interfaces.
+## How It Fits
 
-## Quick usage example
+- Artifacts carry identity, metadata, timestamps, optional source references, and in-memory content.
+- `Conversation` extends `TextArtifact` and stores a message tree plus an event log.
+- Host runtimes such as the CLI, an API server, or a worker decide how to persist serialized dicts and when to flush events.
+
+Generation parameters do not live on `Conversation`. Architectures and models declare runtime `ParamSpec`s, and callers pass values through `Registry.run(..., **kwargs)` or `Process.parameters`.
+
+## Quick Example
 
 ```python
-from claia.lib.data import TextFile, ImageFile, FileRepository
+from claia.core.data import Conversation, TextArtifact
+from claia.core.enums.conversation import MessageRole
 
-# Create models
-text = TextFile.from_content("Hello, world!", "greeting.txt")
-image = ImageFile.from_path("/path/to/photo.jpg", is_reference=False)
+text = TextArtifact.from_content("Hello, world!", name="greeting.txt")
 
-# Persist with a repository
-repo = FileRepository.create_file_system("/data")
-repo.save(text)
-repo.save(image)
+conversation = Conversation(title="Example")
+conversation.add_message(MessageRole.USER, "Summarize the greeting.")
 
-# Load later
-loaded = repo.load(text.id, load_content=True)
-print(loaded.content)
+payload = conversation.to_dict()
+restored = Conversation.from_dict(payload)
+
+print(text.content)
+print(restored.get_thread()[0].content)
 ```
+
+Use `Conversation.observe(callback)` for push-style persistence hooks, or `Conversation.pull_events()` when you want to drain pending events at request boundaries.

@@ -1,43 +1,38 @@
 # Conversation Models
 
-Pure data models for conversations, built on top of the media/data layer.
+Conversation models represent chat state as a pure Python message tree with an event-backed audit trail. They are the data contract used by the framework, CLI, agents, and host integrations.
 
-## What lives here
+## What Lives Here
 
-- `conversation.py` — `Conversation` model (title, prompt, messages, actions).
-- `message.py` — `Message` model with thread-safe operations.
-- `action.py` — `Action` model for audit trail events.
+- `conversation.py` — `Conversation`, including title/prompt metadata, messages, active branch tracking, serialization, and event emission.
+- `message.py` — `Message`, including role, content, attachments, inline args, parent links, and thread-safe content updates.
+- `tool_definition.py` — compatibility re-export for tool definition dataclasses.
 
-Generation parameters are not stored on `Conversation`. Architectures/models
-declare them as RUNTIME `ParamSpec`s and callers supply them per-call via
-`Process.parameters` or `Registry.run(..., **kwargs)`.
+All primary types are available from `claia.core.data`; `Conversation` and `Message` are also re-exported from `claia.framework`.
 
-All are re-exported via `claia.lib.data` (see `lib/data/__init__.py`).
+## How It Fits
 
-## How it fits (TL;DR)
+- Messages form a tree via `parent_id`; `active_head_id` points at the current branch tip.
+- Mutations record `DomainEvent`s for auditing and host-runtime persistence.
+- Streaming updates can append chunks without flooding the event log.
+- Generation settings stay outside the data model and are passed at runtime through registry or process parameters.
 
-- `Conversation` extends `TextFile` so it can be stored with the same repository infrastructure as other files.
-- Repositories live in `lib/data/repositories` and operate on `BaseFile`/`TextFile` and subclasses.
-- The rest of CLAIA (agents, registry, CLI) treats `Conversation` as a pure in-memory model; persistence is optional.
-
-## Quick usage example
+## Quick Example
 
 ```python
-from claia.lib.data import Conversation, FileRepository
-from claia.lib.enums.conversation import MessageRole
+from claia.core.data import Conversation
+from claia.core.enums.conversation import MessageRole
 
-# Create a conversation
-conv = Conversation(title="My Conversation")
-conv.add_message(MessageRole.USER, "Hello!")
-conv.add_message(MessageRole.ASSISTANT, "Hi there!")
+conversation = Conversation(title="My Conversation")
+conversation.add_message(MessageRole.USER, "Hello!")
+conversation.add_message(MessageRole.ASSISTANT, "Hi there!")
 
-# Persist via generic file repository
-repo = FileRepository.create_file_system("/conversations")
-repo.save(conv)
+for message in conversation.get_thread():
+    print(message.speaker.value, message.content)
 
-loaded = repo.load(conv.id, load_content=True)
+payload = conversation.to_dict()
+loaded = Conversation.from_dict(payload)
 print(loaded.title, len(loaded.messages))
 ```
 
-For more details on methods and behavior (streaming, audit trail, thread safety), see
-`conversation.py`, `message.py`, and `action.py`.
+Use `conversation.observe(callback)` when an integration needs to react to each mutation. Use `conversation.pull_events()` when the caller owns the persistence boundary and wants to flush events later.

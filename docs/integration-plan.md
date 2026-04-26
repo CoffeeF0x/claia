@@ -569,7 +569,7 @@ the future split. Console script repointed to
 module paths; group names unchanged.
 - Tests reorganised under `src/tests/{core,framework,cli}` mirroring
 the package structure. 27/27 pass.
-- Slate's imports migrated from `claia.lib.`* to `claia.core.*` and
+- Slate's imports migrated from the legacy library namespace to `claia.core.*` and
 `claia.framework.*`.
 - Dropped the unused `aia` dependency.
 
@@ -578,8 +578,8 @@ Known debt carried into later phases:
 - Built-in plugin classes still import `pluggy.HookimplMarker`
 directly (Phase 5 cleanup, see also Pluggy Stays in `claia.framework`
 caveat above).
-- External plugins outside the monorepo (e.g., `claia_bob`) still
-reference the old `claia.lib` import path. Either we ship a small
+- External plugins outside the monorepo (e.g., `claia_bob`) may still
+reference legacy import paths. Either we ship a small
 compatibility shim, update them in lockstep, or document the
 breaking change.
 
@@ -913,8 +913,8 @@ alongside the plugin system docs.
 - `**claia.core` pluggy decoupling** — built-in plugin classes still
 import `pluggy.HookimplMarker`. Resolve by providing thin registrar
 wrappers in `claia.framework` (Phase 5).
-- **External plugin compatibility** — packages that import from
-`claia.lib.`* (legacy) need either a shim or a coordinated update.
+- **External plugin compatibility** — packages that import from legacy
+CLAIA paths need either a shim or a coordinated update.
 Pick a strategy when the first non-monorepo plugin runs into it.
 - **Plugin identifier namespacing** — deferred; likely reverse-DNS or
 similar when the plugin ecosystem grows.

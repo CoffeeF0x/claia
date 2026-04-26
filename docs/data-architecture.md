@@ -24,7 +24,7 @@ BaseArtifact (ABC)
 └── AudioArtifact
 ```
 
-All models live in `claia.lib.data.models` and are re-exported from `claia.lib.data`.
+All models live in `claia.core.data.models` and are re-exported from `claia.core.data`. Common data types are also re-exported from `claia.framework` for app-level code that is already using the registry.
 
 ### BaseArtifact
 
@@ -45,7 +45,7 @@ The root of all artifact types. Provides identity, naming, timestamps, and conte
 Constructor: all fields are keyword arguments with sensible defaults.
 
 ```python
-from claia.lib.data import TextArtifact
+from claia.core.data import TextArtifact
 
 t = TextArtifact(name="notes.txt")
 d = t.to_dict()   # plain dict, no legacy keys
@@ -156,7 +156,7 @@ Every mutation emits exactly one `DomainEvent` (recorded + dispatched):
 
 ## Domain Events
 
-Defined in `claia.lib.data.events`. Events serve as both the persisted audit trail and runtime notification system.
+Defined in `claia.core.data.events`. Events serve as both the persisted audit trail and runtime notification system.
 
 ### EventType Enum
 
@@ -205,11 +205,11 @@ pending = conversation.pull_events()  # returns + clears pending
 if pending:
     store.save(conversation)
 
-# Listener-based (API might use this)
-def on_event(event: DomainEvent):
+# Observer-based (API might use this)
+def on_event(event: DomainEvent, message):
     db.handle(event)
 
-conversation.add_event_listener(on_event)
+conversation.observe(on_event)
 ```
 
 ### Serialization
@@ -269,12 +269,7 @@ What `conversation.to_dict()` produces (and what gets saved as JSON / sent over 
       "timestamp": 1710000000.0,
       "metadata": {"title": "My Chat", "system_prompt": "You are a helpful assistant."}
     }
-  ],
-  "settings": {
-    "streaming": true,
-    "text_settings": {},
-    "image_settings": {}
-  }
+  ]
 }
 ```
 
@@ -317,7 +312,7 @@ When building the API layer on top of these models:
 
 The serialized dict structure maps naturally to a normalized schema:
 
-- **conversations** table: `id`, `title`, `prompt` (JSON), `active_head_id`, `settings` (JSON), `created_at`, `updated_at`
+- **conversations** table: `id`, `title`, `prompt` (JSON), `active_head_id`, `created_at`, `updated_at`
 - **messages** table: `message_id`, `conversation_id` (FK), `parent_id`, `speaker`, `content`, `file_ids` (JSON array), `inline_args` (JSON), `created_at`, `updated_at`
 - **events** table: `event_id`, `conversation_id` (FK), `event_type`, `entity_id`, `parent_id`, `timestamp`, `metadata` (JSON)
 
@@ -330,13 +325,13 @@ The API can use event listeners for real-time database writes:
 ```python
 conv = Conversation.from_dict(db_data)
 
-def persist_event(event: DomainEvent):
+def persist_event(event: DomainEvent, message):
     db.insert_event(conv.id, event.to_dict())
     if event.event_type == EventType.MESSAGE_CREATED:
         db.insert_message(conv.id, event.metadata)
     # etc.
 
-conv.add_event_listener(persist_event)
+conv.observe(persist_event)
 ```
 
 Or use the poll pattern after request handling:
@@ -359,7 +354,7 @@ db.save_conversation(conv)
 ## File Map
 
 ```
-claia/lib/data/
+claia/core/data/
   __init__.py              — re-exports all models + events
   events.py                — EventType enum + DomainEvent dataclass
   models/

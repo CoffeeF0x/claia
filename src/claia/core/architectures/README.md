@@ -8,7 +8,7 @@ Architecture adapters that translate model definitions into runnable model stack
 - `transformers_generic.py`, `transformers_gemma3.py` — local transformer-based architectures.
 - `dummy.py` — no-op/testing architecture.
 
-Each architecture implements hooks defined in `hooks.architecture` and is discovered via the
+Each architecture implements the contract mirrored by `claia.framework.hooks.architecture` and is discovered via the
 `claia.architectures` entry point.
 
 ## How architectures fit in

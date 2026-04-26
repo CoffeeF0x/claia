@@ -1,39 +1,39 @@
-# CLAIA Package
+# Framework
 
-Core runtime for agents, model stack, tool system, and plugin registries.
+The framework layer is CLAIA's orchestration runtime. It loads plugins, exposes the `Registry` facade, runs tools and models, and manages agent processes.
 
-## What this package does (TL;DR)
+## What Lives Here
 
-- Turns **conversations + settings** into **model calls and tool executions**.
-- Uses a **plugin system** (via `pluggy`) so models, tools, and agents can be added without changing core code.
-- Provides a **single facade** (`Registry`) over the plugin `Manager` plus queues, processes, and results.
+- `manager.py` — discovers and loads entry-point plugins with pluggy.
+- `registry.py` — the app-facing composition root for models, tools, and agents.
+- `registrars.py` — wraps core plugin implementations in pluggy-compatible registrars.
+- `process.py` and `queue.py` — units of work and queueing for agents.
+- `agents/` — base agent contract and built-in agent plugins.
+- `hooks/` — hookspecs for architectures, deployments, solvers, definitions, tools, and agents.
 
-## Runtime flow (mental model)
+## Runtime Flow
 
-1. **Entry**: `python -m claia` or the `cli` package parses CLI args and builds settings.
-2. **Registry**: `registry.Registry` loads plugins via `manager.Manager` and exposes:
-   - model API (`run(...)`)
-   - tool API (`process_content(...)`, `run_command(...)`)
-   - agent API (process queue + workers)
-3. **Plugins**: concrete implementations live in subpackages and are discovered via entry points
-   (`claia.architectures`, `claia.deployments`, `claia.tool_modules`, `claia.agents`, etc.).
+1. The CLI or host app builds settings.
+2. `Registry.load_plugins(**kwargs)` asks `Manager` to discover entry points and initialize extensions.
+3. Model calls flow through solver, deployment, and architecture plugins.
+4. Tool calls flow through pattern, protocol, and module plugins.
+5. Agent work is represented as `Process` objects and can be handled directly or by registry workers.
 
-Key modules:
-- `manager.py` — plugin manager for models, tools, and agents
-- `registry.py` — high-level façade used by CLI/apps to talk to the system
+## Library Entry Point
 
-## Subpackages (where to look)
+```python
+from claia.framework import Registry, Conversation
 
-- `agents/` — agent implementations (how processes are orchestrated)
-- `cli/` — command-line entrypoints, settings, and logging
-- `deployments/` — runtime backends (API, local, remote, dummy)
-- `hooks/` — pluggy hookspecs and info objects for all plugin types
-- `lib/` — shared runtime library (data models, enums, process/queue, model abstractions)
-- `architectures/` — architecture adapters wrapping concrete model APIs
-- `definitions/` — model metadata/definitions consumed by solvers/deployments
-- `solvers/` — deployment/architecture selection strategies
-- `tools/` — concrete tool modules (command implementations)
-- `tool_patterns/` — high-level tool invocation patterns (how tool calls are marked in text)
-- `tool_protocols/` — protocols for executing tool commands against the command catalog
+registry = Registry()
+registry.load_plugins(openai_api_token="sk-...")
 
-Run: `python -m claia` (delegates to `cli`).
+conversation = Conversation()
+conversation.add_message("user", "Hello!")
+
+result = registry.run("gpt-4", conversation)
+print(result.get_data())
+```
+
+Because `claia` is a namespace package, `claia.framework` also acts as a convenience hub. It re-exports common `claia.core` types such as `Conversation`, `Result`, `ParamSpec`, `ModelDefinition`, and modality chunk helpers.
+
+Run the CLI with `python -m claia.cli` from source or `claia` after installation.

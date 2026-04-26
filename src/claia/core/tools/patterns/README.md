@@ -6,7 +6,7 @@ High-level patterns for **detecting and parsing tool calls** in model text.
 
 - `default.py` — baseline pattern implementation and utilities.
 
-Patterns typically implement hooks from `hooks.pattern` and are discovered via the
+Patterns implement the contract mirrored by `claia.framework.hooks.pattern` and are discovered via the
 `claia.tool_patterns` entry point.
 
 ## How patterns fit in

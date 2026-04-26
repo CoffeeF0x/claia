@@ -13,8 +13,9 @@ The actual ABCs that implementations subclass live alongside their domain:
 - ``claia.core.tools.protocols.base.BaseProtocol``
 - ``claia.core.tools.modules.base.BaseToolModule``
 
-Pluggy hookspecs that mirror these ABCs live in the ``claia.hooks`` framework
-package; ``claia.core`` itself never imports pluggy.
+Pluggy hookspecs that mirror these ABCs live in ``claia.framework.hooks``.
+The contracts in this subpackage stay framework-free so plugin metadata can
+be imported without starting the runtime.
 """
 
 from .base import (

@@ -24,7 +24,7 @@ Agent implementations that orchestrate processes, models, and tools.
 
 ## Implementing a new agent (TL;DR)
 
-- Subclass `lib.BaseAgent` and implement a class method like `process_request(process, registry, **kwargs)`.
-- Provide a plugin class with `hookimpl` methods from `hooks.agent`:
+- Subclass `claia.framework.agents.base.BaseAgent` and implement a class method like `process_request(process, registry, **kwargs)`.
+- Provide a plugin class implementing the hooks in `claia.framework.hooks.agent`:
   - `get_agent_class(agent_name) -> Type[BaseAgent]`
   - `get_agent_info() -> AgentInfo` (name, description, `params: List[ParamSpec]`).

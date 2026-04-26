@@ -9,7 +9,7 @@ Protocols define **how tool commands are executed** once a pattern has detected 
   - invokes the tool’s callable with prepared kwargs
   - returns a `Result` object.
 
-Protocols typically implement hooks from `hooks.protocol` and are discovered via the
+Protocols implement the contract mirrored by `claia.framework.hooks.protocol` and are discovered via the
 `claia.tool_protocols` entry point.
 
 ## How protocols fit in

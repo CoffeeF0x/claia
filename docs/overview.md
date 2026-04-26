@@ -1,221 +1,169 @@
-# CLAIA Developer Guide (src/)
+# CLAIA Developer Overview
 
-This guide explains the package layout, how to add a model, create an agent, add tool commands, and use the CLI.
+CLAIA is split into three layers under the `claia.*` namespace: `core` for pure library code, `framework` for orchestration, and `cli` for the command-line app. Start with `claia.framework.Registry` when building an app, and drop into `claia.core` when you are adding models, tools, or data types.
 
 ## Package Overview
 
-- `claia/` — core package
-  - `agents/` — agent implementations and plugins
-  - `cli/` — CLI entrypoint, settings, defaults, logger
-  - `deployments/` — runtime backends (API, local, remote, dummy)
-  - `hooks/` — plugin hook contracts (types and info objects)
-  - `lib/` — shared runtime library
-    - `base.py` — base agent utilities
-    - `files/` — file, prompt, and conversation types
-    - `model/` — model layer (API, transformers, dummy, base classes)
-    - `process.py`, `queue.py`, `results.py` — orchestration utilities
-  - `architectures/` — architecture plugins that map to model classes
-  - `definitions/` — definitions that name and describe models
-  - `solvers/` — select model per process
-  - `tools/` — concrete tool command modules
-  - `tool_patterns/` — patterns that define tool prompts/format
-  - `tool_protocols/` — protocols that execute commands from a catalog
+- `claia.core` — data models, result types, plugin metadata/contracts, model classes, architectures, deployments, solvers, definitions, and tools.
+- `claia.framework` — pluggy discovery, registrars, hookspecs, `Registry`, `Process`, `ProcessQueue`, worker lifecycle, and agents.
+- `claia.cli` — argument parsing, settings, interactive commands, rendering, CLI tool module, and JSON file storage.
 
-Plugin registration uses Python entry points declared in `pyproject.toml` under:
+Plugin registration uses Python entry points declared in `pyproject.toml`:
+
 - `claia.architectures`, `claia.definitions`, `claia.deployments`, `claia.solvers`, `claia.agents`
 - `claia.tool_modules`, `claia.tool_patterns`, `claia.tool_protocols`
 
-See `pyproject.toml` for current built-in registrations.
-
-## Add a Model
-
-You add models by providing:
-1) A model class in `claia/lib/model/...`
-2) An architecture plugin in `claia/architectures/`
-3) (Optional) a definitions plugin in `claia/definitions/`
-4) An entry point in `pyproject.toml`
-
-Step 1: Implement or reuse a model class
-- Place API-backed clients under `claia/lib/model/api/` (e.g., `openai.py`, `anthropic.py`).
-- Place local/transformer models under `claia/lib/model/transformers/`.
-- Base interfaces live in `claia/lib/model/base/`.
-
-Step 2: Create an architecture plugin
-Create `claia/architectures/my_provider.py` that returns the model class and declares its `ParamSpec`s for safe kwarg filtering.
+## Use CLAIA As A Library
 
 ```python
-import pluggy
-from typing import Type
-from claia.lib.model.api import OpenAIModel  # or your own model class
-from claia.core.plugins.base import ArchitectureInfo, ParamScope, ParamSpec, SettingCategory
+from claia.framework import Registry, Conversation
+from claia.core.enums.conversation import MessageRole
 
-hookimpl = pluggy.HookimplMarker("claia_architectures")
+registry = Registry()
+registry.load_plugins(openai_api_token="sk-...")
 
-class MyProviderPlugin:
-  @hookimpl
-  def get_architecture_info(self) -> ArchitectureInfo:
-    return ArchitectureInfo(
-      name="my_provider",
-      title="My Provider API",
-      description="My provider models",
-      params=[
-        ParamSpec(
-          name="my_provider_api_token",
-          type=str,
-          scope=ParamScope.INIT,
-          required=True,
-          secret=True,
-          category=SettingCategory.API,
-          description="My Provider API Token",
-        ),
-      ],
-    )
+conversation = Conversation(title="Example")
+conversation.add_message(MessageRole.USER, "Explain registries in one sentence.")
 
-  @hookimpl
-  def get_model_class(self) -> Type:
-    return OpenAIModel  # or your custom class
+result = registry.run("gpt-4", conversation, temperature=0.3)
+print(result.get_data() if result.is_success() else result.get_message())
 ```
 
-Step 3 (optional): Add model definitions
-If you want human-friendly IDs and metadata, provide `claia/definitions/my_provider.py` with a definitions plugin that enumerates supported models.
+Use `Registry.query(...)` for a one-shot prompt helper and `Registry.run_command(...)` for direct tool invocation. Use `start_workers(...)`, `add_process(...)`, and `stop_workers(...)` when you need queued agent processing.
 
-Step 4: Register entry points in `pyproject.toml`
+## Add A Model Provider
+
+Adding a provider usually means adding four pieces:
+
+1. A model class under `claia.core.models`.
+2. An architecture plugin under `claia.core.architectures`.
+3. Optional model definitions under `claia.core.definitions`.
+4. Entry points in `pyproject.toml`.
+
+```python
+from typing import Type
+
+from claia.core.architectures.base import BaseArchitecture
+from claia.core.models.api.openai import OpenAIModel
+from claia.core.plugins.base import ArchitectureInfo, ParamScope, ParamSpec, SettingCategory
+
+
+class MyProviderPlugin(BaseArchitecture):
+    info = ArchitectureInfo(
+        name="my_provider",
+        title="My Provider API",
+        description="My provider models",
+        params=[
+            ParamSpec(
+                name="my_provider_api_token",
+                type=str,
+                scope=ParamScope.INIT,
+                required=True,
+                secret=True,
+                category=SettingCategory.API,
+                description="My Provider API token.",
+            ),
+        ],
+    )
+
+    def get_architecture_info(self) -> ArchitectureInfo:
+        return self.info
+
+    def get_model_class(self) -> Type:
+        return OpenAIModel
+```
+
+Register it:
 
 ```toml
 [project.entry-points."claia.architectures"]
-my_provider = "claia.architectures.my_provider:MyProviderPlugin"
+my_provider = "claia.core.architectures.my_provider:MyProviderPlugin"
 
-# Optional: definitions
 [project.entry-points."claia.definitions"]
-my_provider = "claia.definitions.my_provider:MyProviderDefinitionsPlugin"
+my_provider = "claia.core.definitions.my_provider:MyProviderDefinitionsPlugin"
 ```
 
-Credentials and config are provided via CLI flags or env vars (see CLI section). The registry forwards only the kwargs that match a `ParamSpec` declared by the plugin.
+The framework filters constructor and runtime kwargs through each plugin's `ParamSpec` declarations. `ParamScope.INIT` values are used during plugin construction; `ParamScope.RUNTIME` values are resolved per request.
 
-## Create an Agent
+## Create An Agent
 
-Agents orchestrate a `Process` using the model registry. Implement an agent class and expose it via an agent plugin.
+Agents turn a `Process` into work. They live in `claia.framework.agents`, receive the active registry, and usually call `registry.run(...)` or `registry.query(...)`.
 
 ```python
-import pluggy
-from claia.lib import BaseAgent
+from claia.framework import BaseAgent
 
-hookimpl = pluggy.HookimplMarker("claia_agents")
 
 class MyAgent(BaseAgent):
-  @classmethod
-  def process_request(cls, process, registry=None, **kwargs):
-    model_id = process.parameters["model_id"]
-    result = registry.run(model_id, process.conversation, **kwargs)
-    if result.is_error():
-      process.mark_failed(result.get_message())
-    else:
-      process.mark_completed(result.get_data())
-    return process
+    @classmethod
+    def process_request(cls, process, registry=None, **kwargs):
+        model_id = process.parameters["model_id"]
+        result = registry.run(model_id, process.conversation, **kwargs)
 
-class MyAgentPlugin:
-  @hookimpl
-  def get_agent_class(self, agent_name: str):
-    return MyAgent if agent_name == "my_agent" else None
+        if result.is_error():
+            process.mark_failed(result.get_message())
+        else:
+            process.mark_completed(result.get_data())
 
-  @hookimpl
-  def get_agent_info(self):
-    from claia.hooks import AgentInfo
-    return AgentInfo(name="my_agent", description="Custom agent")
+        return process
 ```
 
-Register it in `pyproject.toml`:
-
-```toml
-[project.entry-points."claia.agents"]
-my_agent = "claia.agents.my_agent:MyAgentPlugin"
-```
-
-Pick it at runtime with `--default-agent my_agent` or interactively in the CLI.
+Expose the agent with a plugin registered under `claia.agents`. See `claia.framework.agents.simple` for the built-in implementation.
 
 ## Add Tool Commands
 
-Tool commands are provided by command modules. The registry validates/serializes arguments and passes prepared kwargs to the protocol. Protocols execute commands from a commands catalog (not the full manager).
+Tools are split into modules, patterns, and protocols:
 
-Implement a module in `claia/tools/my_module.py`:
+- Tool modules provide callable commands.
+- Tool patterns detect tool calls in generated text.
+- Tool protocols execute calls against the command catalog.
 
 ```python
-import pluggy
-from claia.hooks.tool import ToolModuleInfo, ToolDefinition, ArgumentDefinition
+from claia.core.plugins.base import ArgumentDefinition, ToolDefinition, ToolModuleInfo
+from claia.core.tools.modules.base import BaseToolModule
 
-hookimpl = pluggy.HookimplMarker("claia_tool_modules")
 
-class MyModulePlugin:
-  @hookimpl
-  def get_module_info(self) -> ToolModuleInfo:
-    return ToolModuleInfo(name="my", title="My Tools", description="Demo tools")
+class MyModulePlugin(BaseToolModule):
+    info = ToolModuleInfo(name="my", title="My Tools", description="Demo tools")
 
-  @hookimpl
-  def get_module_tools(self):
-    return {
-      "echo": ToolDefinition(
-        name="echo",
-        description="Echo a message",
-        callable=lambda message, **kw: str(message),
-        arguments={
-          "message": ArgumentDefinition(name="message", data_type="str", required=True, description="Message")
+    def get_module_tools(self):
+        return {
+            "echo": ToolDefinition(
+                name="echo",
+                description="Echo a message.",
+                callable=lambda message, **kwargs: str(message),
+                arguments={
+                    "message": ArgumentDefinition(
+                        name="message",
+                        data_type="str",
+                        required=True,
+                        description="Message to echo.",
+                    ),
+                },
+            ),
         }
-      )
-    }
 ```
 
-Register it in `pyproject.toml`:
+Register it:
 
 ```toml
 [project.entry-points."claia.tool_modules"]
-my = "claia.tools.my_module:MyModulePlugin"
+my = "claia.core.tools.modules.my_module:MyModulePlugin"
 ```
 
-Notes:
-- Protocols (e.g., `tool_protocols.simple`) receive a commands catalog and invoke callables. See `claia/tool_protocols/simple.py`.
-- Patterns (e.g., `tool_patterns/default.py`) provide prompts for tool calling.
+## Use The CLI
 
-## Use the CLI
-
-Run the CLI:
+Run from source:
 
 ```bash
-python -m claia
-# or, after install
+python -m claia.cli
+```
+
+Run after installation:
+
+```bash
 claia
 ```
 
-Configuration sources (priority: CLI flags > .env > env vars > defaults):
-- CLI flags are auto-generated from `claia/cli/settings.py` `CONFIG_VARS` (e.g., `--openai-api-token`, `--default-agent`).
-- `.env` supports `CLAIA_`-prefixed variables or unprefixed (e.g., `CLAIA_OPENAI_API_TOKEN=...`).
+Interactive commands start with `:`. Use `:help`, `:tool`, `:model`, `:agent`, `:prompt`, and `:conversation` to inspect and manage runtime state. One-shot queries and direct tool calls are available through CLI flags and command aliases; run `claia --help` for the current command list.
 
-One-shot command execution (non-interactive):
-
-```bash
-# Call a tool command directly
-claia my.echo message="Hello"
-
-# Run any registered command: <module>.<command> key=value [key=value ...]
-claia sample.add a=1 b=2
-```
-
-Interactive commands:
-- Enter `:` to run commands inside the REPL
-- `:` (alone) shows help information
-- `:tool` lists available modules
-- `:tool sample` lists commands in the `sample` module
-- `:sample.echo message=Hello` or `:tool sample.echo message=Hello` runs a command
-
-Model inference (interactive):
-- Type a prompt (no leading `:`). The default agent (e.g., `bob`) creates a `Process` and calls the selected model via the registry.
-- Change defaults with flags like `--default-model`, `--default-agent`, etc.
-
-Workers and tools:
-- The CLI initializes a `Registry` with background workers and default tool pattern/protocol so tool calls in model outputs can be detected and executed.
-
-## Testing
-
-Run tests from the project root:
-
-```bash
-pytest -q
+Configuration can come from CLI flags, interactive `:set`, `.env`, environment variables, and CLI-owned `storage/settings.json`. Plugin settings are discovered from `ParamSpec` declarations, so new providers and tools can add settings without hard-coding CLI flags.
