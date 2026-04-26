@@ -7,5 +7,6 @@ OpenAI, Anthropic, and other cloud-based AI services.
 
 from .openai import OpenAIModel
 from .anthropic import AnthropicModel
+from .openrouter import OpenRouterModel
 
-__all__ = ['OpenAIModel', 'AnthropicModel']
+__all__ = ['OpenAIModel', 'AnthropicModel', 'OpenRouterModel']

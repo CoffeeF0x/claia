@@ -8,6 +8,7 @@ types of AI models and providers.
 # Import architecture plugins
 from .openai import OpenAIPlugin
 from .anthropic import AnthropicPlugin
+from .openrouter import OpenRouterPlugin
 from .transformers_generic import TransformersGenericPlugin
 from .transformers_gemma3 import TransformersGemma3Plugin
 from .dummy import DummyArchitecturePlugin
@@ -16,6 +17,7 @@ from .dummy import DummyArchitecturePlugin
 __all__ = [
   'OpenAIPlugin',
   'AnthropicPlugin',
+  'OpenRouterPlugin',
   'TransformersGenericPlugin',
   'TransformersGemma3Plugin',
   'DummyArchitecturePlugin'

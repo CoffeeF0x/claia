@@ -1,6 +1,15 @@
-from typing import Dict, Any, List, Generator
-import logging
+"""
+OpenRouter API model implementation.
+
+OpenRouter exposes an OpenAI-compatible Chat Completions API across many
+providers. This module keeps the framework-facing contract the same as
+the other API models: ``generate`` yields text deltas when ``stream`` is
+true and yields one complete text response otherwise.
+"""
+
 import json
+import logging
+from typing import Any, Dict, Generator, List, Optional
 
 # Internal dependencies
 from ..base import APIModel
@@ -8,19 +17,11 @@ from claia.core.data import Conversation
 from claia.core.enums.conversation import MessageRole
 
 
-
 ########################################################################
 #                              CONSTANTS                               #
 ########################################################################
-# Openrouter-specific default settings
-DEFAULT_SETTINGS = {
-  "max_tokens": 1000,
-}
-
-# Header defaults
 DEFAULT_HTTP_REFERER = "http://localhost:3000"
 DEFAULT_X_TITLE = "CLAIA"
-
 
 
 ########################################################################
@@ -29,15 +30,24 @@ DEFAULT_X_TITLE = "CLAIA"
 logger = logging.getLogger(__name__)
 
 
-
 ########################################################################
 #                               CLASSES                                #
 ########################################################################
 class OpenRouterModel(APIModel):
-  def __init__(self, model_name: str):
+  """OpenRouter API model implementation."""
+
+  def __init__(
+    self,
+    model_name: str,
+    openrouter_api_token: Optional[str] = None,
+    openrouter_http_referer: str = DEFAULT_HTTP_REFERER,
+    openrouter_x_title: str = DEFAULT_X_TITLE,
+  ):
     super().__init__(model_name, base_url="https://openrouter.ai/api/v1")
-    self.set_custom_header("HTTP-Referer", DEFAULT_HTTP_REFERER)
-    self.set_custom_header("X-Title", DEFAULT_X_TITLE)
+    self.set_custom_header("HTTP-Referer", openrouter_http_referer)
+    self.set_custom_header("X-Title", openrouter_x_title)
+    if openrouter_api_token:
+      self.set_api_key(openrouter_api_token)
 
   def _format_messages(self, conversation: Conversation) -> List[Dict[str, Any]]:
     """Format conversation messages for the OpenRouter API."""
@@ -50,7 +60,11 @@ class OpenRouterModel(APIModel):
         "content": system_prompt
       })
 
-    for message in conversation.get_messages([MessageRole.USER, MessageRole.ASSISTANT]):
+    for message in conversation.get_thread():
+      if message.speaker not in (MessageRole.USER, MessageRole.ASSISTANT):
+        continue
+      if not message.content:
+        continue
       messages.append({
         "role": message.speaker.value,
         "content": message.content
@@ -62,41 +76,34 @@ class OpenRouterModel(APIModel):
   def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
     """Generate a response using the OpenRouter API. Yields tokens, returns full response.
 
-    When invoked through the framework, ``kwargs`` arrive pre-resolved
-    against the architecture's RUNTIME ``ParamSpec`` declarations. When
-    invoked directly (bypassing the registry), the ``DEFAULT_SETTINGS``
-    fallback ensures ``max_tokens`` still has a reasonable default.
+    ``kwargs`` arrive pre-filtered and pre-defaulted against the
+    architecture's RUNTIME ``ParamSpec`` declarations, so we consume
+    them directly without a local defaults pass.
     """
     try:
-      settings = {**DEFAULT_SETTINGS, **kwargs}
-      messages = self._format_messages(conversation)
-
-      data = {
+      request_data = {
         "model": self.model_name,
-        "messages": messages,
-        "max_tokens": settings.get("max_tokens"),
-        "stream": settings.get("stream")
+        "messages": self._format_messages(conversation),
       }
 
-      if settings.get("temperature"):
-        data["temperature"] = settings.get("temperature")
-      if settings.get("top_p"):
-        data["top_p"] = settings.get("top_p")
-      if settings.get("top_k"):
-        data["top_k"] = settings.get("top_k")
-      if settings.get("presence_penalty"):
-        data["presence_penalty"] = settings.get("presence_penalty")
-      if settings.get("frequency_penalty"):
-        data["frequency_penalty"] = settings.get("frequency_penalty")
-      if settings.get("stop"):
-        data["stop"] = settings.get("stop")
-      if settings.get("n"):
-        data["n"] = settings.get("n")
+      for param in (
+        "max_tokens",
+        "temperature",
+        "top_p",
+        "top_k",
+        "presence_penalty",
+        "frequency_penalty",
+        "stop",
+        "n",
+      ):
+        value = kwargs.get(param)
+        if value is not None:
+          request_data[param] = value
 
-      if settings.get("stream"):
-        full_response = yield from self._get_text_stream(data)
+      if kwargs.get("stream", False):
+        full_response = yield from self._handle_streaming_response(request_data)
       else:
-        full_response = yield from self._get_text(data)
+        full_response = yield from self._handle_non_streaming_response(request_data)
 
       return full_response
 
@@ -106,39 +113,56 @@ class OpenRouterModel(APIModel):
       yield error_msg
       return error_msg
 
-  def _get_text_stream(self, data: Dict[str, Any]) -> Generator[str, None, str]:
+  def _extract_error_message(self, data: Dict[str, Any], fallback: str) -> str:
+    """Extract OpenRouter error details from an API response body."""
+    err = data.get("error")
+    if isinstance(err, dict):
+      message = err.get("message") or fallback
+      code = err.get("code") or err.get("type")
+      return f"OpenRouter error ({code}): {message}" if code else f"OpenRouter error: {message}"
+    if isinstance(err, str):
+      return f"OpenRouter error: {err}"
+    return fallback
+
+  def _handle_streaming_response(self, request_data: Dict[str, Any]) -> Generator[str, None, str]:
     """Stream response from the OpenRouter API. Yields tokens, returns full response."""
     try:
-      response = self.post("chat/completions", data, stream=True)
+      response = self.post("chat/completions", {**request_data, "stream": True}, stream=True)
       full_response = ""
 
       for line in response.iter_lines():
         if not line:
           continue
 
-        line = line.decode('utf-8') if isinstance(line, bytes) else line
-
-        if not line.startswith('data: '):
+        line_text = line.decode("utf-8") if isinstance(line, bytes) else line
+        if not line_text.startswith("data: "):
           continue
 
-        data_line = line[6:]
-
-        if data_line == '[DONE]':
+        data_line = line_text[6:]
+        if data_line.strip() == "[DONE]":
           break
 
         try:
           chunk = json.loads(data_line)
-
-          if 'choices' in chunk and len(chunk['choices']) > 0:
-            delta = chunk['choices'][0].get('delta', {})
-
-            if 'content' in delta:
-              content_chunk = delta['content']
-              full_response += content_chunk
-              yield content_chunk
-
         except json.JSONDecodeError:
           logger.warning(f"Failed to parse streaming response: {data_line}")
+          continue
+
+        if "error" in chunk:
+          error_msg = self._extract_error_message(chunk, "Unknown error from OpenRouter API")
+          logger.error(error_msg)
+          yield error_msg
+          return error_msg
+
+        choices = chunk.get("choices") or []
+        if not choices:
+          continue
+
+        delta = choices[0].get("delta") or {}
+        content_chunk = delta.get("content")
+        if content_chunk:
+          full_response += content_chunk
+          yield content_chunk
 
       return full_response
 
@@ -148,21 +172,29 @@ class OpenRouterModel(APIModel):
       yield error_msg
       return error_msg
 
-  def _get_text(self, data: Dict[str, Any]) -> Generator[str, None, str]:
+  def _handle_non_streaming_response(self, request_data: Dict[str, Any]) -> Generator[str, None, str]:
     """Get non-streaming response from the OpenRouter API. Yields full content as single token."""
     try:
-      response = self.post("chat/completions", data)
-      response_json = response.json()
+      response = self.post("chat/completions", request_data)
+      data = response.json()
 
-      if 'choices' in response_json and len(response_json['choices']) > 0:
-        response_text = response_json["choices"][0]["message"]["content"]
-        yield response_text
-        return response_text
-      else:
-        logger.error(f"Unexpected response format from OpenRouter: {response_json}")
-        error_msg = "Error: Invalid response from OpenRouter API"
+      if "error" in data:
+        error_msg = self._extract_error_message(data, "Unknown error from OpenRouter API")
+        logger.error(error_msg)
         yield error_msg
         return error_msg
+
+      choices = data.get("choices") or []
+      if choices:
+        response_text = choices[0].get("message", {}).get("content", "")
+        response_text = response_text if response_text else "No response generated"
+        yield response_text
+        return response_text
+
+      logger.error(f"Unexpected response format from OpenRouter: {data}")
+      error_msg = "Error: Invalid response from OpenRouter API"
+      yield error_msg
+      return error_msg
 
     except Exception as e:
       logger.error(f"Error in non-streaming response: {e}")

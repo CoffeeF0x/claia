@@ -113,6 +113,7 @@ claia = "claia.cli.__main__:main"
 [project.entry-points."claia.architectures"]
 openai = "claia.core.architectures.openai:OpenAIPlugin"
 anthropic = "claia.core.architectures.anthropic:AnthropicPlugin"
+openrouter = "claia.core.architectures.openrouter:OpenRouterPlugin"
 transformers_generic = "claia.core.architectures.transformers_generic:TransformersGenericPlugin"
 transformers_gemma3 = "claia.core.architectures.transformers_gemma3:TransformersGemma3Plugin"
 dummy = "claia.core.architectures.dummy:DummyArchitecturePlugin"
@@ -129,6 +130,7 @@ default = "claia.core.solvers.default:DefaultSolverPlugin"
 [project.entry-points."claia.definitions"]
 openai = "claia.core.definitions.openai:OpenAIDefinitionsPlugin"
 anthropic = "claia.core.definitions.anthropic:AnthropicDefinitionsPlugin"
+openrouter = "claia.core.definitions.openrouter:OpenRouterDefinitionsPlugin"
 legacy = "claia.core.definitions.legacy:LegacyDefinitionsPlugin"
 
 [project.entry-points."claia.agents"]
