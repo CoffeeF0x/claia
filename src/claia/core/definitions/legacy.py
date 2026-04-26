@@ -124,8 +124,11 @@ class LegacyDefinitionsPlugin(BaseDefinitionProvider):
         description="The latest version of Stable Diffusion, with improved text-to-image generation capabilities.",
         capabilities=["text-to-image", "image-generation"],
         deployments=["local"],
-        architectures=[],
+        architectures=["diffusers"],
         aliases=["sd-v2", "sd2", "stable-diffusion-2"],
+        identifiers={
+          "diffusers": "stabilityai/stable-diffusion-2"
+        },
         input_modalities=[Modality.TEXT],
         output_modalities=[Modality.IMAGE],
       ),

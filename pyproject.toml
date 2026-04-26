@@ -116,6 +116,7 @@ anthropic = "claia.core.architectures.anthropic:AnthropicPlugin"
 openrouter = "claia.core.architectures.openrouter:OpenRouterPlugin"
 transformers_generic = "claia.core.architectures.transformers_generic:TransformersGenericPlugin"
 transformers_gemma3 = "claia.core.architectures.transformers_gemma3:TransformersGemma3Plugin"
+diffusers = "claia.core.architectures.diffusers:DiffusersPlugin"
 dummy = "claia.core.architectures.dummy:DummyArchitecturePlugin"
 
 [project.entry-points."claia.deployments"]
