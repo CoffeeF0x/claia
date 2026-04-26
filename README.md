@@ -117,7 +117,7 @@ These values are passed to plugins through the `Registry` and filtered by each p
 - Registry: A single facade coordinating models, tools, and agents.
   Key APIs:
   - `load_plugins(**kwargs)` — discover and initialize registered extensions
-  - `run(model_name, conversation, **kwargs)` — model inference via solver, deployment, and architecture
+  - `run(model_name, conversation, **kwargs)` — model inference via solver, deployment, then architecture
   - `query(model_name, prompt, **kwargs)` — one-shot text prompt helper
   - `run_command(command_name, parameters, conversation, **kwargs)` — invoke a tool by name
   - Agent processing and worker lifecycle for queued processes
