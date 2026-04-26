@@ -6,7 +6,7 @@ custom handling for their specific requirements and optimizations.
 """
 
 import logging
-from typing import Optional, Generator
+from typing import Any, Dict, Optional
 
 # Internal dependencies
 from claia.core.data import Conversation
@@ -77,48 +77,20 @@ class Gemma3Model(GenericTransformerModel):
       self.loaded = False
       raise
 
-  def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
-    """Generate a response using the Gemma3 model. Yields the full response as a single token.
+  def _get_generation_kwargs(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """Build Gemma3-specific generation kwargs."""
+    generation_kwargs = super()._get_generation_kwargs(kwargs)
+    generation_kwargs.update({
+      "max_new_tokens": kwargs.get("max_tokens", 128),
+      "temperature": kwargs.get("temperature", 0.6),
+      # "top_p": kwargs.get("top_p", 0.95),
+      # "top_k": kwargs.get("top_k", 40),
+      # "eos_token_id": self.tokenizer.eos_token_id,
+      # "repetition_penalty": 1.1,
+      # "length_penalty": 1.0,
+    })
+    return generation_kwargs
 
-    ``kwargs`` arrive pre-resolved against
-    ``TransformersGemma3Plugin.info.params`` so the fallbacks below
-    mirror those declarations and only matter if a caller bypasses the
-    registry.
-    """
-    if not self.loaded:
-      self.load()
-
-    try:
-      prompt = self._convert_conversation_to_prompt(conversation)
-
-      inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)
-      inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-      import torch
-      with torch.no_grad():
-        outputs = self.model.generate(
-          **inputs,
-          max_new_tokens=kwargs.get("max_tokens", 2048),
-          temperature=kwargs.get("temperature", 0.8),
-          top_p=kwargs.get("top_p", 0.95),
-          top_k=kwargs.get("top_k", 40),
-          do_sample=True,
-          pad_token_id=self.tokenizer.eos_token_id,
-          eos_token_id=self.tokenizer.eos_token_id,
-          repetition_penalty=1.1,
-          length_penalty=1.0
-        )
-
-      input_length = inputs["input_ids"].shape[1]
-      generated_tokens = outputs[0][input_length:]
-      response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
-      response = response.replace("<end_of_turn>", "").strip()
-
-      yield response
-      return response
-
-    except Exception as e:
-      logger.error(f"Error generating response with Gemma3 model {self.model_name}: {e}")
-      error_msg = f"Error: {str(e)}"
-      yield error_msg
-      return error_msg
+  def _postprocess_response(self, response: str) -> str:
+    """Remove Gemma chat-template markers from the completed response."""
+    return response.replace("<end_of_turn>", "").strip()

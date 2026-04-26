@@ -6,8 +6,10 @@ using the Hugging Face transformers library.
 """
 
 import logging
-from typing import List, Optional, Generator
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from queue import Empty
+from threading import Thread
+from typing import Any, Dict, List, Optional, Generator
+from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
 import torch
 
 # Internal dependencies
@@ -76,7 +78,7 @@ class GenericTransformerModel(LocalModel):
     logger.info(f"Unloaded transformer model: {self.model_name}")
 
   def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
-    """Generate a response using the transformer model. Yields the full response as a single token.
+    """Generate a response using the transformer model.
 
     ``kwargs`` arrive pre-resolved against the architecture's RUNTIME
     ``ParamSpec`` declarations (see ``Manager.resolve_runtime_kwargs``),
@@ -87,26 +89,14 @@ class GenericTransformerModel(LocalModel):
 
     try:
       prompt = self._convert_conversation_to_prompt(conversation)
+      inputs = self._tokenize_prompt(prompt)
 
-      inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)
-      inputs = {k: v.to(self.device) for k, v in inputs.items()}
+      if kwargs.get("stream", False):
+        response = yield from self._generate_streaming(inputs, kwargs)
+      else:
+        response = self._generate_blocking(inputs, kwargs)
+        yield response
 
-      with torch.no_grad():
-        outputs = self.model.generate(
-          **inputs,
-          max_new_tokens=kwargs.get("max_tokens", 1000),
-          temperature=kwargs.get("temperature", 0.7),
-          top_p=kwargs.get("top_p", 1.0),
-          top_k=kwargs.get("top_k", 50),
-          do_sample=True,
-          pad_token_id=self.tokenizer.eos_token_id
-        )
-
-      input_length = inputs["input_ids"].shape[1]
-      generated_tokens = outputs[0][input_length:]
-      response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
-
-      yield response
       return response
 
     except Exception as e:
@@ -114,6 +104,105 @@ class GenericTransformerModel(LocalModel):
       error_msg = f"Error: {str(e)}"
       yield error_msg
       return error_msg
+
+  def _tokenize_prompt(self, prompt: str) -> Dict[str, Any]:
+    """Tokenize and move a prompt to the configured device."""
+    inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)
+    return {k: v.to(self.device) for k, v in inputs.items()}
+
+  def _get_generation_kwargs(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """Build Hugging Face generation kwargs from resolved runtime params."""
+    generation_kwargs = {
+      "max_new_tokens": kwargs.get("max_tokens", 1000),
+      "temperature": kwargs.get("temperature", 0.7),
+      "top_p": kwargs.get("top_p", 1.0),
+      "do_sample": True,
+      "pad_token_id": self.tokenizer.eos_token_id,
+    }
+
+    top_k = kwargs.get("top_k")
+    if top_k is not None:
+      generation_kwargs["top_k"] = top_k
+
+    return generation_kwargs
+
+  def _generate_blocking(self, inputs: Dict[str, Any], kwargs: Dict[str, Any]) -> str:
+    """Generate the complete response before yielding it."""
+    with torch.no_grad():
+      outputs = self.model.generate(
+        **inputs,
+        **self._get_generation_kwargs(kwargs),
+      )
+
+    input_length = inputs["input_ids"].shape[1]
+    generated_tokens = outputs[0][input_length:]
+    response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+    return self._postprocess_response(response)
+
+  def _generate_streaming(self, inputs: Dict[str, Any], kwargs: Dict[str, Any]) -> Generator[str, None, str]:
+    """Generate text in a background thread and yield decoded deltas."""
+    streamer = TextIteratorStreamer(
+      self.tokenizer,
+      skip_prompt=True,
+      skip_special_tokens=True,
+      timeout=0.5,
+    )
+    generation_kwargs = {
+      **inputs,
+      **self._get_generation_kwargs(kwargs),
+      "streamer": streamer,
+    }
+    errors = []
+
+    def run_generation() -> None:
+      try:
+        with torch.no_grad():
+          self.model.generate(**generation_kwargs)
+      except Exception as e:
+        errors.append(e)
+        # Unblock the iterator if generation fails before transformers
+        # has a chance to signal the stream end.
+        streamer.on_finalized_text("", stream_end=True)
+
+    thread = Thread(target=run_generation, daemon=True)
+    thread.start()
+
+    full_response = ""
+    stream_finished = False
+    while thread.is_alive() and not stream_finished:
+      try:
+        chunk = next(streamer)
+      except Empty:
+        continue
+      except StopIteration:
+        stream_finished = True
+        break
+      if chunk:
+        text = self._postprocess_stream_chunk(chunk)
+        full_response += text
+        yield text
+
+    if not stream_finished:
+      for chunk in streamer:
+        if chunk:
+          text = self._postprocess_stream_chunk(chunk)
+          full_response += text
+          yield text
+
+    thread.join()
+
+    if errors:
+      raise errors[0]
+
+    return self._postprocess_response(full_response)
+
+  def _postprocess_stream_chunk(self, chunk: str) -> str:
+    """Post-process one streamed text delta."""
+    return chunk
+
+  def _postprocess_response(self, response: str) -> str:
+    """Post-process the complete model response."""
+    return response.strip()
 
   def _convert_conversation_to_prompt(self, conversation: Conversation) -> str:
     """Convert a Conversation object to a text prompt."""
