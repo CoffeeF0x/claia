@@ -13,6 +13,13 @@ The intent is a structure we can live with for years. Everything below
 was decided with that horizon in mind, and alternatives we considered
 and rejected are documented inline so future work has the rationale.
 
+> **Implementation notes:** the running log of as-built changes lives
+> in [`tools-overhaul-implementation-notes.md`](./tools-overhaul-implementation-notes.md).
+> That file records the concrete files added, modified, and removed
+> in each phase, along with any deviations from this plan and any
+> follow-up items discovered along the way. Update it as work
+> progresses; this plan document stays focused on intent and design.
+
 ---
 
 ## 1. Why we're changing things
