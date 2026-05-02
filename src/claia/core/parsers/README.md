@@ -40,12 +40,32 @@ are the consumer's responsibility.
 
 ## TagSpec interpretation
 
-| `attribute_terminator` | `open_token` semantics                                                                  | Example                                |
-| ---------------------- | --------------------------------------------------------------------------------------- | -------------------------------------- |
-| `None`                 | Full opening literal; matched verbatim.                                                 | `[TOOL_CALL]`, `<think>`               |
-| set (e.g. `]`, `>`)    | Opening **prefix**; whitespace + `key=value` pairs are tolerated up to the terminator.  | `[TOOL_CALL` … `]`, `<reference` … `>` |
+| `attribute_terminator` | `open_token` semantics                                                                                       | Example                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
+| `None`                 | Full opening literal first; if the literal does not match and `len(open_token) > 1`, falls back to inferring | `[TOOL_CALL]`, `<think>`               |
+|                        | the terminator from the token's last character. See "Inferred terminator" below.                             |                                        |
+| set (e.g. `]`, `>`)    | Opening **prefix**; whitespace + `key=value` pairs are tolerated up to the terminator.                       | `[TOOL_CALL` … `]`, `<reference` … `>` |
 
-Attribute syntax inside the region:
+### Inferred terminator (`attribute_terminator=None`, `len > 1`)
+
+A spec like `TagSpec(TagType.THINKING, "<think>", "</think>")` is
+matched in two steps:
+
+1. **Literal match.** If `open_token` matches verbatim at the
+   current position the parser uses it directly with empty
+   attributes (e.g., `<think>` → `attrs={}`).
+2. **Inferred-terminator fallback.** Otherwise the parser treats
+   `open_token[:-1]` as a prefix (`<think`) and `open_token[-1]` as
+   the terminator (`>`), and parses an attribute region between
+   them. The character immediately after the prefix must be either
+   the terminator or whitespace — `<think foo="x">` matches,
+   `<thinking>` does not.
+
+This makes attribute-bearing variants of common tags work without
+changing existing default `TagSpec` declarations.
+
+### Attribute syntax (inside the region)
+
 - whitespace-separated `key=value` pairs
 - `value` may be `"…"`, `'…'`, or unquoted (no whitespace,
   terminator ends it)

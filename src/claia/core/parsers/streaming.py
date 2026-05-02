@@ -218,6 +218,17 @@ class StreamingTagParser:
       ``("complete", spec, attributes, raw_open, end_pos)``
       ``("partial",)``
       ``("no_match",)``
+
+    For specs with an explicit ``attribute_terminator`` the
+    ``open_token`` is the prefix and attributes are parsed up to the
+    terminator. For specs with ``attribute_terminator=None`` the
+    parser first tries a verbatim match of ``open_token``; if that
+    fails AND the token is at least two characters long, it falls
+    back to an "inferred terminator" match using ``open_token[-1]``
+    as the terminator and ``open_token[:-1]`` as the prefix. The
+    fallback path requires the character immediately after the
+    prefix to be either the inferred terminator or whitespace, so
+    that e.g. ``<think>`` does not match against ``<thinking>``.
     """
     any_partial = False
 
@@ -229,6 +240,13 @@ class StreamingTagParser:
           return ("complete", spec, {}, ot, p + len(ot))
         if _is_proper_prefix(self._buffer[p:], ot):
           any_partial = True
+          continue
+        if len(ot) > 1:
+          inferred = self._try_match_inferred_open(spec, p)
+          if inferred[0] == "complete":
+            return inferred
+          if inferred[0] == "partial":
+            any_partial = True
         continue
 
       if self._buffer.startswith(ot, p):
@@ -251,6 +269,38 @@ class StreamingTagParser:
         any_partial = True
 
     return ("partial",) if any_partial else ("no_match",)
+
+  def _try_match_inferred_open(self, spec: TagSpec, p: int) -> Tuple:
+    """Try the inferred-terminator fallback for a no-explicit-terminator spec.
+
+    Treats ``spec.open_token[:-1]`` as the prefix and
+    ``spec.open_token[-1]`` as the terminator. Returns a tuple shaped
+    like the outer ``_try_match_open`` result, or ``("no_match",)``
+    when this spec does not in fact open here.
+    """
+    ot = spec.open_token
+    prefix = ot[:-1]
+    terminator = ot[-1]
+
+    if not self._buffer.startswith(prefix, p):
+      return ("no_match",)
+
+    after = p + len(prefix)
+    if after >= len(self._buffer):
+      return ("partial",)
+
+    next_ch = self._buffer[after]
+    if next_ch != terminator and not next_ch.isspace():
+      return ("no_match",)
+
+    outcome = parse_attribute_region(self._buffer, after, terminator)
+    if outcome[0] == "complete":
+      attrs, end_pos = outcome[1], outcome[2]
+      raw_open = self._buffer[p:end_pos]
+      return ("complete", spec, attrs, raw_open, end_pos)
+    if outcome[0] == "partial":
+      return ("partial",)
+    return ("no_match",)
 
   # ------------------------------------------------------------------
   # Tag-event construction

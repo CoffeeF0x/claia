@@ -46,9 +46,15 @@ class TagSpec:
 
   ``open_token`` is interpreted in one of two ways:
 
-  - ``attribute_terminator is None``: ``open_token`` is the full
-    opening literal and is matched verbatim
-    (e.g., ``[TOOL_CALL]``, ``<think>``).
+  - ``attribute_terminator is None``: ``open_token`` is matched
+    verbatim first (e.g., ``[TOOL_CALL]`` matches ``[TOOL_CALL]``
+    exactly with empty attributes). If the literal does not match
+    and ``len(open_token) > 1``, the parser falls back to an
+    *inferred-terminator* match using ``open_token[-1]`` as the
+    terminator and ``open_token[:-1]`` as the prefix; the character
+    immediately after the prefix must be the terminator or
+    whitespace, which lets ``<think foo="x">`` match without making
+    ``<thinking>`` match against ``<think>``.
   - ``attribute_terminator`` is a string (e.g., ``]`` or ``>``):
     ``open_token`` is the opening **prefix**. After the prefix, the
     parser tolerates whitespace and ``key=value`` attribute pairs up

@@ -226,6 +226,89 @@ class TestAttributedTags:
 
 
 ########################################################################
+#                       INFERRED-TERMINATOR ATTRS                      #
+########################################################################
+class TestInferredTerminator:
+  """Specs with ``attribute_terminator=None`` fall back to using the
+  last character of ``open_token`` as the terminator when the literal
+  match fails. Covers the common case of allowing
+  ``<think foo="bar">`` for a default ``<think>`` spec."""
+
+  @pytest.fixture
+  def think_spec(self) -> TagSpec:
+    return TagSpec(TagType.THINKING, "<think>", "</think>")
+
+  @pytest.fixture
+  def think_parser(self, think_spec) -> StreamingTagParser:
+    return StreamingTagParser([think_spec])
+
+  def test_literal_still_matches_with_empty_attrs(self, think_parser):
+    events = _events(think_parser, "<think>plain</think>")
+    assert len(events) == 1
+    ev = events[0]
+    assert isinstance(ev, TagEvent)
+    assert ev.tag_type == TagType.THINKING
+    assert ev.content == "plain"
+    assert ev.attributes == {}
+    assert ev.raw_open == "<think>"
+
+  def test_inferred_terminator_parses_attributes(self, think_parser):
+    events = _events(think_parser, '<think depth="2" tag=note>body</think>')
+    assert len(events) == 1
+    ev = events[0]
+    assert isinstance(ev, TagEvent)
+    assert ev.tag_type == TagType.THINKING
+    assert ev.content == "body"
+    assert ev.attributes == {"depth": "2", "tag": "note"}
+    assert ev.raw_open == '<think depth="2" tag=note>'
+
+  def test_inferred_does_not_match_extended_word(self, think_parser):
+    events = _events(think_parser, "the word <thinking> is fine")
+    assert len(events) == 1
+    assert isinstance(events[0], TextEvent)
+    assert events[0].text == "the word <thinking> is fine"
+
+  def test_inferred_does_not_match_when_no_separator(self, think_parser):
+    events = _events(think_parser, "<thinkX>not a tag")
+    assert len(events) == 1
+    assert isinstance(events[0], TextEvent)
+    assert events[0].text == "<thinkX>not a tag"
+
+  def test_inferred_partial_at_chunk_boundary(self, think_parser):
+    events = _events(think_parser, "<think dep", "th=2>body</think>")
+    assert len(events) == 1
+    ev = events[0]
+    assert isinstance(ev, TagEvent)
+    assert ev.attributes == {"depth": "2"}
+    assert ev.content == "body"
+
+  def test_inferred_skipped_for_single_char_open_token(self):
+    spec = TagSpec(TagType.TOOL, "<", "</")
+    parser = StreamingTagParser([spec])
+    events = _events(parser, "<a>hello</")
+    types = [type(ev).__name__ for ev in events]
+    assert "TagEvent" in types
+    tags = [ev for ev in events if isinstance(ev, TagEvent)]
+    assert tags[0].content == "a>hello"
+    assert tags[0].attributes == {}
+    assert tags[0].raw_open == "<"
+
+  def test_default_tool_spec_accepts_attributes(self):
+    """The default ``[TOOL_CALL]`` spec should also benefit from
+    inferred-terminator attribute parsing."""
+    parser = StreamingTagParser([DEFAULT_TAGS[TagType.TOOL]])
+    events = _events(
+      parser,
+      "[TOOL_CALL name='echo']{}[/TOOL_CALL]",
+    )
+    assert len(events) == 1
+    ev = events[0]
+    assert isinstance(ev, TagEvent)
+    assert ev.attributes == {"name": "echo"}
+    assert ev.content == "{}"
+
+
+########################################################################
 #                          NESTED TAGS                                 #
 ########################################################################
 class TestNesting:
@@ -333,18 +416,19 @@ class TestChunkBoundaries:
     parser = StreamingTagParser(attr_specs)
     return _events(parser, fixture_text)
 
-  @pytest.mark.parametrize("split", list(range(1, 100)))
-  def test_split_at_every_position(self, attr_specs, fixture_text, split):
-    if split >= len(fixture_text):
-      pytest.skip("split past end of fixture")
-    a, b = fixture_text[:split], fixture_text[split:]
-    parser = StreamingTagParser(attr_specs)
-    events = _events(parser, a, b)
+  def test_split_at_every_position(self, attr_specs, fixture_text):
+    """Split the fixture at every legal byte boundary and verify the
+    event stream is identical to the unsplit baseline."""
     expected = self._expected_events(fixture_text, attr_specs)
-    assert _serialize(events) == _serialize(expected), (
-      f"event mismatch when splitting at {split}: "
-      f"{events!r} != {expected!r}"
-    )
+    expected_serialized = _serialize(expected)
+    for split in range(1, len(fixture_text)):
+      a, b = fixture_text[:split], fixture_text[split:]
+      parser = StreamingTagParser(attr_specs)
+      events = _events(parser, a, b)
+      assert _serialize(events) == expected_serialized, (
+        f"event mismatch when splitting at {split}: "
+        f"{events!r} != {expected!r}"
+      )
 
   def test_split_one_char_at_a_time(self, attr_specs, fixture_text):
     parser = StreamingTagParser(attr_specs)

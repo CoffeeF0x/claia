@@ -94,6 +94,20 @@ the cases listed in the phase plan.
   be passed straight into `StreamingTagParser`. Phase 2 will add the
   `tag_overrides` field on `ModelDefinition` and proper unit tests
   for merging.
+- **Inferred terminator for `attribute_terminator=None`.** Extension
+  to plan §3.4: when `attribute_terminator is None` and
+  `len(open_token) > 1`, the parser still tries the verbatim literal
+  match first, then falls back to interpreting `open_token[-1]` as
+  the terminator and `open_token[:-1]` as the prefix. The fallback
+  requires the character immediately after the prefix to be either
+  the inferred terminator or whitespace, which prevents
+  unintended matches like `<thinking>` against `<think>`. This makes
+  attribute-bearing variants of common tags (e.g.,
+  `<think depth="2">…</think>`,
+  `[TOOL_CALL name='echo']…[/TOOL_CALL]`) work without forcing every
+  spec to declare an explicit terminator. The behavior change is
+  additive: any existing literal-only match continues to match
+  unchanged.
 
 ### Deviations from the plan
 
