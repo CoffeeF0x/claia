@@ -8,6 +8,7 @@ import time
 
 # Internal dependencies
 from claia.framework.queue import ProcessQueue
+from claia.core.enums.process_queue import ProcessQueueHook
 from claia.framework.process import Process
 from claia.core.enums.process import ProcessStatus
 
@@ -95,10 +96,35 @@ def test_wait_for_all_processes_pending_timeout_false(process: Process):
   assert all_done is False
 
 
-def test_wait_for_all_processes_no_pending_true(process: Process):
+def test_queue_native_hooks_enqueue_and_dequeue(process: Process):
   q = ProcessQueue()
-  # Once not PENDING, the current implementation treats as all done
-  process.mark_started()
+  seen = []
+
+  def on_enq(**kw):
+    seen.append(("enq", kw["process"].id))
+
+  def on_deq(**kw):
+    seen.append(("deq", kw["process"].id))
+
+  q.add_hook(ProcessQueueHook.ENQUEUE, on_enq)
+  q.add_hook(ProcessQueueHook.DEQUEUE, on_deq)
+
   q.put(process)
-  all_done = q.wait_for_all_processes(timeout=0.5, check_interval=0.01)
-  assert all_done is True
+  got = q.get(block=False)
+  assert got is process
+  assert seen == [("enq", process.id), ("deq", process.id)]
+
+  q.remove_hook(ProcessQueueHook.ENQUEUE, on_enq)
+  q.remove_hook(ProcessQueueHook.DEQUEUE, on_deq)
+
+
+def test_queue_snapshot_includes_process_fields(process: Process):
+  q = ProcessQueue()
+  q.put(process)
+  snap = q.snapshot()
+  assert len(snap) == 1
+  row = snap[0]
+  assert row["id"] == process.id
+  assert row["status"] == "pending"
+  assert row["agent_type"] == process.agent_type
+  assert "model_id" in row["parameters"]

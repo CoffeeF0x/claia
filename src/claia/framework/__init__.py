@@ -78,6 +78,7 @@ from claia.core.plugins.base import (
     SettingCategory,
 )
 from claia.core.definitions.model_definition import ModelDefinition
+from claia.core.enums.process_queue import ProcessQueueHook
 from claia.core.modality import (
     Modality,
     ChunkKind,
@@ -95,7 +96,8 @@ from .agents.base import BaseAgent
 
 __all__ = [
     # Framework primitives
-    "Registry", "Manager", "Process", "ProcessQueue", "BaseAgent",
+    "Registry", "Manager", "Process", "ProcessQueue", "ProcessQueueHook",
+    "BaseAgent",
     # Results
     "Result", "DeploymentError",
     # Data

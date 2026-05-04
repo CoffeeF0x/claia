@@ -119,3 +119,26 @@ class Process:
     Safe to call from any thread.
     """
     self.cancel_event.set()
+
+  def to_dict(self, parameter_value_max_len: int = 160) -> Dict[str, Any]:
+    """JSON-friendly summary for monitoring (queue snapshots, admin APIs)."""
+    status = self.status
+    status_val = status.value if isinstance(status, ProcessStatus) else str(status)
+    params: Dict[str, str] = {}
+    for key, val in (self.parameters or {}).items():
+      text = repr(val)
+      if len(text) > parameter_value_max_len:
+        text = text[:parameter_value_max_len] + "…"
+      params[str(key)] = text
+    return {
+      "id": self.id,
+      "agent_type": self.agent_type,
+      "status": status_val,
+      "parent_id": self.parent_id,
+      "created_at": self.created_at,
+      "started_at": self.started_at,
+      "completed_at": self.completed_at,
+      "error": self.error,
+      "cancel_requested": self.cancel_requested,
+      "parameters": params,
+    }

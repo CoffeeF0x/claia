@@ -5,12 +5,12 @@ The ProcessQueue manages processes that need to be executed by agents.
 
 # External dependencies
 import queue, time, logging, threading
-from typing import Optional
+from typing import Any, Callable, DefaultDict, Dict, List, Optional
 
 # Internal dependencies
 from .process import Process
 from claia.core.enums.process import ProcessStatus
-
+from claia.core.enums.process_queue import ProcessQueueHook
 
 
 ########################################################################
@@ -28,6 +28,7 @@ class ProcessQueue:
     self._lock = threading.Lock()
     self._processes = {}  # id -> Process mapping for quick lookups
     self._logger = logging.getLogger(__name__)
+    self._hooks: DefaultDict[ProcessQueueHook, List[Callable[..., Any]]] = DefaultDict(list)
 
   def put(self, process: Process):
     """
@@ -46,6 +47,7 @@ class ProcessQueue:
       # Add to queue
       self._queue.put(process.id)
 
+    self._emit_hook(ProcessQueueHook.ENQUEUE, process=process)
     return process.id
 
   def get(self, block=True, timeout=None) -> Optional[Process]:
@@ -61,14 +63,17 @@ class ProcessQueue:
     """
     try:
       process_id = self._queue.get(block=block, timeout=timeout)
+      dequeued = None
       with self._lock:
         process = self._processes.get(process_id)
         if process:
           # Only remove from processes dict if status is COMPLETED, FAILED, or CANCELLED
           if process.status in [ProcessStatus.COMPLETED, ProcessStatus.FAILED, ProcessStatus.CANCELLED]:
             self._processes.pop(process_id, None)
-          return process
-        return None
+          dequeued = process
+      if dequeued is not None:
+        self._emit_hook(ProcessQueueHook.DEQUEUE, process=dequeued)
+      return dequeued
     except queue.Empty:
       return None
 
@@ -95,6 +100,8 @@ class ProcessQueue:
     with self._lock:
       self._processes[process.id] = process
 
+    self._emit_hook(ProcessQueueHook.UPDATE, process=process)
+
   def remove(self, process_id: str) -> bool:
     """
     Remove a process from the queue.
@@ -109,12 +116,28 @@ class ProcessQueue:
     Returns:
         True if the process was found and cancelled, False otherwise
     """
+    removed_process = None
     with self._lock:
       process = self._processes.get(process_id)
       if process:
         process.mark_cancelled()
-        return True
-      return False
+        removed_process = process
+    if removed_process is not None:
+      self._emit_hook(ProcessQueueHook.REMOVE, process=removed_process)
+      return True
+    return False
+
+  def snapshot(self) -> List[Dict[str, Any]]:
+    """
+    Return a point-in-time list of tracked processes for observability.
+
+    Entries include processes still awaiting work, actively running, and any
+    terminal records retained in the lookup table.
+    """
+    with self._lock:
+      rows = [p.to_dict() for p in self._processes.values()]
+    rows.sort(key=lambda r: (r.get("created_at") or 0, r.get("id") or ""))
+    return rows
 
   def size(self) -> int:
     """
@@ -124,8 +147,6 @@ class ProcessQueue:
         The number of processes in the queue
     """
     return self._queue.qsize()
-
-
 
   def wait_for_process(self, process_id: str, timeout: float = None, check_interval: float = 0.1) -> Optional[Process]:
     """
@@ -187,6 +208,30 @@ class ProcessQueue:
     self._logger.warning(f"Timed out waiting for all processes after {timeout} seconds")
     return False
 
+  ######################################################################
+  #                               HOOKS                                #
+  ######################################################################
+  def add_hook(self, hook: ProcessQueueHook, callback: Callable[..., Any]) -> None:
+    """Register a native callback for a queue lifecycle event (thread-safe)."""
+    with self._lock:
+      self._hooks[hook].append(callback)
 
+  def remove_hook(self, hook: ProcessQueueHook, callback: Callable[..., Any]) -> None:
+    """Unregister a callback previously passed to :meth:`add_hook`."""
+    with self._lock:
+      cbs = self._hooks.get(hook)
+      if not cbs:
+        return
+      try:
+        cbs.remove(callback)
+      except ValueError:
+        pass
 
-
+  def _emit_hook(self, hook: ProcessQueueHook, **payload: Any) -> None:
+    with self._lock:
+      callbacks = list(self._hooks.get(hook, ()))
+    for cb in callbacks:
+      try:
+        cb(**payload)
+      except Exception as e:
+        self._logger.error("Queue hook %r failed: %s", hook, e)

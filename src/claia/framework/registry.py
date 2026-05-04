@@ -852,6 +852,17 @@ class Registry:
       else:
         logger.debug("All workers stopped successfully")
 
+  def worker_thread_stats(self) -> tuple[int, int]:
+    """
+    In-process worker pool counts: ``(registered_threads, alive_threads)``.
+
+    HTTP layers map this to JSON; Claia stays transport-agnostic.
+    """
+    workers = list(self._workers)
+    registered = len(workers)
+    alive = sum(1 for w in workers if w.is_alive())
+    return (registered, alive)
+
   def set_worker_count(self, count: int):
     """
     Set the number of worker threads for the Registry.
