@@ -16,6 +16,7 @@ import threading
 
 # Internal dependencies
 from ....enums.conversation import MessageRole
+from ....parser.types import TagType
 
 
 ########################################################################
@@ -55,6 +56,18 @@ class Message:
     Thread Safety:
         Messages include thread-safe methods for concurrent updates during streaming
         and tool processing. Use safe_* methods when multiple threads access the same message.
+
+    Utility messages:
+        When ``speaker`` is ``MessageRole.UTILITY`` the message represents a
+        parsed tag span (tool call, thinking, reference, …) derived from a
+        sibling assistant message. Utility messages carry the optional
+        ``tag_type`` / ``source_message_id`` / ``start_index`` /
+        ``end_index`` / ``attributes`` fields so consumers can locate the
+        original span and dispatch on its categorical type. The fields
+        default to ``None`` / ``{}`` for non-utility messages and are
+        omitted from ``to_dict`` output when unset to keep persisted
+        artifacts compact and backwards-compatible. See
+        ``tools-overhaul-plan.md`` §4.
     """
 
     def __init__(self,
@@ -65,7 +78,12 @@ class Message:
                  file_ids: Optional[List[str]] = None,
                  created_at: Optional[float] = None,
                  updated_at: Optional[float] = None,
-                 inline_args: Optional[Dict[str, Any]] = None):
+                 inline_args: Optional[Dict[str, Any]] = None,
+                 tag_type: Optional[TagType] = None,
+                 source_message_id: Optional[str] = None,
+                 start_index: Optional[int] = None,
+                 end_index: Optional[int] = None,
+                 attributes: Optional[Dict[str, str]] = None):
         """
         Initialize a message.
 
@@ -78,6 +96,19 @@ class Message:
             created_at: Optional timestamp for creation time
             updated_at: Optional timestamp for last update time
             inline_args: Optional arguments extracted from the message content
+            tag_type: For ``UTILITY`` messages, the categorical kind of
+                the parsed tag (TOOL, THINKING, REFERENCE, …).
+            source_message_id: For ``UTILITY`` messages, the
+                ``message_id`` of the assistant message this utility
+                was parsed from.
+            start_index: For ``UTILITY`` messages, the absolute
+                character offset of the tag's open token in the
+                source message text.
+            end_index: For ``UTILITY`` messages, the exclusive end
+                offset just past the close token.
+            attributes: For ``UTILITY`` messages parsed from an
+                attribute-bearing tag, the parsed XML-style
+                ``key=value`` attribute pairs from the open token.
         """
         self.message_id = message_id or str(uuid.uuid4())
         self.parent_id = parent_id
@@ -88,12 +119,35 @@ class Message:
         self.updated_at = updated_at or self.created_at
         self.inline_args = inline_args or {}
 
+        # Utility-message fields. Coerce ``tag_type`` from its string
+        # value if a serialized form is passed in.
+        if tag_type is not None and not isinstance(tag_type, TagType):
+            tag_type = TagType(tag_type)
+        self.tag_type: Optional[TagType] = tag_type
+        self.source_message_id: Optional[str] = source_message_id
+        self.start_index: Optional[int] = start_index
+        self.end_index: Optional[int] = end_index
+        self.attributes: Dict[str, str] = dict(attributes) if attributes else {}
+
         # Thread safety for concurrent updates (streaming + tool processing)
         self._content_lock = threading.Lock()
 
+    def is_utility(self) -> bool:
+        """Return ``True`` if this message is a parsed-tag sibling."""
+        return self.speaker == MessageRole.UTILITY
+
     def to_dict(self) -> Dict[str, Any]:
-        """Convert the message to a dictionary."""
-        return {
+        """Convert the message to a dictionary.
+
+        Utility-only fields (``tag_type``, ``source_message_id``,
+        ``start_index``, ``end_index``, ``attributes``) are emitted
+        only when set so non-utility messages serialize unchanged
+        from earlier versions. This keeps persisted conversations
+        backwards-compatible: old payloads round-trip identically,
+        and new utility-bearing payloads carry only the fields that
+        actually have values.
+        """
+        data: Dict[str, Any] = {
             "message_id": self.message_id,
             "parent_id": self.parent_id,
             "speaker": self.speaker.value,
@@ -103,10 +157,26 @@ class Message:
             "updated_at": self.updated_at,
             "inline_args": self.inline_args,
         }
+        if self.tag_type is not None:
+            data["tag_type"] = self.tag_type.value
+        if self.source_message_id is not None:
+            data["source_message_id"] = self.source_message_id
+        if self.start_index is not None:
+            data["start_index"] = self.start_index
+        if self.end_index is not None:
+            data["end_index"] = self.end_index
+        if self.attributes:
+            data["attributes"] = dict(self.attributes)
+        return data
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Message':
-        """Create a message from a dictionary."""
+        """Create a message from a dictionary.
+
+        Missing utility fields default to ``None`` (or ``{}`` for
+        ``attributes``) so payloads written before Phase 3 of the
+        tools overhaul deserialize unchanged.
+        """
         return cls(
             speaker=data.get("speaker", MessageRole.USER.value),
             content=data.get("content", ""),
@@ -116,6 +186,11 @@ class Message:
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
             inline_args=data.get("inline_args", {}) or data.get("query_args", {}),
+            tag_type=data.get("tag_type"),
+            source_message_id=data.get("source_message_id"),
+            start_index=data.get("start_index"),
+            end_index=data.get("end_index"),
+            attributes=data.get("attributes"),
         )
 
     # Thread-safe methods for concurrent updates

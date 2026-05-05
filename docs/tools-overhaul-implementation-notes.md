@@ -210,6 +210,140 @@ with merge-aware behavior in the framework's definition merger.
 
 ---
 
+## Phase 3 — Message + Conversation extensions
+
+Goal (per plan §11): introduce the `UTILITY` role and the
+sibling-utility-message data model on `Message` /
+`Conversation` so parsed tag spans (tool calls, thinking blocks,
+references) can live as first-class messages alongside the
+assistant text they were extracted from.
+
+### Files modified
+
+- `src/claia/core/enums/conversation.py` — added
+  `MessageRole.UTILITY = "utility"` with class-docstring
+  documentation pointing back to plan §2.4 / §4. The dead
+  `TagType` / `TagStatus` enums in this same module are left in
+  place for now; they have zero importers and will be cleaned up
+  in a later phase (likely Phase 7's pattern-subsystem removal,
+  which is the natural place to retire the legacy tag types).
+- `src/claia/core/data/models/conversation/message.py` — added
+  optional `tag_type` / `source_message_id` / `start_index` /
+  `end_index` / `attributes` fields to `Message.__init__` (each
+  defaulting to `None` / `{}`); `tag_type` is coerced from its
+  string `value` form to support deserialization. New `is_utility()`
+  helper. `to_dict` now omits unset utility fields so legacy
+  user/assistant messages serialize byte-for-byte unchanged from
+  earlier versions; `from_dict` reads the new fields with
+  defaults so payloads written before Phase 3 deserialize without
+  modification. Imports `TagType` from
+  `claia.core.parser.types` (the parser's categorical enum, not
+  the legacy `claia.core.enums.conversation.TagType`).
+- `src/claia/core/data/models/conversation/conversation.py` —
+  - `get_thread(head_id=None, include_utility=False)` filters
+    `MessageRole.UTILITY` messages out of the linearized thread by
+    default. Pass `include_utility=True` to surface them (UI,
+    debug, replay).
+  - `get_messages(speaker=None, include_utility=False)` mirrors
+    the same flag and additionally surfaces utility messages
+    automatically when the caller's `speaker` filter explicitly
+    asks for `MessageRole.UTILITY`.
+  - New `append_utility(tag_type, content, source_message_id, …)`
+    method: constructs a `Message` with `role=UTILITY` and the
+    utility fields populated, appends it to `self.messages`,
+    advances `active_head_id` so further turns chain
+    chronologically, and emits a `MESSAGE_CREATED` domain event
+    with `tag_type` / `source_message_id` / index metadata. It
+    intentionally bypasses `extract_inline_args` so JSON-shaped
+    tag bodies round-trip verbatim.
+- `src/tests/core/test_utility_messages.py` — new Phase 3 test
+  module with 24 tests covering enum membership, message
+  construction (including string-form `tag_type` coercion and
+  attribute aliasing), serialization round-trip, legacy-payload
+  compatibility, `Conversation.append_utility` semantics
+  (head advancement, event emission, parent_id override,
+  inline-arg bypass), `get_thread` / `get_messages` filtering,
+  and full `Conversation` round-trip via both `to_dict`/`from_dict`
+  and the JSON `set_content` path.
+
+### Decisions confirmed during implementation
+
+- **`tag_type` typing.** `Message.tag_type` carries
+  `claia.core.parser.types.TagType` (the categorical "tool" /
+  "thinking" / "reference" enum from Phase 1), not the dead
+  `TagType` enum still sitting in
+  `claia.core.enums.conversation` (which encodes literal token
+  strings). The constructor accepts the string `.value` form so
+  serialized payloads round-trip, and the dead enum is left
+  untouched until a dedicated cleanup phase.
+- **Backwards compatibility on the wire.** `to_dict` only
+  emits utility fields when they are non-default. This means
+  every conversation persisted before Phase 3 serializes
+  identically (verified by
+  `test_legacy_payload_round_trip_unchanged` and
+  `test_legacy_conversation_round_trip_unchanged`). New
+  utility-bearing payloads carry the additional keys; older
+  consumers that ignore unknown keys keep working.
+- **Tree placement of utility messages.** `append_utility`
+  defaults the new message's `parent_id` to the current
+  `active_head_id` (chronological chaining behind the source
+  assistant or the previous utility), and `source_message_id`
+  is stored as an explicit, separate field. This matches plan
+  §2.4 ("siblings, not children" of the assistant message in
+  the flat list, while the explicit `source_message_id` link
+  remains stable across edits). An explicit `parent_id`
+  parameter is supported for callers that need to anchor a
+  utility somewhere other than the active head (e.g. attaching
+  retroactively to a buried branch).
+- **Inline-arg extraction skipped for utility content.** The
+  default `add_message` path runs `Message.extract_inline_args`,
+  which would consume `{...}`-shaped JSON payloads and clear
+  the utility's content. `append_utility` constructs the
+  message directly and appends to `self.messages` without that
+  side-effect, guaranteeing tag bodies (especially JSON tool
+  calls) survive intact.
+- **`get_latest_message` not changed.** That helper looks up
+  `active_head_id` directly and only falls back to
+  `get_thread()` when the head is missing. Leaving it on the
+  raw `messages` map is intentional: the active head can
+  legitimately be a utility message after a streamed turn, and
+  callers that ask for "the latest message" should see whatever
+  was actually last appended. Callers that want a non-utility
+  view should request `get_thread()` explicitly.
+
+### Deviations from the plan
+
+- **`append_utility` introduced in Phase 3.** Plan §11's Phase 3
+  bullets do not mention this helper; it appears only in plan
+  §9's agent-loop pseudocode (Phase 6). Adding it now keeps the
+  data-model surface complete in one place and lets Phase 3
+  carry its own round-trip tests without reaching into private
+  state. Phase 6 will use it as documented.
+
+### Test coverage added
+
+- Enum membership: new `UTILITY` value and uniqueness against
+  existing roles.
+- Message construction: default-empty utility fields,
+  fully-populated utility fields, string-`value` coercion of
+  `tag_type`, defensive copying of the `attributes` dict.
+- Serialization: full round-trip, `to_dict` omitting unset
+  optional fields, `tag_type` serialized to its string `value`,
+  legacy-payload deserialization yielding default-empty utility
+  fields and re-serializing identically.
+- `Conversation.append_utility`: head advancement, default-and-
+  explicit `parent_id` placement, JSON-payload survival
+  (no inline-arg extraction), event emission with full metadata.
+- `get_thread` / `get_messages`: utility filtered by default,
+  surfaced via `include_utility=True`, surfaced when speaker
+  filter explicitly requests `MessageRole.UTILITY`, and the flat
+  `self.messages` list always contains every message regardless
+  of linearization filtering.
+- Full `Conversation` round-trip via both `to_dict`/`from_dict`
+  and the JSON `set_content` path.
+
+---
+
 ## Follow-ups & deferred items
 
 These are items discovered during implementation that were not
@@ -231,3 +365,11 @@ phase or follow-up.
   (likely by switching the merger to a generic field-by-field
   walk over the dataclass fields with merge-rules registered per
   field, instead of the current hand-listed kwargs).
+- **Dead `TagType` / `TagStatus` enums in
+  `claia.core.enums.conversation`.** These predate the parser
+  package and are not imported anywhere; the parser's
+  categorical `TagType` (`claia.core.parser.types.TagType`) is
+  the live one. Phase 3 deliberately avoided touching them so
+  the diff stays tightly scoped to the message-and-conversation
+  surface; Phase 7's pattern-subsystem removal is the natural
+  place to retire them along with related legacy code paths.

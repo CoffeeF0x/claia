@@ -32,6 +32,7 @@ from ..text import TextArtifact
 from ...events import DomainEvent, EventType
 from .message import Message
 from ....enums.conversation import MessageRole
+from ....parser.types import TagType
 
 
 DEFAULT_CONVERSATION_TITLE = "New Conversation"
@@ -314,8 +315,23 @@ class Conversation(TextArtifact):
     def _build_id_map(self) -> Dict[str, Message]:
         return {m.message_id: m for m in self.messages}
 
-    def get_thread(self, head_id: Optional[str] = None) -> List[Message]:
-        """Return ordered messages from root to head_id (chronological)."""
+    def get_thread(self,
+                   head_id: Optional[str] = None,
+                   include_utility: bool = False) -> List[Message]:
+        """Return ordered messages from root to head_id (chronological).
+
+        Args:
+            head_id: Optional starting leaf. Defaults to
+                ``active_head_id``.
+            include_utility: If ``False`` (the default) messages with
+                ``role == MessageRole.UTILITY`` are filtered out of the
+                returned thread. Utility messages are derived siblings
+                of an assistant message — parsed tag spans that
+                consumers like the model-facing prompt builder should
+                not echo back. Pass ``True`` to include them (e.g., for
+                UI rendering, debugging, or replay). See
+                ``tools-overhaul-plan.md`` §4.2.
+        """
         target = head_id or self.active_head_id
         if not target or not self.messages:
             return []
@@ -337,6 +353,8 @@ class Conversation(TextArtifact):
             current_id = msg.parent_id
 
         chain.reverse()
+        if not include_utility:
+            chain = [m for m in chain if m.speaker != MessageRole.UTILITY]
         return chain
 
     def get_siblings(self, message_id: str) -> List[Message]:
@@ -413,6 +431,93 @@ class Conversation(TextArtifact):
                      entity_id=message.message_id, parent_id=message.parent_id)
         return message
 
+    def append_utility(self,
+                       tag_type: TagType,
+                       content: str,
+                       source_message_id: str,
+                       start_index: Optional[int] = None,
+                       end_index: Optional[int] = None,
+                       attributes: Optional[Dict[str, str]] = None,
+                       parent_id: Optional[str] = None) -> Message:
+        """Append a ``UTILITY``-role sibling message derived from a tag.
+
+        The plan's §2.4 / §4 design treats parsed tag spans (tool
+        calls, thinking blocks, references, …) as their own first-class
+        messages that reference a source assistant message by id. This
+        helper is the data-model entry point for creating one.
+
+        Behaviour:
+
+        - ``parent_id`` defaults to the current ``active_head_id`` so
+          successive utilities and follow-up user/assistant turns
+          chain chronologically through the tree. Pass an explicit
+          ``parent_id`` to anchor elsewhere (e.g. directly to the
+          source assistant message when several utilities were parsed
+          out of order).
+        - ``source_message_id`` is the explicit, immutable link to
+          the assistant message the tag came from. It is **not**
+          required to equal ``parent_id`` and remains stable across
+          subsequent edits to the tree.
+        - ``active_head_id`` advances to the new utility message so
+          later additions follow it. Default ``get_thread()`` calls
+          filter utility messages out, so the linearization seen by
+          models is unaffected.
+        - The standard ``MESSAGE_CREATED`` domain event is emitted,
+          carrying ``tag_type`` / ``source_message_id`` in the
+          event metadata for persistence/observer consumers.
+        - Inline-arg extraction is intentionally skipped: utility
+          content is the verbatim parsed tag body (e.g., a JSON
+          tool-call payload) and must round-trip unmodified.
+
+        Args:
+            tag_type: Categorical kind of the parsed tag.
+            content: Raw content between the open and close tokens.
+            source_message_id: ``message_id`` of the source assistant
+                message the utility was parsed from.
+            start_index: Absolute character offset of the open token
+                in the source assistant message text.
+            end_index: Exclusive end offset just past the close
+                token in the source assistant message text.
+            attributes: Parsed XML-style attributes from the open
+                token, or ``None`` for tags without attributes.
+            parent_id: Optional override for the tree parent;
+                defaults to ``active_head_id``.
+        """
+        effective_parent_id = parent_id if parent_id is not None else self.active_head_id
+
+        message = Message(
+            speaker=MessageRole.UTILITY,
+            content=content,
+            parent_id=effective_parent_id,
+            tag_type=tag_type,
+            source_message_id=source_message_id,
+            start_index=start_index,
+            end_index=end_index,
+            attributes=attributes,
+        )
+
+        self.messages.append(message)
+        self.active_head_id = message.message_id
+        self.updated_at = time.time()
+
+        meta: Dict[str, Any] = {
+            "message_id": message.message_id,
+            "parent_id": message.parent_id,
+            "speaker": message.speaker.value,
+            "tag_type": tag_type.value,
+            "source_message_id": source_message_id,
+        }
+        if start_index is not None:
+            meta["start_index"] = start_index
+        if end_index is not None:
+            meta["end_index"] = end_index
+        if message.attributes:
+            meta["attribute_count"] = len(message.attributes)
+
+        self._record(EventType.MESSAGE_CREATED, message, meta,
+                     entity_id=message.message_id, parent_id=message.parent_id)
+        return message
+
     def update_message(self, message_id: str, content: Optional[str] = None,
                        file_ids: Optional[List[str]] = None) -> Optional[Message]:
         """Update a message in-place (content fix, not a branch)."""
@@ -474,12 +579,29 @@ class Conversation(TextArtifact):
         thread = self.get_thread()
         return thread[-1] if thread else None
 
-    def get_messages(self, speaker: Optional[Union[MessageRole, List[MessageRole]]] = None) -> List[Message]:
-        thread = self.get_thread()
-        if speaker is None:
+    def get_messages(self,
+                     speaker: Optional[Union[MessageRole, List[MessageRole]]] = None,
+                     include_utility: bool = False) -> List[Message]:
+        """Return active-thread messages, optionally filtered by speaker.
+
+        ``include_utility`` mirrors :meth:`get_thread`: utility messages
+        are excluded by default. Explicitly requesting a speaker that
+        includes ``MessageRole.UTILITY`` also returns utility messages
+        regardless of ``include_utility``, since the caller has asked
+        for that role specifically.
+        """
+        speakers: Optional[List[MessageRole]] = None
+        if speaker is not None:
+            raw = [speaker] if not isinstance(speaker, list) else speaker
+            speakers = [s if isinstance(s, MessageRole) else MessageRole(s) for s in raw]
+
+        # If the caller explicitly asks for utility messages by speaker,
+        # surface them even when ``include_utility`` is False.
+        wants_utility = bool(speakers and MessageRole.UTILITY in speakers)
+        thread = self.get_thread(include_utility=include_utility or wants_utility)
+
+        if speakers is None:
             return thread
-        speakers = [speaker] if not isinstance(speaker, list) else speaker
-        speakers = [s if isinstance(s, MessageRole) else MessageRole(s) for s in speakers]
         return [m for m in thread if m.speaker in speakers]
 
     def start_streaming_message(self,
