@@ -657,6 +657,26 @@ class Manager:
       merged.update(dict2)  # dict2 overrides dict1 on conflicts
     return merged if merged else None
 
+  def _merge_tag_overrides(
+    self,
+    existing: Optional[Dict[Any, Any]],
+    incoming: Optional[Dict[Any, Any]],
+  ) -> Optional[Dict[Any, Any]]:
+    """Merge two optional ``tag_overrides`` maps with last-wins on key.
+
+    Per plan §3.7, overrides are per-``TagType`` replacement; we do
+    not deep-merge individual ``TagSpec`` fields. ``incoming`` (the
+    later definition) wins on ``TagType`` conflicts.
+    """
+    if not existing and not incoming:
+      return None
+    merged: Dict[Any, Any] = {}
+    if existing:
+      merged.update(existing)
+    if incoming:
+      merged.update(incoming)
+    return merged if merged else None
+
 
   ######################################################################
   #                              GETTERS                               #
@@ -717,7 +737,10 @@ class Manager:
               capabilities=self._merge_lists(existing.capabilities, definition.capabilities),
               license=definition.license or existing.license,
               url=definition.url or existing.url,
-              identifiers=self._merge_dicts(existing.identifiers, definition.identifiers)
+              identifiers=self._merge_dicts(existing.identifiers, definition.identifiers),
+              tag_overrides=self._merge_tag_overrides(
+                existing.tag_overrides, definition.tag_overrides
+              ),
             )
             all_definitions[name] = merged
           else:

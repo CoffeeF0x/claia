@@ -499,6 +499,155 @@ class TestResolveTagSpecs:
     types = {s.tag_type: s for s in specs}
     assert types[TagType.REFERENCE] == extra
 
+  def test_empty_override_map_returns_defaults(self):
+    md = SimpleNamespace(tag_overrides={})
+    specs = resolve_tag_specs(md)
+    assert specs == list(DEFAULT_TAGS.values())
+
+  def test_override_does_not_mutate_defaults(self):
+    """Resolving with an override must not leak into ``DEFAULT_TAGS``."""
+    snapshot = dict(DEFAULT_TAGS)
+    custom = TagSpec(TagType.TOOL, "<<TOOL>>", "<</TOOL>>")
+    md = SimpleNamespace(tag_overrides={TagType.TOOL: custom})
+    resolve_tag_specs(md)
+    assert DEFAULT_TAGS == snapshot
+
+  def test_resolution_then_parsing_uses_overrides(self):
+    """End-to-end: a model with custom tokens parses its own format."""
+    custom = TagSpec(TagType.TOOL, "<<TOOL>>", "<</TOOL>>")
+    md = SimpleNamespace(tag_overrides={TagType.TOOL: custom})
+    parser = TagParser(resolve_tag_specs(md))
+    events = _events(parser, "<<TOOL>>{}<</TOOL>>")
+    assert len(events) == 1
+    ev = events[0]
+    assert isinstance(ev, TagEvent)
+    assert ev.tag_type == TagType.TOOL
+    assert ev.raw_open == "<<TOOL>>"
+    assert ev.raw_close == "<</TOOL>>"
+
+
+########################################################################
+#                  RESOLUTION ON CONCRETE ModelDefinition              #
+########################################################################
+class TestResolveTagSpecsModelDefinition:
+  """End-to-end coverage that ``ModelDefinition`` carries
+  ``tag_overrides`` correctly through the resolver. Phase 2 of the
+  tools-overhaul plan introduces the real field; these tests prove
+  the resolver works against an actual ``ModelDefinition`` and not
+  just a duck-typed stand-in."""
+
+  def test_default_definition_has_no_overrides(self):
+    from claia.core.definitions.model_definition import ModelDefinition
+    md = ModelDefinition()
+    assert md.tag_overrides is None
+    specs = resolve_tag_specs(md)
+    assert specs == list(DEFAULT_TAGS.values())
+
+  def test_definition_with_override_is_applied(self):
+    from claia.core.definitions.model_definition import ModelDefinition
+    custom = TagSpec(
+      tag_type=TagType.TOOL,
+      open_token="<tool_call>",
+      close_token="</tool_call>",
+    )
+    md = ModelDefinition(
+      title="custom-tool-format",
+      tag_overrides={TagType.TOOL: custom},
+    )
+    specs = resolve_tag_specs(md)
+    types = {s.tag_type: s for s in specs}
+    assert types[TagType.TOOL] == custom
+    # Other tag types remain at their defaults
+    assert types[TagType.THINKING] == DEFAULT_TAGS[TagType.THINKING]
+    assert types[TagType.REFERENCE] == DEFAULT_TAGS[TagType.REFERENCE]
+
+  def test_definition_partial_override_leaves_others_at_default(self):
+    from claia.core.definitions.model_definition import ModelDefinition
+    custom_think = TagSpec(
+      tag_type=TagType.THINKING,
+      open_token="<reasoning>",
+      close_token="</reasoning>",
+    )
+    md = ModelDefinition(tag_overrides={TagType.THINKING: custom_think})
+    specs = resolve_tag_specs(md)
+    types = {s.tag_type: s for s in specs}
+    assert types[TagType.THINKING] == custom_think
+    assert types[TagType.TOOL] == DEFAULT_TAGS[TagType.TOOL]
+    assert types[TagType.REFERENCE] == DEFAULT_TAGS[TagType.REFERENCE]
+
+  def test_definition_full_override_for_every_tag_type(self):
+    from claia.core.definitions.model_definition import ModelDefinition
+    overrides = {
+      TagType.TOOL: TagSpec(TagType.TOOL, "<<T>>", "<</T>>"),
+      TagType.THINKING: TagSpec(TagType.THINKING, "<<R>>", "<</R>>"),
+      TagType.REFERENCE: TagSpec(TagType.REFERENCE, "<<X>>", "<</X>>"),
+    }
+    md = ModelDefinition(tag_overrides=overrides)
+    specs = resolve_tag_specs(md)
+    types = {s.tag_type: s for s in specs}
+    for tag_type, spec in overrides.items():
+      assert types[tag_type] == spec
+    # No leftover default specs after a full override.
+    assert len(specs) == len(overrides)
+
+
+########################################################################
+#                  ModelDefinition MERGE BEHAVIOR                      #
+########################################################################
+class TestModelDefinitionTagOverridesMerge:
+  """Verify the ``Manager.get_supported_models`` merge path preserves
+  ``tag_overrides`` correctly when two providers contribute the same
+  model name. The merge helper is private, so these tests exercise it
+  through a lightweight ``Manager`` instance."""
+
+  def _make_manager(self):
+    from claia.framework.manager import Manager
+    return Manager.__new__(Manager)
+
+  def test_merge_neither_override_returns_none(self):
+    manager = self._make_manager()
+    result = manager._merge_tag_overrides(None, None)
+    assert result is None
+
+  def test_merge_only_existing_preserved(self):
+    manager = self._make_manager()
+    existing = {TagType.TOOL: TagSpec(TagType.TOOL, "<a>", "</a>")}
+    result = manager._merge_tag_overrides(existing, None)
+    assert result == existing
+
+  def test_merge_only_incoming_preserved(self):
+    manager = self._make_manager()
+    incoming = {TagType.TOOL: TagSpec(TagType.TOOL, "<a>", "</a>")}
+    result = manager._merge_tag_overrides(None, incoming)
+    assert result == incoming
+
+  def test_merge_disjoint_keys_combined(self):
+    manager = self._make_manager()
+    existing = {TagType.TOOL: TagSpec(TagType.TOOL, "<a>", "</a>")}
+    incoming = {TagType.THINKING: TagSpec(TagType.THINKING, "<b>", "</b>")}
+    result = manager._merge_tag_overrides(existing, incoming)
+    assert result is not None
+    assert result[TagType.TOOL] == existing[TagType.TOOL]
+    assert result[TagType.THINKING] == incoming[TagType.THINKING]
+
+  def test_merge_incoming_wins_on_conflict(self):
+    manager = self._make_manager()
+    existing = {TagType.TOOL: TagSpec(TagType.TOOL, "<old>", "</old>")}
+    incoming = {TagType.TOOL: TagSpec(TagType.TOOL, "<new>", "</new>")}
+    result = manager._merge_tag_overrides(existing, incoming)
+    assert result is not None
+    assert result[TagType.TOOL] == incoming[TagType.TOOL]
+
+  def test_merge_does_not_mutate_inputs(self):
+    manager = self._make_manager()
+    existing = {TagType.TOOL: TagSpec(TagType.TOOL, "<a>", "</a>")}
+    incoming = {TagType.THINKING: TagSpec(TagType.THINKING, "<b>", "</b>")}
+    existing_snapshot = dict(existing)
+    incoming_snapshot = dict(incoming)
+    manager._merge_tag_overrides(existing, incoming)
+    assert existing == existing_snapshot
+    assert incoming == incoming_snapshot
+
 
 ########################################################################
 #                          HELPERS                                     #

@@ -12,12 +12,19 @@ which the framework merges across all installed providers.
 Modality fields default to text-in / text-out so existing plain-text
 definitions keep working unchanged. Multi-modal providers extend the
 lists.
+
+``tag_overrides`` lets a definition swap the global default
+``TagSpec`` for one or more ``TagType`` values when this model emits
+non-default delimiter strings (e.g., a model that uses
+``<tool_call>``/``</tool_call>`` instead of ``[TOOL_CALL]``).
+Resolution happens via ``claia.core.parser.resolve_tag_specs``.
 """
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from ..modality import Modality
+from ..parser.types import TagSpec, TagType
 
 
 @dataclass
@@ -31,6 +38,12 @@ class ModelDefinition:
   ``input_modalities`` / ``output_modalities`` are first-class fields
   so applications can filter or route models by what they accept and
   produce without re-parsing the free-form ``capabilities`` strings.
+
+  ``tag_overrides`` is a per-``TagType`` replacement map for the
+  global default ``TagSpec`` registry. ``None`` (the default) means
+  the model uses the global defaults for every tag type. Entries in
+  the map fully replace the corresponding default; there is no
+  field-level merging within a ``TagSpec`` (see plan §3.7).
   """
   title: Optional[str] = None
   aliases: Optional[List[str]] = None
@@ -50,3 +63,4 @@ class ModelDefinition:
   output_modalities: List[Modality] = field(
     default_factory=lambda: [Modality.TEXT]
   )
+  tag_overrides: Optional[Dict[TagType, TagSpec]] = None

@@ -7,11 +7,13 @@ that swaps the default ``TagSpec`` for one or more ``TagType`` values.
 in a form ready to feed into ``TagParser``.
 
 Per-tag-type replacement: if a model overrides ``TagType.TOOL`` it
-provides a complete ``TagSpec``; there is no field-level merging.
+provides a complete ``TagSpec``; there is no field-level merging
+(see plan §3.7).
 
-The ``tag_overrides`` field on ``ModelDefinition`` is added in Phase
-2 of the tools-overhaul plan. This helper reads the field defensively
-via ``getattr`` so it can be exercised before the field lands.
+The lookup of ``tag_overrides`` uses ``getattr`` with a ``None``
+default so this helper accepts any duck-typed object — concrete
+``ModelDefinition`` instances, lightweight test stand-ins, or
+``None`` itself when no model definition is available.
 """
 
 from typing import Any, Dict, List, Optional
@@ -34,8 +36,10 @@ def resolve_tag_specs(model_def: Any) -> List[TagSpec]:
 
   Returns:
     A list of ``TagSpec`` with one entry per ``TagType`` covered by
-    the defaults plus any overrides that introduce additional tag
-    types.
+    the defaults, plus any overrides that introduce additional tag
+    types. Default entries whose ``TagType`` appear in the overrides
+    are replaced; entries not present in the overrides are
+    preserved verbatim.
   """
   merged: Dict[TagType, TagSpec] = dict(DEFAULT_TAGS)
   overrides: Optional[Dict[TagType, TagSpec]] = (

@@ -133,6 +133,83 @@ the cases listed in the phase plan.
 
 ---
 
+## Phase 2 — Tag specs in model definitions
+
+Goal (per plan §11): Expose `tag_overrides` on `ModelDefinition`
+and ensure `resolve_tag_specs` reads the real field end-to-end,
+with merge-aware behavior in the framework's definition merger.
+
+### Files modified
+
+- `src/claia/core/definitions/model_definition.py` — added the
+  `tag_overrides: Optional[Dict[TagType, TagSpec]] = None` field and
+  imported `TagSpec`/`TagType` from `claia.core.parser.types`. Kept
+  the field default `None` so existing callers and persisted data
+  need no migration. Documented the field on the class docstring
+  per plan §3.7 (per-`TagType` replacement, no field-level merging).
+- `src/claia/framework/manager.py` — `Manager.get_supported_models`
+  now propagates `tag_overrides` through the cross-provider merge
+  path. Added a private `_merge_tag_overrides(existing, incoming)`
+  helper that mirrors the existing list/dict mergers: last-wins on
+  `TagType` keys, returns `None` when both sides are empty.
+- `src/claia/core/parser/resolution.py` — refreshed the module
+  docstring now that the field is a real attribute on
+  `ModelDefinition` rather than a Phase 2 placeholder. The
+  `getattr(model_def, "tag_overrides", None)` lookup is retained so
+  duck-typed stand-ins (e.g., test fixtures) still work.
+- `src/tests/core/test_parsers.py` — added `TestResolveTagSpecs`
+  cases for empty override maps and immutability of `DEFAULT_TAGS`,
+  plus end-to-end `TestResolveTagSpecsModelDefinition` covering the
+  resolver against a concrete `ModelDefinition`, plus
+  `TestModelDefinitionTagOverridesMerge` covering the manager's
+  `_merge_tag_overrides` helper directly.
+
+### Decisions confirmed during implementation
+
+- **Override merge semantics.** Per plan §3.7 there is no field-level
+  merging within a `TagSpec`; the `Manager` merger therefore performs
+  per-`TagType` replacement (last definition wins). This matches the
+  intent of "if a model overrides `TagType.TOOL`, it provides a
+  complete `TagSpec`."
+- **Defensive `getattr` retained in `resolve_tag_specs`.** Even
+  though `ModelDefinition` now owns the field, the resolver still
+  uses `getattr(..., "tag_overrides", None)` so callers can pass
+  duck-typed stand-ins (existing tests use `SimpleNamespace`). The
+  dependency direction is parser → definitions only via
+  `claia.core.parser.types`, which is import-safe (parser types
+  module imports only from stdlib).
+- **No native definitions ship overrides yet.** The plan allows
+  "Update existing model definitions (or leave at default)"; we
+  leave the legacy/openai/anthropic/openrouter providers at the
+  defaults. As models that emit non-default delimiters are added
+  (e.g., providers that use `<tool_call>`), they can opt in by
+  setting `tag_overrides`.
+
+### Deviations from the plan
+
+- None of substance. The plan's Phase 2 description is fully
+  realized; the resolver was already written defensively in Phase 1
+  so only the field, docstrings, and merge path needed updating.
+
+### Test coverage added
+
+- `test_empty_override_map_returns_defaults` — `tag_overrides={}` is
+  treated as no-overrides.
+- `test_override_does_not_mutate_defaults` — `DEFAULT_TAGS` is
+  preserved across resolver calls.
+- `test_resolution_then_parsing_uses_overrides` — end-to-end:
+  resolved specs drive a real `TagParser` that recognizes the
+  overridden delimiters.
+- `TestResolveTagSpecsModelDefinition` — concrete `ModelDefinition`
+  with no overrides, with one override, with a partial-set override,
+  and with overrides for every `TagType` (default specs disappear
+  when fully replaced).
+- `TestModelDefinitionTagOverridesMerge` — `_merge_tag_overrides`
+  with neither, only-existing, only-incoming, disjoint keys, and
+  conflict resolution; also asserts inputs are not mutated.
+
+---
+
 ## Follow-ups & deferred items
 
 These are items discovered during implementation that were not
@@ -144,3 +221,13 @@ phase or follow-up.
   future change can drop everything before `_text_start` when the
   stack is empty (and update positions through a `_cursor` offset
   the way the plan originally described).
+- **`Manager.get_supported_models` merger drops modality fields.**
+  Pre-existing bug independent of Phase 2: when two providers
+  contribute a definition with the same name, `input_modalities`
+  and `output_modalities` are not propagated through the merged
+  `ModelDefinition` and silently revert to the
+  `[Modality.TEXT]` default. Phase 2 only added the `tag_overrides`
+  case; the modality regression should be fixed in a follow-up
+  (likely by switching the merger to a generic field-by-field
+  walk over the dataclass fields with merge-rules registered per
+  field, instead of the current hand-listed kwargs).
