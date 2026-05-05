@@ -673,12 +673,18 @@ class TestRegistryRefreshAndShutdown:
 
     registry = Registry()
     registry._plugins_loaded = True
-    registry._commands_catalog = {"cached": "catalog"}
+    # Phase 5: ``_commands_catalog`` is gone; ``refresh_tools`` instead
+    # invalidates the unified ``_tool_index`` / ``_protocols_by_name``
+    # so the next access rebuilds them from the post-refresh
+    # inventories.
+    registry._tool_index = {"stale.tool": object()}  # type: ignore[assignment]
+    registry._protocols_by_name = {"simple": object()}
     registry.manager.refresh_protocols = MagicMock()
 
     registry.refresh_tools()
     registry.manager.refresh_protocols.assert_called_once()
-    assert registry._commands_catalog is None
+    assert registry._tool_index is None
+    assert registry._protocols_by_name is None
 
   def test_shutdown_tears_down_workers_and_protocols(self):
     from claia.framework.registry import Registry

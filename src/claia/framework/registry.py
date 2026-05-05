@@ -15,7 +15,7 @@ from claia.framework.queue import ProcessQueue
 from claia.core.enums.process import ProcessStatus
 from claia.core.data import Conversation
 from claia.core.modality import ChunkKind, GenerationChunk
-from claia.core.plugins.base import ParamScope, ParamSpec
+from claia.core.plugins.base import ParamScope, ParamSpec, ToolReference
 
 
 
@@ -44,7 +44,14 @@ class Registry:
     self.cache: Dict[str, Any] = {}
 
     # Tool-related
-    self._commands_catalog: Optional[Dict[str, Dict]] = None
+    # Phase 5 (plan §7.1): the registry holds a unified
+    # ``qualified_name -> ToolReference`` index assembled from every
+    # loaded protocol's ``get_tool_references()``, plus a
+    # ``protocol_name -> instance`` map so dispatch can route back to
+    # the owning protocol without re-scanning pluggy.
+    self._tool_index: Optional[Dict[str, ToolReference]] = None
+    self._protocols_by_name: Optional[Dict[str, Any]] = None
+
     self._user_kwargs: Dict[str, Any] = {}
     self._plugins_loaded = False
 
@@ -149,31 +156,146 @@ class Registry:
   #                             TOOLS API                              #
   ######################################################################
   def _ensure_loaded(self) -> None:
-    """Ensure plugins are loaded and commands catalog is built."""
+    """Make sure plugins are loaded before tool dispatch.
+
+    Phase 5 (plan §7.1) drops the eagerly-cached ``_commands_catalog``;
+    the unified ``_tool_index`` is built lazily by
+    :meth:`_ensure_tool_index`. This method only handles the
+    plugin-load side of the gate so callers that don't need the index
+    (e.g., diagnostics) avoid the extra pass.
+    """
     if not self._plugins_loaded:
       self.load_plugins()
-    if self._commands_catalog is None:
-      self._commands_catalog = self.manager.get_all_commands()
 
-  def get_commands_catalog(self) -> Dict[str, Dict]:
-    """Return a cached catalog of all commands grouped by module."""
+  # ------------------------------------------------------------------
+  # Tool index (post-overhaul surface)
+  # ------------------------------------------------------------------
+  def _rebuild_tool_index(self) -> None:
+    """Assemble the unified ``qualified_name -> ToolReference`` index.
+
+    Walks every loaded protocol in pluggy registration order, asking
+    each for its ``get_tool_references()`` output. Duplicates are
+    skipped with a debug log (first-in-list wins, plan §2.8). Also
+    populates ``_protocols_by_name`` so ``execute_tool`` can route
+    back to the owning protocol without re-iterating.
+    """
     self._ensure_loaded()
-    return self._commands_catalog or {}
+    index: Dict[str, ToolReference] = {}
+    protocols: Dict[str, Any] = {}
+
+    for inst in self.manager.iter_protocol_instances():
+      try:
+        info = inst.get_protocol_info()
+      except Exception:
+        logger.exception("Failed to read protocol_info from %r", inst)
+        continue
+      protocol_name = getattr(info, "name", None)
+      if not protocol_name:
+        continue
+
+      if protocol_name not in protocols:
+        protocols[protocol_name] = inst
+
+      try:
+        refs = inst.get_tool_references() or []
+      except Exception:
+        logger.exception(
+          "Failed to collect tool references from protocol %s", protocol_name,
+        )
+        continue
+
+      for ref in refs:
+        if ref.qualified_name in index:
+          logger.debug(
+            "Skipping duplicate tool %s from protocol %s; first registration wins",
+            ref.qualified_name, ref.protocol_name,
+          )
+          continue
+        index[ref.qualified_name] = ref
+
+    self._tool_index = index
+    self._protocols_by_name = protocols
+
+  def _ensure_tool_index(self) -> None:
+    """Lazy build the tool index on first access."""
+    self._ensure_loaded()
+    if self._tool_index is None or self._protocols_by_name is None:
+      self._rebuild_tool_index()
+
+  def list_tools(self) -> List[ToolReference]:
+    """Return every tool currently exposed across all loaded protocols."""
+    self._ensure_tool_index()
+    return list((self._tool_index or {}).values())
+
+  def get_tool(self, qualified_name: str) -> Optional[ToolReference]:
+    """Return the ``ToolReference`` for ``qualified_name`` or ``None``."""
+    self._ensure_tool_index()
+    return (self._tool_index or {}).get(qualified_name)
+
+  def execute_tool(
+    self,
+    qualified_name: str,
+    raw_payload: str,
+    conversation,
+    **kwargs,
+  ) -> Result:
+    """Dispatch a tool call through its owning protocol.
+
+    Phase 5 surface (plan §7.2). The registry resolves the
+    ``ToolReference`` from its index, then forwards to
+    ``BaseProtocol.execute(qualified_name, raw_payload, conversation, **kwargs)``.
+    The protocol decodes the raw payload (JSON for ``simple``, MCP
+    envelope for the future MCP plugin, etc.) and runs the actual
+    tool. Cross-cutting injectables (settings, the registry itself,
+    cancellation tokens) ride through ``**kwargs``.
+    """
+    self._ensure_tool_index()
+
+    ref = (self._tool_index or {}).get(qualified_name)
+    if ref is None:
+      return Result.fail(f"Tool not found: {qualified_name}")
+
+    protocol = (self._protocols_by_name or {}).get(ref.protocol_name)
+    if protocol is None:
+      return Result.fail(
+        f"Protocol '{ref.protocol_name}' for tool '{qualified_name}' not loaded"
+      )
+
+    try:
+      return protocol.execute(qualified_name, raw_payload, conversation, **kwargs)
+    except Exception as e:
+      logger.exception("Error executing tool '%s'", qualified_name)
+      return Result.fail(str(e))
+
+  # ------------------------------------------------------------------
+  # Transitional surface (retired in phase 6)
+  # ------------------------------------------------------------------
+  def get_commands_catalog(self) -> Dict[str, Dict]:
+    """Return a hierarchical catalog of all native commands.
+
+    Phase 5 transitional helper: derived directly from the manager on
+    every call (no caching). Used by the surviving
+    :meth:`process_content` shim and any external code that still
+    introspects the legacy catalog shape. Phase 6 retires both
+    callers.
+    """
+    self._ensure_loaded()
+    return self.manager.get_all_commands()
 
   def refresh_tools(self) -> None:
     """Re-fetch dynamic tool inventories from every loaded protocol.
 
-    Phase 4 surface (plan §6.2 / §11 Phase 4). Triggers each
-    protocol's :meth:`BaseProtocol.refresh` hook (MCP will react to
-    ``notifications/tools/list_changed`` here once it lands). The
-    cached command catalog is invalidated so the next call to
-    :meth:`get_commands_catalog` rebuilds it; phase 5 will replace that
-    with the unified ``_tool_index`` rebuild described in plan §7.1.
+    Triggers each protocol's :meth:`BaseProtocol.refresh` hook (MCP
+    will react to ``notifications/tools/list_changed`` here once it
+    lands) and then invalidates the cached ``_tool_index`` /
+    ``_protocols_by_name`` so the next access rebuilds them from the
+    post-refresh inventories.
     """
     if not self._plugins_loaded:
       return
     self.manager.refresh_protocols()
-    self._commands_catalog = None
+    self._tool_index = None
+    self._protocols_by_name = None
 
   def shutdown(self) -> None:
     """Tear down workers and release protocol-owned resources.
@@ -211,9 +333,18 @@ class Registry:
     return opening_token in content
 
   def process_content(self, conversation, content: str, settings=None, protocol_name: str = 'simple', **kwargs) -> str:
+    """Find and execute tool calls in content using the configured
+    pattern/protocol.
+
+    Phase 5 keeps this transitional shim alive (plan §11 Phase 5) but
+    sources its kwarg-prep helper from the simple protocol's
+    ``dispatcher`` module — the registry no longer owns the
+    ``_prepare_command_kwargs`` / ``_convert_type`` helpers
+    (plan §7.4). Phase 6 retires both this method and the
+    ``execute_legacy`` callee on the simple protocol.
     """
-    Find and execute tool calls in content using the configured pattern/protocol.
-    """
+    from claia.core.tools.protocols.simple.dispatcher import prepare_command_kwargs
+
     self._ensure_loaded()
 
     # Resolve pattern plugin: prefer conversation pattern name, fallback to default
@@ -263,10 +394,10 @@ class Registry:
             # Extra kwargs can include conversation and user/system kwargs; only mapped if expected by args
             extra = dict(filtered_protocol_kwargs)
             extra['conversation'] = conversation
-            prepared_kwargs = self._prepare_command_kwargs(m.parameters or {}, cmd_def, extra_kwargs=extra)
+            prepared_kwargs = prepare_command_kwargs(m.parameters or {}, cmd_def, extra_kwargs=extra)
 
-            # Phase 4 transitional shim: dispatch via the pre-overhaul
-            # entry point on the simple protocol. The new
+            # Phase 4 / 5 transitional shim: dispatch via the
+            # pre-overhaul entry point on the simple protocol. The new
             # ``BaseProtocol.execute(qualified_name, raw_payload, ...)``
             # contract is driven by the agent loop in phase 6 once the
             # parser surfaces ``TagEvent`` objects directly; until then
@@ -305,124 +436,54 @@ class Registry:
     return processed
 
   def run_command(self, command_name: str, parameters: Dict[str, Any], conversation, **kwargs) -> Result:
-    """Execute a command module by name (for CLI use).
-    
-    Tool callables must return either:
-    - A Result object (used as-is)
-    - A string (wrapped in Result.ok)
-    - Otherwise an error is returned
+    """Execute a native command by name (CLI direct-execution path).
+
+    Plan §7.4 keeps ``run_command`` on the registry rather than
+    folding it into ``execute_tool``: CLI parameter dicts include
+    non-JSON-serializable Python objects (``registry``,
+    ``command_specs``, etc.) that must reach the callable without
+    JSON encoding. The kwarg-prep helper now lives in the simple
+    protocol's ``dispatcher`` module, so the registry no longer
+    knows about ``ArgumentDefinition`` directly.
+
+    Resolution is unchanged from pre-overhaul:
+
+      tool_context (host injectables) -> caller kwargs ->
+      registry -> conversation
+
+    with later assignments overriding earlier ones. Tool callables
+    must return ``Result`` or ``str``; anything else is an error.
     """
+    from claia.core.tools.protocols.simple.dispatcher import (
+      normalize_result, prepare_command_kwargs,
+    )
+
     self._ensure_loaded()
 
     plugin, cmd_def, module_info = self.manager.get_tool_by_name(command_name)
     if not plugin or not cmd_def:
       return Result.fail(f"Tool not found: {command_name}")
 
+    if not (cmd_def and hasattr(cmd_def, 'callable') and callable(cmd_def.callable)):
+      return Result.fail(f"Command '{command_name}' is not executable (no callable)")
+
+    extra: Dict[str, Any] = {}
+    extra.update(self._tool_context)
+    extra.update(kwargs)
+    extra['registry'] = self
+    extra['conversation'] = conversation
+
     try:
-      if not (cmd_def and hasattr(cmd_def, 'callable') and callable(cmd_def.callable)):
-        return Result.fail(f"Command '{command_name}' is not executable (no callable)")
+      call_kwargs = prepare_command_kwargs(parameters or {}, cmd_def, extra_kwargs=extra)
+    except ValueError as e:
+      return Result.fail(str(e))
 
-      # Build the extras dict that ``_prepare_command_kwargs`` merges
-      # into the call. Later assignments override earlier ones, so the
-      # precedence (lowest -> highest) is:
-      #   tool_context (host-registered injectables, e.g. settings)
-      #   -> caller kwargs (per-invocation runtime values)
-      #   -> registry (always available, can't be shadowed by kwargs)
-      #   -> conversation (current conversation object)
-      extra: Dict[str, Any] = {}
-      extra.update(self._tool_context)
-      extra.update(kwargs)
-      extra['registry'] = self
-      extra['conversation'] = conversation
-      call_kwargs = self._prepare_command_kwargs(parameters or {}, cmd_def, extra_kwargs=extra)
-
+    try:
       result = cmd_def.callable(**call_kwargs)
-      
-      # Handle different return types from tool callables
-      if isinstance(result, Result):
-        # Tool returned a Result object, use it directly
-        return result
-      elif isinstance(result, str):
-        # Tool returned a string, wrap it in Result.ok
-        return Result.ok(data=result)
-      else:
-        # Invalid return type
-        return Result.fail(f"Tool '{command_name}' returned invalid type: {type(result).__name__}. Tools must return Result or str.")
     except Exception as e:
       return Result.fail(str(e))
 
-  def _prepare_command_kwargs(self, parameters: Dict[str, Any], cmd_def, extra_kwargs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Map CLI-provided parameters to the callable's expected arguments.
-
-    Supports both key=value style and positional tokens provided under
-    the special key '__args__' (a list of raw string tokens).
-    """
-    args_spec = getattr(cmd_def, 'arguments', None) or {}
-    # Preserve insertion order of args_spec (Python 3.7+ dicts are ordered)
-    pos_vals = []
-    if isinstance(parameters, dict) and '__args__' in parameters and isinstance(parameters['__args__'], list):
-      pos_vals = list(parameters['__args__'])
-
-    # Use extra_kwargs directly since modules now store their required settings internally
-    filtered_extra = extra_kwargs or {}
-
-    call_kwargs: Dict[str, Any] = {}
-
-    for name, arg_def in args_spec.items():
-      provided = None
-      # 1) explicit key=value takes precedence
-      if name in parameters:
-        provided = parameters[name]
-      # 2) use value from filtered extra kwargs (e.g., settings, conversation) if available
-      elif name in filtered_extra:
-        provided = filtered_extra[name]
-      # 3) use positional if available
-      elif pos_vals:
-        provided = pos_vals.pop(0)
-      # 4) default value if present and not provided
-      elif hasattr(arg_def, 'default_value') and getattr(arg_def, 'default_value') is not None:
-        provided = getattr(arg_def, 'default_value')
-
-      # Validate required
-      required = getattr(arg_def, 'required', False)
-      if provided is None and required:
-        raise ValueError(f"Missing required argument: {name}")
-
-      if provided is not None:
-        dtype = getattr(arg_def, 'data_type', 'str')
-        call_kwargs[name] = self._convert_type(provided, dtype)
-
-    return call_kwargs
-
-  def _convert_type(self, value: Any, data_type: str) -> Any:
-    """Convert string value to the requested data type.
-
-    Supports: 'str', 'int', 'float', 'bool', 'custom'. Falls back to str.
-    Custom type passes through values without conversion.
-    """
-    try:
-      if data_type == 'custom':
-        # Pass through custom types without conversion
-        return value
-      if data_type == 'int':
-        return int(value)
-      if data_type == 'float':
-        return float(value)
-      if data_type == 'bool':
-        if isinstance(value, bool):
-          return value
-        v = str(value).strip().lower()
-        if v in ('1', 'true', 't', 'yes', 'y', 'on'):
-          return True
-        if v in ('0', 'false', 'f', 'no', 'n', 'off'):
-          return False
-        # Non-standard bool: treat non-empty as True
-        return bool(v)
-      # default and 'str'
-      return str(value)
-    except Exception:
-      # If conversion fails, return original value
-      return value
+    return normalize_result(command_name, result)
 
 
   ######################################################################

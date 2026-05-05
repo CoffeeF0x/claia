@@ -545,6 +545,220 @@ third-party extensions have a grace period to migrate.
 
 ---
 
+## Phase 5 — Simple protocol rewrite
+
+Goal (per plan §11): split ``SimpleProtocolPlugin`` into a package
+that owns its own dispatch (kwarg prep, type coercion, JSON payload
+decoding), give ``Registry`` the unified ``_tool_index`` /
+``execute_tool`` / ``list_tools`` / ``get_tool`` surface, retire the
+old ``_commands_catalog`` cache, and have the ``Manager`` hand
+loaded native tool modules to the simple protocol at startup. The
+transitional ``process_content`` shim and ``execute_legacy`` callee
+both stay alive for phase 6 to retire together.
+
+### Files added
+
+- ``src/claia/core/tools/protocols/simple/__init__.py`` —
+  re-exports ``SimpleProtocolPlugin`` so the
+  ``simple = "claia.core.tools.protocols.simple:SimpleProtocolPlugin"``
+  entry point resolves at the package path unchanged.
+- ``src/claia/core/tools/protocols/simple/payload.py`` —
+  ``decode_payload(raw_payload) -> (parameters, name_hint)`` accepts
+  flat (``{"k": "v"}``) and envelope
+  (``{"name": "x", "parameters": {...}}``) JSON shapes; empty input
+  is ``({}, None)``; non-JSON / non-object payloads raise
+  ``ValueError``. Envelope ``name`` is informational only — dispatch
+  still uses the registry-supplied ``qualified_name``.
+- ``src/claia/core/tools/protocols/simple/dispatcher.py`` —
+  ``convert_type``, ``prepare_command_kwargs``, ``find_tool``, and
+  ``normalize_result``. These are the helpers that used to live as
+  ``Registry._prepare_command_kwargs`` and ``Registry._convert_type``;
+  they're now imported by both ``SimpleProtocolPlugin.execute`` and
+  ``Registry.run_command`` so kwarg-prep semantics stay identical
+  across both entry points.
+- ``src/claia/core/tools/protocols/simple/protocol.py`` —
+  ``SimpleProtocolPlugin`` itself: ``bind_tool_modules`` setter, a
+  ``bound_modules`` read-only view, ``get_tool_references``,
+  ``execute(qualified_name, raw_payload, conversation, **kwargs)``
+  delegating into ``payload`` + ``dispatcher``, and
+  ``execute_legacy`` preserved for the registry's transitional
+  ``process_content`` shim.
+- ``src/claia/core/tools/protocols/simple/README.md`` — package
+  overview, payload-shape examples, and the ``run_command`` vs
+  ``execute_tool`` entry-point split.
+- ``src/tests/framework/test_simple_protocol_phase5.py`` — 59-case
+  suite covering the new package layout, ``decode_payload`` shapes,
+  every dispatcher helper, ``SimpleProtocolPlugin`` integration,
+  ``Manager`` binding, and the new ``Registry`` surface.
+
+### Files modified
+
+- ``src/claia/framework/manager.py``:
+  - ``load_all_plugins`` now calls a new
+    ``_bind_native_tools_to_protocols()`` between the
+    ``claia.tool_modules`` load and ``_start_protocols()`` so a
+    protocol's ``start()`` can already see its inventory.
+  - ``_bind_native_tools_to_protocols`` collects every loaded
+    ``BaseToolModule`` instance and calls ``bind_tool_modules`` on
+    every protocol that exposes the duck-typed hook (currently only
+    ``SimpleProtocolPlugin``). Per-protocol failures log + skip so a
+    misbehaving binder cannot block other protocols.
+  - Added a public ``iter_protocol_instances()`` that delegates to
+    ``_iter_protocol_instances`` so ``Registry._rebuild_tool_index``
+    can iterate the loaded protocols without reaching into a
+    private accessor.
+- ``src/claia/framework/registry.py``:
+  - Removed ``_commands_catalog`` cache,
+    ``_prepare_command_kwargs``, and ``_convert_type`` per plan §7.4.
+  - Added ``_tool_index: Optional[Dict[str, ToolReference]]`` and
+    ``_protocols_by_name: Optional[Dict[str, BaseProtocol]]`` plus a
+    ``_rebuild_tool_index`` walker that iterates
+    ``manager.iter_protocol_instances()`` and applies the
+    first-in-list-wins dedupe rule (plan §2.8).
+    ``_ensure_tool_index`` lazily builds the index on first use.
+  - Added ``list_tools()``, ``get_tool(qualified_name)``, and
+    ``execute_tool(qualified_name, raw_payload, conversation, **kwargs)``
+    per plan §7.2. ``execute_tool`` resolves through the index,
+    routes to ``protocol.execute``, and translates protocol
+    exceptions into ``Result.fail``.
+  - ``refresh_tools`` invalidates ``_tool_index`` and
+    ``_protocols_by_name`` instead of the old commands-catalog
+    cache; the next access rebuilds from post-refresh inventories.
+  - ``process_content`` and ``run_command`` now import
+    ``prepare_command_kwargs`` / ``normalize_result`` from
+    ``claia.core.tools.protocols.simple.dispatcher`` instead of
+    using private registry methods. ``process_content`` keeps its
+    ``execute_legacy`` dispatch path; ``run_command`` performs its
+    own lookup + prep + invoke + normalize chain because CLI
+    parameter dicts contain non-JSON-serializable Python objects
+    (``registry``, ``command_specs``, etc.) that must reach the
+    callable without a JSON round-trip (plan §7.4 second bullet).
+  - ``get_commands_catalog`` survives as a transitional accessor
+    that delegates straight to ``manager.get_all_commands()`` —
+    no caching — so the surviving ``process_content`` shim and any
+    legacy introspectors keep working until phase 6 retires them.
+- ``src/tests/framework/test_protocol_contract.py`` — Phase 4
+  registry-refresh test updated to assert on the new
+  ``_tool_index`` / ``_protocols_by_name`` invalidation instead of
+  the now-removed ``_commands_catalog`` cache.
+
+### Files removed
+
+- ``src/claia/core/tools/protocols/simple.py`` — replaced by the
+  package of the same name.
+
+### Decisions confirmed during implementation
+
+- **Manager binds native tools via duck-typing.** Plan §8.2 calls
+  out the simple protocol specifically, but hard-coding "simple" in
+  the manager would prevent third-party protocols (e.g. a hosted
+  RPC bridge) from opting into the same native-module surface.
+  ``_bind_native_tools_to_protocols`` therefore checks for a
+  ``bind_tool_modules`` attribute on each protocol instance instead
+  of dispatching by name. Single-arg signature (``modules``) keeps
+  the contract narrow.
+- **``run_command`` stays on the registry, doesn't go through
+  ``execute_tool``.** Plan §7.4 allows either approach; the deciding
+  factor was the in-tree CLI commands (e.g.
+  ``cli/commands/system.py:HelpCommand``) that pass non-JSON-
+  serializable Python objects (``registry``, ``command_specs``)
+  inside ``parameters``. Routing those through ``execute_tool``
+  would require JSON-encoding ``parameters``, which would either
+  break those callers or force them to split injectables out of
+  ``parameters``. Phase 5 keeps ``run_command`` on the registry,
+  using the same ``dispatcher`` helpers as the protocol so kwarg-
+  prep stays consistent. Phase 6 (or a follow-up) can revisit the
+  CLI-side split.
+- **Inventory rebuild is lazy.** ``_rebuild_tool_index`` runs the
+  first time ``list_tools`` / ``get_tool`` / ``execute_tool`` is
+  called after load (or after ``refresh_tools``). This keeps
+  ``Registry.__init__`` free of the cross-protocol walk so the
+  cheap "construct then ask for ParamSpecs" startup path used by
+  ``Settings`` doesn't pay for the dispatch index it doesn't need.
+- **First-in-list-wins on duplicates.** Implemented exactly as plan
+  §2.8 prescribes — pluggy load order determines precedence; the
+  collision is logged at ``DEBUG`` and the late-arriving entry
+  drops out. A future protocol that wants explicit precedence will
+  need an explicit ``priority`` field, deferred per plan §12.8.
+- **``get_commands_catalog`` no longer caches.** The previous
+  caching wasn't safe across ``refresh_tools`` cycles anyway; phase
+  5 makes the helper a thin call into ``manager.get_all_commands``
+  so the legacy shim always sees fresh data. The new ``_tool_index``
+  is the post-overhaul cache and lives at a different abstraction
+  level.
+- **Legacy dispatch (``execute_legacy``) is the only place
+  ``commands`` catalogs still flow.** The new ``execute`` path
+  takes only ``raw_payload`` + ``conversation`` + ``**kwargs``; the
+  catalog is internal to the protocol via the bound modules. Plan
+  §7.3's "transitional shim retained for one phase" applies to the
+  surface ``process_content`` exposes; phase 6 deletes both pieces.
+
+### Deviations from the plan
+
+- **``_tool_index`` is built lazily, not "after protocols load".**
+  Plan §7.1 implies eager assembly during ``load_all_plugins``;
+  phase 5 deferred to first use. Reasoning: the manager's
+  ``Settings``-bootstrap path constructs a ``Registry`` very early
+  and asks for ``ParamSpecs`` before the first tool dispatch, and
+  protocol instances don't have ``bind_tool_modules`` results yet
+  in some downstream test fixtures. The lazy rebuild keeps the
+  observable behavior identical (``list_tools`` etc. always
+  return the current inventory) without forcing the index up
+  before it's needed.
+- **``_normalize_result`` was renamed to ``normalize_result`` when
+  it moved into ``dispatcher.py``.** Plan §8.4 keeps the underscore
+  spelling on the plugin; phase 5 dropped it because the helper is
+  now a public module-level function used by both
+  ``SimpleProtocolPlugin`` and ``Registry.run_command``. Underscore
+  spelling on a non-class module-level helper would mislead
+  importers.
+
+### Test coverage added
+
+``src/tests/framework/test_simple_protocol_phase5.py`` (59 cases):
+
+- **Package layout**: import paths still resolve, internal split is
+  reachable, ``SimpleProtocolPlugin`` is still a ``BaseProtocol``
+  subclass (3 cases).
+- **``decode_payload``**: empty / whitespace-only / flat /
+  envelope / envelope-with-non-string-name / envelope-without-
+  parameters / envelope-with-non-dict-parameters / invalid-JSON /
+  non-object-JSON / string-JSON (10 cases).
+- **``convert_type``**: int, float, bool truthy/falsy strings,
+  bool pass-through, bool unknown-string fallback, str default,
+  unknown-type fallback, ``custom`` pass-through, invalid-int
+  graceful-return (10 cases).
+- **``find_tool``**: empty modules, qualified resolution to
+  specific module, bare-name first match, unknown qualified name,
+  module-introspection failure tolerated, tool-def without callable
+  rejected (6 cases).
+- **``prepare_command_kwargs``**: explicit-precedence, extras
+  fallback, positional ``__args__``, default values, required-arg
+  raise, type coercion applied, optional-without-value omitted (7
+  cases).
+- **``normalize_result``**: ``Result`` passthrough, ``str`` wrap,
+  invalid-type fail (3 cases).
+- **``SimpleProtocolPlugin`` integration**: bind/refbind, read-only
+  view of ``bound_modules``, full execute path through payload +
+  dispatcher, missing-required-arg propagated (5 cases).
+- **``Manager`` binding**: ``iter_protocol_instances`` is public,
+  ``_bind_native_tools_to_protocols`` hands modules over, broken
+  binder doesn't poison other protocols (3 cases).
+- **``Registry`` index + ``execute_tool``**: list aggregation, get
+  unknown returns ``None``, first-in-list-wins on duplicate names,
+  routing to owning protocol with ``**kwargs`` passthrough,
+  unknown-name failure, protocol-exception translation,
+  ``refresh_tools`` invalidation rebuilds with new inventory,
+  ``refresh_tools`` no-op before load (8 cases).
+- **``Registry.run_command``**: dispatcher kwarg-prep reached with
+  injectables (registry / settings / conversation), unknown tool
+  fails (2 cases).
+- **Cleanup verification**: registry no longer carries
+  ``_prepare_command_kwargs``, ``_convert_type``, or
+  ``_commands_catalog`` (2 cases).
+
+---
+
 ## Follow-ups & deferred items
 
 These are items discovered during implementation that were not
@@ -566,24 +780,32 @@ phase or follow-up.
   (likely by switching the merger to a generic field-by-field
   walk over the dataclass fields with merge-rules registered per
   field, instead of the current hand-listed kwargs).
-- **`SimpleProtocolPlugin.bind_tool_modules` needs a caller.** Phase
-  4 shipped the setter and realistic ``get_tool_references`` /
-  ``execute`` implementations but no framework code calls
-  ``bind_tool_modules`` yet — ``get_tool_references`` therefore
-  returns an empty list at runtime until phase 5 wires the manager
-  / registry to pass in the loaded modules. This is the intended
-  phase-5 migration path (plan §8.2); the follow-up here is just to
-  make sure phase 5 lands the wiring before any caller relies on
-  the inventory.
+- ~~**`SimpleProtocolPlugin.bind_tool_modules` needs a caller.**~~
+  Resolved in phase 5: ``Manager._bind_native_tools_to_protocols``
+  now calls ``bind_tool_modules`` on every protocol that exposes
+  the duck-typed hook, after both ``claia.tool_modules`` and
+  ``claia.tool_protocols`` are loaded.
 - **`ToolReference.parameter_schema` default.** Made optional
   (``None``) so phase 4 could ship references without forcing a
   schema. Revisit in phase 8 once MCP references need to carry raw
   JSON Schema — the default may need to flip back to required to
   catch protocols that forget to populate it.
-- **Registry commands-catalog invalidation.** ``refresh_tools``
-  currently clears ``self._commands_catalog`` so the next
-  ``get_commands_catalog`` rebuilds it from ``manager.get_all_commands``.
-  Phase 5 replaces this with a ``_tool_index: Dict[str, ToolReference]``
-  assembled from ``protocol.get_tool_references()`` per plan §7.1;
-  at that point ``refresh_tools`` should rebuild the index directly
-  rather than relying on the module-manager walk.
+- ~~**Registry commands-catalog invalidation.**~~ Resolved in phase
+  5: ``_commands_catalog`` was retired; ``refresh_tools`` now
+  invalidates the unified ``_tool_index`` /
+  ``_protocols_by_name`` view instead.
+- **CLI ``parameters`` dicts mix invocation args with Python
+  injectables.** ``cli/commands/system.py:HelpCommand`` (and
+  similar) shove ``registry``, ``command_specs``, ``current_mode``
+  inside ``parameters`` rather than as ``**kwargs`` injectables.
+  This is why ``Registry.run_command`` cannot delegate to
+  ``execute_tool`` (which JSON-encodes parameters). A follow-up
+  should split those callers so ``run_command`` can eventually
+  fold into ``execute_tool``.
+- **``run_command`` retained for the CLI direct-execution path.**
+  Plan §7.4 lets ``run_command`` either forward to ``execute_tool``
+  or stay on the registry; phase 5 picked the latter to avoid
+  breaking the non-JSON CLI parameter shape (see above). If/when
+  the CLI callers split injectables out, revisit removing
+  ``run_command`` and folding all CLI dispatch into
+  ``execute_tool``.

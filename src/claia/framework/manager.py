@@ -319,6 +319,13 @@ class Manager:
       self._load_plugins(group='claia.tool_protocols', pm=self.protocol_pm, label='protocol', allow_empty=True, ctor_kwargs=kwargs)
       self._load_plugins(group='claia.tool_modules', pm=self.module_pm, label='module', allow_empty=True, ctor_kwargs=kwargs)
 
+      # Overhaul phase 5: hand the freshly-loaded native tool modules
+      # to any protocol that opts in via a ``bind_tool_modules`` hook
+      # (currently only the simple protocol — see plan §8.2). Done
+      # before ``start()`` so a protocol's startup logic can already
+      # see its inventory.
+      self._bind_native_tools_to_protocols()
+
       # Overhaul phase 4: fire ``start()`` on each loaded protocol so
       # session-bearing implementations (future MCP, remote RPC, etc.)
       # can open their resources once plugins are wired in. Any failure
@@ -420,6 +427,46 @@ class Manager:
       if inst is None:
         continue
       yield inst
+
+  def iter_protocol_instances(self):
+    """Public alias for :meth:`_iter_protocol_instances`.
+
+    Phase 5 surface: ``Registry._rebuild_tool_index`` walks every
+    loaded protocol to collect its ``ToolReference`` list, so the
+    accessor needs to be on the public Manager surface (the underscore
+    variant remains for in-tree callers that already use it).
+    """
+    yield from self._iter_protocol_instances()
+
+  def _bind_native_tools_to_protocols(self) -> None:
+    """Hand the loaded native ``BaseToolModule`` instances to any
+    protocol that opts in to native-module binding.
+
+    Plan §8.2 specifies that the simple protocol owns the
+    ``BaseToolModule`` -> ``ToolReference`` projection. Rather than
+    hard-coding "simple" in the manager, this method duck-types on the
+    presence of ``bind_tool_modules`` so third-party protocols that
+    want native-module access can opt in without a new ABC method.
+
+    Errors from any one protocol log + are swallowed so a malfunctioning
+    binder cannot block other protocols from coming up.
+    """
+    modules = [
+      entry.instance
+      for entry in self._lazy_plugins.get('claia.tool_modules', [])
+      if entry.instance is not None
+    ]
+    for inst in self._iter_protocol_instances():
+      binder = getattr(inst, 'bind_tool_modules', None)
+      if not callable(binder):
+        continue
+      try:
+        binder(modules)
+      except Exception as e:
+        logger.warning(
+          "Protocol %s bind_tool_modules() raised %s; skipping",
+          type(inst).__name__, e,
+        )
 
   def _start_protocols(self) -> None:
     """Call ``start()`` on every loaded protocol, swallowing errors.
