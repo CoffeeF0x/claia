@@ -222,11 +222,14 @@ assistant text they were extracted from.
 
 - `src/claia/core/enums/conversation.py` — added
   `MessageRole.UTILITY = "utility"` with class-docstring
-  documentation pointing back to plan §2.4 / §4. The dead
-  `TagType` / `TagStatus` enums in this same module are left in
-  place for now; they have zero importers and will be cleaned up
-  in a later phase (likely Phase 7's pattern-subsystem removal,
-  which is the natural place to retire the legacy tag types).
+  documentation pointing back to plan §2.4 / §4. Also removed
+  the dead `TagType` (literal-token-string enum) and `TagStatus`
+  enums living in the same module. They predated the parser
+  package, had zero importers in the repo, and would be a
+  source of confusion now that the live categorical
+  `claia.core.parser.types.TagType` is referenced from
+  ``Message``. The `auto` import is also dropped since
+  ``MessageRole`` only uses string values.
 - `src/claia/core/data/models/conversation/message.py` — added
   optional `tag_type` / `source_message_id` / `start_index` /
   `end_index` / `attributes` fields to `Message.__init__` (each
@@ -270,12 +273,13 @@ assistant text they were extracted from.
 
 - **`tag_type` typing.** `Message.tag_type` carries
   `claia.core.parser.types.TagType` (the categorical "tool" /
-  "thinking" / "reference" enum from Phase 1), not the dead
-  `TagType` enum still sitting in
-  `claia.core.enums.conversation` (which encodes literal token
-  strings). The constructor accepts the string `.value` form so
-  serialized payloads round-trip, and the dead enum is left
-  untouched until a dedicated cleanup phase.
+  "thinking" / "reference" enum from Phase 1). The legacy
+  literal-token-string `TagType` and the unused `TagStatus`
+  that previously lived in
+  `claia.core.enums.conversation` were removed in this same
+  commit so the parser's enum is unambiguously the source of
+  truth. The constructor accepts the string `.value` form so
+  serialized payloads round-trip.
 - **Backwards compatibility on the wire.** `to_dict` only
   emits utility fields when they are non-default. This means
   every conversation persisted before Phase 3 serializes
@@ -365,11 +369,3 @@ phase or follow-up.
   (likely by switching the merger to a generic field-by-field
   walk over the dataclass fields with merge-rules registered per
   field, instead of the current hand-listed kwargs).
-- **Dead `TagType` / `TagStatus` enums in
-  `claia.core.enums.conversation`.** These predate the parser
-  package and are not imported anywhere; the parser's
-  categorical `TagType` (`claia.core.parser.types.TagType`) is
-  the live one. Phase 3 deliberately avoided touching them so
-  the diff stays tightly scoped to the message-and-conversation
-  surface; Phase 7's pattern-subsystem removal is the natural
-  place to retire them along with related legacy code paths.
