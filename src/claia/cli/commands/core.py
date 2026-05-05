@@ -90,8 +90,10 @@ class Commands:
     # Handle multiple CLI commands
     if not is_interactive:
       command_groups = self._split_cli_commands(tokens)
+      command_groups = [self._maybe_implicit_query_group(g) for g in command_groups]
       if len(command_groups) > 1:
         return self._execute_multiple_commands(command_groups, conversation)
+      tokens = command_groups[0]
     
     cmd, args = tokens[0], tokens[1:]
     
@@ -147,6 +149,24 @@ class Commands:
     if current:
       groups.append(current)
     return groups
+  
+  def _maybe_implicit_query_group(self, group: List[str]) -> List[str]:
+    """
+    Treat `claia hello world` like `claia --query hello world`.
+
+    Skips wrapping when the group already starts with a CLI command, looks like
+    an unknown flag, or matches an interactive alias (e.g. ``query``, ``h``).
+    """
+    if not group:
+      return group
+    head = group[0]
+    if head in self._cli_command_map:
+      return group
+    if head.startswith('-'):
+      return group
+    if head.lower() in self._interactive_command_map:
+      return group
+    return [generate_cli_alias('query')] + group
   
   def _execute_multiple_commands(self, command_groups: List[List[str]], 
                                  conversation: Optional[Any]) -> Result:
