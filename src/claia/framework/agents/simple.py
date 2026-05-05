@@ -1,16 +1,38 @@
 """
 Simple agent plugin for CLAIA.
-A simple agent that directly calls a model for inference.
+
+Phase 6 (plan §9) makes the agent the owner of the per-turn
+``TagParser``. As deployment chunks arrive the agent feeds them
+through the parser, appends utility messages for any closed tags, and
+dispatches ``TagType.TOOL`` events through ``Registry.execute_tool``
+inline — the result text is appended to the streaming assistant
+message and emitted as a ``"token"`` event so terminal renderers see
+the call → response flow without a separate post-stream pass.
 """
 
+import json
 import logging
-from typing import Optional, Type
+from typing import Any, Iterable, List, Optional, Tuple, Type
 
 from .base import BaseAgent
 from claia.core.data.models import AudioArtifact, ImageArtifact
 from claia.core.enums.conversation import MessageRole
 from claia.core.modality import ChunkKind, GenerationChunk
+from claia.core.parser import (
+  ParseError,
+  ParseEvent,
+  TagEvent,
+  TagParser,
+  TagType,
+  TextEvent,
+  resolve_tag_specs,
+)
+from claia.core.results import Result
+from claia.core.tools.protocols.simple.payload import decode_payload
 from ..hooks import AgentInfo
+
+
+logger = logging.getLogger(__name__)
 
 
 ########################################################################
@@ -20,24 +42,29 @@ class SimpleAgent(BaseAgent):
   """
   A simple agent that directly calls a model for inference.
 
-  Consumes the ``GenerationChunk`` generator from ``registry.run``,
-  emitting ``"token"`` callbacks on the process for each text chunk
-  and forwarding non-text chunks (e.g. progress updates, image bytes)
-  via a ``"chunk"`` event for consumers that want the richer stream.
-  On completion emits ``"complete"``; on failure emits ``"error"``.
+  Streams ``GenerationChunk`` items from ``registry.run`` and
+  forwards visible text through the ``"token"`` event. Each text
+  chunk is also fed to a ``TagParser`` configured from the model
+  definition's ``tag_overrides``; closed tags become utility
+  messages on the conversation, and tool tags are dispatched through
+  ``registry.execute_tool``. Tool-result text is streamed back to
+  the user via the same ``"token"`` channel and appended to the
+  active assistant message so it shows up inline in the transcript.
+
+  Non-text chunks (image / audio bytes) follow the same artifact
+  attachment path as before.
   """
 
   @classmethod
   def process_request(cls, process, registry=None, **kwargs) -> object:
-    """
-    Process a model inference request by streaming tokens from the registry.
+    """Stream a model turn, parse tags inline, and dispatch tool calls.
 
-    The conversation is mutated through the dedicated streaming methods so
-    that the conversation observer (if any) sees a single STREAM_START with
-    an empty placeholder message before tokens flow, and a single STREAM_END
-    once the response completes. Per-token appends are intentionally silent
-    to avoid flooding observers; consumers that need real-time progress
-    listen for the process's "token" callback instead.
+    The conversation is mutated through the streaming-message
+    helpers so observers see one ``STREAM_START`` and one
+    ``STREAM_END`` per turn, with utility messages for parsed
+    tags interleaved between them. Per-token appends are silent;
+    consumers wanting real-time progress listen on the process's
+    ``"token"`` callback.
     """
     conversation = process.conversation
     streaming_message = None
@@ -49,11 +76,15 @@ class SimpleAgent(BaseAgent):
       streaming_message = conversation.start_streaming_message(MessageRole.ASSISTANT)
       process.emit("stream_start", streaming_message.message_id)
 
+      tag_specs = cls._resolve_tag_specs(registry, model_id)
+      parser = TagParser(tag_specs)
+
       cancelled = False
       for chunk in registry.run(model_id, conversation, streaming=True, **kwargs):
         if process.cancel_requested:
           cancelled = True
           break
+
         if chunk.kind is not ChunkKind.TEXT:
           if chunk.kind is ChunkKind.IMAGE_BYTES:
             cls._attach_image_chunk(process, streaming_message.message_id, chunk)
@@ -61,10 +92,35 @@ class SimpleAgent(BaseAgent):
             cls._attach_audio_chunk(process, streaming_message.message_id, chunk)
           process.emit("chunk", chunk)
           continue
+
         token = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
         full_response += token
         conversation.append_stream_chunk(streaming_message.message_id, token)
         process.emit("token", token)
+
+        appended = cls._consume_parse_events(
+          parser.feed(token),
+          process=process,
+          registry=registry,
+          conversation=conversation,
+          streaming_message_id=streaming_message.message_id,
+          tool_kwargs=kwargs,
+        )
+        full_response += appended
+
+      # End-of-stream: flush any pending events (tail text, unclosed
+      # tags). The flush is intentionally inside the success path so
+      # cancellation doesn't fire spurious tool dispatches.
+      if not cancelled:
+        appended = cls._consume_parse_events(
+          parser.flush(),
+          process=process,
+          registry=registry,
+          conversation=conversation,
+          streaming_message_id=streaming_message.message_id,
+          tool_kwargs=kwargs,
+        )
+        full_response += appended
 
       if cancelled:
         conversation.end_streaming_message(streaming_message.message_id, error="cancelled")
@@ -90,6 +146,241 @@ class SimpleAgent(BaseAgent):
 
     return process
 
+  # ------------------------------------------------------------------
+  # Parser integration
+  # ------------------------------------------------------------------
+  @classmethod
+  def _resolve_tag_specs(cls, registry, model_id: str):
+    """Resolve the ``TagSpec`` list active for ``model_id``.
+
+    Falls back to ``DEFAULT_TAGS`` (via ``resolve_tag_specs(None)``)
+    when the registry isn't able to surface a definition — the
+    fixtures used by older tests pass a deliberately minimal
+    registry stand-in, and the parser is happy to run with the
+    defaults.
+    """
+    try:
+      definitions = registry.get_supported_models()
+    except Exception:
+      definitions = None
+    model_def = None
+    if isinstance(definitions, dict) and model_id in definitions:
+      model_def = definitions[model_id]
+    return resolve_tag_specs(model_def)
+
+  @classmethod
+  def _consume_parse_events(
+    cls,
+    events: Iterable[ParseEvent],
+    *,
+    process,
+    registry,
+    conversation,
+    streaming_message_id: str,
+    tool_kwargs: dict,
+  ) -> str:
+    """Drain a parser event iterator, dispatching tools as we go.
+
+    Returns the concatenation of any text appended to the streaming
+    message as a side effect of dispatch (currently just tool result
+    text). ``TextEvent`` items are intentionally ignored: their text
+    was already emitted as part of the originating chunk.
+    """
+    appended = ""
+    for ev in events:
+      if isinstance(ev, TextEvent):
+        continue
+      if isinstance(ev, ParseError):
+        logger.debug(
+          "Parser error %s at %d (expected=%r got=%r)",
+          ev.reason, ev.position, ev.expected, ev.got,
+        )
+        continue
+      if isinstance(ev, TagEvent):
+        appended += cls._handle_tag_event(
+          ev,
+          process=process,
+          registry=registry,
+          conversation=conversation,
+          streaming_message_id=streaming_message_id,
+          tool_kwargs=tool_kwargs,
+        )
+    return appended
+
+  @classmethod
+  def _handle_tag_event(
+    cls,
+    ev: TagEvent,
+    *,
+    process,
+    registry,
+    conversation,
+    streaming_message_id: str,
+    tool_kwargs: dict,
+  ) -> str:
+    """Append a utility message for ``ev`` and dispatch tool calls.
+
+    Always records the tag as a utility message so downstream
+    consumers (persistence, observers, future replay tooling) get
+    the structured span. For ``TagType.TOOL`` events the agent then
+    resolves the qualified name and dispatches through
+    ``registry.execute_tool``, streaming the result back to the
+    active assistant message. Returns whatever extra text was
+    appended to the streaming message so the agent can keep
+    ``full_response`` accurate.
+    """
+    appender = getattr(conversation, "append_utility", None)
+    if callable(appender):
+      try:
+        appender(
+          tag_type=ev.tag_type,
+          content=ev.content,
+          source_message_id=streaming_message_id,
+          start_index=ev.start_index,
+          end_index=ev.end_index,
+          attributes=dict(ev.attributes) if ev.attributes else None,
+        )
+      except Exception:
+        logger.exception("Failed to append utility message for tag %r", ev.tag_type)
+
+    if ev.tag_type is not TagType.TOOL:
+      return ""
+
+    return cls._dispatch_tool_event(
+      ev,
+      process=process,
+      registry=registry,
+      conversation=conversation,
+      streaming_message_id=streaming_message_id,
+      tool_kwargs=tool_kwargs,
+    )
+
+  @classmethod
+  def _dispatch_tool_event(
+    cls,
+    ev: TagEvent,
+    *,
+    process,
+    registry,
+    conversation,
+    streaming_message_id: str,
+    tool_kwargs: dict,
+  ) -> str:
+    """Dispatch a TOOL ``TagEvent`` through ``registry.execute_tool``.
+
+    Pulls the target name from the tag's attributes first, then from
+    the JSON payload's envelope ``name`` field. When both sources are
+    silent the dispatch fails with a typed message rather than
+    guessing. Result text is appended to the streaming message and
+    emitted as a token so the user sees it inline.
+    """
+    name = cls._extract_tool_name(ev)
+    if not name:
+      return cls._emit_tool_output(
+        f"[TOOL_ERROR] Tool call missing 'name' (tag attributes={ev.attributes})",
+        process=process,
+        conversation=conversation,
+        streaming_message_id=streaming_message_id,
+      )
+
+    qualified = name
+    resolver = getattr(registry, "resolve_qualified_name", None)
+    if callable(resolver):
+      resolved = resolver(name)
+      if resolved is not None:
+        qualified = resolved
+
+    try:
+      result = registry.execute_tool(
+        qualified,
+        ev.content,
+        conversation,
+        **tool_kwargs,
+      )
+    except Exception as exc:
+      logger.exception("Error executing tool %r", qualified)
+      return cls._emit_tool_output(
+        f"[TOOL_ERROR] {exc}",
+        process=process,
+        conversation=conversation,
+        streaming_message_id=streaming_message_id,
+      )
+
+    rendered = cls._render_result(result)
+    return cls._emit_tool_output(
+      rendered,
+      process=process,
+      conversation=conversation,
+      streaming_message_id=streaming_message_id,
+    )
+
+  @staticmethod
+  def _extract_tool_name(ev: TagEvent) -> Optional[str]:
+    """Pull the dispatch name out of attributes or the JSON envelope."""
+    attr_name = ev.attributes.get("name") if ev.attributes else None
+    if isinstance(attr_name, str) and attr_name.strip():
+      return attr_name.strip()
+    try:
+      _params, name_hint = decode_payload(ev.content)
+    except ValueError:
+      return None
+    if isinstance(name_hint, str) and name_hint.strip():
+      return name_hint.strip()
+    return None
+
+  @staticmethod
+  def _render_result(result: Result) -> str:
+    """Stringify a ``Result`` for inline streaming back to the user."""
+    if result is None:
+      return ""
+    if result.is_error():
+      return f"[TOOL_ERROR] {result.get_message() or 'Unknown tool error'}"
+    data = result.get_data()
+    if data is None:
+      return ""
+    if isinstance(data, str):
+      return data
+    try:
+      return json.dumps(data)
+    except Exception:
+      return str(data)
+
+  @staticmethod
+  def _emit_tool_output(
+    text: str,
+    *,
+    process,
+    conversation,
+    streaming_message_id: str,
+  ) -> str:
+    """Append ``text`` to the streaming message and emit it as a token.
+
+    Splitting this out keeps the dispatch helpers free of streaming
+    bookkeeping and makes the success / error paths share a single
+    point of side effects.
+    """
+    if not text:
+      return ""
+    # The result is a separate streaming step from the model's own
+    # output; prefix with a newline if the assistant didn't end on
+    # one so the inline rendering reads naturally.
+    prefix = ""
+    try:
+      latest = conversation.get_message(streaming_message_id)  # type: ignore[attr-defined]
+      current = getattr(latest, "content", "") if latest is not None else ""
+    except Exception:
+      current = ""
+    if current and not current.endswith("\n"):
+      prefix = "\n"
+
+    out = f"{prefix}{text}"
+    conversation.append_stream_chunk(streaming_message_id, out)
+    process.emit("token", out)
+    return out
+
+  # ------------------------------------------------------------------
+  # Non-text chunk handling (unchanged from pre-phase-6)
+  # ------------------------------------------------------------------
   @staticmethod
   def _attach_image_chunk(process, message_id: str, chunk: GenerationChunk) -> None:
     """Convert an image byte chunk into an artifact attached to the message."""

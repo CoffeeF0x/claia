@@ -1,22 +1,19 @@
-# Tool Patterns
+# Tool Patterns (deprecated — slated for phase 7 removal)
 
-High-level patterns for **detecting and parsing tool calls** in model text.
+The pattern subsystem was the pre-overhaul tool-call detector for
+free-form assistant output. Phase 6 retired its only consumer
+(`Registry.process_content`); phase 7 deletes this directory, the
+`claia.tool_patterns` entry-point group, and the related
+`PatternRegistrar` / hookspec / `Manager` accessors.
 
-## What lives here
+## What still lives here (transitionally)
 
-- `default.py` — baseline pattern implementation and utilities.
+- `default.py` — baseline pattern implementation and utilities. The
+  in-tree code no longer constructs or queries it.
 
-Patterns implement the contract mirrored by `claia.framework.hooks.pattern` and are discovered via the
-`claia.tool_patterns` entry point.
+## Migration
 
-## How patterns fit in
-
-- Define how tool calls are marked and extracted (e.g., special tags or JSON blocks).
-- Provide methods such as `find_tool_calls(content, conversation, settings)` returning matches with:
-  - tool name
-  - parsed parameters
-  - character offsets (for text replacement).
-- Used by `Registry.process_content(...)` to:
-  - scan assistant output for tool calls
-  - hand off to a **tool protocol** for execution
-  - splice results back into the content.
+The streaming [`TagParser`](../../parser/README.md) replaces the
+pattern subsystem. Tool-call detection happens inside the agent
+loop, and dispatch flows through `Registry.execute_tool` (see
+`framework/agents/simple.py` and `tools/protocols/README.md`).

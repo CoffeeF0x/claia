@@ -54,14 +54,6 @@ through this protocol.
 The envelope's `name` field is informational only; dispatch always
 uses the `qualified_name` argument supplied by the registry.
 
-## Legacy dispatch
-
-`SimpleProtocolPlugin.execute_legacy(tool_name, parameters, conversation, commands, **kwargs)`
-preserves the pre-overhaul calling convention. It is kept alive so
-`Registry.process_content`'s transitional shim continues to work
-through phase 5; phase 6 retires both together and the method comes
-out at the same time.
-
 ## CLI direct execution
 
 `Registry.run_command(name, parameters, conversation, **kwargs)` does
@@ -71,3 +63,12 @@ CLI parameter dicts contain non-JSON-serializable Python objects
 without round-tripping through JSON. That path uses the same
 `dispatcher` helpers (`prepare_command_kwargs`, `normalize_result`),
 so type coercion stays consistent across the two entry points.
+
+## Phase 6 retirement notes
+
+The transitional `execute_legacy(tool_name, parameters, conversation, commands, **kwargs)`
+method that backed `Registry.process_content` was removed in phase 6
+along with `process_content` itself. Streaming agents now own a
+`TagParser` per turn and call `Registry.execute_tool` directly when
+a `TagType.TOOL` event closes; the simple protocol's only public
+dispatch surface is therefore `execute(...)`.

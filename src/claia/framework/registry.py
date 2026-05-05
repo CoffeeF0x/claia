@@ -5,7 +5,6 @@ that provides a unified interface for tools, models, and agents.
 
 import logging
 import threading
-import json
 from typing import Any, Dict, Iterator, List, Optional, Union
 
 from claia.framework.manager import Manager
@@ -232,6 +231,44 @@ class Registry:
     self._ensure_tool_index()
     return (self._tool_index or {}).get(qualified_name)
 
+  def resolve_qualified_name(self, name: str) -> Optional[str]:
+    """Resolve a possibly-bare tool name to its qualified form.
+
+    Phase 6 (plan §2.9) makes unqualified-name resolution the
+    consumer's problem. The agent loop calls this before
+    :meth:`execute_tool` so models that emit bare tool names (e.g.
+    ``{"name": "echo", ...}`` from a ``[TOOL_CALL]`` payload without
+    a module prefix) still hit the right tool.
+
+    Resolution rules:
+
+    1. ``name`` is already in the index — return it unchanged.
+    2. Exactly one indexed entry ends with ``"." + name`` — return
+       that entry.
+    3. Two or more matches — return the first one in index order
+       (matches the first-in-list-wins precedence used elsewhere)
+       and log a debug warning. Hosts that need stricter behavior
+       can wrap the call.
+    4. No match — return ``None`` and let the caller surface the
+       failure.
+    """
+    self._ensure_tool_index()
+    index = self._tool_index or {}
+    if name in index:
+      return name
+
+    suffix = "." + name
+    matches = [q for q in index if q.endswith(suffix)]
+    if not matches:
+      return None
+    if len(matches) > 1:
+      logger.debug(
+        "Bare tool name %r matched multiple qualified names %r; "
+        "using first match per index order",
+        name, matches,
+      )
+    return matches[0]
+
   def execute_tool(
     self,
     qualified_name: str,
@@ -267,21 +304,6 @@ class Registry:
       logger.exception("Error executing tool '%s'", qualified_name)
       return Result.fail(str(e))
 
-  # ------------------------------------------------------------------
-  # Transitional surface (retired in phase 6)
-  # ------------------------------------------------------------------
-  def get_commands_catalog(self) -> Dict[str, Dict]:
-    """Return a hierarchical catalog of all native commands.
-
-    Phase 5 transitional helper: derived directly from the manager on
-    every call (no caching). Used by the surviving
-    :meth:`process_content` shim and any external code that still
-    introspects the legacy catalog shape. Phase 6 retires both
-    callers.
-    """
-    self._ensure_loaded()
-    return self.manager.get_all_commands()
-
   def refresh_tools(self) -> None:
     """Re-fetch dynamic tool inventories from every loaded protocol.
 
@@ -313,127 +335,6 @@ class Registry:
         self.manager.stop_protocols()
       except Exception as e:
         logger.warning("manager.stop_protocols raised during shutdown: %s", e)
-
-  def contains_tool_tokens(self, content: str, pattern_name: Optional[str] = None) -> bool:
-    """Lightweight precheck to see if content likely contains tool calls for a pattern."""
-    self._ensure_loaded()
-    pattern_plugin = None
-    pattern_info = None
-    if pattern_name:
-      pattern_plugin, pattern_info = self.manager.get_pattern_by_name(pattern_name)
-    if not pattern_plugin:
-      pattern_plugin = self.manager.get_default_pattern()
-      if pattern_plugin:
-        pattern_info = pattern_plugin.get_pattern_info()
-    if not pattern_plugin or not pattern_info:
-      return False
-    opening_token = getattr(pattern_info, 'opening_token', None)
-    if not opening_token:
-      return False
-    return opening_token in content
-
-  def process_content(self, conversation, content: str, settings=None, protocol_name: str = 'simple', **kwargs) -> str:
-    """Find and execute tool calls in content using the configured
-    pattern/protocol.
-
-    Phase 5 keeps this transitional shim alive (plan §11 Phase 5) but
-    sources its kwarg-prep helper from the simple protocol's
-    ``dispatcher`` module — the registry no longer owns the
-    ``_prepare_command_kwargs`` / ``_convert_type`` helpers
-    (plan §7.4). Phase 6 retires both this method and the
-    ``execute_legacy`` callee on the simple protocol.
-    """
-    from claia.core.tools.protocols.simple.dispatcher import prepare_command_kwargs
-
-    self._ensure_loaded()
-
-    # Resolve pattern plugin: prefer conversation pattern name, fallback to default
-    pattern_plugin = None
-    pattern_info = None
-    try:
-      if conversation and getattr(conversation, 'tool_pattern_name', None):
-        pattern_plugin, pattern_info = self.manager.get_pattern_by_name(conversation.tool_pattern_name)
-    except Exception:
-      pattern_plugin, pattern_info = None, None
-    if not pattern_plugin:
-      pattern_plugin = self.manager.get_default_pattern()
-      if pattern_plugin:
-        pattern_info = pattern_plugin.get_pattern_info()
-    if not pattern_plugin:
-      logger.debug("No tool pattern plugins registered; returning content unchanged")
-      return content
-
-    # Resolve protocol plugin
-    protocol_plugin, protocol_info = self.manager.get_protocol_by_name(protocol_name)
-    if not protocol_plugin:
-      logger.warning(f"Tool protocol '{protocol_name}' not found; returning content unchanged")
-      return content
-
-    # Pass kwargs through to protocol unchanged
-    filtered_protocol_kwargs = dict(kwargs)
-
-    processed = content
-
-    # Prepare the commands catalog once for the protocol to use for lookup
-    commands_catalog = self.get_commands_catalog()
-
-    # Iterate until no more matches are found
-    while True:
-      matches = pattern_plugin.find_tool_calls(processed, conversation, settings=settings)
-      if not matches:
-        break
-
-      # Process matches in order, left-to-right to keep indices consistent
-      for m in matches:
-        try:
-          # Resolve command definition to prepare arguments
-          plugin, cmd_def, module_info = self.manager.get_tool_by_name(m.tool_name)
-          if not plugin or not cmd_def:
-            exec_result = Result.fail(f"Tool not found: {m.tool_name}")
-          else:
-            # Extra kwargs can include conversation and user/system kwargs; only mapped if expected by args
-            extra = dict(filtered_protocol_kwargs)
-            extra['conversation'] = conversation
-            prepared_kwargs = prepare_command_kwargs(m.parameters or {}, cmd_def, extra_kwargs=extra)
-
-            # Phase 4 / 5 transitional shim: dispatch via the
-            # pre-overhaul entry point on the simple protocol. The new
-            # ``BaseProtocol.execute(qualified_name, raw_payload, ...)``
-            # contract is driven by the agent loop in phase 6 once the
-            # parser surfaces ``TagEvent`` objects directly; until then
-            # the registry keeps feeding prepared kwargs through the
-            # legacy dispatch path so existing CLI tool calls work
-            # unchanged. See ``tools-overhaul-plan.md`` §7.3.
-            exec_result: Result = protocol_plugin.execute_legacy(
-              m.tool_name,
-              prepared_kwargs,
-              conversation,
-              commands_catalog,
-              **filtered_protocol_kwargs
-            )
-        except Exception as e:
-          exec_result = Result.fail(str(e))
-
-        if exec_result.is_success():
-          data = exec_result.get_data()
-          if isinstance(data, str):
-            replacement = data
-          elif data is None:
-            replacement = ''
-          else:
-            try:
-              replacement = json.dumps(data)
-            except Exception:
-              replacement = str(data)
-        else:
-          replacement = f"[TOOL_ERROR] {exec_result.get_message() or 'Unknown tool error'}"
-
-        # Replace text span
-        processed = processed[:m.start_index] + replacement + processed[m.end_index:]
-
-      # Continue loop to detect nested or newly introduced calls
-
-    return processed
 
   def run_command(self, command_name: str, parameters: Dict[str, Any], conversation, **kwargs) -> Result:
     """Execute a native command by name (CLI direct-execution path).

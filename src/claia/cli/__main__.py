@@ -259,38 +259,8 @@ def print_header(settings: Settings) -> None:
 
 
 ########################################################################
-#                            TOOL FUNCTIONS                            #
+#                          CONVERSATION SETUP                          #
 ########################################################################
-def process_final_message_tools(final_message, process: Process, settings: Settings, registry: Registry) -> None:
-  """Process any tool calls in the final message and update the conversation if needed."""
-
-  # Note: Tool pattern/protocol configuration is now handled by the registry extensions
-  # We simply try to process the content and let the registry handle detection
-
-  # Get user configuration parameters to pass to tools
-  user_kwargs = settings.get_user_kwargs()
-
-  # Try to process tool calls in the message content
-  try:
-    processed_content = registry.process_content(
-      process.conversation,
-      final_message.content,
-      settings=None,
-      **user_kwargs
-    )
-  except Exception as e:
-    logger.debug(f"No tool processing needed or failed: {e}")
-    return
-
-  # If content changed after processing, update the message and display changes
-  if processed_content != final_message.content:
-    print("\n[Processing tool calls...]")
-    # Display only the new content that was added (tool results)
-    print(processed_content[len(final_message.content):], flush=True)
-    # Update the stored message with the processed content (thread-safe)
-    process.conversation.update_message(final_message.message_id, content=processed_content)
-
-
 def setup_conversation(settings: Settings, registry: Registry) -> None:
   """Setup or configure the active conversation."""
   if not settings.active_conversation:
@@ -482,18 +452,14 @@ def main() -> None:
           for artifact in saved_artifacts:
             print(f"[Saved attachment: {artifact.name}]")
           # Persist only if domain events indicate conversation mutations.
+          # Tool calls (when present in the streamed response) are
+          # dispatched inline by the agent loop per plan §9, so by the
+          # time we reach here the conversation already reflects every
+          # tool result and utility message.
           pending_events = process.conversation.pull_events()
           if file_repo and pending_events:
             if not file_repo.save(process.conversation):
               logger.error("Failed to save conversation")
-          # Process tool calls in the final message
-          final_message = process.conversation.get_latest_message()
-          if final_message:
-            process_final_message_tools(final_message, process, settings, registry)
-            post_tool_events = process.conversation.pull_events()
-            if file_repo and post_tool_events:
-              if not file_repo.save(process.conversation):
-                logger.error("Failed to save conversation after tool processing")
           done_event.set()
 
         def on_error(error_msg):

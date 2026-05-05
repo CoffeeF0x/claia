@@ -759,6 +759,210 @@ both stay alive for phase 6 to retire together.
 
 ---
 
+## Phase 6 — Agent loop migration
+
+Goal (per plan §11): make the agent the per-turn owner of a
+``TagParser``, run tool dispatch through ``Registry.execute_tool``
+inline as TOOL ``TagEvent`` instances close, and retire the
+transitional ``Registry.process_content`` /
+``Registry.contains_tool_tokens`` / ``Registry.get_commands_catalog``
+surface plus the matching ``SimpleProtocolPlugin.execute_legacy``
+shim alongside the CLI's post-stream tool-processing pass.
+
+### Files modified
+
+- ``src/claia/framework/agents/simple.py`` — full rewrite of the
+  ``process_request`` body. The agent now:
+  1. Resolves ``TagSpec``s for the current model via
+     ``resolve_tag_specs(registry.get_supported_models()[model_id])``,
+     falling back to defaults when the registry lacks the
+     definition.
+  2. Constructs one ``TagParser`` per turn.
+  3. For each text chunk, emits ``"token"`` (preserving the live
+     stream UX), appends to the streaming message, then feeds the
+     same text into the parser.
+  4. For every ``TagEvent`` produced, appends a utility message
+     via ``conversation.append_utility(...)``. For
+     ``TagType.TOOL`` events, extracts the dispatch name from the
+     attributes-or-envelope, runs ``registry.resolve_qualified_name``
+     to upgrade a bare name to a qualified one, and calls
+     ``registry.execute_tool(qualified, raw_payload, conversation, **kwargs)``.
+     The result text is appended to the streaming message (with a
+     newline prefix when needed) and re-emitted as a ``"token"`` so
+     terminal renderers see the tool output inline.
+  5. Drains ``parser.flush()`` after the deployment loop ends.
+     Cancellation skips the flush so a torn-down stream cannot
+     fire spurious tool dispatches.
+  6. ``ParseError`` events log at ``DEBUG`` and are otherwise
+     ignored — the parser's mismatched-close / unclosed-tag
+     diagnostics aren't user-facing today.
+- ``src/claia/framework/registry.py`` — removed ``process_content``,
+  ``contains_tool_tokens``, and ``get_commands_catalog``; dropped
+  the now-unused ``import json``. Added
+  ``Registry.resolve_qualified_name(name)`` (plan §2.9) which
+  returns the qualified form for a bare tool name by scanning the
+  index for a unique ``"." + name`` suffix; multiple matches log a
+  debug warning and return the first by index order.
+- ``src/claia/core/tools/protocols/simple/protocol.py`` — removed
+  ``execute_legacy`` and its imports / docstring references.
+  ``SimpleProtocolPlugin``'s only public dispatch surface is now
+  ``execute(qualified_name, raw_payload, conversation, **kwargs)``.
+- ``src/claia/cli/__main__.py`` — removed
+  ``process_final_message_tools`` and the ``on_complete`` callsite
+  that used it. The CLI's only remaining post-stream side effect
+  is conversation persistence; tool dispatch + result rendering is
+  fully inside the agent loop.
+- ``src/tests/framework/test_protocol_contract.py`` — dropped the
+  two ``TestSimpleProtocolExecuteLegacy`` cases and updated the
+  module docstring to point at phase 6 retirement.
+
+### Files added
+
+- ``src/tests/framework/test_agent_phase6.py`` — 16 cases covering
+  the new agent loop:
+  - Text-only stream (no tag dispatch, no utility messages).
+  - Single tool call (envelope payload, qualified name, bare-name
+    fallback, tool failure inline error, payload-without-name typed
+    error).
+  - Multiple tool calls dispatched in order with utility messages
+    and inline result text.
+  - Thinking + tool mixed (verifies ``THINKING`` → utility,
+    ``TOOL`` → utility + dispatch).
+  - Tag tokens split across chunk boundaries (open token straddling
+    two chunks still produces a single ``TagEvent``).
+  - End-of-stream tool tag dispatched on flush.
+  - Mismatched-close ``ParseError`` tolerated without crashing.
+  - ``Registry.resolve_qualified_name`` unit tests (already
+    qualified, bare match, no match, ambiguous → first wins).
+  - Verification that ``process_content``, ``contains_tool_tokens``,
+    ``get_commands_catalog``, and ``execute_legacy`` are all gone
+    from the production surface.
+
+### Files updated (documentation)
+
+- ``src/claia/core/tools/README.md`` — describes the post-overhaul
+  flow (modules → registry index → agent → ``execute_tool``); the
+  legacy bullet about ``Registry.process_content`` coordinating
+  detection-execution-replacement is gone.
+- ``src/claia/core/tools/protocols/README.md`` — describes the new
+  ``BaseProtocol`` ABC, the registry's index assembly, and the
+  agent-driven dispatch path.
+- ``src/claia/core/tools/protocols/simple/README.md`` — phase 6
+  retirement note replaces the legacy-dispatch section.
+- ``src/claia/core/tools/patterns/README.md`` — flagged as
+  deprecated and slated for phase 7 deletion now that nothing
+  in-tree consumes it.
+
+### Decisions confirmed during implementation
+
+- **Tool result lives inline in the assistant message, not a
+  utility message.** Plan §12.2 leaves the tool-result-message
+  shape open. Phase 6 takes the simplest path: result text is
+  appended to the streaming assistant message and re-emitted as a
+  ``"token"`` so terminal rendering matches the legacy "[Processing
+  tool calls...]" experience without any post-stream rewrite.
+  Future work (a ``TagType.TOOL_RESULT`` utility, a separate role,
+  etc.) is a clean superset of this state — the agent already
+  builds the necessary utility messages for the call itself, so a
+  future commit only needs to record the response side too.
+- **Original tool tag stays in the message text.** Pre-overhaul
+  ``Registry.process_content`` *replaced* the tag span with the
+  result. Phase 6 keeps the tag verbatim and *appends* the result;
+  this preserves auditability of the model's actual output and
+  avoids index-arithmetic against a streaming buffer. The user
+  still sees both the call and the response inline in the
+  terminal.
+- **Bare-name resolution lives on ``Registry``.** Plan §2.9 makes
+  unqualified-name resolution the consumer's problem, so the
+  registry exposes ``resolve_qualified_name`` and the agent calls
+  it before ``execute_tool``. Hosts that want stricter behavior
+  (e.g. reject ambiguous bare names) can wrap or replace the
+  helper.
+- **Tool name resolution prefers tag attributes over envelope.**
+  ``<tool_call name="echo">{...}</tool_call>``-style overrides
+  carry the dispatch name in attributes; the JSON-envelope ``name``
+  field is the fallback when the tag spec doesn't surface
+  attributes. Both are accepted; bare-content payloads with no
+  name source fail with a typed inline error rather than guessing.
+- **Cancellation skips the flush.** When the user cancels mid-
+  stream the agent stops feeding the parser and does **not** call
+  ``parser.flush()``. Otherwise a half-streamed tag could fire a
+  surprise dispatch after the user already pressed Ctrl+C.
+- **``Conversation.get_latest_message`` is no longer the
+  assistant-message accessor.** ``append_utility`` advances
+  ``active_head_id`` to the new utility, so tests must filter by
+  ``MessageRole.ASSISTANT`` explicitly. Phase 6 tests provide a
+  ``_assistant_message`` helper to enforce this.
+
+### Deviations from the plan
+
+- **Plan §9 pseudocode shows the agent calling
+  ``simple_payload.peek_name(ev.content)``.** The implementation
+  reuses the existing ``decode_payload`` helper from
+  ``simple.payload`` (which already returns the envelope ``name``
+  as ``name_hint``) and falls back to the tag's parsed
+  ``attributes["name"]``. No new ``peek_name`` function was
+  introduced.
+- **Tool-result handling is not yet a utility message.** The plan
+  pseudocode hints at a ``conversation.append_tool_result(...)``
+  call. Phase 6 intentionally defers the structured tool-result
+  message (plan §12.2) and treats the response as inline streamed
+  text. The decision is documented above; phase 7 / a future
+  follow-up can layer the structured message on top without
+  changing the dispatch path.
+- **``Registry.resolve_qualified_name`` lives on the registry, not
+  the protocol.** Plan §2.9 names "the agent or the tool protocol"
+  as candidate owners; phase 6 chose the registry because it
+  already holds the unified index, and the agent is the natural
+  caller. Multi-protocol setups don't need per-protocol resolution
+  logic.
+
+### Test coverage added
+
+``src/tests/framework/test_agent_phase6.py`` (16 cases) covers each
+of the four streaming scenarios required by plan §11 Phase 6, plus
+the surrounding plumbing:
+
+- **Text-only stream**: 1 case (no dispatch, no utilities).
+- **One tool call**: 4 cases (envelope payload + qualified name,
+  bare-name fallback, tool failure inline error,
+  payload-without-name typed error).
+- **Multiple tool calls**: 1 case (two dispatches in order, two
+  utilities, both result strings appear inline).
+- **Thinking + tool mixed**: 1 case (THINKING utility + TOOL
+  utility + dispatch).
+- **Streaming chunk boundaries**: 1 case (open token split across
+  chunks).
+- **Parser flush**: 1 case (close token at end of stream).
+- **ParseError tolerance**: 1 case (unclosed tag does not crash
+  the stream).
+- **``Registry.resolve_qualified_name``**: 4 cases (already
+  qualified passthrough, bare resolves, unknown returns ``None``,
+  ambiguous returns first match).
+- **Legacy surface removed**: 2 cases (registry no longer has
+  ``process_content`` / ``contains_tool_tokens`` /
+  ``get_commands_catalog``; simple protocol no longer has
+  ``execute_legacy``).
+
+The pre-existing ``test_simple_agent.py`` cases (5 tests covering
+text-only success, token callbacks, error handling, image and audio
+artifact attachment) all continue to pass against the rewritten
+agent.
+
+### Cleanup performed alongside phase 6
+
+- Removed the unused ``import json`` from
+  ``src/claia/framework/registry.py`` (no remaining callers after
+  ``process_content`` was deleted).
+- Renamed the CLI's ``TOOL FUNCTIONS`` section header to
+  ``CONVERSATION SETUP`` after ``process_final_message_tools`` was
+  removed.
+- Updated three READMEs (core/tools, core/tools/protocols,
+  core/tools/patterns) so newcomers don't get pointed at retired
+  code paths.
+
+---
+
 ## Follow-ups & deferred items
 
 These are items discovered during implementation that were not
@@ -809,3 +1013,38 @@ phase or follow-up.
   the CLI callers split injectables out, revisit removing
   ``run_command`` and folding all CLI dispatch into
   ``execute_tool``.
+- **Tool result is appended inline rather than stored as a structured
+  utility message.** Phase 6 keeps the tool's response as plain text
+  appended to the streaming assistant message and re-emitted as a
+  ``"token"`` event. Plan §12.2 leaves the
+  ``TagType.TOOL_RESULT``-vs-separate-role question open. A
+  follow-up should make the response a first-class structured
+  message (utility tag type ``TOOL_RESULT`` linking back to the
+  call's utility id is the leading candidate) so persistence and
+  observers can round-trip it without re-parsing the assistant
+  text.
+- **``payload.decode_payload`` requires an explicit ``parameters``
+  field for envelope shape.** ``{"name": "x"}`` (no ``parameters``)
+  is currently treated as a flat parameter dict; the agent's
+  ``_extract_tool_name`` therefore fails to find a name. Phase 5's
+  contract fixed this behavior on purpose
+  (``test_simple_protocol_phase5.py::test_envelope_without_parameters_treated_as_flat``),
+  but it's a foot-gun if a model emits envelope-style metadata
+  without filling the ``parameters`` dict for a no-arg tool. A
+  follow-up could make a top-level string ``name`` field
+  unambiguously trigger the envelope path with ``parameters``
+  defaulting to ``{}``; weigh against the existing test contract
+  before flipping.
+- **Pattern subsystem still loads, just nobody calls it.** Phase 6
+  removed the only consumers (``Registry.process_content`` and the
+  CLI's post-stream pass) but ``Manager.pattern_pm`` and the
+  ``claia.tool_patterns`` entry-point group still load on startup.
+  Phase 7 deletes the whole subsystem; until then the dormant
+  loader produces no observable effect (the default pattern is
+  registered but never queried).
+- **Cancellation race in the parser flush.** When the user cancels
+  mid-stream the agent intentionally skips ``parser.flush()`` to
+  avoid firing tool calls after the user gave up. A follow-up
+  could surface a partial-tag warning to the user (or to the
+  conversation as a structured event) so a half-streamed call
+  isn't silently dropped.

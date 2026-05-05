@@ -8,8 +8,7 @@ Exercises the post-overhaul protocol contract described in
 - New ``BaseProtocol`` ABC (abstract method enforcement, default
   lifecycle no-ops, ``get_protocol_info`` passthrough).
 - ``SimpleProtocolPlugin`` implementing the new ABC: ``execute`` via
-  JSON payload, ``execute_legacy`` for the transitional registry
-  shim, and ``get_tool_references`` reflecting bound modules.
+  JSON payload and ``get_tool_references`` reflecting bound modules.
 - ``ProtocolRegistrar`` wiring the new hooks through to the plugin.
 - ``Manager`` lifecycle: ``start()`` fires at load time,
   ``stop_protocols()`` / ``refresh_protocols()`` iterate loaded
@@ -17,6 +16,10 @@ Exercises the post-overhaul protocol contract described in
 - ``Registry.refresh_tools`` / ``Registry.shutdown`` surface the
   lifecycle entry points without tripping over unloaded plugins.
 - Deprecation banner on the legacy ABC import.
+
+Note: the phase 5 ``execute_legacy`` shim and the corresponding
+``Registry.process_content`` flow were retired in phase 6; tests that
+covered them have been removed alongside the production code.
 """
 
 from __future__ import annotations
@@ -372,49 +375,6 @@ class TestSimpleProtocolPluginContract:
     result = plugin.execute("demo.boom", "", conversation=None)
     assert result.is_error()
     assert "kaboom" in result.get_message()
-
-
-class TestSimpleProtocolExecuteLegacy:
-  """Transitional dispatcher that ``Registry.process_content`` drives
-  until phase 6 retires ``process_content``."""
-
-  def _catalog(self, module_name: str, tool_name: str, fn):
-    return {
-      module_name: {
-        "module_info": ToolModuleInfo(name=module_name, title=module_name, description=""),
-        "list_of_tools": [
-          {
-            "tool_name": tool_name,
-            "tool_description": "",
-            "tool_callable": fn,
-            "arguments": [],
-          }
-        ],
-      }
-    }
-
-  def test_execute_legacy_dispatches_via_catalog(self):
-    plugin = SimpleProtocolPlugin()
-    catalog = self._catalog("demo", "echo", lambda message: Result.ok(f"echo:{message}"))
-    result = plugin.execute_legacy(
-      "demo.echo",
-      {"message": "hi"},
-      conversation=None,
-      commands=catalog,
-    )
-    assert result.is_success()
-    assert result.get_data() == "echo:hi"
-
-  def test_execute_legacy_returns_not_found(self):
-    plugin = SimpleProtocolPlugin()
-    result = plugin.execute_legacy(
-      "demo.missing",
-      {},
-      conversation=None,
-      commands={},
-    )
-    assert result.is_error()
-    assert "not found" in result.get_message()
 
 
 # ---------------------------------------------------------------------------

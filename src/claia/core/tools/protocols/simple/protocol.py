@@ -18,17 +18,12 @@ Internals split per plan §8:
   preps the callable's kwargs from a parameter dict + injectables.
 - :func:`~claia.core.tools.protocols.simple.payload.decode_payload`
   decodes the ``raw_payload`` string into ``(parameters, name_hint)``.
-
-The pre-overhaul dispatch (catalog + already-prepared kwargs) is
-preserved as :meth:`execute_legacy` so the transitional
-``Registry.process_content`` shim continues to work through phase 5;
-phase 6 retires both together.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from claia.core.plugins.base import ProtocolInfo, ToolReference
 from claia.core.results import Result
@@ -159,60 +154,6 @@ class SimpleProtocolPlugin(BaseProtocol):
       return Result.fail(str(exc))
 
     return normalize_result(qualified_name, result)
-
-  # ------------------------------------------------------------------
-  # Legacy dispatch (transitional)
-  # ------------------------------------------------------------------
-  def execute_legacy(
-    self,
-    tool_name: str,
-    parameters: Dict[str, Any],
-    conversation,
-    commands: Dict[str, Any],
-    **kwargs,
-  ) -> Result:
-    """Pre-overhaul dispatch: ``commands`` catalog + prepared kwargs.
-
-    Kept intact so the transitional ``Registry.process_content`` flow
-    keeps working through phases 4 – 5; phase 6 deletes both this
-    method and the registry shim that drives it.
-
-    ``parameters`` here is **already prepared** by the caller
-    (``Registry.process_content`` runs ``prepare_command_kwargs``
-    against the resolved ``ToolDefinition`` before calling in), so the
-    only work left is callable resolution from the externally-supplied
-    catalog and result normalization.
-    """
-    callable_fn: Optional[Any] = None
-    try:
-      if "." in tool_name:
-        module_name, cmd_name = tool_name.split(".", 1)
-        mod = commands.get(module_name) if isinstance(commands, dict) else None
-        if mod and isinstance(mod.get("list_of_tools"), list):
-          for entry in mod["list_of_tools"]:
-            if entry.get("tool_name") == cmd_name:
-              callable_fn = entry.get("tool_callable")
-              break
-      else:
-        if isinstance(commands, dict):
-          for _, mod in commands.items():
-            loc = mod.get("list_of_tools") if isinstance(mod, dict) else None
-            if isinstance(loc, list):
-              for entry in loc:
-                if entry.get("tool_name") == tool_name:
-                  callable_fn = entry.get("tool_callable")
-                  break
-            if callable_fn:
-              break
-
-      if not callable_fn:
-        return Result.fail(f"Tool '{tool_name}' not found")
-
-      result = callable_fn(**(parameters or {}))
-      return normalize_result(tool_name, result)
-    except Exception as exc:
-      logger.exception("Error executing tool '%s'", tool_name)
-      return Result.fail(str(exc))
 
 
 __all__ = ["SimpleProtocolPlugin"]
