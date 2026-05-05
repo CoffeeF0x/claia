@@ -319,6 +319,13 @@ class Manager:
       self._load_plugins(group='claia.tool_protocols', pm=self.protocol_pm, label='protocol', allow_empty=True, ctor_kwargs=kwargs)
       self._load_plugins(group='claia.tool_modules', pm=self.module_pm, label='module', allow_empty=True, ctor_kwargs=kwargs)
 
+      # Overhaul phase 4: fire ``start()`` on each loaded protocol so
+      # session-bearing implementations (future MCP, remote RPC, etc.)
+      # can open their resources once plugins are wired in. Any failure
+      # logs and is skipped; the protocol still registers so other
+      # static protocols (simple) don't go down with it.
+      self._start_protocols()
+
       # Load agent plugins (optional)
       self._load_plugins(group='claia.agents', pm=self.agent_pm, label='agent', allow_empty=True, ctor_kwargs=kwargs)
 
@@ -394,6 +401,86 @@ class Manager:
       logger.error(f"Error loading {label} plugins from entry points: {e}")
       if not allow_empty:
         raise
+
+  # ------------------------------------------------------------------
+  # Protocol lifecycle (overhaul phase 4)
+  # ------------------------------------------------------------------
+  def _iter_protocol_instances(self):
+    """Yield the plain ``BaseProtocol`` instances for loaded protocols.
+
+    Unlike iterating ``self.protocol_pm.get_plugins()``, this returns
+    the wrapped plugin objects (not their registrar shells) so callers
+    can reach lifecycle hooks that aren't part of the pluggy dispatch
+    surface directly. Falls back to ``getattr(reg, 'plugin', reg)`` so
+    a bare-instance registration (should never happen, but be
+    defensive) still works.
+    """
+    for entry in self._lazy_plugins.get('claia.tool_protocols', []):
+      inst = entry.instance
+      if inst is None:
+        continue
+      yield inst
+
+  def _start_protocols(self) -> None:
+    """Call ``start()`` on every loaded protocol, swallowing errors.
+
+    Per plan §6.2 the default ``BaseProtocol.start`` is a no-op.
+    Session-bearing protocols (future MCP) open their connections
+    here. A single protocol's failure must not prevent other protocols
+    from running.
+    """
+    for inst in self._iter_protocol_instances():
+      start = getattr(inst, 'start', None)
+      if not callable(start):
+        continue
+      try:
+        start()
+      except Exception as e:
+        logger.warning(
+          "Protocol %s start() raised %s; continuing with partial inventory",
+          type(inst).__name__, e,
+        )
+
+  def stop_protocols(self) -> None:
+    """Call ``stop()`` on every loaded protocol.
+
+    Exposed on ``Manager`` so the ``Registry`` can tear down external
+    sessions during application shutdown without reaching into pluggy
+    internals. Errors are logged and swallowed — teardown should never
+    crash the caller.
+    """
+    for inst in self._iter_protocol_instances():
+      stop = getattr(inst, 'stop', None)
+      if not callable(stop):
+        continue
+      try:
+        stop()
+      except Exception as e:
+        logger.warning(
+          "Protocol %s stop() raised %s; continuing teardown",
+          type(inst).__name__, e,
+        )
+
+  def refresh_protocols(self) -> None:
+    """Call ``refresh()`` on every loaded protocol.
+
+    Triggered by registry callers that need to react to dynamic
+    inventory changes (e.g. an MCP ``notifications/tools/list_changed``).
+    Errors log and are skipped; the registry rebuilds its index from
+    the post-refresh ``get_tool_references()`` outputs separately in
+    phase 5.
+    """
+    for inst in self._iter_protocol_instances():
+      refresh = getattr(inst, 'refresh', None)
+      if not callable(refresh):
+        continue
+      try:
+        refresh()
+      except Exception as e:
+        logger.warning(
+          "Protocol %s refresh() raised %s; keeping prior inventory",
+          type(inst).__name__, e,
+        )
 
   @staticmethod
   def _instantiate_plugin(

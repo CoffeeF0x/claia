@@ -255,6 +255,40 @@ class ToolCallMatch:
 
 
 @dataclass
+class ToolReference:
+  """Protocol-agnostic descriptor of an executable tool.
+
+  Produced by each protocol's ``get_tool_references()`` and stored in
+  the registry's unified tool index. The registry uses ``qualified_name``
+  to identify the tool and ``protocol_name`` to dispatch execution back
+  to the owning protocol. ``parameter_schema`` is intentionally opaque
+  to the registry — its shape is protocol-specific (e.g. a
+  ``Dict[str, ArgumentDefinition]`` for the simple protocol, a raw JSON
+  Schema dict for MCP, etc.). Callers that need to introspect arguments
+  (UIs, renderers) must dispatch on the owning protocol.
+
+  See `docs/tools-overhaul-plan.md` §6.1 for the full rationale.
+
+  Fields:
+    - ``qualified_name``: fully-namespaced tool name, e.g.
+      ``"system.clear"`` for native modules or
+      ``"mcp.<server>.<tool>"`` for MCP-sourced tools.
+    - ``description``: human-readable description surfaced by UIs and
+      help text. Sourced from the protocol's own metadata.
+    - ``protocol_name``: name of the protocol that owns and runs this
+      tool. The registry uses this to route ``execute_tool`` calls.
+    - ``parameter_schema``: protocol-specific description of the tool's
+      parameters. Opaque to the registry.
+    - ``tags``: optional free-form tags for UI filtering / grouping.
+  """
+  qualified_name: str
+  description: str
+  protocol_name: str
+  parameter_schema: Any = None
+  tags: List[str] = field(default_factory=list)
+
+
+@dataclass
 class DeploymentParams:
   """Resolved deployment parameters returned by a solver."""
   deployment_name: str

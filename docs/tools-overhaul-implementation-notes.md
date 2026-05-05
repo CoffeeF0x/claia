@@ -348,6 +348,203 @@ assistant text they were extracted from.
 
 ---
 
+## Phase 4 — Protocol contract rewrite
+
+Goal (per plan §11): replace the pre-overhaul ``BaseProtocol`` /
+``ProtocolHooks`` contract with the new surface described in plan §6:
+protocols own their own tool inventory, expose a lifecycle
+(``start`` / ``stop`` / ``refresh``), and execute against a raw payload
+string. The old contract stays importable with a deprecation banner so
+third-party extensions have a grace period to migrate.
+
+### Files added
+
+- ``src/claia/core/tools/protocols/_legacy.py`` — keeps the
+  pre-overhaul ABC importable as ``LegacyBaseProtocol``. Imports fire
+  a ``DeprecationWarning`` at module-load time and a second one when a
+  subclass is created, pointing authors at the new
+  ``claia.core.tools.protocols.base.BaseProtocol``.
+- ``src/tests/framework/test_protocol_contract.py`` — 37-case phase 4
+  regression suite covering ``ToolReference``, the new ABC,
+  ``SimpleProtocolPlugin`` under the new contract, the pluggy
+  registrar, the hookspec signature, ``Manager`` lifecycle wiring, and
+  the ``Registry.refresh_tools`` / ``Registry.shutdown`` surface.
+
+### Files modified
+
+- ``src/claia/core/plugins/base.py`` — added ``ToolReference``
+  (``qualified_name`` / ``description`` / ``protocol_name`` /
+  ``parameter_schema`` / ``tags``). ``parameter_schema`` is typed
+  ``Any`` with a ``None`` default so protocols can return references
+  whose argument shape is not JSON-Schema-like (plan §2.10 / §6.1).
+- ``src/claia/core/plugins/__init__.py`` — re-export ``ToolReference``
+  alongside the existing plugin-info dataclasses.
+- ``src/claia/core/tools/protocols/base.py`` — new ``BaseProtocol``
+  ABC with:
+  - Class-level ``info: ClassVar[ProtocolInfo]`` + default
+    ``get_protocol_info`` passthrough.
+  - Default no-op ``start`` / ``stop`` / ``refresh`` methods so static
+    protocols can subclass without lifecycle boilerplate.
+  - Abstract ``get_tool_references() -> List[ToolReference]``.
+  - Abstract
+    ``execute(qualified_name, raw_payload, conversation, **kwargs) -> Result``.
+  The old ``execute(tool_name, parameters, conversation, commands, **kwargs)``
+  signature now lives on ``LegacyBaseProtocol``.
+- ``src/claia/core/tools/protocols/simple.py`` — ``SimpleProtocolPlugin``
+  now inherits from the new ``BaseProtocol``:
+  - Adds ``bind_tool_modules(modules)`` as a transitional setter
+    (phase 5 will fold this into ``__init__``).
+  - ``get_tool_references()`` walks bound modules and emits
+    ``ToolReference(qualified_name="<module>.<tool>",
+    protocol_name="simple", parameter_schema=<ArgumentDefinition map>)``.
+  - ``execute(qualified_name, raw_payload, ...)`` decodes
+    ``raw_payload`` as JSON. Both the flat form (``{"key": "value"}``)
+    and the envelope form (``{"name": ..., "parameters": {...}}``) are
+    accepted; the dispatch target is always ``qualified_name`` as
+    supplied by the registry, so a mismatched envelope ``name`` is
+    informational.
+  - Pre-overhaul logic is preserved verbatim as ``execute_legacy`` so
+    ``Registry.process_content`` keeps working during phases 4 – 5.
+  - ``_normalize_result`` is now a shared helper used by both paths.
+- ``src/claia/framework/hooks/protocol.py`` — hookspec rewritten to
+  mirror the new ABC: ``get_protocol_info``, ``start``, ``stop``,
+  ``refresh``, ``get_tool_references``, and the new ``execute``
+  signature. Also re-exports ``ToolReference`` so ``framework.hooks``
+  consumers have a single import point.
+- ``src/claia/framework/hooks/__init__.py`` — surfaces ``ToolReference``
+  in the framework-hooks namespace.
+- ``src/claia/framework/registrars.py`` — ``ProtocolRegistrar`` grew
+  ``@hookimpl`` methods for ``start`` / ``stop`` / ``refresh`` /
+  ``get_tool_references`` and rewired ``execute`` to the new keyword
+  arguments. ``_BaseRegistrar.__getattr__`` keeps delegating unknown
+  names to the wrapped plugin, which is how ``Registry.process_content``
+  still reaches ``execute_legacy`` during the transition.
+- ``src/claia/framework/manager.py``:
+  - Added ``_iter_protocol_instances`` (yields the plain plugin
+    instances, not their registrar shells) plus ``_start_protocols``,
+    ``stop_protocols``, ``refresh_protocols``. Each method logs-and-
+    continues on a per-protocol exception so one malfunctioning
+    protocol cannot take the rest down.
+  - ``load_all_plugins`` now calls ``_start_protocols()`` after the
+    tool-group loads complete (plan §11 Phase 4 bullet 5).
+- ``src/claia/framework/registry.py``:
+  - ``process_content`` switched to ``protocol_plugin.execute_legacy``
+    to preserve the current tool-call flow while the new ABC rolls
+    out (plan §7.3, transitional shim).
+  - Added ``refresh_tools()`` — delegates to
+    ``manager.refresh_protocols()`` and invalidates the cached
+    commands catalog. Phase 5 replaces the catalog with the unified
+    ``_tool_index`` rebuild.
+  - Added ``shutdown()`` — combines ``stop_workers`` with
+    ``manager.stop_protocols`` for clean teardown of external
+    sessions.
+- ``src/claia/framework/__init__.py`` — re-export ``ToolReference``.
+
+### Decisions confirmed during implementation
+
+- **Legacy ABC parked under ``_legacy`` rather than the public
+  ``base`` module.** The plan calls for the old surface to remain
+  "importable under deprecation banner". We chose a new, clearly
+  demarcated module (``claia.core.tools.protocols._legacy``) so the
+  main ``base`` module can be rewritten cleanly without touching the
+  legacy implementation. The legacy module fires a
+  ``DeprecationWarning`` twice: once at import (module-level
+  ``warnings.warn``) and once at subclass creation (via
+  ``__init_subclass__``), so both "just imports the symbol" and
+  "builds a plugin against it" paths surface the signal.
+- **``BaseProtocol.start`` / ``stop`` / ``refresh`` default to
+  no-ops.** Plan §6.2 phrases these as defaults, and the simple
+  protocol does not need any of them yet; leaving them concrete on
+  the ABC keeps static protocols (simple, any future pure-Python
+  bridge) free of mandatory boilerplate. Abstract methods remain
+  ``get_tool_references`` and ``execute`` only.
+- **``execute_legacy`` kept on ``SimpleProtocolPlugin`` for the
+  transition.** The alternative — collapsing the old dispatch into
+  the new ``execute`` — would have required phase 5 work (kwarg
+  preparation moving out of the registry) earlier than the plan
+  sequences it. Keeping the old method accessible through the
+  registrar's ``__getattr__`` means ``Registry.process_content`` can
+  continue to operate against the prepared-kwargs / commands-catalog
+  contract without reaching for the pluggy hook surface. Phase 6
+  deletes both the legacy method and the shim together.
+- **``SimpleProtocolPlugin.bind_tool_modules`` as a transitional
+  setter.** Plan §8.2 describes the simple protocol being
+  constructed with its modules in hand at framework startup. Because
+  the framework instantiates plugins with no arguments (Manager
+  contract), the binding has to land via a follow-up call. Exposing
+  ``bind_tool_modules`` now — as opposed to waiting for phase 5 —
+  lets us ship the new ``get_tool_references`` / ``execute`` methods
+  with realistic behavior and tests today, while leaving the actual
+  framework-side wiring (who calls ``bind_tool_modules`` when) to
+  phase 5.
+- **JSON payload envelope + flat accepted.** Simple protocol's
+  ``execute`` handles both ``{"key": "value"}`` and the richer
+  ``{"name": ..., "parameters": {...}}``. The envelope form mirrors
+  what the parser will hand in once phase 6 lands tool-call payloads
+  as ``TagEvent.content``. The flat form is useful for direct tests
+  and any tag writer that skips the envelope. The envelope ``name``
+  is informational — the registry resolves dispatch via
+  ``qualified_name``.
+- **Registry ``shutdown`` is idempotent.** It swallows exceptions
+  from ``stop_workers`` and ``stop_protocols`` so a partially-broken
+  shutdown still progresses. Given how many hosts (CLI, tests,
+  future HTTP layer) call shutdown from diverse contexts, keeping
+  the method tolerant is more valuable than crashing loudly.
+
+### Deviations from the plan
+
+- **Phase 4 adds ``bind_tool_modules`` and a working ``execute``
+  implementation on ``SimpleProtocolPlugin``.** The plan's phase 5
+  bullet (``SimpleProtocolPlugin`` "constructed with the loaded
+  native tool modules at framework startup") is a strict prerequisite
+  for surfacing tools through the new contract. Rather than leave
+  ``execute`` / ``get_tool_references`` as stubs until phase 5, we
+  shipped a minimal end-to-end path now. The kwarg-prep path + JSON
+  schema decoding from the registry still moves in phase 5 per plan;
+  this change only anticipates the *binding* step.
+- **``ToolReference.parameter_schema`` defaults to ``None``.** The
+  plan shows ``parameter_schema`` as a required field; we made it
+  optional with a ``None`` default so protocol implementations that
+  don't expose argument schemas (e.g. a hypothetical bridge that
+  only surfaces name + description) don't have to invent a schema
+  shape. This is purely additive — every call site that passes a
+  concrete value continues to work.
+
+### Test coverage added
+
+``src/tests/framework/test_protocol_contract.py`` (37 cases):
+
+- ``ToolReference``: required / default fields, opaque
+  ``parameter_schema``, non-shared tag lists, re-export through the
+  three public surfaces.
+- ``BaseProtocol``: abstract-method enforcement,
+  ``get_protocol_info`` passthrough, no-op lifecycle defaults.
+- Legacy ABC: ``DeprecationWarning`` fires on import and on subclass
+  creation.
+- ``SimpleProtocolPlugin`` (new ``execute``): empty-inventory
+  not-found, qualified-name dispatch, JSON flat and envelope
+  payloads, empty payload, invalid JSON, non-object JSON, string
+  return wrapped in ``Result.ok``, invalid return flagged, callable
+  exception translated to ``Result.fail``, tolerating a broken
+  module during inventory walking.
+- ``SimpleProtocolPlugin`` (``execute_legacy``): catalog-driven
+  dispatch, missing-tool fallback.
+- ``ProtocolRegistrar``: all six hooks delegated, execute forwards
+  keyword arguments.
+- ``ProtocolHooks``: declares the expected hook names and the new
+  execute signature.
+- ``Manager`` lifecycle: ``start`` fires at load time,
+  ``stop_protocols`` / ``refresh_protocols`` iterate every loaded
+  protocol, errors from any one protocol are swallowed so the rest
+  still run.
+- ``Registry``: ``refresh_tools`` no-ops before plugins are loaded,
+  delegates to ``manager.refresh_protocols`` and invalidates the
+  commands catalog after load; ``shutdown`` calls both
+  ``stop_workers`` and ``stop_protocols`` when plugins are loaded
+  and skips the latter otherwise.
+
+---
+
 ## Follow-ups & deferred items
 
 These are items discovered during implementation that were not
@@ -369,3 +566,24 @@ phase or follow-up.
   (likely by switching the merger to a generic field-by-field
   walk over the dataclass fields with merge-rules registered per
   field, instead of the current hand-listed kwargs).
+- **`SimpleProtocolPlugin.bind_tool_modules` needs a caller.** Phase
+  4 shipped the setter and realistic ``get_tool_references`` /
+  ``execute`` implementations but no framework code calls
+  ``bind_tool_modules`` yet — ``get_tool_references`` therefore
+  returns an empty list at runtime until phase 5 wires the manager
+  / registry to pass in the loaded modules. This is the intended
+  phase-5 migration path (plan §8.2); the follow-up here is just to
+  make sure phase 5 lands the wiring before any caller relies on
+  the inventory.
+- **`ToolReference.parameter_schema` default.** Made optional
+  (``None``) so phase 4 could ship references without forcing a
+  schema. Revisit in phase 8 once MCP references need to carry raw
+  JSON Schema — the default may need to flip back to required to
+  catch protocols that forget to populate it.
+- **Registry commands-catalog invalidation.** ``refresh_tools``
+  currently clears ``self._commands_catalog`` so the next
+  ``get_commands_catalog`` rebuilds it from ``manager.get_all_commands``.
+  Phase 5 replaces this with a ``_tool_index: Dict[str, ToolReference]``
+  assembled from ``protocol.get_tool_references()`` per plan §7.1;
+  at that point ``refresh_tools`` should rebuild the index directly
+  rather than relying on the module-manager walk.

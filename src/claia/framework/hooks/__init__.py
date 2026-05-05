@@ -15,7 +15,7 @@ from .deployment import DeploymentHooks, DeploymentInfo
 from .solver import SolverHooks, SolverInfo, DeploymentParams
 from .definition import DefinitionHooks, ModelDefinition
 from .pattern import PatternHooks, PatternInfo
-from .protocol import ProtocolHooks, ProtocolInfo
+from .protocol import ProtocolHooks, ProtocolInfo, ToolReference
 from .tool import ToolModuleHooks, ToolModuleInfo, ToolDefinition, ArgumentDefinition
 from .agent import AgentHooks, AgentInfo
 
@@ -26,7 +26,7 @@ __all__ = [
     'SolverHooks', 'SolverInfo', 'DeploymentParams',
     'DefinitionHooks', 'ModelDefinition',
     'PatternHooks', 'PatternInfo',
-    'ProtocolHooks', 'ProtocolInfo',
+    'ProtocolHooks', 'ProtocolInfo', 'ToolReference',
     'ToolModuleHooks', 'ToolModuleInfo', 'ToolDefinition', 'ArgumentDefinition',
     'AgentHooks', 'AgentInfo',
 ]

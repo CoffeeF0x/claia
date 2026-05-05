@@ -2,14 +2,19 @@
 Pluggy hookspecs for tool-protocol plugins.
 
 These specs mirror ``BaseProtocol`` in
-``claia.core.tools.protocols.base``.
+``claia.core.tools.protocols.base`` as of the tools-overhaul (plan
+§6.3). The old pre-overhaul ``execute`` signature lives under
+``claia.core.tools.protocols._legacy`` and is not surfaced through
+pluggy; legacy plugins must migrate to the new contract before they
+can register.
 """
 
-import pluggy
-from typing import Any, Dict
+from typing import List
 
+import pluggy
+
+from claia.core.plugins.base import ProtocolInfo, ToolReference
 from claia.core.results import Result
-from claia.core.plugins.base import ProtocolInfo
 
 
 hookspec = pluggy.HookspecMarker("claia_tool_protocols")
@@ -23,15 +28,34 @@ class ProtocolHooks:
     """Return metadata describing this protocol."""
 
   @hookspec
+  def start(self) -> None:
+    """Open sessions, validate config, warm caches. No-op by default."""
+
+  @hookspec
+  def stop(self) -> None:
+    """Close sessions, release resources. No-op by default."""
+
+  @hookspec
+  def refresh(self) -> None:
+    """Re-fetch dynamic tool inventories. No-op by default."""
+
+  @hookspec
+  def get_tool_references(self) -> List[ToolReference]:
+    """Return the tool inventory this protocol owns."""
+
+  @hookspec
   def execute(
     self,
-    tool_name: str,
-    parameters: Dict[str, Any],
+    qualified_name: str,
+    raw_payload: str,
     conversation,
-    commands: Dict[str, Any],
     **kwargs,
   ) -> Result:
-    """Execute ``tool_name`` and return a ``Result``."""
+    """Execute ``qualified_name`` with the given raw payload.
+
+    ``raw_payload`` is the tag body as emitted by the parser; the
+    protocol is responsible for decoding it into call parameters.
+    """
 
 
-__all__ = ["ProtocolHooks", "ProtocolInfo"]
+__all__ = ["ProtocolHooks", "ProtocolInfo", "ToolReference"]

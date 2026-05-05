@@ -72,6 +72,7 @@ from claia.core.plugins.base import (
     ToolDefinition,
     ArgumentDefinition,
     ToolCallMatch,
+    ToolReference,
     DeploymentParams,
     ParamSpec,
     ParamScope,
@@ -108,7 +109,7 @@ __all__ = [
     "ExtensionInfo",
     "ArchitectureInfo", "DeploymentInfo", "SolverInfo",
     "PatternInfo", "ProtocolInfo", "ToolModuleInfo",
-    "ToolDefinition", "ArgumentDefinition", "ToolCallMatch", "DeploymentParams",
+    "ToolDefinition", "ArgumentDefinition", "ToolCallMatch", "ToolReference", "DeploymentParams",
     "ParamSpec", "ParamScope", "SettingCategory",
     "ModelDefinition",
     # Modality / multi-modal chunks

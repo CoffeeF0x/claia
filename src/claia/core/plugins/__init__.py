@@ -29,6 +29,7 @@ from .base import (
     ToolDefinition,
     ArgumentDefinition,
     ToolCallMatch,
+    ToolReference,
     DeploymentParams,
 )
 
@@ -43,5 +44,6 @@ __all__ = [
     "ToolDefinition",
     "ArgumentDefinition",
     "ToolCallMatch",
+    "ToolReference",
     "DeploymentParams",
 ]

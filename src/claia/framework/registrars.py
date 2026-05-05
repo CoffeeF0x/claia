@@ -30,6 +30,7 @@ from claia.core.plugins.base import (
   ToolCallMatch,
   ToolDefinition,
   ToolModuleInfo,
+  ToolReference,
 )
 from claia.core.definitions.model_definition import ModelDefinition
 from claia.core.results import Result
@@ -200,26 +201,49 @@ class PatternRegistrar(_BaseRegistrar):
 # Tool Protocol
 # ---------------------------------------------------------------------
 class ProtocolRegistrar(_BaseRegistrar):
-  """Adapts a ``BaseProtocol`` instance to the pluggy tool-protocol hooks."""
+  """Adapts a ``BaseProtocol`` instance to the pluggy tool-protocol hooks.
+
+  Mirrors the post-overhaul contract in
+  ``claia.core.tools.protocols.base.BaseProtocol``: the protocol owns
+  its own tool inventory (:meth:`get_tool_references`) and its own
+  dispatch (:meth:`execute`). Lifecycle hooks
+  (:meth:`start`/:meth:`stop`/:meth:`refresh`) are defaulted to no-op
+  on the ABC; the registrar forwards them unconditionally so protocols
+  that override the defaults still see the calls.
+  """
 
   @_pro_impl
   def get_protocol_info(self) -> ProtocolInfo:
     return self._plugin.get_protocol_info()
 
   @_pro_impl
+  def start(self) -> None:
+    return self._plugin.start()
+
+  @_pro_impl
+  def stop(self) -> None:
+    return self._plugin.stop()
+
+  @_pro_impl
+  def refresh(self) -> None:
+    return self._plugin.refresh()
+
+  @_pro_impl
+  def get_tool_references(self) -> List[ToolReference]:
+    return self._plugin.get_tool_references()
+
+  @_pro_impl
   def execute(
     self,
-    tool_name: str,
-    parameters: Dict[str, Any],
+    qualified_name: str,
+    raw_payload: str,
     conversation,
-    commands: Dict[str, Any],
     **kwargs,
   ) -> Result:
     return self._plugin.execute(
-      tool_name=tool_name,
-      parameters=parameters,
+      qualified_name=qualified_name,
+      raw_payload=raw_payload,
       conversation=conversation,
-      commands=commands,
       **kwargs,
     )
 

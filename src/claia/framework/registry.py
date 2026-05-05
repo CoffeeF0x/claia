@@ -160,6 +160,38 @@ class Registry:
     self._ensure_loaded()
     return self._commands_catalog or {}
 
+  def refresh_tools(self) -> None:
+    """Re-fetch dynamic tool inventories from every loaded protocol.
+
+    Phase 4 surface (plan §6.2 / §11 Phase 4). Triggers each
+    protocol's :meth:`BaseProtocol.refresh` hook (MCP will react to
+    ``notifications/tools/list_changed`` here once it lands). The
+    cached command catalog is invalidated so the next call to
+    :meth:`get_commands_catalog` rebuilds it; phase 5 will replace that
+    with the unified ``_tool_index`` rebuild described in plan §7.1.
+    """
+    if not self._plugins_loaded:
+      return
+    self.manager.refresh_protocols()
+    self._commands_catalog = None
+
+  def shutdown(self) -> None:
+    """Tear down workers and release protocol-owned resources.
+
+    Calls :meth:`stop_workers` and then asks the manager to dispatch
+    ``stop()`` across every loaded protocol. Idempotent; safe to call
+    even if plugins were never loaded.
+    """
+    try:
+      self.stop_workers(wait=True, timeout=5.0)
+    except Exception as e:
+      logger.warning("stop_workers raised during shutdown: %s", e)
+    if self._plugins_loaded:
+      try:
+        self.manager.stop_protocols()
+      except Exception as e:
+        logger.warning("manager.stop_protocols raised during shutdown: %s", e)
+
   def contains_tool_tokens(self, content: str, pattern_name: Optional[str] = None) -> bool:
     """Lightweight precheck to see if content likely contains tool calls for a pattern."""
     self._ensure_loaded()
@@ -233,7 +265,15 @@ class Registry:
             extra['conversation'] = conversation
             prepared_kwargs = self._prepare_command_kwargs(m.parameters or {}, cmd_def, extra_kwargs=extra)
 
-            exec_result: Result = protocol_plugin.execute(
+            # Phase 4 transitional shim: dispatch via the pre-overhaul
+            # entry point on the simple protocol. The new
+            # ``BaseProtocol.execute(qualified_name, raw_payload, ...)``
+            # contract is driven by the agent loop in phase 6 once the
+            # parser surfaces ``TagEvent`` objects directly; until then
+            # the registry keeps feeding prepared kwargs through the
+            # legacy dispatch path so existing CLI tool calls work
+            # unchanged. See ``tools-overhaul-plan.md`` §7.3.
+            exec_result: Result = protocol_plugin.execute_legacy(
               m.tool_name,
               prepared_kwargs,
               conversation,
