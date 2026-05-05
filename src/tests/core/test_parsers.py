@@ -21,12 +21,12 @@ from types import SimpleNamespace
 from typing import List
 
 # Internal dependencies
-from claia.core.parsers import (
+from claia.core.parser import (
   DEFAULT_TAGS,
   ParseError,
   ParseEvent,
-  StreamingTagParser,
   TagEvent,
+  TagParser,
   TagSpec,
   TagType,
   TextEvent,
@@ -43,11 +43,11 @@ def default_specs() -> List[TagSpec]:
 
 
 @pytest.fixture
-def parser(default_specs: List[TagSpec]) -> StreamingTagParser:
-  return StreamingTagParser(default_specs)
+def parser(default_specs: List[TagSpec]) -> TagParser:
+  return TagParser(default_specs)
 
 
-def _events(parser: StreamingTagParser, *chunks: str) -> List[ParseEvent]:
+def _events(parser: TagParser, *chunks: str) -> List[ParseEvent]:
   """Feed all ``chunks`` then flush; return the full event list."""
   out: List[ParseEvent] = []
   for c in chunks:
@@ -154,7 +154,7 @@ class TestAttributedTags:
     ]
 
   def test_xml_double_quoted(self, attr_specs):
-    parser = StreamingTagParser(attr_specs)
+    parser = TagParser(attr_specs)
     events = _events(parser, '<reference guid="abc-123">body</reference>')
     assert len(events) == 1
     ev = events[0]
@@ -166,7 +166,7 @@ class TestAttributedTags:
     assert ev.raw_close == "</reference>"
 
   def test_bracket_single_quoted(self, attr_specs):
-    parser = StreamingTagParser(attr_specs)
+    parser = TagParser(attr_specs)
     events = _events(parser, "[TOOL_CALL NAME='do_thing']content[/TOOL_CALL]")
     assert len(events) == 1
     ev = events[0]
@@ -176,7 +176,7 @@ class TestAttributedTags:
     assert ev.attributes == {"NAME": "do_thing"}
 
   def test_unquoted_value(self, attr_specs):
-    parser = StreamingTagParser(attr_specs)
+    parser = TagParser(attr_specs)
     events = _events(parser, "<reference guid=plain>body</reference>")
     assert len(events) == 1
     ev = events[0]
@@ -184,7 +184,7 @@ class TestAttributedTags:
     assert ev.attributes == {"guid": "plain"}
 
   def test_bare_key_no_value(self, attr_specs):
-    parser = StreamingTagParser(attr_specs)
+    parser = TagParser(attr_specs)
     events = _events(parser, "<reference flag>body</reference>")
     assert len(events) == 1
     ev = events[0]
@@ -192,7 +192,7 @@ class TestAttributedTags:
     assert ev.attributes == {"flag": ""}
 
   def test_multiple_attributes(self, attr_specs):
-    parser = StreamingTagParser(attr_specs)
+    parser = TagParser(attr_specs)
     events = _events(
       parser,
       "<reference guid=\"x\" type='thing' weight=42 sticky>body</reference>",
@@ -208,7 +208,7 @@ class TestAttributedTags:
     }
 
   def test_no_attributes(self, attr_specs):
-    parser = StreamingTagParser(attr_specs)
+    parser = TagParser(attr_specs)
     events = _events(parser, "[TOOL_CALL]bare[/TOOL_CALL]")
     assert len(events) == 1
     ev = events[0]
@@ -217,7 +217,7 @@ class TestAttributedTags:
     assert ev.attributes == {}
 
   def test_attribute_with_dotted_key(self, attr_specs):
-    parser = StreamingTagParser(attr_specs)
+    parser = TagParser(attr_specs)
     events = _events(parser, '<reference my.key="v">body</reference>')
     assert len(events) == 1
     ev = events[0]
@@ -239,8 +239,8 @@ class TestInferredTerminator:
     return TagSpec(TagType.THINKING, "<think>", "</think>")
 
   @pytest.fixture
-  def think_parser(self, think_spec) -> StreamingTagParser:
-    return StreamingTagParser([think_spec])
+  def think_parser(self, think_spec) -> TagParser:
+    return TagParser([think_spec])
 
   def test_literal_still_matches_with_empty_attrs(self, think_parser):
     events = _events(think_parser, "<think>plain</think>")
@@ -284,7 +284,7 @@ class TestInferredTerminator:
 
   def test_inferred_skipped_for_single_char_open_token(self):
     spec = TagSpec(TagType.TOOL, "<", "</")
-    parser = StreamingTagParser([spec])
+    parser = TagParser([spec])
     events = _events(parser, "<a>hello</")
     types = [type(ev).__name__ for ev in events]
     assert "TagEvent" in types
@@ -296,7 +296,7 @@ class TestInferredTerminator:
   def test_default_tool_spec_accepts_attributes(self):
     """The default ``[TOOL_CALL]`` spec should also benefit from
     inferred-terminator attribute parsing."""
-    parser = StreamingTagParser([DEFAULT_TAGS[TagType.TOOL]])
+    parser = TagParser([DEFAULT_TAGS[TagType.TOOL]])
     events = _events(
       parser,
       "[TOOL_CALL name='echo']{}[/TOOL_CALL]",
@@ -413,7 +413,7 @@ class TestChunkBoundaries:
     )
 
   def _expected_events(self, fixture_text: str, attr_specs):
-    parser = StreamingTagParser(attr_specs)
+    parser = TagParser(attr_specs)
     return _events(parser, fixture_text)
 
   def test_split_at_every_position(self, attr_specs, fixture_text):
@@ -423,7 +423,7 @@ class TestChunkBoundaries:
     expected_serialized = _serialize(expected)
     for split in range(1, len(fixture_text)):
       a, b = fixture_text[:split], fixture_text[split:]
-      parser = StreamingTagParser(attr_specs)
+      parser = TagParser(attr_specs)
       events = _events(parser, a, b)
       assert _serialize(events) == expected_serialized, (
         f"event mismatch when splitting at {split}: "
@@ -431,7 +431,7 @@ class TestChunkBoundaries:
       )
 
   def test_split_one_char_at_a_time(self, attr_specs, fixture_text):
-    parser = StreamingTagParser(attr_specs)
+    parser = TagParser(attr_specs)
     events: List[ParseEvent] = []
     for ch in fixture_text:
       events.extend(parser.feed(ch))
@@ -440,7 +440,7 @@ class TestChunkBoundaries:
     assert _serialize(events) == _serialize(expected)
 
   def test_split_inside_attribute_region(self, attr_specs):
-    parser = StreamingTagParser(attr_specs)
+    parser = TagParser(attr_specs)
     events = _events(
       parser,
       '<reference gui',
@@ -461,10 +461,10 @@ class TestParserValidation:
     spec_a = TagSpec(TagType.TOOL, "[A]", "[/A]")
     spec_b = TagSpec(TagType.TOOL, "[B]", "[/B]")
     with pytest.raises(ValueError):
-      StreamingTagParser([spec_a, spec_b])
+      TagParser([spec_a, spec_b])
 
   def test_no_specs_yields_only_text(self):
-    parser = StreamingTagParser([])
+    parser = TagParser([])
     events = _events(parser, "anything goes [TOOL_CALL] here")
     assert len(events) == 1
     assert isinstance(events[0], TextEvent)

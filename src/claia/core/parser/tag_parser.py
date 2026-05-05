@@ -1,10 +1,10 @@
 """
-Streaming, stateful tag parser.
+Stateful streaming tag parser.
 
-``StreamingTagParser`` consumes assistant output one chunk at a time
-and yields ``ParseEvent`` items as they become unambiguous. It is
-used by the agent loop today and is reused for any tag-shaped
-artifact in model text (tool calls, thinking, references, …).
+``TagParser`` consumes assistant output one chunk at a time and yields
+``ParseEvent`` items as they become unambiguous. It is used by the agent loop
+today and is reused for any tag-shaped artifact in model text (tool calls,
+thinking, references, …).
 
 State machine, informally:
 
@@ -32,40 +32,17 @@ positions are simply buffer indices. See the implementation notes for
 why this is acceptable for v1.
 """
 
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Dict, Iterable, Iterator, List, Tuple
 
-from .attributes import parse_attribute_region
 from .types import ParseError, ParseEvent, TagEvent, TagSpec, TagType, TextEvent
+from .utils import OpenTag, is_proper_prefix, parse_attribute_region
 
 
 ########################################################################
-#                            INTERNAL STATE                            #
+#                             TAG PARSER                               #
 ########################################################################
-class _OpenTag:
-  """A tag whose open token was consumed but whose close has not yet been seen."""
-
-  __slots__ = ("spec", "attributes", "open_start", "content_start", "raw_open")
-
-  def __init__(
-    self,
-    spec: TagSpec,
-    attributes: Dict[str, str],
-    open_start: int,
-    content_start: int,
-    raw_open: str,
-  ) -> None:
-    self.spec = spec
-    self.attributes = attributes
-    self.open_start = open_start
-    self.content_start = content_start
-    self.raw_open = raw_open
-
-
-########################################################################
-#                         STREAMING TAG PARSER                         #
-########################################################################
-class StreamingTagParser:
-  """Streaming tag-extraction state machine.
+class TagParser:
+  """Tag-extraction state machine over streamed text chunks.
 
   Construct with the active set of tag specs (typically produced by
   ``resolve_tag_specs(model_def)``). At most one spec per
@@ -88,7 +65,7 @@ class StreamingTagParser:
     self._buffer: str = ""
     self._scan_pos: int = 0
     self._text_start: int = 0
-    self._stack: List[_OpenTag] = []
+    self._stack: List[OpenTag] = []
 
   # ------------------------------------------------------------------
   # Public API
@@ -161,7 +138,7 @@ class StreamingTagParser:
             start_index=self._text_start,
             end_index=p,
           )
-        self._stack.append(_OpenTag(
+        self._stack.append(OpenTag(
           spec=spec,
           attributes=attrs,
           open_start=p,
@@ -194,7 +171,7 @@ class StreamingTagParser:
     ct = top_spec.close_token
     if self._buffer.startswith(ct, p):
       return ("complete_top", p + len(ct))
-    if _is_proper_prefix(self._buffer[p:], ct):
+    if is_proper_prefix(self._buffer[p:], ct):
       any_partial = True
 
     for spec in self._specs:
@@ -203,7 +180,7 @@ class StreamingTagParser:
       ct = spec.close_token
       if self._buffer.startswith(ct, p):
         return ("complete_mismatch", spec, p + len(ct))
-      if _is_proper_prefix(self._buffer[p:], ct):
+      if is_proper_prefix(self._buffer[p:], ct):
         any_partial = True
 
     return ("partial",) if any_partial else ("no_match",)
@@ -238,7 +215,7 @@ class StreamingTagParser:
       if spec.attribute_terminator is None:
         if self._buffer.startswith(ot, p):
           return ("complete", spec, {}, ot, p + len(ot))
-        if _is_proper_prefix(self._buffer[p:], ot):
+        if is_proper_prefix(self._buffer[p:], ot):
           any_partial = True
           continue
         if len(ot) > 1:
@@ -265,7 +242,7 @@ class StreamingTagParser:
         # malformed — fall through; treat as not actually an open here.
         continue
 
-      if _is_proper_prefix(self._buffer[p:], ot):
+      if is_proper_prefix(self._buffer[p:], ot):
         any_partial = True
 
     return ("partial",) if any_partial else ("no_match",)
@@ -321,11 +298,3 @@ class StreamingTagParser:
     if not self._stack:
       self._text_start = close_end
     return event
-
-
-########################################################################
-#                              HELPERS                                 #
-########################################################################
-def _is_proper_prefix(s: str, target: str) -> bool:
-  """True iff ``s`` is a non-empty proper prefix of ``target``."""
-  return 0 < len(s) < len(target) and target.startswith(s)

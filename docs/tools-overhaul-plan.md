@@ -112,7 +112,7 @@ The pattern plugin axis is removed. Its responsibilities split:
   default per tag type** registered globally; a model definition only
   carries an override when it deviates from the default.
 - The **actual extraction** moves into a new
-  `claia.core.parsers` package. It is a streaming, stateful parser
+  `claia.core.parser` package. It is a streaming, stateful parser
   with a generic tag-extraction model — not tool-specific.
 
 - **Why split**: Token strings are a property of the model
@@ -213,17 +213,17 @@ protocol-agnostic surface (described below).
 
 ## 3. The parser subsystem
 
-New package: `claia/core/parsers/`.
+New package: `claia/core/parser/`.
 
 ### 3.1 Package layout
 
 ```
-claia/core/parsers/
+claia/core/parser/
   __init__.py
   types.py        # TagType, TagSpec, TextEvent, TagEvent, ParseEvent
   defaults.py     # DEFAULT_TAGS registry
-  streaming.py    # StreamingTagParser
-  attributes.py   # Attribute parser (small state machine)
+  tag_parser.py    # TagParser
+  utils.py        # parse_attribute_region, OpenTag, helpers
   resolution.py   # resolve_tag_specs(model_def) -> List[TagSpec]
   README.md
 ```
@@ -293,10 +293,10 @@ Attribute syntax inside the region:
 
 ### 3.5 Streaming behavior
 
-`StreamingTagParser`:
+`TagParser`:
 
 ```python
-class StreamingTagParser:
+class TagParser:
   def __init__(self, tag_specs: List[TagSpec]) -> None: ...
   def feed(self, chunk: str) -> Iterator[ParseEvent]: ...
   def flush(self) -> Iterator[ParseEvent]: ...   # call at end-of-stream
@@ -345,7 +345,7 @@ The parser is a generator-style yielder, not a callback-based observer.
 Consumers (the agent loop, today) drive it explicitly:
 
 ```python
-parser = StreamingTagParser(resolve_tag_specs(model_def))
+parser = TagParser(resolve_tag_specs(model_def))
 for chunk in stream:
   for ev in parser.feed(chunk):
     handle(ev)
@@ -704,7 +704,7 @@ Pseudocode:
 
 ```python
 specs = resolve_tag_specs(model_def)
-parser = StreamingTagParser(specs)
+parser = TagParser(specs)
 assistant_msg = conversation.start_assistant_message()
 
 for chunk in deployment.run(...):
@@ -820,7 +820,7 @@ the code they cover.
 
 ### Phase 1 — Parser core (no dependencies on the rest)
 
-- `claia/core/parsers/` with all of §3 in place.
+- `claia/core/parser/` with all of §3 in place.
 - Test coverage:
   - simple non-attributed tag spans
   - attributed tags (XML-style and bracket-style)
@@ -872,7 +872,7 @@ the code they cover.
 
 ### Phase 6 — Agent loop migration
 
-- Agent uses `StreamingTagParser` directly per §9.
+- Agent uses `TagParser` directly per §9.
 - All callsites of `Registry.process_content` migrated.
 - Transitional shim deleted at end of phase.
 - End-to-end tests covering: streaming text-only response, streaming
@@ -1007,13 +1007,13 @@ small edits to imports, `__all__`, etc. expected.
 
 ### New files
 
-- `src/claia/core/parsers/__init__.py`
-- `src/claia/core/parsers/types.py`
-- `src/claia/core/parsers/defaults.py`
-- `src/claia/core/parsers/streaming.py`
-- `src/claia/core/parsers/attributes.py`
-- `src/claia/core/parsers/resolution.py`
-- `src/claia/core/parsers/README.md`
+- `src/claia/core/parser/__init__.py`
+- `src/claia/core/parser/types.py`
+- `src/claia/core/parser/defaults.py`
+- `src/claia/core/parser/tag_parser.py`
+- `src/claia/core/parser/utils.py`
+- `src/claia/core/parser/resolution.py`
+- `src/claia/core/parser/README.md`
 - `src/claia/core/tools/types.py` (or extend `claia/core/plugins/base.py`)
   for `ToolReference`
 - `src/claia/core/tools/protocols/simple/__init__.py`

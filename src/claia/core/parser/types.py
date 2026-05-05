@@ -63,7 +63,7 @@ class TagSpec:
 
   A single parser instance must not be configured with two specs
   whose open tokens prefix-match each other; the constructor of
-  ``StreamingTagParser`` enforces one spec per ``TagType`` which
+  ``TagParser`` enforces one spec per ``TagType`` which
   prevents the most common collision.
   """
   tag_type: TagType

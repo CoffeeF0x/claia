@@ -4,7 +4,7 @@ Tag-spec resolution from a model definition.
 Each ``ModelDefinition`` may declare a ``tag_overrides`` mapping
 that swaps the default ``TagSpec`` for one or more ``TagType`` values.
 ``resolve_tag_specs`` returns the merged list of specs for that model
-in a form ready to feed into ``StreamingTagParser``.
+in a form ready to feed into ``TagParser``.
 
 Per-tag-type replacement: if a model overrides ``TagType.TOOL`` it
 provides a complete ``TagSpec``; there is no field-level merging.

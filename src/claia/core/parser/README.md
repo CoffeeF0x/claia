@@ -1,31 +1,31 @@
-# Parsers
+# Parser
 
-Streaming, stateful tag-extraction for assistant content.
+Stateful tag extraction over streamed assistant content.
 
 ## What lives here
 
 - `types.py` — `TagType`, `TagSpec`, and the parser's event dataclasses
   (`TextEvent`, `TagEvent`, `ParseError`, plus the `ParseEvent` union).
-- `attributes.py` — small state machine that parses the
-  `key=value` region between an open prefix and its terminator.
-- `streaming.py` — `StreamingTagParser`, the streaming state machine
-  that consumes chunks and yields parse events.
+- `utils.py` — prefix checks, attribute-region parsing (`parse_attribute_region`),
+  and the internal `OpenTag` stack frame.
+- `tag_parser.py` — `TagParser`, the state machine that consumes chunks and
+  yields parse events.
 - `defaults.py` — `DEFAULT_TAGS`, the one-spec-per-`TagType` global
   default registry.
 - `resolution.py` — `resolve_tag_specs(model_def)`, which merges the
   defaults with any per-model `tag_overrides`.
 
-## How parsers fit in
+## How this package fits in
 
 A parser is **per turn**. The agent loop constructs a
-`StreamingTagParser` from the active `TagSpec` list (typically
+`TagParser` from the active `TagSpec` list (typically
 `resolve_tag_specs(model_def)`), then drives it with model output as
 it streams:
 
 ```python
-from claia.core.parsers import StreamingTagParser, TagType, resolve_tag_specs
+from claia.core.parser import TagParser, TagType, resolve_tag_specs
 
-parser = StreamingTagParser(resolve_tag_specs(model_def))
+parser = TagParser(resolve_tag_specs(model_def))
 for chunk in deployment.run(...):
   for ev in parser.feed(chunk.text):
     handle(ev)

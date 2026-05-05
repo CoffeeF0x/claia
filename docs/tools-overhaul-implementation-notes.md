@@ -18,38 +18,35 @@ the plan's §12 Open considerations), add it to the
 ## Phase 1 — Parser core
 
 Goal (per plan §11): Stand up the streaming tag parser package
-(`claia.core.parsers`) implementing §3 in full, with test coverage for
+(`claia.core.parser`) implementing §3 in full, with test coverage for
 the cases listed in the phase plan.
 
 ### Files added
 
-- `src/claia/core/parsers/__init__.py` — public surface (re-exports of
+- `src/claia/core/parser/__init__.py` — public surface (re-exports of
   `TagType`, `TagSpec`, `TextEvent`, `TagEvent`, `ParseError`,
-  `ParseEvent`, `StreamingTagParser`, `DEFAULT_TAGS`,
+  `ParseEvent`, `TagParser`, `DEFAULT_TAGS`,
   `resolve_tag_specs`).
-- `src/claia/core/parsers/types.py` — `TagType` enum, `TagSpec`
+- `src/claia/core/parser/types.py` — `TagType` enum, `TagSpec`
   dataclass, and the `TextEvent` / `TagEvent` / `ParseError` event
   dataclasses plus the `ParseEvent` union alias.
-- `src/claia/core/parsers/attributes.py` — small state-machine for
-  parsing the attribute region between an open prefix and the
-  attribute terminator (handles `key="…"`, `key='…'`,
-  unquoted values, and bare `key` with no value). Exposes
-  `parse_attribute_region(buffer, start, terminator)` returning a
-  three-state result: complete, partial, or malformed.
-- `src/claia/core/parsers/streaming.py` — `StreamingTagParser` with
+- `src/claia/core/parser/utils.py` — `parse_attribute_region` for the
+  attribute region after an open prefix, plus `OpenTag`, `KEY_CHARS` /
+  `WHITESPACE`, and `is_proper_prefix`.
+- `src/claia/core/parser/tag_parser.py` — `TagParser` with
   `feed(chunk)` and `flush()` generators. Maintains a buffer, a scan
   cursor, a pending-text start, and a LIFO stack of open tags. Uses
-  `attributes.parse_attribute_region` for prefix-style opens.
-- `src/claia/core/parsers/defaults.py` — `DEFAULT_TAGS` mapping
+  `parse_attribute_region` for prefix-style opens.
+- `src/claia/core/parser/defaults.py` — `DEFAULT_TAGS` mapping
   `TagType -> TagSpec`. Default tokens follow the suggestions in
   plan §3.3 (`[TOOL_CALL]`/`[/TOOL_CALL]`, `<think>`/`</think>`,
   `[REF]`/`[/REF]`).
-- `src/claia/core/parsers/resolution.py` — `resolve_tag_specs(model_def)`
+- `src/claia/core/parser/resolution.py` — `resolve_tag_specs(model_def)`
   helper. Reads `model_def.tag_overrides` defensively via `getattr`
   so it works before Phase 2 lands the actual field on
   `ModelDefinition`. Per-`TagType` replacement, no field-level
   merging (plan §3.7).
-- `src/claia/core/parsers/README.md` — package overview and usage
+- `src/claia/core/parser/README.md` — package overview and usage
   notes.
 - `src/tests/core/test_parsers.py` — Phase 1 parser tests covering
   the cases enumerated in plan §11 Phase 1.
@@ -86,12 +83,12 @@ the cases listed in the phase plan.
   terminator-delimited), and bare-key (no `=`) attributes. Bare keys
   bind to an empty string. Keys are restricted to alphanumerics,
   underscore, and dot.
-- **Spec validation.** The `StreamingTagParser` constructor rejects
+- **Spec validation.** The `TagParser` constructor rejects
   duplicate `TagType` entries up front, since the rest of the
   algorithm assumes per-type uniqueness (plan §3.3, §3.7).
 - **`resolve_tag_specs` signature.** Implemented as the plan
   describes; returns the merged values as a `List[TagSpec]` so it can
-  be passed straight into `StreamingTagParser`. Phase 2 will add the
+  be passed straight into `TagParser`. Phase 2 will add the
   `tag_overrides` field on `ModelDefinition` and proper unit tests
   for merging.
 - **Inferred terminator for `attribute_terminator=None`.** Extension

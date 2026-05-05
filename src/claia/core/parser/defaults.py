@@ -3,7 +3,7 @@ Default tag specifications.
 
 Exactly one ``TagSpec`` per ``TagType`` is registered as the global
 default. Per-model overrides supersede these (see
-``claia.core.parsers.resolution``). There is never more than one
+``claia.core.parser.resolution``). There is never more than one
 spec of a given ``TagType`` active in a parser instance.
 """
 
