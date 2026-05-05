@@ -883,7 +883,7 @@ class CLIModulePlugin(BaseToolModule):
     output_lines.append("-" * 70)
 
     if registry:
-      catalog = registry.get_commands_catalog()
+      catalog = registry.manager.get_all_commands()
       if catalog:
         total_tools = 0
         for mod_name, mod in catalog.items():

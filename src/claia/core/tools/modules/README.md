@@ -12,11 +12,9 @@ Each module subclasses `BaseToolModule` from `claia.core.tools.modules.base` and
 ## How tools fit in
 
 - Tool modules are discovered via the `claia.tool_modules` entry point.
-- `Manager` builds a **commands catalog** by calling each module’s hooks.
-- `Registry`:
-  - exposes this catalog via `get_commands_catalog()`
-  - uses **tool patterns** to detect tool calls in text
-  - uses **tool protocols** to execute selected tools.
+- `Manager` builds a per-module **commands catalog** (`get_all_commands()`) by calling each module's hooks; the CLI uses this for the `:tool` / `:help` listings.
+- The built-in **simple** protocol consumes that catalog, registers a `ToolReference` per tool with the `Registry`, and dispatches calls.
+- Streaming tool-call extraction lives in `claia.core.parser` (`TagParser`); the agent loop drives the parser and routes `TOOL`-tag events through `Registry.execute_tool`.
 
 ## Implementing a new tool module (TL;DR)
 

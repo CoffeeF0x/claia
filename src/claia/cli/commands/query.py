@@ -17,7 +17,7 @@ from .base import BaseCommand
 
 
 logger = logging.getLogger(__name__)
-DEFAULT_AGENT = "assistant"
+DEFAULT_AGENT = "simple"
 
 
 class QueryCommand(BaseCommand):

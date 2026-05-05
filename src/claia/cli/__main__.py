@@ -96,8 +96,6 @@ INPUT_CHARACTER = ":"
 NEWLINE_CHARACTER = "\\"
 CONTINUATION_PROMPT = ">"
 DEFAULT_AGENT = "simple"
-TOOL_PATTERN_NAME = "default"
-TOOL_PROTOCOL_NAME = "simple"
 
 
 
@@ -325,9 +323,6 @@ def main() -> None:
         # Prepend --query to treat stdin as a query command
         settings.extra_args = ['--query', stdin_data] + settings.extra_args
         logger.info(f"Treating stdin as query command")
-
-    # Build commands catalog
-    _ = registry.get_commands_catalog() # NOTE: Can probably be removed later
 
     # Register CLI-specific agents using the programmatic registration API
     logger.debug("Registering CLI-specific agents")
