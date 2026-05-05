@@ -11,7 +11,7 @@ CLAIA is split into three layers under the `claia.*` namespace: `core` for pure 
 Plugin registration uses Python entry points declared in `pyproject.toml`:
 
 - `claia.architectures`, `claia.definitions`, `claia.deployments`, `claia.solvers`, `claia.agents`
-- `claia.tool_modules`, `claia.tool_patterns`, `claia.tool_protocols`
+- `claia.tool_modules`, `claia.tool_protocols`
 
 ## Use CLAIA As A Library
 
@@ -111,11 +111,15 @@ Expose the agent with a plugin registered under `claia.agents`. See `claia.frame
 
 ## Add Tool Commands
 
-Tools are split into modules, patterns, and protocols:
+Tools are split into modules and protocols:
 
 - Tool modules provide callable commands.
-- Tool patterns detect tool calls in generated text.
-- Tool protocols execute calls against the command catalog.
+- Tool protocols own a tool inventory and dispatch calls. The
+  built-in `simple` protocol bridges native modules; future protocols
+  (MCP, etc.) plug in alongside.
+
+Streaming tool-call extraction is handled centrally by
+`claia.core.parser.TagParser`, driven by the agent loop.
 
 ```python
 from claia.core.plugins.base import ArgumentDefinition, ToolDefinition, ToolModuleInfo

@@ -8,8 +8,7 @@ Pluggy hook contracts and info objects for all CLAIA plugin types.
 - `architecture.py` — hooks and `ArchitectureInfo` for architecture plugins.
 - `definition.py` — hooks and `ModelDefinition` pattern for model metadata.
 - `deployment.py` — hooks and `DeploymentInfo` for deployments.
-- `pattern.py` — hooks and pattern info for tool patterns.
-- `protocol.py` — hooks and protocol info for tool protocols.
+- `protocol.py` — hooks, `ProtocolInfo`, and `ToolReference` for tool protocols.
 - `solver.py` — hooks and `SolverInfo`/`DeploymentParams` for solvers.
 - `tool.py` — hooks and `ToolModuleInfo`/`ToolDefinition`/`ArgumentDefinition` for tool modules.
 

@@ -24,10 +24,8 @@ from claia.core.modality import GenerationChunk
 from claia.core.plugins.base import (
   ArchitectureInfo,
   DeploymentInfo,
-  PatternInfo,
   ProtocolInfo,
   SolverInfo,
-  ToolCallMatch,
   ToolDefinition,
   ToolModuleInfo,
   ToolReference,
@@ -46,7 +44,6 @@ _arch_impl = pluggy.HookimplMarker("claia_architectures")
 _dep_impl = pluggy.HookimplMarker("claia_deployments")
 _sol_impl = pluggy.HookimplMarker("claia_solvers")
 _def_impl = pluggy.HookimplMarker("claia_definitions")
-_pat_impl = pluggy.HookimplMarker("claia_tool_patterns")
 _pro_impl = pluggy.HookimplMarker("claia_tool_protocols")
 _mod_impl = pluggy.HookimplMarker("claia_tool_modules")
 _agt_impl = pluggy.HookimplMarker("claia_agents")
@@ -183,21 +180,6 @@ class DefinitionRegistrar(_BaseRegistrar):
 
 
 # ---------------------------------------------------------------------
-# Tool Pattern
-# ---------------------------------------------------------------------
-class PatternRegistrar(_BaseRegistrar):
-  """Adapts a ``BasePattern`` instance to the pluggy tool-pattern hooks."""
-
-  @_pat_impl
-  def get_pattern_info(self) -> PatternInfo:
-    return self._plugin.get_pattern_info()
-
-  @_pat_impl
-  def find_tool_calls(self, content: str, conversation, settings=None) -> List[ToolCallMatch]:
-    return self._plugin.find_tool_calls(content, conversation, settings=settings)
-
-
-# ---------------------------------------------------------------------
 # Tool Protocol
 # ---------------------------------------------------------------------
 class ProtocolRegistrar(_BaseRegistrar):
@@ -292,7 +274,6 @@ REGISTRAR_BY_GROUP: Dict[str, Type[_BaseRegistrar]] = {
   "claia.deployments": DeploymentRegistrar,
   "claia.solvers": SolverRegistrar,
   "claia.definitions": DefinitionRegistrar,
-  "claia.tool_patterns": PatternRegistrar,
   "claia.tool_protocols": ProtocolRegistrar,
   "claia.tool_modules": ToolModuleRegistrar,
   "claia.agents": AgentRegistrar,
@@ -304,7 +285,6 @@ __all__ = [
   "DeploymentRegistrar",
   "SolverRegistrar",
   "DefinitionRegistrar",
-  "PatternRegistrar",
   "ProtocolRegistrar",
   "ToolModuleRegistrar",
   "AgentRegistrar",

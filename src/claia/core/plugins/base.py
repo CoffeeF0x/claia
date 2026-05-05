@@ -195,14 +195,6 @@ class SolverInfo(ExtensionInfo):
 
 
 @dataclass
-class PatternInfo(ExtensionInfo):
-  """Information about a tool-calling pattern plugin."""
-  opening_token: str = field(default="")
-  closing_token: str = field(default="")
-  prompt_template: Optional[str] = field(default=None)
-
-
-@dataclass
 class ProtocolInfo(ExtensionInfo):
   """Information about a tool-protocol plugin."""
   pass
@@ -242,16 +234,6 @@ class ToolDefinition:
   description: str
   callable: Callable
   arguments: Dict[str, ArgumentDefinition]
-
-
-@dataclass
-class ToolCallMatch:
-  """A single tool-call invocation found in message content by a pattern."""
-  start_index: int
-  end_index: int  # exclusive, suitable for slice replacement
-  tool_name: str
-  parameters: Dict[str, Any]
-  raw: Optional[str] = None
 
 
 @dataclass

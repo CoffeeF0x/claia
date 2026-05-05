@@ -161,9 +161,13 @@ discovers the subpackages without requiring a top-level
 - Plugin entry points are declared in this single `pyproject.toml`
 today. Group names remain `claia.architectures`,
 `claia.deployments`, `claia.solvers`, `claia.definitions`,
-`claia.tool_patterns`, `claia.tool_protocols`, `claia.tool_modules`,
-`claia.agents` — these are stable identifiers, not module paths,
-and external plugins keep registering against them unchanged.
+`claia.tool_protocols`, `claia.tool_modules`, `claia.agents`
+— these are stable identifiers, not module paths, and external
+plugins keep registering against them unchanged. The
+`claia.tool_patterns` group was retired in the tools overhaul
+phase 7 (see `docs/tools-overhaul-plan.md`); the streaming
+`claia.core.parser.TagParser` replaces the per-pattern detector
+plumbing.
 - When the repo splits into separate distributions, each subpackage
 takes its own `pyproject.toml` and continues to ship under the same
 `claia.*` namespace. Entry-point declarations move with the

@@ -6,9 +6,9 @@ This module handles loading and coordinating all plugin types:
 - Model deployments (handle deployment methods)
 - Model solvers (determine deployment strategies)
 - Model definitions (provide model metadata)
-- Tool patterns (define how tools are used)
 - Tool protocols (handle tool execution)
 - Tool modules (provide tool implementations)
+- Agents (orchestrate model and tool calls)
 
 Extensions are lazy-loaded: definitions/metadata are discovered first
 without instantiation, allowing each plugin's declared ``ParamSpec``
@@ -24,7 +24,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
 
 from .hooks import (
   ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHooks,
-  PatternHooks, ProtocolHooks, ToolModuleHooks, AgentHooks,
+  ProtocolHooks, ToolModuleHooks, AgentHooks,
   DeploymentInfo, SolverInfo, ModelDefinition, ArchitectureInfo, AgentInfo
 )
 from .registrars import REGISTRAR_BY_GROUP
@@ -50,7 +50,6 @@ PLUGIN_GROUPS: Tuple[str, ...] = (
   'claia.deployments',
   'claia.solvers',
   'claia.definitions',
-  'claia.tool_patterns',
   'claia.tool_protocols',
   'claia.tool_modules',
   'claia.agents',
@@ -97,7 +96,7 @@ class Manager:
 
   This class coordinates all plugin types for models, tools, and agents:
   - Model: Architecture, Deployment, Solver, Definition plugins
-  - Tools: Pattern, Protocol, CommandModule plugins
+  - Tools: Protocol, ToolModule plugins
   - Agents: Agent plugins
 
   Extensions are lazy-loaded: ``discover_plugins()`` collects metadata
@@ -122,9 +121,6 @@ class Manager:
     self.definition_pm.add_hookspecs(DefinitionHooks)
 
     # Tool plugin managers
-    self.pattern_pm = pluggy.PluginManager("claia_tool_patterns")
-    self.pattern_pm.add_hookspecs(PatternHooks)
-
     self.protocol_pm = pluggy.PluginManager("claia_tool_protocols")
     self.protocol_pm.add_hookspecs(ProtocolHooks)
 
@@ -315,7 +311,6 @@ class Manager:
       self._load_plugins(group='claia.definitions', pm=self.definition_pm, label='definition', allow_empty=True, ctor_kwargs=kwargs)
 
       # Load tool plugins (pass in kwargs; each plugin receives only its INIT-scoped params)
-      self._load_plugins(group='claia.tool_patterns', pm=self.pattern_pm, label='pattern', allow_empty=True, ctor_kwargs=kwargs)
       self._load_plugins(group='claia.tool_protocols', pm=self.protocol_pm, label='protocol', allow_empty=True, ctor_kwargs=kwargs)
       self._load_plugins(group='claia.tool_modules', pm=self.module_pm, label='module', allow_empty=True, ctor_kwargs=kwargs)
 
@@ -412,31 +407,20 @@ class Manager:
   # ------------------------------------------------------------------
   # Protocol lifecycle (overhaul phase 4)
   # ------------------------------------------------------------------
-  def _iter_protocol_instances(self):
+  def iter_protocol_instances(self):
     """Yield the plain ``BaseProtocol`` instances for loaded protocols.
 
     Unlike iterating ``self.protocol_pm.get_plugins()``, this returns
     the wrapped plugin objects (not their registrar shells) so callers
     can reach lifecycle hooks that aren't part of the pluggy dispatch
-    surface directly. Falls back to ``getattr(reg, 'plugin', reg)`` so
-    a bare-instance registration (should never happen, but be
-    defensive) still works.
+    surface directly. ``Registry._rebuild_tool_index`` consumes this
+    to collect each protocol's ``ToolReference`` list.
     """
     for entry in self._lazy_plugins.get('claia.tool_protocols', []):
       inst = entry.instance
       if inst is None:
         continue
       yield inst
-
-  def iter_protocol_instances(self):
-    """Public alias for :meth:`_iter_protocol_instances`.
-
-    Phase 5 surface: ``Registry._rebuild_tool_index`` walks every
-    loaded protocol to collect its ``ToolReference`` list, so the
-    accessor needs to be on the public Manager surface (the underscore
-    variant remains for in-tree callers that already use it).
-    """
-    yield from self._iter_protocol_instances()
 
   def _bind_native_tools_to_protocols(self) -> None:
     """Hand the loaded native ``BaseToolModule`` instances to any
@@ -456,17 +440,11 @@ class Manager:
       for entry in self._lazy_plugins.get('claia.tool_modules', [])
       if entry.instance is not None
     ]
-    for inst in self._iter_protocol_instances():
-      binder = getattr(inst, 'bind_tool_modules', None)
-      if not callable(binder):
-        continue
-      try:
-        binder(modules)
-      except Exception as e:
-        logger.warning(
-          "Protocol %s bind_tool_modules() raised %s; skipping",
-          type(inst).__name__, e,
-        )
+    self._dispatch_protocol_hook(
+      'bind_tool_modules',
+      lambda hook: hook(modules),
+      failure_tail='skipping',
+    )
 
   def _start_protocols(self) -> None:
     """Call ``start()`` on every loaded protocol, swallowing errors.
@@ -476,17 +454,11 @@ class Manager:
     here. A single protocol's failure must not prevent other protocols
     from running.
     """
-    for inst in self._iter_protocol_instances():
-      start = getattr(inst, 'start', None)
-      if not callable(start):
-        continue
-      try:
-        start()
-      except Exception as e:
-        logger.warning(
-          "Protocol %s start() raised %s; continuing with partial inventory",
-          type(inst).__name__, e,
-        )
+    self._dispatch_protocol_hook(
+      'start',
+      lambda hook: hook(),
+      failure_tail='continuing with partial inventory',
+    )
 
   def stop_protocols(self) -> None:
     """Call ``stop()`` on every loaded protocol.
@@ -496,17 +468,11 @@ class Manager:
     internals. Errors are logged and swallowed — teardown should never
     crash the caller.
     """
-    for inst in self._iter_protocol_instances():
-      stop = getattr(inst, 'stop', None)
-      if not callable(stop):
-        continue
-      try:
-        stop()
-      except Exception as e:
-        logger.warning(
-          "Protocol %s stop() raised %s; continuing teardown",
-          type(inst).__name__, e,
-        )
+    self._dispatch_protocol_hook(
+      'stop',
+      lambda hook: hook(),
+      failure_tail='continuing teardown',
+    )
 
   def refresh_protocols(self) -> None:
     """Call ``refresh()`` on every loaded protocol.
@@ -517,16 +483,37 @@ class Manager:
     the post-refresh ``get_tool_references()`` outputs separately in
     phase 5.
     """
-    for inst in self._iter_protocol_instances():
-      refresh = getattr(inst, 'refresh', None)
-      if not callable(refresh):
+    self._dispatch_protocol_hook(
+      'refresh',
+      lambda hook: hook(),
+      failure_tail='keeping prior inventory',
+    )
+
+  def _dispatch_protocol_hook(
+    self,
+    hook_name: str,
+    invoke: Any,
+    *,
+    failure_tail: str,
+  ) -> None:
+    """Run ``invoke(getattr(protocol, hook_name))`` across loaded protocols.
+
+    Skips protocols that don't expose the hook (duck typing), logs and
+    swallows per-protocol exceptions so a single bad protocol cannot
+    take the rest of the lifecycle pass down. ``failure_tail`` is the
+    contextual phrase appended to the warning message ("continuing
+    teardown", "skipping", etc.).
+    """
+    for inst in self.iter_protocol_instances():
+      hook = getattr(inst, hook_name, None)
+      if not callable(hook):
         continue
       try:
-        refresh()
+        invoke(hook)
       except Exception as e:
         logger.warning(
-          "Protocol %s refresh() raised %s; keeping prior inventory",
-          type(inst).__name__, e,
+          "Protocol %s %s() raised %s; %s",
+          type(inst).__name__, hook_name, e, failure_tail,
         )
 
   @staticmethod
@@ -985,17 +972,6 @@ class Manager:
 
       result[info.name] = module_entry
     return result
-
-  def get_pattern_by_name(self, name: str):
-    """Get a tool pattern plugin by name."""
-    self.load_all_plugins()
-    return self._find_plugin_by_name(self.pattern_pm, 'get_pattern_info', name)
-
-  def get_default_pattern(self):
-    """Get the default pattern plugin."""
-    self.load_all_plugins()
-    patterns = list(self.pattern_pm.get_plugins())
-    return patterns[0] if patterns else None
 
 
   # AGENTS

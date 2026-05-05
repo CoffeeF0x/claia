@@ -143,9 +143,6 @@ legacy = "claia.core.definitions.legacy:LegacyDefinitionsPlugin"
 [project.entry-points."claia.agents"]
 simple = "claia.framework.agents.simple:SimpleAgentPlugin"
 
-[project.entry-points."claia.tool_patterns"]
-default = "claia.core.tools.patterns.default:DefaultToolPatternPlugin"
-
 [project.entry-points."claia.tool_protocols"]
 simple = "claia.core.tools.protocols.simple:SimpleProtocolPlugin"
 

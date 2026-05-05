@@ -963,6 +963,164 @@ agent.
 
 ---
 
+## Phase 7 — Pattern subsystem removal
+
+Goal (per plan §11): remove the now-dormant pattern axis entirely.
+Phase 6 retired the only consumers but the loader, registrar,
+hookspec, info dataclass, and ``claia.tool_patterns`` entry-point
+group were still wired into the framework. This phase deletes all of
+it and trims the leftover dataclasses
+(``PatternInfo`` / ``ToolCallMatch``) plus the ``tool_text.py``
+helper that only the default pattern used.
+
+### Files removed
+
+- ``src/claia/core/tools/patterns/`` (whole directory:
+  ``__init__.py``, ``base.py`` ``BasePattern`` ABC, ``default.py``
+  ``DefaultToolPatternPlugin``, README).
+- ``src/claia/framework/hooks/pattern.py`` — the ``PatternHooks``
+  hookspec module.
+- ``src/claia/core/data/utils/tool_text.py`` — string-scanner
+  helpers (``find_tool_calls``, ``validate_tool_call_json``) that
+  only the default pattern consumed. The streaming
+  ``claia.core.parser.TagParser`` covers every in-tree case now.
+
+### Files modified
+
+- ``src/claia/framework/registrars.py`` — dropped
+  ``PatternRegistrar``, the ``_pat_impl`` ``HookimplMarker``, the
+  ``"claia.tool_patterns"`` entry in ``REGISTRAR_BY_GROUP``, and
+  ``PatternInfo`` / ``ToolCallMatch`` from the imports / ``__all__``.
+- ``src/claia/framework/manager.py`` —
+  - Dropped ``self.pattern_pm`` and the matching
+    ``add_hookspecs(PatternHooks)`` call.
+  - Dropped ``"claia.tool_patterns"`` from ``PLUGIN_GROUPS`` and the
+    ``_load_plugins(group='claia.tool_patterns', ...)`` call inside
+    ``load_all_plugins``.
+  - Dropped ``get_pattern_by_name`` / ``get_default_pattern``
+    accessors.
+  - Promoted ``_iter_protocol_instances`` to the public
+    ``iter_protocol_instances`` (was a ``yield from`` alias for the
+    underscore variant) and folded the four lifecycle dispatchers
+    (``_bind_native_tools_to_protocols`` / ``_start_protocols`` /
+    ``stop_protocols`` / ``refresh_protocols``) onto a shared
+    ``_dispatch_protocol_hook(hook_name, invoke, failure_tail)``
+    helper. The four call sites became three-line stubs that just
+    declare which hook to fire and how to phrase the per-protocol
+    failure log.
+  - Updated the module docstring to drop the "tool patterns" line and
+    list "agents" alongside the other plugin types.
+- ``src/claia/framework/hooks/__init__.py`` — dropped
+  ``PatternHooks`` / ``PatternInfo`` from imports and ``__all__``.
+- ``src/claia/core/plugins/base.py`` — deleted ``PatternInfo`` and
+  ``ToolCallMatch``.
+- ``src/claia/core/plugins/__init__.py`` — dropped
+  ``PatternInfo`` / ``ToolCallMatch`` from imports + ``__all__``;
+  removed the ``BasePattern`` bullet from the module docstring.
+- ``src/claia/core/__init__.py`` — dropped
+  ``PatternInfo`` / ``ToolCallMatch`` from the imports +
+  ``__all__``; surfaced ``ToolReference`` here for consistency with
+  the rest of the post-overhaul tool surface.
+- ``src/claia/framework/__init__.py`` — dropped
+  ``PatternInfo`` / ``ToolCallMatch``; trimmed the docstring's
+  "tool patterns/protocols/modules" mention to
+  "tool protocols/modules".
+- ``src/claia/cli/__init__.py`` — dropped
+  ``PatternInfo`` / ``ToolCallMatch``; surfaced ``ToolReference`` for
+  parity with ``claia.framework`` re-exports.
+- ``src/claia/core/tools/__init__.py`` — rewrote the package
+  docstring to describe the post-overhaul two-axis model (modules +
+  protocols) instead of the legacy three-axis (patterns / protocols /
+  modules) one.
+- ``src/claia/core/tools/README.md`` — replaced the deprecation
+  note that pointed at ``patterns/`` with a flat description of the
+  module / protocol axes; the streaming parser sits behind
+  ``claia.core.parser`` and is the only tool-call extractor now.
+- ``src/claia/core/data/utils/README.md`` — dropped the
+  ``tool_text.py`` bullet and added a pointer to
+  ``claia.core.parser`` for the streaming-extraction case.
+- ``src/claia/core/plugins/README.md`` — replaced
+  ``ToolCallMatch`` with ``ToolReference`` in the "supporting
+  dataclasses" paragraph; removed the "tool patterns" mention from
+  the per-plugin-type list.
+- ``src/claia/framework/hooks/README.md`` — dropped the
+  ``pattern.py`` bullet; tightened the ``protocol.py`` bullet to
+  mention ``ToolReference``.
+- ``pyproject.toml`` — removed the
+  ``[project.entry-points."claia.tool_patterns"]`` table.
+- ``README.md`` — dropped the ``claia.tool_patterns`` and
+  "patterns" wording from the highlights and plugin-system bullets.
+- ``docs/data-architecture.md`` — dropped the ``tool_text.py`` line
+  from the package tree.
+- ``docs/overview.md`` — replaced the three-axis
+  "modules/patterns/protocols" wording with the post-overhaul
+  two-axis description and pointed readers at
+  ``claia.core.parser`` for streaming extraction.
+- ``docs/integration-plan.md`` — appended a phase-7 retirement note
+  to the entry-point-groups bullet so the doc no longer advertises
+  the dead group as live.
+
+### Files modified (tests)
+
+- ``src/tests/framework/test_protocol_contract.py`` — dropped
+  ``"claia.tool_patterns"`` from the manager-stub-out list inside
+  ``TestManagerProtocolLifecycle.test_start_fires_at_load_time``.
+- ``src/tests/framework/test_simple_protocol_phase5.py`` — renamed
+  ``test_iter_protocol_instances_public_alias`` to
+  ``test_iter_protocol_instances_is_public`` now that there is no
+  underscore-prefixed variant for it to alias.
+
+### Decisions confirmed during implementation
+
+- **``ToolReference`` joins ``claia.core.__all__``.** Previously only
+  re-exported via ``claia.framework`` and ``claia.core.plugins``. With
+  ``ToolCallMatch`` gone, ``ToolReference`` is the canonical
+  protocol-agnostic tool descriptor; surfacing it from the ``core``
+  hub matches the other ``Tool*`` exports and saves two-step imports.
+- **``_dispatch_protocol_hook`` consolidates four near-duplicates.**
+  Plan §6.2 has four lifecycle entry points (``start`` / ``stop`` /
+  ``refresh`` / ``bind_tool_modules``); each had identical
+  duck-typed-getattr / try / log-and-continue boilerplate. The shared
+  helper takes an ``invoke(hook)`` callable so the only per-method
+  detail (zero-arg call vs. argument forwarding) remains visible at
+  the call site. Behaviour is unchanged; the warning template was
+  preserved verbatim aside from the hook name being interpolated
+  rather than hard-coded.
+- **``iter_protocol_instances`` is the only accessor.** Phase 5 kept
+  both an underscore-prefixed in-tree helper and a public alias for
+  the registry. Phase 7 deletes the underscore variant; every internal
+  caller now uses the public name. No external consumers exist
+  in-tree; the underscore name was never part of the documented
+  surface.
+- **``_legacy.py`` deliberately survives.** Plan §6.3 kept the
+  pre-overhaul ABC importable behind a deprecation banner. With
+  phase 6 already retiring every in-tree caller, the legacy module is
+  now a pure deprecation shim for external consumers — exactly what
+  it was designed for. Removing it would be a quiet breaking change
+  for third-party plugins that still import the old contract; that
+  decision belongs to a future major-version cut, not the tools
+  overhaul.
+
+### Deviations from the plan
+
+- **None of substance.** The plan called for deleting the patterns
+  subsystem and the ``ToolCallMatch`` / ``PatternInfo`` dataclasses;
+  this phase delivers exactly that and additionally removes the
+  ``tool_text.py`` helper (which the plan didn't enumerate but only
+  the default pattern consumed) and adds the
+  ``_dispatch_protocol_hook`` cleanup mentioned above.
+
+### Test coverage
+
+The full suite (248 cases) was re-run and passed. No new tests were
+added in this phase because the deletions are pure subtraction — the
+behaviours they used to back have either moved to ``TagParser`` (with
+its own coverage from phase 1) or have no replacement (the legacy
+``find_tool_calls`` / ``validate_tool_call_json`` helpers had no
+external callers in any of the workspaces).
+
+---
+
 ## Follow-ups & deferred items
 
 These are items discovered during implementation that were not
@@ -1035,13 +1193,13 @@ phase or follow-up.
   unambiguously trigger the envelope path with ``parameters``
   defaulting to ``{}``; weigh against the existing test contract
   before flipping.
-- **Pattern subsystem still loads, just nobody calls it.** Phase 6
-  removed the only consumers (``Registry.process_content`` and the
-  CLI's post-stream pass) but ``Manager.pattern_pm`` and the
-  ``claia.tool_patterns`` entry-point group still load on startup.
-  Phase 7 deletes the whole subsystem; until then the dormant
-  loader produces no observable effect (the default pattern is
-  registered but never queried).
+- ~~**Pattern subsystem still loads, just nobody calls it.**~~
+  Resolved in phase 7: the entire subsystem
+  (``claia.core.tools.patterns``, ``claia.framework.hooks.pattern``,
+  ``PatternRegistrar``, ``Manager.pattern_pm``, ``PatternInfo`` /
+  ``ToolCallMatch``, the ``claia.tool_patterns`` entry-point group,
+  and the lone ``claia.core.data.utils.tool_text`` helper) was
+  deleted.
 - **Cancellation race in the parser flush.** When the user cancels
   mid-stream the agent intentionally skips ``parser.flush()`` to
   avoid firing tool calls after the user gave up. A follow-up

@@ -9,7 +9,6 @@ The actual ABCs that implementations subclass live alongside their domain:
 - ``claia.core.architectures.base.BaseArchitecture``
 - ``claia.core.deployments.base.BaseDeployment``
 - ``claia.core.solvers.base.BaseSolver``
-- ``claia.core.tools.patterns.base.BasePattern``
 - ``claia.core.tools.protocols.base.BaseProtocol``
 - ``claia.core.tools.modules.base.BaseToolModule``
 
@@ -23,12 +22,10 @@ from .base import (
     ArchitectureInfo,
     DeploymentInfo,
     SolverInfo,
-    PatternInfo,
     ProtocolInfo,
     ToolModuleInfo,
     ToolDefinition,
     ArgumentDefinition,
-    ToolCallMatch,
     ToolReference,
     DeploymentParams,
 )
@@ -38,12 +35,10 @@ __all__ = [
     "ArchitectureInfo",
     "DeploymentInfo",
     "SolverInfo",
-    "PatternInfo",
     "ProtocolInfo",
     "ToolModuleInfo",
     "ToolDefinition",
     "ArgumentDefinition",
-    "ToolCallMatch",
     "ToolReference",
     "DeploymentParams",
 ]

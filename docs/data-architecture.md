@@ -371,7 +371,6 @@ claia/core/data/
   utils/
     image.py               — image processing utilities
     text.py                — text processing utilities
-    tool_text.py           — tool call text utilities
 
 claia/cli/storage/
   __init__.py              — exports JsonStore

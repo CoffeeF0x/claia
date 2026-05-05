@@ -11,7 +11,7 @@ CLAIA is a project I've been working on to abstract away the model loading. Star
 - Pluggable architecture using `pluggy` for simple extensibility
 - A single `Registry` API for:
   - Models: solve, deploy, and run across providers and runtimes
-  - Tools: declarative tool modules, protocols, and patterns
+  - Tools: declarative tool modules and protocols
   - Agents: process orchestration and worker lifecycle
 - Supports models from both API sources as well as local deployments (with plans for remote deployment functionality)
 - Robust conversation object with a builtin changelog/audit system
@@ -132,5 +132,4 @@ These values are passed to plugins through the `Registry` and filtered by each p
   - `claia.definitions` — model metadata and canonical IDs (to assist solvers)
   - `claia.agents` — model orchestration strategies
   - `claia.tool_modules` — concrete tool command modules
-  - `claia.tool_patterns` — text patterns for detecting tool calls
-  - `claia.tool_protocols` — protocols for executing detected tool calls
+  - `claia.tool_protocols` — protocols that own a tool inventory and execute calls

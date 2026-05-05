@@ -434,7 +434,7 @@ class TestSimpleProtocolPluginIntegration:
 # Manager binding + iteration accessor
 # ---------------------------------------------------------------------------
 class TestManagerBinding:
-  def test_iter_protocol_instances_public_alias(self):
+  def test_iter_protocol_instances_is_public(self):
     """``Registry`` reaches for the public accessor; verify it exists."""
     from claia.framework.manager import Manager
 

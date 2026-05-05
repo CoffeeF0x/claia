@@ -562,7 +562,7 @@ class TestManagerProtocolLifecycle:
     # missing required architectures, so stub that path out.
     self._inject_protocols(manager, [tracker])
     for group in (
-      'claia.definitions', 'claia.tool_patterns', 'claia.tool_modules',
+      'claia.definitions', 'claia.tool_modules',
       'claia.agents', 'claia.architectures', 'claia.deployments',
       'claia.solvers',
     ):
