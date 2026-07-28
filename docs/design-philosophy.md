@@ -2,6 +2,28 @@
 
 This document describes how CLAIA is designed and how work moves through the project. It is written for contributors: read it before proposing a change, and use it to judge whether an idea belongs in the library, in a plugin, or if it doesn't belong at all.
 
+## Vision
+
+Running a model should not require understanding how it runs, but it also shouldn't force a project to constrain itself to the vision of the framework. CLAIA exists as a translation layer to abstract the model loading and deployment away from the external project. To achieve this, CLAIA must assume several layers of interfacing, from a granular approach for advanced users to a turnkey approach for higher level use cases. This is achieved by only constraining a contract layer between the consumers (the projects using claia) and enforced on the producers (the modules that interface to the actual model deployments). If this thin layer can be the only enforced structure, this will create a very versatile option in this space.
+
+The framework exists to provide the turnkey solution, which will perhaps introduce the most deliberation. It aims to provide an easy to use option that won't cripple the developer when the project grows. However, it doesn't exist to provide entire production deployment. It currently includes a default agent, a queue system, and a model registry to offer a solution that can be used at a small scale. Any changes to the turnkey offerings should be discussed and approved by both the creator and the community.
+
+Everything that currently exists is built around that goal, however rough the current pieces are. Providers, runtimes, and model families become crutches that make code hard to modify and maintain. CLAIA attempts to disolve that into a library, allowing the projects to remain flexible, readable, and maintainable.
+
+## Project maturity
+
+CLAIA is pre-alpha. Through this stage and the alpha releases that follow, backward compatibility is explicitly not a goal. Interfaces, names, and contracts change when a better design is found, and they change without deprecation cycles or transitional paths.
+
+This is a deliberate trade. Preserving old interfaces this early produces a codebase shaped by its own history rather than by its current understanding, and every compatibility layer added now is a constraint on a design that has not settled yet. A clean implementation is worth more at this stage than an unbroken upgrade path.
+
+In practice, for contributors:
+
+- When a contract proves wrong, correct it and update every caller. A change that needs a compatibility layer to avoid touching the rest of the tree is a signal to make the change properly instead.
+- Removing the old path is part of the work, not a follow-up. Aliases, transitional branches, and dead code do not outlive the change that introduced them.
+- Reference plugins, tests, and the CLI move in step with core changes rather than lagging behind them.
+
+Consumers should pin a version and upgrade deliberately; release notes carry the breaking changes. This posture ends as the project approaches a stable release, at which point compatibility becomes a genuine constraint and contract changes earn a deprecation path.
+
 ## Principles
 
 ### Modules are the unit of work
@@ -63,9 +85,9 @@ The sanity folder is not a comprehensive test suite and must never grow into one
 The permanent, comprehensive test layer, and the first stage that runs without a human in the loop. Two conventions keep it navigable:
 
 - **Tests mirror the source tree.** A module at `src/claia/core/solvers/default.py` is tested at `src/tests/core/solvers/default.py`. Directory names match, and files carry no `test_` prefix.
-- **Shared fixtures, fakes, and builders live in** `src/tests/mocks/`**.** Tests do not define their own, which keeps the structures under test consistent across the suite.
+- **Shared fixtures, fakes, and builders live in `src/tests/mocks/`.** Tests do not define their own, which keeps the structures under test consistent across the suite.
 
-Tests are modular in the same way the source is: each file covers its counterpart's contract and the edge cases the sandbox deliberately ignored.
+Tests are modular in the same way the source is: each file covers its counterpart's contract and the edge cases sanity testing deliberately ignored.
 
 ### CI
 
