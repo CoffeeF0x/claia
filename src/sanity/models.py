@@ -42,8 +42,6 @@ def run_model():
   # Drop chars_per_chunk / chars_per_second to watch streaming.
   chunks, full = drain(model.generate(
     conversation,
-    chars_per_second=100,
-    chars_per_chunk=10,
   ))
 
   preview = "".join(chunks)[:120].replace("\n", " ")
