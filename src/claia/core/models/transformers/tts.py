@@ -9,11 +9,15 @@ small backend adapters.
 import io
 import importlib
 import logging
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional, Sequence, Tuple
 
 from claia.core.data import Conversation
+from claia.core.data.adapters import artifacts_to_conversation
+from claia.core.data.artifacts import BaseArtifact
+from claia.core.data.chunks import AudioChunk, BaseChunk, TextChunk
+from claia.core.data.response import ModelResponse
 from claia.core.enums.conversation import MessageRole
-from claia.core.modality import ChunkKind, GenerationChunk, text_chunk
+from claia.core.enums.data import AudioFormat
 from ..base import LocalModel
 
 
@@ -66,10 +70,12 @@ class LocalTTSModel(LocalModel):
 
   def generate(
     self,
-    conversation: Conversation,
+    artifacts: Sequence[BaseArtifact],
     **kwargs,
-  ) -> Generator[GenerationChunk, None, str]:
+  ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate speech audio from the latest user text or a prompt override."""
+    conversation = artifacts_to_conversation(artifacts)
+    chunks: list = []
     if not self.loaded:
       self.load()
 
@@ -84,11 +90,13 @@ class LocalTTSModel(LocalModel):
         **backend_kwargs,
       )
 
-      summary = "Generated audio."
-      yield text_chunk(summary)
-      yield GenerationChunk(
-        kind=ChunkKind.AUDIO_BYTES,
+      summary = TextChunk(data="Generated audio.")
+      chunks.append(summary)
+      yield summary
+      audio_fmt = AudioFormat.WAV if response_format == "wav" else AudioFormat.MPEG
+      audio = AudioChunk(
         data=audio_bytes,
+        format=audio_fmt,
         metadata={
           "media_type": MEDIA_TYPES.get(response_format, f"audio/{response_format}"),
           "format": response_format.upper(),
@@ -97,13 +105,16 @@ class LocalTTSModel(LocalModel):
           **metadata,
         },
       )
-      return summary
+      chunks.append(audio)
+      yield audio
+      return ModelResponse(chunks=chunks, complete=True, metadata={"text": summary.data})
 
     except Exception as e:
       logger.error(f"Error generating speech with local TTS model {self.model_name}: {e}")
-      error_msg = f"Error: {str(e)}"
-      yield text_chunk(error_msg)
-      return error_msg
+      chunk = TextChunk(data=f"Error: {str(e)}")
+      chunks.append(chunk)
+      yield chunk
+      return ModelResponse(chunks=chunks, complete=False, error=str(e))
 
   def tokenize(self, text: str) -> List[int]:
     """Tokenization is not exposed for TTS backends."""

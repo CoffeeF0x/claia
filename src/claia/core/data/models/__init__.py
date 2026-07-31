@@ -1,26 +1,34 @@
 """
-Domain data models.
+Conversation-domain models.
 
-Pure Python models for CLAIA artifacts and conversation objects.
-All models are independent of persistence mechanisms.
+Artifacts live under ``claia.core.data.artifacts``. This package keeps
+Conversation, Message, and Prompt — types that are not IO artifacts.
 """
 
-from .base import BaseArtifact
-from .text import TextArtifact
-from .image import ImageArtifact
-from .audio import AudioArtifact
+from claia.core.data.artifacts import (
+  AudioArtifact,
+  BaseArtifact,
+  FileArtifact,
+  ImageArtifact,
+  LinkArtifact,
+  RawArtifact,
+  TextArtifact,
+)
 from .prompt import Prompt
 from .conversation import (
-    Conversation,
-    Message,
+  Conversation,
+  Message,
 )
 
 __all__ = [
-    "BaseArtifact",
-    "TextArtifact",
-    "ImageArtifact",
-    "AudioArtifact",
-    "Prompt",
-    "Conversation",
-    "Message",
+  "BaseArtifact",
+  "TextArtifact",
+  "ImageArtifact",
+  "AudioArtifact",
+  "FileArtifact",
+  "LinkArtifact",
+  "RawArtifact",
+  "Prompt",
+  "Conversation",
+  "Message",
 ]

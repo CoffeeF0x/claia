@@ -7,8 +7,9 @@ import pytest
 
 # Internal dependencies
 from claia.framework.agents.simple import SimpleAgent
+from claia.core.data.chunks import AudioChunk, ImageChunk, TextChunk
+from claia.core.enums.data import AudioFormat, ImageFormat
 from claia.core.enums.process import ProcessStatus
-from claia.core.modality import ChunkKind, GenerationChunk, text_chunk
 
 
 PNG_BYTES = base64.b64decode(
@@ -45,10 +46,10 @@ def test_simple_agent_attaches_image_artifacts(process):
     def run(self, model_id, conversation, streaming=False, **kwargs):
       assert streaming is True
       return iter([
-        text_chunk("Generated image."),
-        GenerationChunk(
-          kind=ChunkKind.IMAGE_BYTES,
+        TextChunk(data="Generated image."),
+        ImageChunk(
           data=PNG_BYTES,
+          format=ImageFormat.PNG,
           metadata={
             "media_type": "image/png",
             "format": "PNG",
@@ -80,10 +81,10 @@ def test_simple_agent_attaches_audio_artifacts(process):
     def run(self, model_id, conversation, streaming=False, **kwargs):
       assert streaming is True
       return iter([
-        text_chunk("Generated audio."),
-        GenerationChunk(
-          kind=ChunkKind.AUDIO_BYTES,
+        TextChunk(data="Generated audio."),
+        AudioChunk(
           data=AUDIO_BYTES,
+          format=AudioFormat.WAV,
           metadata={
             "media_type": "audio/wav",
             "format": "WAV",
@@ -107,5 +108,4 @@ def test_simple_agent_attaches_audio_artifacts(process):
   assert message_id == assistant_message.message_id
   assert artifact.id == assistant_message.file_ids[0]
   assert artifact.media_type == "audio/wav"
-  assert artifact.sample_rate == 22050
   assert artifact.load_content() == AUDIO_BYTES

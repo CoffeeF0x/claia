@@ -34,7 +34,7 @@ import pytest
 from claia.core.data import Conversation
 from claia.core.enums.conversation import MessageRole
 from claia.core.enums.process import ProcessStatus
-from claia.core.modality import GenerationChunk, text_chunk
+from claia.core.data.chunks import BaseChunk, TextChunk
 from claia.core.parser import TagType
 from claia.core.plugins.base import ToolReference
 from claia.core.results import Result
@@ -79,7 +79,7 @@ class _FakeToolRegistry:
   ``resolve_qualified_name`` (bare-name fallback).
   """
 
-  def __init__(self, chunks: List[GenerationChunk], tools: Optional[Dict[str, Any]] = None):
+  def __init__(self, chunks: List[BaseChunk], tools: Optional[Dict[str, Any]] = None):
     self._chunks = chunks
     # ``tools`` maps qualified_name -> callable(payload, conversation, **kw) -> Result
     self._tools: Dict[str, Any] = tools or {}
@@ -120,8 +120,9 @@ def _process(conversation, model_id="dummy-model"):
 
 
 def _stream(*texts: str, conversation_factory=Conversation):
-  """Build a one-shot list of ``GenerationChunk`` items from text snippets."""
-  return [text_chunk(t) for t in texts]
+  """Build a one-shot list of ``TextChunk`` items from text snippets."""
+  del conversation_factory
+  return [TextChunk(data=t) for t in texts]
 
 
 # ---------------------------------------------------------------------------

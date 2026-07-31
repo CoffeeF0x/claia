@@ -2,20 +2,15 @@
 Abstract base class for deployment plugins.
 
 A deployment knows how to take an architecture's model class plus a
-conversation and produce a stream of ``GenerationChunk`` items.
-Concrete deployments handle caching of model instances themselves; the
-framework only provides a shared ``cache`` dict.
-
-The framework's ``claia_deployments`` hookspec mirrors this ABC.
-Subclasses declare their metadata via a class-level ``info`` attribute
-so plugin discovery does not have to instantiate the plugin.
+conversation, flatten it to artifacts, and produce a stream of
+``BaseChunk`` items (content only). Status lives on ``ModelResponse``.
 """
 
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Dict, Iterator, Type
 
 from ..data import Conversation
-from ..modality import GenerationChunk
+from ..data.chunks import BaseChunk
 from ..plugins.base import DeploymentInfo
 
 
@@ -40,25 +35,19 @@ class BaseDeployment(ABC):
     cache: Dict[str, Any],
     init_kwargs: Dict[str, Any],
     runtime_kwargs: Dict[str, Any],
-  ) -> Iterator[GenerationChunk]:
+  ) -> Iterator[BaseChunk]:
     """
     Deploy (if needed) and run inference on a model.
 
-    Yields ``GenerationChunk`` items as they arrive from the underlying
-    model. Text-only deployments wrap each token in a
-    ``ChunkKind.TEXT`` chunk; multi-modal deployments may emit image,
-    audio, video or progress chunks.
+    Yields ``BaseChunk`` content items as they arrive. Completion and
+    errors are carried by the model's ``ModelResponse`` (generator
+    return value), not by control chunks.
 
     Kwargs are split by ``ParamSpec`` scope at the framework boundary
-    (``Registry._run_stream``) and handed in as two dicts so each one
-    reaches the layer that actually consumes it:
+    (``Registry._run_stream``) and handed in as two dicts:
 
-    - ``init_kwargs`` — INIT-scoped kwargs (credentials, endpoints,
-      paths). Forwarded to the model class constructor when a fresh
-      instance is built.
-    - ``runtime_kwargs`` — RUNTIME-scoped kwargs (``temperature``,
-      ``max_tokens``, ...) already resolved against the architecture's
-      spec defaults. Forwarded to ``model.generate`` per call.
+    - ``init_kwargs`` — INIT-scoped kwargs for model construction
+    - ``runtime_kwargs`` — RUNTIME-scoped kwargs for ``model.generate``
 
     Errors are raised as exceptions (typically ``DeploymentError``).
     """

@@ -6,6 +6,7 @@ import base64
 
 from claia.cli.storage import JsonStore
 from claia.core.data.models import AudioArtifact, ImageArtifact, TextArtifact
+from claia.core.enums.data import ImageFormat
 
 
 PNG_BYTES = base64.b64decode(
@@ -18,8 +19,7 @@ def test_json_store_round_trips_image_artifact_content(tmp_path):
   artifact = ImageArtifact.from_bytes(
     image_data=PNG_BYTES,
     name="generated-image.png",
-    format="PNG",
-    media_type="image/png",
+    format=ImageFormat.PNG,
     metadata={"prompt": "fox"},
   )
 
@@ -40,7 +40,6 @@ def test_json_store_round_trips_text_artifact_content(tmp_path):
   artifact = TextArtifact.from_content(
     content="hello from disk",
     name="note.txt",
-    media_type="text/plain",
   )
 
   assert store.save(artifact)
@@ -57,7 +56,6 @@ def test_json_store_round_trips_audio_artifact_content(tmp_path):
   artifact = AudioArtifact.from_bytes(
     audio_data=b"RIFFfake",
     name="clip.wav",
-    media_type="audio/wav",
   )
 
   assert store.save(artifact)

@@ -7,10 +7,14 @@ including support for streaming and non-streaming responses.
 
 import json
 import logging
-from typing import Dict, Any, Optional, Generator
+from typing import Dict, Any, Optional, Generator, Sequence
 
 # Internal dependencies
 from claia.core.data import Conversation
+from claia.core.data.adapters import artifacts_to_conversation
+from claia.core.data.artifacts import BaseArtifact
+from claia.core.data.chunks import BaseChunk
+from claia.core.data.response import ModelResponse
 from claia.core.enums.conversation import MessageRole
 from ..base import APIModel
 
@@ -49,13 +53,18 @@ class AnthropicModel(APIModel):
     """Set the API key for Anthropic authentication."""
     self.set_custom_header("x-api-key", api_key)
 
-  def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
-    """Generate a response using Anthropic's API. Yields tokens, returns full response.
+  def generate(
+    self,
+    artifacts: Sequence[BaseArtifact],
+    **kwargs,
+  ) -> Generator[BaseChunk, None, ModelResponse]:
+    """Generate a response using Anthropic's API.
 
-    ``kwargs`` arrive pre-filtered and pre-defaulted against the
-    architecture's RUNTIME ``ParamSpec`` declarations, so we consume
-    them directly without a local defaults pass.
+    Yields text chunks (legacy string tokens are normalized by the
+    deployment layer); returns a ``ModelResponse``.
     """
+    conversation = artifacts_to_conversation(artifacts)
+    chunks: list = []
     try:
       system_message, messages = self._convert_conversation_to_messages(conversation)
 
@@ -84,17 +93,31 @@ class AnthropicModel(APIModel):
 
       if kwargs.get("stream", False):
         request_data["stream"] = True
-        full_response = yield from self._handle_streaming_response(request_data)
+        token_gen = self._handle_streaming_response(request_data)
       else:
-        full_response = yield from self._handle_non_streaming_response(request_data)
+        token_gen = self._handle_non_streaming_response(request_data)
 
-      return full_response
+      from claia.core.data.chunks import TextChunk
+      try:
+        while True:
+          token = next(token_gen)
+          chunk = TextChunk(data=token) if isinstance(token, str) else token
+          chunks.append(chunk)
+          yield chunk
+      except StopIteration as stop:
+        return ModelResponse(
+          chunks=chunks,
+          complete=True,
+          metadata={"text": stop.value},
+        )
 
     except Exception as e:
       logger.error(f"Error generating response with Anthropic model {self.model_name}: {e}")
-      error_msg = f"Error: {str(e)}"
-      yield error_msg
-      return error_msg
+      from claia.core.data.chunks import TextChunk
+      chunk = TextChunk(data=f"Error: {str(e)}")
+      chunks.append(chunk)
+      yield chunk
+      return ModelResponse(chunks=chunks, complete=False, error=str(e))
 
   def _convert_conversation_to_messages(self, conversation: Conversation) -> tuple:
     """Convert a Conversation object to Anthropic messages format."""

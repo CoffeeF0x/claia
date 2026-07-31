@@ -3,17 +3,16 @@ A dummy model that returns a predefined story.
 Used for testing streaming capabilities.
 """
 
-# External dependencies
 import time
 import logging
 import random
-from typing import Dict, Any, Generator
+from typing import Generator, Sequence
 
-# Internal dependencies
 from ..base import BaseModel
-from claia.core.data import Conversation
-from claia.core.enums.conversation import MessageRole
-
+from claia.core.data.artifacts import BaseArtifact
+from claia.core.data.chunks import BaseChunk, TextChunk
+from claia.core.data.response import ModelResponse
+from claia.core.enums.data import TextFormat
 
 
 ########################################################################
@@ -109,9 +108,10 @@ CHARS_PER_CHUNK = 20
 class DummyModel(BaseModel):
   """
   A dummy model that returns a predefined story.
-  This model simulates streaming by returning chunks of the story
-  at a controlled rate.
+  This model simulates streaming by yielding TextChunk items
+  at a controlled rate, then returns a ModelResponse.
   """
+
   def __init__(self, model_name: str = "dummy-model"):
     super().__init__(model_name)
     self.story = STORY.strip()
@@ -119,28 +119,31 @@ class DummyModel(BaseModel):
     self.story_length = len(self.characters)
     logger.debug(f"Initialized DummyModel with {self.story_length} characters")
 
-  def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
-    """
-    Generate a response by streaming a predefined story.
-
-    Yields chunks of the story at a controlled rate to simulate streaming.
-    Returns the complete story when finished.
-    """
+  def generate(
+    self,
+    artifacts: Sequence[BaseArtifact],
+    **kwargs,
+  ) -> Generator[BaseChunk, None, ModelResponse]:
+    """Stream the story as TextChunks; return a ModelResponse."""
+    del artifacts  # Dummy ignores input content
     chars_per_second = kwargs.get("chars_per_second", CHARS_PER_SECOND)
     chars_per_chunk = kwargs.get("chars_per_chunk", CHARS_PER_CHUNK)
-    logger.debug(f"Generating response at {chars_per_second} characters per second in chunks of {chars_per_chunk}")
+    logger.debug(
+      f"Generating at {chars_per_second} chars/s in chunks of {chars_per_chunk}"
+    )
 
-    full_response = ""
-
+    chunks = []
     for i in range(0, self.story_length, chars_per_chunk):
-        end_idx = min(i + chars_per_chunk, self.story_length)
-        chunk = "".join(self.characters[i:end_idx])
-        full_response += chunk
-        yield chunk
-        delay = (chars_per_chunk / chars_per_second) * (0.9 + (random.random() * 0.2))
-        time.sleep(delay)
+      end_idx = min(i + chars_per_chunk, self.story_length)
+      text = "".join(self.characters[i:end_idx])
+      chunk = TextChunk(data=text, format=TextFormat.PLAIN)
+      chunks.append(chunk)
+      yield chunk
+      delay = (chars_per_chunk / chars_per_second) * (0.9 + (random.random() * 0.2))
+      time.sleep(delay)
 
-    full_response += "\n"
-    yield "\n"
+    trailing = TextChunk(data="\n", format=TextFormat.PLAIN)
+    chunks.append(trailing)
+    yield trailing
 
-    return full_response
+    return ModelResponse(chunks=chunks, complete=True)

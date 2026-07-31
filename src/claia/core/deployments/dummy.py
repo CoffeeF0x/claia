@@ -8,8 +8,9 @@ import logging
 from typing import Any, Dict, Iterator, Type
 
 from .base import BaseDeployment
+from ._run import deploy_and_stream
 from claia.core.data import Conversation
-from ..modality import GenerationChunk, text_chunk
+from claia.core.data.chunks import BaseChunk
 from ..plugins.base import DeploymentInfo
 
 
@@ -33,20 +34,14 @@ class DummyDeploymentPlugin(BaseDeployment):
     cache: Dict[str, Any],
     init_kwargs: Dict[str, Any],
     runtime_kwargs: Dict[str, Any],
-  ) -> Iterator[GenerationChunk]:
-    """Deploy (if needed) and run inference for dummy model. Yields ``GenerationChunk`` items."""
+  ) -> Iterator[BaseChunk]:
     del init_kwargs  # DummyModel takes no init-time configuration
-    cache_key = f"{model_name}:dummy"
-
-    if cache_key in cache:
-      model_instance = cache[cache_key]
-      logger.debug(f"Using cached dummy model instance for {cache_key}")
-    else:
-      logger.debug(f"Deploying dummy model: {model_name}")
-      model_instance = model_class(model_name=model_name)
-      cache[cache_key] = model_instance
-      logger.debug(f"Successfully deployed and cached dummy model: {model_name}")
-
-    logger.debug(f"Running dummy model inference: {model_name}")
-    for token in model_instance.generate(conversation, **runtime_kwargs):
-      yield token if isinstance(token, GenerationChunk) else text_chunk(token)
+    return deploy_and_stream(
+      model_name=model_name,
+      model_class=model_class,
+      conversation=conversation,
+      cache=cache,
+      cache_suffix="dummy",
+      init_kwargs={},
+      runtime_kwargs=runtime_kwargs,
+    )

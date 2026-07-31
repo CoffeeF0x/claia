@@ -8,12 +8,16 @@ using the Hugging Face transformers library.
 import logging
 from queue import Empty
 from threading import Thread
-from typing import Any, Dict, List, Optional, Generator
+from typing import Any, Dict, List, Optional, Generator, Sequence
 from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
 import torch
 
 # Internal dependencies
 from claia.core.data import Conversation
+from claia.core.data.adapters import artifacts_to_conversation
+from claia.core.data.artifacts import BaseArtifact
+from claia.core.data.chunks import BaseChunk, TextChunk
+from claia.core.data.response import ModelResponse
 from claia.core.enums.conversation import MessageRole
 from ..base import LocalModel
 
@@ -77,13 +81,14 @@ class GenericTransformerModel(LocalModel):
     self.loaded = False
     logger.info(f"Unloaded transformer model: {self.model_name}")
 
-  def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
-    """Generate a response using the transformer model.
-
-    ``kwargs`` arrive pre-resolved against the architecture's RUNTIME
-    ``ParamSpec`` declarations (see ``Manager.resolve_runtime_kwargs``),
-    so we consume them directly.
-    """
+  def generate(
+    self,
+    artifacts: Sequence[BaseArtifact],
+    **kwargs,
+  ) -> Generator[BaseChunk, None, ModelResponse]:
+    """Generate a response using the transformer model."""
+    conversation = artifacts_to_conversation(artifacts)
+    chunks: list = []
     if not self.loaded:
       self.load()
 
@@ -92,18 +97,32 @@ class GenericTransformerModel(LocalModel):
       inputs = self._tokenize_prompt(prompt)
 
       if kwargs.get("stream", False):
-        response = yield from self._generate_streaming(inputs, kwargs)
+        token_gen = self._generate_streaming(inputs, kwargs)
+        try:
+          while True:
+            token = next(token_gen)
+            chunk = TextChunk(data=token) if isinstance(token, str) else token
+            chunks.append(chunk)
+            yield chunk
+        except StopIteration as stop:
+          return ModelResponse(
+            chunks=chunks,
+            complete=True,
+            metadata={"text": stop.value},
+          )
       else:
         response = self._generate_blocking(inputs, kwargs)
-        yield response
-
-      return response
+        chunk = TextChunk(data=response)
+        chunks.append(chunk)
+        yield chunk
+        return ModelResponse(chunks=chunks, complete=True, metadata={"text": response})
 
     except Exception as e:
       logger.error(f"Error generating response with transformer model {self.model_name}: {e}")
-      error_msg = f"Error: {str(e)}"
-      yield error_msg
-      return error_msg
+      chunk = TextChunk(data=f"Error: {str(e)}")
+      chunks.append(chunk)
+      yield chunk
+      return ModelResponse(chunks=chunks, complete=False, error=str(e))
 
   def _tokenize_prompt(self, prompt: str) -> Dict[str, Any]:
     """Tokenize and move a prompt to the configured device."""

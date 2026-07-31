@@ -4,10 +4,11 @@ Start here with DummyModel. Swap MODULE / run_* helpers as more models
 are validated. Keep this file minimal and disposable.
 """
 
-from claia.core.data import Conversation
+from claia.core.data import Conversation, ModelResponse, TextChunk
+from claia.core.data.adapters import conversation_to_artifacts
+from claia.core.data.generate import drain_generate
 from claia.core.deployments.dummy import DummyDeploymentPlugin
 from claia.core.enums.conversation import MessageRole
-from claia.core.modality import iter_text
 from claia.core.models.dummy import DummyModel
 
 MODULE = DummyModel
@@ -20,7 +21,8 @@ def drain(generator):
     print("\nDraining generator...\n")
     while True:
       chunk = next(generator)
-      print(chunk, end="", flush=True)
+      text = chunk.data if isinstance(chunk, TextChunk) else str(chunk)
+      print(text, end="", flush=True)
       chunks.append(chunk)
   except StopIteration as stop:
     print("\nGenerator drained.\n\n")
@@ -32,29 +34,33 @@ def run_model():
   model = MODULE(model_name="dummy-model")
   conversation = Conversation(title="sanity-models")
   conversation.add_message(MessageRole.USER, "Tell me a story.")
+  artifacts = conversation_to_artifacts(conversation)
   message_count_before = len(conversation.messages)
 
   print(f"model: {model.model_name} ({type(model).__name__})")
   print(f"story length: {model.story_length} chars")
+  print(f"artifacts in: {len(artifacts)}")
   print()
 
-  # Large chunk size keeps the run snappy (DummyModel sleeps per chunk).
-  # Drop chars_per_chunk / chars_per_second to watch streaming.
-  chunks, full = drain(model.generate(
-    conversation,
+  chunks, response = drain(model.generate(
+    artifacts,
+    chars_per_second=1_000_000,
+    chars_per_chunk=10_000,
   ))
 
-  preview = "".join(chunks)[:120].replace("\n", " ")
+  assert isinstance(response, ModelResponse)
+  preview = response.text()[:120].replace("\n", " ")
   print(f"chunks: {len(chunks)}")
-  print(f"yielded chars: {sum(len(c) for c in chunks)}")
-  print(f"return chars: {len(full) if full else 0}")
+  print(f"response.complete: {response.complete}")
+  print(f"response.error: {response.error}")
+  print(f"yielded chars: {sum(len(c.data) for c in chunks if isinstance(c, TextChunk))}")
   print(f"preview: {preview}...")
   print(f"conversation untouched: {len(conversation.messages) == message_count_before}")
   print()
 
 
 def run_deployment():
-  """Same path through DummyDeploymentPlugin (model_class + cache)."""
+  """Same path through DummyDeploymentPlugin (conversation → artifacts)."""
   deployment = DummyDeploymentPlugin()
   info = deployment.get_deployment_info()
   conversation = Conversation(title="sanity-models-deploy")
@@ -62,18 +68,26 @@ def run_deployment():
 
   print(f"deployment: {info.name} - {info.description}")
 
-  chunks = list(iter_text(deployment.run(
+  chunks = list(drain_generate(
+    MODULE(model_name="dummy-model"),
+    conversation_to_artifacts(conversation),
+    {"chars_per_second": 1_000_000, "chars_per_chunk": 10_000},
+  ))
+  # Also exercise deployment.run for the full path
+  deploy_chunks = list(deployment.run(
     model_name="dummy-model",
     model_class=MODULE,
     conversation=conversation,
     cache={},
     init_kwargs={},
     runtime_kwargs={"chars_per_second": 1_000_000, "chars_per_chunk": 10_000},
-  )))
+  ))
 
-  preview = "".join(chunks)[:120].replace("\n", " ")
-  print(f"chunks: {len(chunks)}")
-  print(f"yielded chars: {sum(len(c) for c in chunks)}")
+  preview = "".join(
+    c.data for c in deploy_chunks if isinstance(c, TextChunk)
+  )[:120].replace("\n", " ")
+  print(f"chunks: {len(deploy_chunks)}")
+  print(f"yielded chars: {sum(len(c.data) for c in deploy_chunks if isinstance(c, TextChunk))}")
   print(f"preview: {preview}...")
   print()
 

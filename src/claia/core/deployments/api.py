@@ -9,8 +9,9 @@ import logging
 from typing import Any, Dict, Iterator, Type
 
 from .base import BaseDeployment
+from ._run import deploy_and_stream
 from claia.core.data import Conversation
-from ..modality import GenerationChunk, text_chunk
+from claia.core.data.chunks import BaseChunk
 from ..plugins.base import DeploymentInfo
 
 
@@ -18,12 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class APIDeploymentPlugin(BaseDeployment):
-  """
-  API deployment method plugin for remote API-based models.
-
-  This plugin handles deployment of models that make API calls to
-  external services like OpenAI, Anthropic, Google, etc.
-  """
+  """API deployment method plugin for remote API-based models."""
 
   info = DeploymentInfo(
     name="api",
@@ -39,29 +35,13 @@ class APIDeploymentPlugin(BaseDeployment):
     cache: Dict[str, Any],
     init_kwargs: Dict[str, Any],
     runtime_kwargs: Dict[str, Any],
-  ) -> Iterator[GenerationChunk]:
-    """
-    Deploy (if needed) and run inference on an API-based model.
-
-    Yields ``GenerationChunk`` items. The underlying API models still
-    yield plain string tokens from ``generate``; this deployment wraps
-    each token into a ``ChunkKind.TEXT`` chunk so the framework-level
-    contract is uniform across text and multi-modal providers.
-    """
-    cache_key = f"{model_name}:api"
-
-    if cache_key in cache:
-      model_instance = cache[cache_key]
-      logger.debug(f"Using cached API model instance for {cache_key}")
-    else:
-      logger.debug(f"Deploying API model: {model_name}")
-      model_instance = model_class(
-        model_name=model_name,
-        **init_kwargs,
-      )
-      cache[cache_key] = model_instance
-      logger.debug(f"Successfully deployed and cached API model: {model_name}")
-
-    logger.debug(f"Running API model inference: {model_name}")
-    for token in model_instance.generate(conversation, **runtime_kwargs):
-      yield token if isinstance(token, GenerationChunk) else text_chunk(token)
+  ) -> Iterator[BaseChunk]:
+    return deploy_and_stream(
+      model_name=model_name,
+      model_class=model_class,
+      conversation=conversation,
+      cache=cache,
+      cache_suffix="api",
+      init_kwargs=init_kwargs,
+      runtime_kwargs=runtime_kwargs,
+    )

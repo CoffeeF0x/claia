@@ -25,8 +25,8 @@ import logging
 
 # Internal dependencies
 from claia.framework.agents.base import BaseAgent
+from claia.core.data.chunks import TextChunk
 from claia.core.enums.conversation import MessageRole
-from claia.core.modality import ChunkKind
 
 
 ########################################################################
@@ -86,7 +86,7 @@ class WriterAgent(BaseAgent):
       full_response = ""
 
       for chunk in registry.run(model_id, process.conversation, streaming=True, **kwargs):
-        if chunk.kind is not ChunkKind.TEXT:
+        if not isinstance(chunk, TextChunk):
           process.emit("chunk", chunk)
           continue
         token = chunk.data if isinstance(chunk.data, str) else str(chunk.data)

@@ -18,7 +18,7 @@ PNG_BYTES = base64.b64decode(
 
 def test_export_file_command_writes_image_content(tmp_path):
   store = JsonStore(str(tmp_path))
-  artifact = ImageArtifact.from_bytes(PNG_BYTES, name="generated.png", media_type="image/png")
+  artifact = ImageArtifact.from_bytes(PNG_BYTES, name="generated.png")
   assert store.save(artifact)
 
   command = ExportFileCommand(object(), SimpleNamespace(files_directory=str(tmp_path)))
@@ -49,7 +49,7 @@ def test_import_file_command_creates_image_artifact(tmp_path):
 
 def test_file_command_lists_artifacts(tmp_path):
   store = JsonStore(str(tmp_path))
-  artifact = ImageArtifact.from_bytes(PNG_BYTES, name="generated.png", media_type="image/png")
+  artifact = ImageArtifact.from_bytes(PNG_BYTES, name="generated.png")
   assert store.save(artifact)
 
   command = FileCommand(object(), SimpleNamespace(files_directory=str(tmp_path)))

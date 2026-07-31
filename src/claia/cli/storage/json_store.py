@@ -11,16 +11,21 @@ import logging
 import os
 import shutil
 import tempfile
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 
-from claia.core.data.models import (
-    BaseArtifact,
-    TextArtifact,
-    ImageArtifact,
-    AudioArtifact,
-    Prompt,
-    Conversation,
+from claia.core.data import (
+  BaseArtifact,
+  TextArtifact,
+  ImageArtifact,
+  AudioArtifact,
+  FileArtifact,
+  LinkArtifact,
+  RawArtifact,
+  Prompt,
+  Conversation,
 )
+
+StoreObject = Union[BaseArtifact, Prompt, Conversation]
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +51,7 @@ class JsonStore:
     # Internal helpers                                                      #
     # ------------------------------------------------------------------ #
 
-    def _subdir_for(self, artifact: BaseArtifact) -> str:
+    def _subdir_for(self, artifact: StoreObject) -> str:
         if isinstance(artifact, Conversation):
             return "conversations"
         if isinstance(artifact, Prompt):
@@ -55,6 +60,8 @@ class JsonStore:
             return "images"
         if isinstance(artifact, AudioArtifact):
             return "audio"
+        if isinstance(artifact, (FileArtifact, LinkArtifact, RawArtifact)):
+            return "files"
         return "texts"
 
     def _ensure_dir(self, subdir: str) -> str:
@@ -72,8 +79,8 @@ class JsonStore:
                 return candidate
         return None
 
-    def _artifact_from_dict(self, data: Dict[str, Any]) -> BaseArtifact:
-        """Rehydrate a typed artifact from a raw dict."""
+    def _artifact_from_dict(self, data: Dict[str, Any]) -> StoreObject:
+        """Rehydrate a typed object from a raw dict."""
         atype = data.get("artifact_type", "texts")
         if atype == "conversations":
             return Conversation.from_dict(data)
@@ -83,23 +90,30 @@ class JsonStore:
             return ImageArtifact.from_dict(data)
         if atype == "audio":
             return AudioArtifact.from_dict(data)
+        if atype == "files":
+            if data.get("uri") is not None or data.get("format") == "uri-list":
+                return LinkArtifact.from_dict(data)
+            if data.get("format") == "octet-stream":
+                return RawArtifact.from_dict(data)
+            return FileArtifact.from_dict(data)
         return TextArtifact.from_dict(data)
 
     # ------------------------------------------------------------------ #
     # Public API                                                            #
     # ------------------------------------------------------------------ #
 
-    def save(self, artifact: BaseArtifact) -> bool:
-        """Serialize an artifact to a JSON file (atomic write)."""
+    def save(self, artifact: StoreObject) -> bool:
+        """Serialize an artifact/prompt/conversation to a JSON file."""
         try:
             subdir = self._subdir_for(artifact)
             dir_path = self._ensure_dir(subdir)
-            dest = os.path.join(dir_path, f"{artifact.id}.json")
+            object_id = getattr(artifact, "id", None) or getattr(artifact, "guid")
+            dest = os.path.join(dir_path, f"{object_id}.json")
 
             data = artifact.to_dict()
             data["artifact_type"] = subdir
 
-            fd, tmp = tempfile.mkstemp(dir=dir_path, suffix=".tmp", prefix=f"{artifact.id}_")
+            fd, tmp = tempfile.mkstemp(dir=dir_path, suffix=".tmp", prefix=f"{object_id}_")
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2)
@@ -112,10 +126,10 @@ class JsonStore:
                     pass
                 raise
         except Exception as e:
-            logger.error(f"Failed to save artifact {artifact.id}: {e}")
+            logger.error(f"Failed to save artifact: {e}")
             return False
 
-    def load(self, artifact_id: str) -> Optional[BaseArtifact]:
+    def load(self, artifact_id: str) -> Optional[StoreObject]:
         """Load an artifact by ID from any subdirectory."""
         try:
             path = self._find_json(artifact_id)
@@ -147,7 +161,7 @@ class JsonStore:
         try:
             results: List[dict] = []
             subdirs = [artifact_type] if artifact_type else [
-                "texts", "images", "audio", "prompts", "conversations",
+                "texts", "images", "audio", "files", "prompts", "conversations",
             ]
             for subdir in subdirs:
                 dir_path = os.path.join(self.base_directory, subdir)

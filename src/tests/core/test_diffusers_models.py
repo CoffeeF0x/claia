@@ -7,9 +7,12 @@ import sys
 import types
 
 from claia.core.data import Conversation
+from claia.core.data.adapters import conversation_to_artifacts
+from claia.core.data.chunks import ImageChunk, TextChunk
+from claia.core.data.response import ModelResponse
 from claia.core.deployments.local import LocalDeploymentPlugin
 from claia.core.enums.conversation import MessageRole
-from claia.core.modality import ChunkKind, GenerationChunk
+from claia.core.enums.data import ImageFormat
 
 
 class FakeGenerator:
@@ -96,7 +99,7 @@ def test_diffusers_model_yields_text_and_image_chunks(monkeypatch):
   )
 
   chunks = list(model.generate(
-    _conversation(),
+    conversation_to_artifacts(_conversation()),
     height=32,
     width=64,
     num_inference_steps=7,
@@ -107,9 +110,9 @@ def test_diffusers_model_yields_text_and_image_chunks(monkeypatch):
     output_format="png",
   ))
 
-  assert chunks[0].kind is ChunkKind.TEXT
+  assert isinstance(chunks[0], TextChunk)
   assert chunks[0].data == "Generated 1 image."
-  assert chunks[1].kind is ChunkKind.IMAGE_BYTES
+  assert isinstance(chunks[1], ImageChunk)
   assert chunks[1].data == b"PNG:fake-image"
   assert chunks[1].metadata["media_type"] == "image/png"
   assert chunks[1].metadata["model"] == "sd2-community/stable-diffusion-2"
@@ -134,16 +137,19 @@ def test_diffusers_model_allows_prompt_override(monkeypatch):
   diffusers = _import_diffusers_module(monkeypatch)
   model = diffusers.DiffusersModel("example/image-model", defer_loading=True)
 
-  chunks = list(model.generate(_conversation(), prompt="Override prompt"))
+  chunks = list(model.generate(
+    conversation_to_artifacts(_conversation()),
+    prompt="Override prompt",
+  ))
 
   assert chunks[1].metadata["prompt"] == "Override prompt"
   assert FakePipeline.loaded[0].calls[0]["prompt"] == "Override prompt"
 
 
 def test_local_deployment_passes_image_chunks_through():
-  image_chunk = GenerationChunk(
-    kind=ChunkKind.IMAGE_BYTES,
+  image_chunk = ImageChunk(
     data=b"image",
+    format=ImageFormat.PNG,
     metadata={"media_type": "image/png"},
   )
 
@@ -151,8 +157,9 @@ def test_local_deployment_passes_image_chunks_through():
     def __init__(self, model_name, model_path=None, defer_loading=False, device="cpu"):
       self.model_name = model_name
 
-    def generate(self, conversation, **kwargs):
+    def generate(self, artifacts, **kwargs):
       yield image_chunk
+      return ModelResponse(chunks=[image_chunk], complete=True)
 
   deployment = LocalDeploymentPlugin()
   chunks = list(deployment.run(
@@ -164,4 +171,6 @@ def test_local_deployment_passes_image_chunks_through():
     runtime_kwargs={},
   ))
 
-  assert chunks == [image_chunk]
+  assert len(chunks) == 1
+  assert isinstance(chunks[0], ImageChunk)
+  assert chunks[0].data == b"image"

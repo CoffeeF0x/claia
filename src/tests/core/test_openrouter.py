@@ -4,6 +4,7 @@ Tests for the OpenRouter API architecture and definitions.
 
 from claia.core.architectures.openrouter import OpenRouterPlugin
 from claia.core.data import Conversation
+from claia.core.data.adapters import conversation_to_artifacts
 from claia.core.definitions.anthropic import AnthropicDefinitionsPlugin
 from claia.core.definitions.openai import OpenAIDefinitionsPlugin
 from claia.core.definitions.openrouter import OpenRouterDefinitionsPlugin
@@ -52,7 +53,7 @@ def test_openrouter_model_builds_non_streaming_request():
   )
 
   chunks = list(model.generate(
-    _conversation(),
+    conversation_to_artifacts(_conversation()),
     stream=False,
     max_tokens=25,
     temperature=0,
@@ -61,7 +62,7 @@ def test_openrouter_model_builds_non_streaming_request():
   ))
 
   endpoint, data, request_kwargs = model.calls[0]
-  assert chunks == ["Hi there"]
+  assert [c.data for c in chunks] == ["Hi there"]
   assert endpoint == "chat/completions"
   assert request_kwargs == {}
   assert data["model"] == "openai/gpt-4o-mini"
@@ -82,10 +83,14 @@ def test_openrouter_model_streams_deltas():
   ])
   model = RecordingOpenRouterModel("anthropic/claude-sonnet-4.5", response=response)
 
-  chunks = list(model.generate(_conversation(), stream=True, max_tokens=25))
+  chunks = list(model.generate(
+    conversation_to_artifacts(_conversation()),
+    stream=True,
+    max_tokens=25,
+  ))
 
   endpoint, data, request_kwargs = model.calls[0]
-  assert chunks == ["Hello ", "world"]
+  assert [c.data for c in chunks] == ["Hello ", "world"]
   assert endpoint == "chat/completions"
   assert data["stream"] is True
   assert request_kwargs == {"stream": True}
@@ -97,9 +102,9 @@ def test_openrouter_model_surfaces_api_errors():
   })
   model = RecordingOpenRouterModel("bad/model", response=response)
 
-  chunks = list(model.generate(_conversation(), stream=False))
+  chunks = list(model.generate(conversation_to_artifacts(_conversation()), stream=False))
 
-  assert chunks == ["OpenRouter error (invalid_model): Unknown model"]
+  assert [c.data for c in chunks] == ["OpenRouter error (invalid_model): Unknown model"]
 
 
 def test_openrouter_architecture_exposes_model_and_params():

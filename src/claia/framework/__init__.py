@@ -20,69 +20,56 @@ can do::
     from claia.framework import Registry, Conversation, Result
 
 without having to import from two places.
-
-Quick library example::
-
-    from claia.framework import Registry, Conversation
-
-    registry = Registry()
-    registry.load_plugins(openai_api_token="sk-...")
-    registry.start_workers(2)
-
-    conv = Conversation()
-    conv.add_message("user", "Hello!")
-    result = registry.run("gpt-4", conv)
-    print(result.get_data())
-
-Streaming::
-
-    for token in registry.run("gpt-4", conv, streaming=True):
-        print(token, end="", flush=True)
-
-Callback-style query::
-
-    result = registry.query(
-        "gpt-4", "Hello!",
-        on_token=lambda t: print(t, end="", flush=True),
-    )
 """
 
 # Re-exports from claia.core for convenience.
 from claia.core.results import Result, DeploymentError
 from claia.core.data import (
-    Conversation,
-    Message,
-    BaseArtifact,
-    TextArtifact,
-    ImageArtifact,
-    AudioArtifact,
-    Prompt,
-    DomainEvent,
-    EventType,
+  Conversation,
+  Message,
+  DataObject,
+  BaseArtifact,
+  TextArtifact,
+  ImageArtifact,
+  AudioArtifact,
+  FileArtifact,
+  LinkArtifact,
+  RawArtifact,
+  Prompt,
+  BaseChunk,
+  TextChunk,
+  ImageChunk,
+  AudioChunk,
+  RawChunk,
+  ModelResponse,
+  DomainEvent,
+  EventType,
 )
 from claia.core.plugins.base import (
-    ExtensionInfo,
-    ArchitectureInfo,
-    DeploymentInfo,
-    SolverInfo,
-    ProtocolInfo,
-    ToolModuleInfo,
-    ToolDefinition,
-    ArgumentDefinition,
-    ToolReference,
-    DeploymentParams,
-    ParamSpec,
-    ParamScope,
-    SettingCategory,
+  ExtensionInfo,
+  ArchitectureInfo,
+  DeploymentInfo,
+  SolverInfo,
+  ProtocolInfo,
+  ToolModuleInfo,
+  ToolDefinition,
+  ArgumentDefinition,
+  ToolReference,
+  DeploymentParams,
+  ParamSpec,
+  ParamScope,
+  SettingCategory,
 )
 from claia.core.definitions.model_definition import ModelDefinition
 from claia.core.enums.process_queue import ProcessQueueHook
-from claia.core.modality import (
-    Modality,
-    ChunkKind,
-    GenerationChunk,
-    text_chunk,
-    iter_text,
+from claia.core.modality import Modality
+from claia.core.enums.data import (
+  MediaType,
+  TextFormat,
+  ImageFormat,
+  AudioFormat,
+  VideoFormat,
+  ApplicationFormat,
 )
 
 # Framework primitives.
@@ -93,22 +80,28 @@ from .manager import Manager
 from .agents.base import BaseAgent
 
 __all__ = [
-    # Framework primitives
-    "Registry", "Manager", "Process", "ProcessQueue", "ProcessQueueHook",
-    "BaseAgent",
-    # Results
-    "Result", "DeploymentError",
-    # Data
-    "Conversation", "Message",
-    "BaseArtifact", "TextArtifact", "ImageArtifact", "AudioArtifact", "Prompt",
-    "DomainEvent", "EventType",
-    # Plugin metadata
-    "ExtensionInfo",
-    "ArchitectureInfo", "DeploymentInfo", "SolverInfo",
-    "ProtocolInfo", "ToolModuleInfo",
-    "ToolDefinition", "ArgumentDefinition", "ToolReference", "DeploymentParams",
-    "ParamSpec", "ParamScope", "SettingCategory",
-    "ModelDefinition",
-    # Modality / multi-modal chunks
-    "Modality", "ChunkKind", "GenerationChunk", "text_chunk", "iter_text",
+  # Framework primitives
+  "Registry", "Manager", "Process", "ProcessQueue", "ProcessQueueHook",
+  "BaseAgent",
+  # Results
+  "Result", "DeploymentError",
+  # Data
+  "Conversation", "Message",
+  "DataObject",
+  "BaseArtifact", "TextArtifact", "ImageArtifact", "AudioArtifact",
+  "FileArtifact", "LinkArtifact", "RawArtifact", "Prompt",
+  "BaseChunk", "TextChunk", "ImageChunk", "AudioChunk", "RawChunk",
+  "ModelResponse",
+  "DomainEvent", "EventType",
+  # Plugin metadata
+  "ExtensionInfo",
+  "ArchitectureInfo", "DeploymentInfo", "SolverInfo",
+  "ProtocolInfo", "ToolModuleInfo",
+  "ToolDefinition", "ArgumentDefinition", "ToolReference", "DeploymentParams",
+  "ParamSpec", "ParamScope", "SettingCategory",
+  "ModelDefinition",
+  # Modality / media enums
+  "Modality",
+  "MediaType", "TextFormat", "ImageFormat", "AudioFormat",
+  "VideoFormat", "ApplicationFormat",
 ]

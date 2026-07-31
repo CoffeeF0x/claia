@@ -10,7 +10,9 @@ from typing import Any, Dict, Iterator, Type
 
 from .base import BaseDeployment
 from claia.core.data import Conversation
-from ..modality import GenerationChunk, text_chunk
+from claia.core.data.adapters import conversation_to_artifacts
+from claia.core.data.chunks import BaseChunk
+from claia.core.data.generate import drain_generate
 from ..plugins.base import DeploymentInfo
 
 
@@ -18,12 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class LocalDeploymentPlugin(BaseDeployment):
-  """
-  Local deployment method plugin for transformer-based models.
-
-  This plugin handles deployment of models that run locally on the
-  user's machine, typically using HuggingFace transformers.
-  """
+  """Local deployment method plugin for transformer-based models."""
 
   info = DeploymentInfo(
     name="local",
@@ -39,15 +36,7 @@ class LocalDeploymentPlugin(BaseDeployment):
     cache: Dict[str, Any],
     init_kwargs: Dict[str, Any],
     runtime_kwargs: Dict[str, Any],
-  ) -> Iterator[GenerationChunk]:
-    """
-    Deploy (if needed) and run inference on a local model.
-
-    Yields ``GenerationChunk`` items. Local text models yield plain
-    string tokens from ``generate``; this deployment promotes them into
-    ``ChunkKind.TEXT`` chunks. Models that already yield chunks (e.g.
-    future image/audio local models) pass through unchanged.
-    """
+  ) -> Iterator[BaseChunk]:
     cache_key = f"{model_name}:local"
 
     if cache_key in cache:
@@ -55,15 +44,10 @@ class LocalDeploymentPlugin(BaseDeployment):
       logger.debug(f"Using cached local model instance for {cache_key}")
     else:
       logger.debug(f"Deploying local model: {model_name}")
-
-      # ``model_path`` / ``device`` / ``defer_loading`` are positional on
-      # ``LocalModel`` subclasses, so pluck them out of ``init_kwargs``
-      # and pass the remainder (e.g. ``huggingface_api_token``) as
-      # keywords.
       ctor_kwargs = dict(init_kwargs)
-      device = ctor_kwargs.pop('device', 'cpu')
-      model_path = ctor_kwargs.pop('model_path', None)
-      defer_loading = ctor_kwargs.pop('defer_loading', False)
+      device = ctor_kwargs.pop("device", "cpu")
+      model_path = ctor_kwargs.pop("model_path", None)
+      defer_loading = ctor_kwargs.pop("defer_loading", False)
 
       model_instance = model_class(
         model_name=model_name,
@@ -72,10 +56,9 @@ class LocalDeploymentPlugin(BaseDeployment):
         device=device,
         **ctor_kwargs,
       )
-
       cache[cache_key] = model_instance
       logger.debug(f"Successfully deployed and cached local model: {model_name}")
 
+    artifacts = conversation_to_artifacts(conversation)
     logger.debug(f"Running local model inference: {model_name}")
-    for token in model_instance.generate(conversation, **runtime_kwargs):
-      yield token if isinstance(token, GenerationChunk) else text_chunk(token)
+    yield from drain_generate(model_instance, artifacts, runtime_kwargs)

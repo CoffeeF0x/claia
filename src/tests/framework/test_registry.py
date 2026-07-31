@@ -19,14 +19,13 @@ def test_model_registry_run_success(registry_with_fake_manager, tmp_path):
 
 
 def test_model_registry_run_streaming_yields_generation_chunks(registry_with_fake_manager, tmp_path):
-  """registry.run(streaming=True) exposes the chunk stream as promised by Phase 4."""
-  from claia.core.modality import ChunkKind, GenerationChunk
+  """registry.run(streaming=True) exposes the BaseChunk stream."""
+  from claia.core.data.chunks import TextChunk
   conv = Conversation(title="T")
   reg: Registry = registry_with_fake_manager
   chunks = list(reg.run("dummy", conv, streaming=True))
   assert len(chunks) > 0
-  assert all(isinstance(c, GenerationChunk) for c in chunks)
-  assert all(c.kind is ChunkKind.TEXT for c in chunks)
+  assert all(isinstance(c, TextChunk) for c in chunks)
 
 
 def test_model_registry_stream_text_flattens_to_strings(registry_with_fake_manager, tmp_path):
@@ -108,8 +107,8 @@ def test_model_registry_resolves_diffusers_provider_identifier(monkeypatch):
           )
 
         def run(self, model_name, model_class, conversation, cache, init_kwargs, runtime_kwargs):
-          from claia.core.modality import text_chunk
-          yield text_chunk(model_name)
+          from claia.core.data.chunks import TextChunk
+          yield TextChunk(data=model_name)
 
       return Deployment()
 
@@ -184,8 +183,8 @@ def test_model_registry_resolves_tts_provider_identifier(monkeypatch):
           )
 
         def run(self, model_name, model_class, conversation, cache, init_kwargs, runtime_kwargs):
-          from claia.core.modality import text_chunk
-          yield text_chunk(model_name)
+          from claia.core.data.chunks import TextChunk
+          yield TextChunk(data=model_name)
 
       return Deployment()
 

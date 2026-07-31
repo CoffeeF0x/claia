@@ -8,7 +8,7 @@ import pluggy
 from typing import Any, Dict, Iterator, Type
 
 from claia.core.data import Conversation
-from claia.core.modality import GenerationChunk
+from claia.core.data.chunks import BaseChunk
 from claia.core.plugins.base import DeploymentInfo
 
 
@@ -31,8 +31,8 @@ class DeploymentHooks:
     cache: Dict[str, Any],
     init_kwargs: Dict[str, Any],
     runtime_kwargs: Dict[str, Any],
-  ) -> Iterator[GenerationChunk]:
-    """Deploy (if needed) and yield ``GenerationChunk`` items from the model.
+  ) -> Iterator[BaseChunk]:
+    """Deploy (if needed) and yield ``BaseChunk`` items from the model.
 
     ``init_kwargs`` feed the model constructor; ``runtime_kwargs`` feed
     ``model.generate``. Both are pre-filtered by ``ParamSpec`` scope at

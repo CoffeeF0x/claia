@@ -8,14 +8,18 @@ goes in, typed image byte chunks come out.
 
 import io
 import logging
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Sequence
 
 import torch
 from diffusers import DiffusionPipeline
 
 from claia.core.data import Conversation
+from claia.core.data.adapters import artifacts_to_conversation
+from claia.core.data.artifacts import BaseArtifact
+from claia.core.data.chunks import BaseChunk, ImageChunk, TextChunk
+from claia.core.data.response import ModelResponse
 from claia.core.enums.conversation import MessageRole
-from claia.core.modality import ChunkKind, GenerationChunk, text_chunk
+from claia.core.enums.data import ImageFormat
 from ..base import LocalModel
 
 
@@ -94,10 +98,12 @@ class DiffusersModel(LocalModel):
 
   def generate(
     self,
-    conversation: Conversation,
+    artifacts: Sequence[BaseArtifact],
     **kwargs,
-  ) -> Generator[GenerationChunk, None, str]:
+  ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate one or more images from the latest user prompt."""
+    conversation = artifacts_to_conversation(artifacts)
+    chunks: list = []
     if not self.loaded:
       self.load()
 
@@ -108,20 +114,28 @@ class DiffusersModel(LocalModel):
       output = self.pipeline(**pipeline_kwargs)
       images = list(getattr(output, "images", []) or [])
       if not images:
-        message = "No images were returned by the diffusers pipeline."
-        yield text_chunk(message)
-        return message
+        message = TextChunk(data="No images were returned by the diffusers pipeline.")
+        chunks.append(message)
+        yield message
+        return ModelResponse(chunks=chunks, complete=False, error=message.data)
 
-      summary = f"Generated {len(images)} image{'s' if len(images) != 1 else ''}."
-      yield text_chunk(summary)
+      summary = TextChunk(
+        data=f"Generated {len(images)} image{'s' if len(images) != 1 else ''}."
+      )
+      chunks.append(summary)
+      yield summary
 
       output_format = self._normalize_output_format(kwargs.get("output_format"))
       media_type = SUPPORTED_OUTPUT_FORMATS[output_format]
+      try:
+        image_fmt = ImageFormat(output_format.lower())
+      except ValueError:
+        image_fmt = ImageFormat.PNG
       for index, image in enumerate(images):
         image_bytes = self._image_to_bytes(image, output_format)
-        yield GenerationChunk(
-          kind=ChunkKind.IMAGE_BYTES,
+        image_chunk = ImageChunk(
           data=image_bytes,
+          format=image_fmt,
           metadata={
             "media_type": media_type,
             "format": output_format,
@@ -133,14 +147,17 @@ class DiffusersModel(LocalModel):
             "height": getattr(image, "height", None),
           },
         )
+        chunks.append(image_chunk)
+        yield image_chunk
 
-      return summary
+      return ModelResponse(chunks=chunks, complete=True, metadata={"text": summary.data})
 
     except Exception as e:
       logger.error(f"Error generating image with diffusers model {self.model_name}: {e}")
-      error_msg = f"Error: {str(e)}"
-      yield text_chunk(error_msg)
-      return error_msg
+      chunk = TextChunk(data=f"Error: {str(e)}")
+      chunks.append(chunk)
+      yield chunk
+      return ModelResponse(chunks=chunks, complete=False, error=str(e))
 
   def tokenize(self, text: str) -> List[int]:
     """Tokenization is not exposed for image pipelines."""

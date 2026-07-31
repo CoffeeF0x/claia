@@ -102,13 +102,13 @@ class FileCommand(BaseCommand):
         content = f.read()
 
       if kind == "image":
-        artifact = ImageArtifact.from_bytes(content, name=artifact_name, media_type=detected_media_type)
+        artifact = ImageArtifact.from_bytes(content, name=artifact_name)
       elif kind == "audio":
-        artifact = AudioArtifact.from_bytes(content, name=artifact_name, media_type=detected_media_type)
+        artifact = AudioArtifact.from_bytes(content, name=artifact_name)
       else:
         encoding = "utf-8"
         text = content.decode(encoding)
-        artifact = TextArtifact.from_content(text, name=artifact_name, encoding=encoding, media_type=detected_media_type)
+        artifact = TextArtifact.from_content(text, name=artifact_name, encoding=encoding)
 
       artifact.metadata["source_path"] = os.path.abspath(source)
       store = JsonStore(self.settings.files_directory)

@@ -16,10 +16,14 @@ Key differences from the old Chat Completions endpoint:
 
 import json
 import logging
-from typing import Dict, Any, Optional, Generator
+from typing import Dict, Any, Optional, Generator, Sequence
 
 # Internal dependencies
 from claia.core.data import Conversation
+from claia.core.data.adapters import artifacts_to_conversation
+from claia.core.data.artifacts import BaseArtifact
+from claia.core.data.chunks import BaseChunk, TextChunk
+from claia.core.data.response import ModelResponse
 from claia.core.enums.conversation import MessageRole
 from ..base import APIModel
 
@@ -41,13 +45,17 @@ class OpenAIModel(APIModel):
     if openai_api_token:
       self.set_api_key(openai_api_token)
 
-  def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
-    """Generate a response using OpenAI's Responses API. Yields tokens, returns full response.
+  def generate(
+    self,
+    artifacts: Sequence[BaseArtifact],
+    **kwargs,
+  ) -> Generator[BaseChunk, None, ModelResponse]:
+    """Generate a response using OpenAI's Responses API.
 
-    ``kwargs`` arrive pre-filtered and pre-defaulted against the
-    architecture's RUNTIME ``ParamSpec`` declarations (see
-    ``Manager.resolve_runtime_kwargs``), so we consume them directly.
+    Yields ``TextChunk`` tokens; returns a ``ModelResponse``.
     """
+    conversation = artifacts_to_conversation(artifacts)
+    chunks = []
     try:
       instructions, input_messages = self._convert_conversation(conversation)
 
@@ -71,17 +79,29 @@ class OpenAIModel(APIModel):
         request_data["max_output_tokens"] = max_tokens
 
       if kwargs.get("stream", False):
-        full_response = yield from self._handle_streaming_response(request_data)
+        token_gen = self._handle_streaming_response(request_data)
       else:
-        full_response = yield from self._handle_non_streaming_response(request_data)
+        token_gen = self._handle_non_streaming_response(request_data)
 
-      return full_response
+      try:
+        while True:
+          token = next(token_gen)
+          chunk = TextChunk(data=token) if isinstance(token, str) else token
+          chunks.append(chunk)
+          yield chunk
+      except StopIteration as stop:
+        return ModelResponse(
+          chunks=chunks,
+          complete=True,
+          metadata={"text": stop.value},
+        )
 
     except Exception as e:
       logger.error(f"Error generating response with OpenAI model {self.model_name}: {e}")
-      error_msg = f"Error: {str(e)}"
-      yield error_msg
-      return error_msg
+      chunk = TextChunk(data=f"Error: {str(e)}")
+      chunks.append(chunk)
+      yield chunk
+      return ModelResponse(chunks=chunks, complete=False, error=str(e))
 
   def _convert_conversation(self, conversation: Conversation) -> tuple:
     """Convert a Conversation to (instructions, input_messages) for the Responses API.

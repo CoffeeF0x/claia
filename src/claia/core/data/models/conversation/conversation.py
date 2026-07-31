@@ -27,8 +27,8 @@ from typing import Dict, Any, Optional, List, Union, Callable
 import logging
 import json
 import time
+import uuid
 
-from ..text import TextArtifact
 from ...events import DomainEvent, EventType
 from .message import Message
 from ....enums.conversation import MessageRole
@@ -44,9 +44,12 @@ logger = logging.getLogger(__name__)
 EventCallback = Callable[[DomainEvent, Optional["Message"]], None]
 
 
-class Conversation(TextArtifact):
+class Conversation:
     """
     Pure data model for conversations.
+
+    Not an artifact — conversation-domain type that may reference artifacts.
+    Persistence is host-owned (CLI JsonStore, Slate DB, …).
 
     Extends TextArtifact to store conversation data as JSON text.
     Persistence is handled externally by host runtimes (CLI, API) via
@@ -121,20 +124,18 @@ class Conversation(TextArtifact):
                  created_at: Optional[float] = None,
                  updated_at: Optional[float] = None,
                  on_event: Optional[EventCallback] = None,
+                 name: Optional[str] = None,
+                 metadata: Optional[Dict[str, Any]] = None,
                  **kwargs):
-        super().__init__(
-            name=kwargs.pop('name', f"conversation-{id or 'new'}"),
-            id=id,
-            media_type='application/json',
-            encoding='utf-8',
-            created_at=created_at,
-            updated_at=updated_at,
-            **kwargs
-        )
-
+        del kwargs  # accept and ignore legacy artifact kwargs
+        self.id = id or str(uuid.uuid4())
+        self.name = name or f"conversation-{self.id}"
         self.title = title
         self.prompt = self._format_prompt(prompt)
-        self.metadata['title'] = title
+        self.metadata: Dict[str, Any] = metadata or {}
+        self.metadata["title"] = title
+        self.created_at = created_at or time.time()
+        self.updated_at = updated_at or self.created_at
 
         self.messages: List[Message] = []
         if messages:
@@ -249,15 +250,18 @@ class Conversation(TextArtifact):
     # ---------------------------------------------------------------------- #
 
     def to_dict(self) -> Dict[str, Any]:
-        data = super().to_dict()
-        data.update({
+        return {
+            "id": self.id,
+            "name": self.name,
             "title": self.title,
             "prompt": self.prompt,
             "messages": [m.to_dict() for m in self.messages],
             "active_head_id": self.active_head_id,
             "events": [e.to_dict() for e in self.events],
-        })
-        return data
+            "metadata": self.metadata,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Conversation':
@@ -271,15 +275,8 @@ class Conversation(TextArtifact):
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
             name=data.get("name"),
-            is_reference=data.get("is_reference", False),
-            source_uri=data.get("source_uri"),
             metadata=data.get("metadata", {}),
         )
-
-    def load_content(self) -> str:
-        if self._content_loaded and self._content is not None:
-            return self._content
-        return self.content
 
     @property
     def content(self) -> str:
@@ -303,9 +300,6 @@ class Conversation(TextArtifact):
         for e in data.get("events", []):
             self.events.append(e if isinstance(e, DomainEvent) else DomainEvent.from_dict(e))
 
-        self._content = content
-        self._content_loaded = True
-        self.size = len(content.encode(self.encoding))
         self.updated_at = time.time()
 
     # ---------------------------------------------------------------------- #

@@ -20,7 +20,7 @@ import pluggy
 from typing import Any, Dict, Iterator, List, Optional, Type
 
 from claia.core.data import Conversation
-from claia.core.modality import GenerationChunk
+from claia.core.data.chunks import BaseChunk
 from claia.core.plugins.base import (
   ArchitectureInfo,
   DeploymentInfo,
@@ -112,7 +112,7 @@ class DeploymentRegistrar(_BaseRegistrar):
     cache: Dict[str, Any],
     init_kwargs: Dict[str, Any],
     runtime_kwargs: Dict[str, Any],
-  ) -> Iterator[GenerationChunk]:
+  ) -> Iterator[BaseChunk]:
     return self._plugin.run(
       model_name=model_name,
       model_class=model_class,

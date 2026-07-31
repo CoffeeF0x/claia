@@ -9,12 +9,18 @@ contract for a model's generation knobs (``temperature``,
 (``Registry`` + ``Manager``) filters and defaults kwargs against those
 specs before calling ``generate``, so concrete models just consume the
 kwargs that arrive.
+
+Contract: artifacts in, ``ModelResponse`` out. Implementations may yield
+``BaseChunk`` items while streaming and return the filled
+``ModelResponse`` via the generator's return value.
 """
 
 from abc import ABC, abstractmethod
-from typing import Generator
+from typing import Generator, Sequence, Union
 
-from claia.core.data import Conversation
+from claia.core.data.artifacts import BaseArtifact
+from claia.core.data.chunks import BaseChunk
+from claia.core.data.response import ModelResponse
 
 
 ########################################################################
@@ -27,17 +33,22 @@ class BaseModel(ABC):
     self.model_name = model_name
 
   @abstractmethod
-  def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
-    """Generate a response based on the given conversation.
+  def generate(
+    self,
+    artifacts: Sequence[BaseArtifact],
+    **kwargs,
+  ) -> Union[ModelResponse, Generator[BaseChunk, None, ModelResponse]]:
+    """Generate a response from an ordered list of input artifacts.
 
-    Yields individual tokens/chunks as they become available. Returns
-    the full response string when the generator is exhausted. The model
-    must NOT modify the ``Conversation``; that is the deployment
-    layer's responsibility.
+    Prefer returning a ``ModelResponse`` directly. Streaming models may
+    instead yield ``BaseChunk`` items and ``return`` a ``ModelResponse``
+    when the generator is exhausted (StopIteration value).
+
+    The model must NOT mutate the input artifacts; assembly into
+    conversation state is the deployment / host's responsibility.
 
     ``kwargs`` contains the RUNTIME parameters already filtered and
     defaulted by ``Registry``/``Manager`` against the architecture's
-    ``ParamSpec`` declarations. Concrete models pull values directly —
-    e.g. ``kwargs.get("temperature")`` — without redeclaring specs.
+    ``ParamSpec`` declarations.
     """
     pass

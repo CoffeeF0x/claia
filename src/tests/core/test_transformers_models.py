@@ -8,6 +8,7 @@ import types
 from queue import Queue
 
 from claia.core.data import Conversation
+from claia.core.data.adapters import conversation_to_artifacts
 from claia.core.enums.conversation import MessageRole
 
 
@@ -114,15 +115,23 @@ def _conversation():
 def test_generic_transformer_streams_text_deltas(monkeypatch):
   model = _model(monkeypatch)
 
-  chunks = list(model.generate(_conversation(), stream=True, max_tokens=10))
+  chunks = list(model.generate(
+    conversation_to_artifacts(_conversation()),
+    stream=True,
+    max_tokens=10,
+  ))
 
-  assert chunks == ["hello ", "world"]
+  assert [c.data for c in chunks] == ["hello ", "world"]
 
 
 def test_generic_transformer_omits_unset_top_k(monkeypatch):
   model = _model(monkeypatch)
 
-  chunks = list(model.generate(_conversation(), stream=False, top_k=None))
+  chunks = list(model.generate(
+    conversation_to_artifacts(_conversation()),
+    stream=False,
+    top_k=None,
+  ))
 
-  assert chunks == ["blocked response"]
+  assert [c.data for c in chunks] == ["blocked response"]
   assert "top_k" not in model.model.calls[0]

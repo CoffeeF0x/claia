@@ -9,11 +9,15 @@ true and yields one complete text response otherwise.
 
 import json
 import logging
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Sequence
 
 # Internal dependencies
 from ..base import APIModel
 from claia.core.data import Conversation
+from claia.core.data.adapters import artifacts_to_conversation
+from claia.core.data.artifacts import BaseArtifact
+from claia.core.data.chunks import BaseChunk, TextChunk
+from claia.core.data.response import ModelResponse
 from claia.core.enums.conversation import MessageRole
 
 
@@ -73,13 +77,14 @@ class OpenRouterModel(APIModel):
     logger.debug(f"Sending {len(messages)} messages to OpenRouter API")
     return messages
 
-  def generate(self, conversation: Conversation, **kwargs) -> Generator[str, None, str]:
-    """Generate a response using the OpenRouter API. Yields tokens, returns full response.
-
-    ``kwargs`` arrive pre-filtered and pre-defaulted against the
-    architecture's RUNTIME ``ParamSpec`` declarations, so we consume
-    them directly without a local defaults pass.
-    """
+  def generate(
+    self,
+    artifacts: Sequence[BaseArtifact],
+    **kwargs,
+  ) -> Generator[BaseChunk, None, ModelResponse]:
+    """Generate a response using the OpenRouter API."""
+    conversation = artifacts_to_conversation(artifacts)
+    chunks: list = []
     try:
       request_data = {
         "model": self.model_name,
@@ -101,17 +106,29 @@ class OpenRouterModel(APIModel):
           request_data[param] = value
 
       if kwargs.get("stream", False):
-        full_response = yield from self._handle_streaming_response(request_data)
+        token_gen = self._handle_streaming_response(request_data)
       else:
-        full_response = yield from self._handle_non_streaming_response(request_data)
+        token_gen = self._handle_non_streaming_response(request_data)
 
-      return full_response
+      try:
+        while True:
+          token = next(token_gen)
+          chunk = TextChunk(data=token) if isinstance(token, str) else token
+          chunks.append(chunk)
+          yield chunk
+      except StopIteration as stop:
+        return ModelResponse(
+          chunks=chunks,
+          complete=True,
+          metadata={"text": stop.value},
+        )
 
     except Exception as e:
       logger.error(f"Error generating response with OpenRouter model {self.model_name}: {e}")
-      error_msg = f"Error: {str(e)}"
-      yield error_msg
-      return error_msg
+      chunk = TextChunk(data=f"Error: {str(e)}")
+      chunks.append(chunk)
+      yield chunk
+      return ModelResponse(chunks=chunks, complete=False, error=str(e))
 
   def _extract_error_message(self, data: Dict[str, Any], fallback: str) -> str:
     """Extract OpenRouter error details from an API response body."""

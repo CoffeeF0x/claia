@@ -9,7 +9,7 @@ from types import SimpleNamespace
 # Internal dependencies
 from claia.core.results import Result, DeploymentError
 from claia.core.data import Conversation
-from claia.core.modality import GenerationChunk, text_chunk
+from claia.core.data.chunks import TextChunk
 from claia.framework.process import Process
 from claia.core.enums.process import ProcessStatus
 
@@ -35,7 +35,7 @@ def fake_model_registry_ok():
   class FakeRegistry:
     def run(self, model_id, conversation, streaming=False, **kwargs):
       if streaming:
-        return iter([text_chunk(f'{{"echo_model": "{model_id}"}}')])
+        return iter([TextChunk(data=f'{{"echo_model": "{model_id}"}}')])
       return Result.ok(f'{{"echo_model": "{model_id}"}}')
   return FakeRegistry()
 
@@ -100,7 +100,7 @@ def fake_manager():
           return Info()
 
         def run(self, model_name, model_class, conversation, cache, **kwargs):
-          yield text_chunk(f"deployed {model_name} via {deployment_name}")
+          yield TextChunk(data=f"deployed {model_name} via {deployment_name}")
       return Deployment()
 
     def get_available_architectures(self):

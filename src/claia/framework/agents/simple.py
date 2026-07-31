@@ -15,9 +15,10 @@ import logging
 from typing import Any, Iterable, List, Optional, Tuple, Type
 
 from .base import BaseAgent
+from claia.core.data.chunks import AudioChunk, BaseChunk, ImageChunk, TextChunk
 from claia.core.data.models import AudioArtifact, ImageArtifact
 from claia.core.enums.conversation import MessageRole
-from claia.core.modality import ChunkKind, GenerationChunk
+from claia.core.enums.data import AudioFormat, ImageFormat
 from claia.core.parser import (
   ParseError,
   ParseEvent,
@@ -42,17 +43,16 @@ class SimpleAgent(BaseAgent):
   """
   A simple agent that directly calls a model for inference.
 
-  Streams ``GenerationChunk`` items from ``registry.run`` and
-  forwards visible text through the ``"token"`` event. Each text
-  chunk is also fed to a ``TagParser`` configured from the model
-  definition's ``tag_overrides``; closed tags become utility
-  messages on the conversation, and tool tags are dispatched through
+  Streams ``BaseChunk`` items from ``registry.run`` and forwards
+  visible text through the ``"token"`` event. Each text chunk is
+  also fed to a ``TagParser`` configured from the model definition's
+  ``tag_overrides``; closed tags become utility messages on the
+  conversation, and tool tags are dispatched through
   ``registry.execute_tool``. Tool-result text is streamed back to
   the user via the same ``"token"`` channel and appended to the
   active assistant message so it shows up inline in the transcript.
 
-  Non-text chunks (image / audio bytes) follow the same artifact
-  attachment path as before.
+  Non-text chunks (image / audio) follow the artifact attachment path.
   """
 
   @classmethod
@@ -85,10 +85,10 @@ class SimpleAgent(BaseAgent):
           cancelled = True
           break
 
-        if chunk.kind is not ChunkKind.TEXT:
-          if chunk.kind is ChunkKind.IMAGE_BYTES:
+        if not isinstance(chunk, TextChunk):
+          if isinstance(chunk, ImageChunk):
             cls._attach_image_chunk(process, streaming_message.message_id, chunk)
-          elif chunk.kind is ChunkKind.AUDIO_BYTES:
+          elif isinstance(chunk, AudioChunk):
             cls._attach_audio_chunk(process, streaming_message.message_id, chunk)
           process.emit("chunk", chunk)
           continue
@@ -382,7 +382,7 @@ class SimpleAgent(BaseAgent):
   # Non-text chunk handling (unchanged from pre-phase-6)
   # ------------------------------------------------------------------
   @staticmethod
-  def _attach_image_chunk(process, message_id: str, chunk: GenerationChunk) -> None:
+  def _attach_image_chunk(process, message_id: str, chunk: BaseChunk) -> None:
     """Convert an image byte chunk into an artifact attached to the message."""
     try:
       metadata = dict(chunk.metadata or {})
@@ -395,12 +395,19 @@ class SimpleAgent(BaseAgent):
       }.get(output_format, output_format.lower())
       index = metadata.get("index", 0)
       name = metadata.get("name") or f"generated-image-{index + 1}.{extension}"
+      try:
+        image_fmt = (
+          chunk.format
+          if isinstance(chunk.format, ImageFormat)
+          else ImageFormat(output_format.lower().replace("jpg", "jpeg"))
+        )
+      except ValueError:
+        image_fmt = ImageFormat.PNG
 
       artifact = ImageArtifact.from_bytes(
         image_data=chunk.data,
         name=name,
-        format=output_format,
-        media_type=metadata.get("media_type", "image/png"),
+        format=image_fmt,
         metadata=metadata,
       )
       process.conversation.attach_file(message_id, artifact.id)
@@ -409,7 +416,7 @@ class SimpleAgent(BaseAgent):
       logging.exception(f"Failed to attach generated image artifact: {e}")
 
   @staticmethod
-  def _attach_audio_chunk(process, message_id: str, chunk: GenerationChunk) -> None:
+  def _attach_audio_chunk(process, message_id: str, chunk: BaseChunk) -> None:
     """Convert an audio byte chunk into an artifact attached to the message."""
     try:
       metadata = dict(chunk.metadata or {})
@@ -423,13 +430,17 @@ class SimpleAgent(BaseAgent):
       }.get(output_format, output_format.lower())
       index = metadata.get("index", 0)
       name = metadata.get("name") or f"generated-audio-{index + 1}.{extension}"
+      audio_fmt = (
+        chunk.format
+        if isinstance(getattr(chunk, "format", None), AudioFormat)
+        else AudioFormat.WAV
+      )
 
       artifact = AudioArtifact.from_bytes(
         audio_data=chunk.data,
         name=name,
-        format=output_format,
+        format=audio_fmt,
         sample_rate=metadata.get("sample_rate"),
-        media_type=metadata.get("media_type", "audio/wav"),
         metadata=metadata,
       )
       process.conversation.attach_file(message_id, artifact.id)
