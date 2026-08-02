@@ -112,6 +112,7 @@ class DeploymentRegistrar(_BaseRegistrar):
     cache: Dict[str, Any],
     init_kwargs: Dict[str, Any],
     runtime_kwargs: Dict[str, Any],
+    definition: Optional[ModelDefinition] = None,
   ) -> Iterator[BaseChunk]:
     return self._plugin.run(
       model_name=model_name,
@@ -120,6 +121,7 @@ class DeploymentRegistrar(_BaseRegistrar):
       cache=cache,
       init_kwargs=init_kwargs,
       runtime_kwargs=runtime_kwargs,
+      definition=definition,
     )
 
 

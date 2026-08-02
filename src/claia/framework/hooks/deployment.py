@@ -5,10 +5,11 @@ These specs mirror ``BaseDeployment`` in ``claia.core.deployments.base``.
 """
 
 import pluggy
-from typing import Any, Dict, Iterator, Type
+from typing import Any, Dict, Iterator, Optional, Type
 
 from claia.core.data import Conversation
 from claia.core.data.chunks import BaseChunk
+from claia.core.definitions.model_definition import ModelDefinition
 from claia.core.plugins.base import DeploymentInfo
 
 
@@ -31,12 +32,14 @@ class DeploymentHooks:
     cache: Dict[str, Any],
     init_kwargs: Dict[str, Any],
     runtime_kwargs: Dict[str, Any],
+    definition: Optional[ModelDefinition] = None,
   ) -> Iterator[BaseChunk]:
     """Deploy (if needed) and yield ``BaseChunk`` items from the model.
 
     Default implementation lives on ``BaseDeployment.run``. Subclasses
     typically only override ``create_model``. ``init_kwargs`` feed the
     model constructor; ``runtime_kwargs`` feed ``model.generate``.
+    ``definition`` supplies ``supported_inputs`` for translation.
     """
 
 
