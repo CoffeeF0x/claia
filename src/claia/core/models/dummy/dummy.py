@@ -10,9 +10,9 @@ from typing import Generator
 
 from ..base import BaseModel
 from claia.core.data.chunks import BaseChunk, TextChunk
-from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
 from claia.core.enums.data import TextFormat
+from ..base.base import ModelInputs
 
 
 ########################################################################
@@ -121,11 +121,11 @@ class DummyModel(BaseModel):
 
   def generate(
     self,
-    sequence: MessageSequence,
+    inputs: ModelInputs,
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Stream the story as TextChunks; return a ModelResponse."""
-    del sequence  # Dummy ignores input content
+    del inputs  # Dummy ignores input content
     chars_per_second = kwargs.get("chars_per_second", CHARS_PER_SECOND)
     chars_per_chunk = kwargs.get("chars_per_chunk", CHARS_PER_CHUNK)
     logger.debug(

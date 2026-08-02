@@ -1,28 +1,19 @@
 """
 OpenAI API model implementation.
 
-Uses the Responses API (POST /v1/responses), which is the recommended
-endpoint for all current OpenAI models and the only endpoint that
-supports GPT-5.x reasoning, built-in tools, and prompt caching.
-
-Key differences from the old Chat Completions endpoint:
-  - Endpoint:   v1/responses  (was v1/chat/completions)
-  - Input key:  input         (was messages)
-  - System msg: instructions  (top-level field, not a system-role message)
-  - Max tokens: max_output_tokens  (was max_tokens)
-  - Response:   output[].content[].text  (was choices[0].message.content)
-  - Streaming:  event type response.output_text.delta  (was choices[0].delta.content)
+Uses the Responses API (POST /v1/responses).
 """
 
 import json
 import logging
-from typing import Dict, Any, Optional, Generator
+from typing import Dict, Any, Optional, Generator, List
 
-# Internal dependencies
 from claia.core.data.chunks import BaseChunk, TextChunk
 from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
+from claia.core.enums.conversation import MessageRole
 from ..base import APIModel
+from ..base.base import ModelInputs
 
 
 ########################################################################
@@ -44,20 +35,16 @@ class OpenAIModel(APIModel):
 
   def generate(
     self,
-    sequence: MessageSequence,
+    inputs: ModelInputs,
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
-    """Generate a response using OpenAI's Responses API.
-
-    Yields ``TextChunk`` tokens; returns a ``ModelResponse``.
-    """
+    """Generate a response using OpenAI's Responses API."""
     chunks = []
     try:
-      instructions, input_messages = self._convert_sequence(sequence)
+      if not isinstance(inputs, MessageSequence):
+        raise TypeError("OpenAIModel expects a MessageSequence input")
+      instructions, input_messages = self._convert_sequence(inputs)
 
-      # Build base request — excluded fields are handled explicitly below.
-      # n, stop, and top_k are Chat Completions params not supported by the
-      # Responses API; including them causes a 400 Bad Request.
       _skip = {"stream", "max_tokens", "n", "stop", "top_k"}
       request_data: Dict[str, Any] = {
         "model": self.model_name,
@@ -69,7 +56,6 @@ class OpenAIModel(APIModel):
       if instructions:
         request_data["instructions"] = instructions
 
-      # Responses API uses max_output_tokens instead of max_tokens
       max_tokens = kwargs.get("max_tokens")
       if max_tokens is not None:
         request_data["max_output_tokens"] = max_tokens
@@ -100,28 +86,19 @@ class OpenAIModel(APIModel):
       return ModelResponse(chunks=chunks, complete=False, error=str(e))
 
   def _convert_sequence(self, sequence: MessageSequence) -> tuple:
-    """Convert a MessageSequence to (instructions, input_messages).
-
-    The system prompt becomes the top-level `instructions` field.
-    Only user and assistant turns are included in `input`.
-    """
-    return sequence.system, sequence.to_chat_dicts(include_system=False)
+    """Convert a MessageSequence to (instructions, input_messages)."""
+    instructions = sequence.system
+    input_messages: List[Dict[str, str]] = []
+    for message in sequence.messages:
+      if message.speaker not in (MessageRole.USER, MessageRole.ASSISTANT):
+        continue
+      if not message.content:
+        continue
+      role = "user" if message.speaker == MessageRole.USER else "assistant"
+      input_messages.append({"role": role, "content": message.content})
+    return instructions, input_messages
 
   def _handle_streaming_response(self, request_data: Dict[str, Any]) -> Generator[str, None, str]:
-    """Handle streaming response from the Responses API. Yields tokens, returns full response.
-
-    The Responses API SSE stream emits typed events. Text deltas arrive as
-    events with type == "response.output_text.delta" and a "delta" string field.
-
-    The stream can also terminate with non-delta events that the caller needs
-    to know about:
-      - "error" / "response.failed": API returned 200 but the run failed
-        partway through (e.g. quota, content filter). These carry a nested
-        ``error.message`` that we surface so it reaches the user.
-      - "response.completed": clean end of stream; no [DONE] sentinel is sent.
-    Without explicit handling these events were silently dropped, leaving
-    the CLI with a long pause and an empty assistant message.
-    """
     try:
       response = self.post("responses", {**request_data, "stream": True}, stream=True)
       full_response = ""
@@ -171,17 +148,10 @@ class OpenAIModel(APIModel):
       return error_msg
 
   def _handle_non_streaming_response(self, request_data: Dict[str, Any]) -> Generator[str, None, str]:
-    """Handle non-streaming response from the Responses API. Yields full content as single token.
-
-    The response body has an `output` array of items. Text lives in items
-    where type == "message", under content parts where type == "output_text".
-    """
     try:
       response = self.post("responses", request_data)
       data = response.json()
 
-      # Non-streaming runs can still report a failure inline via top-level
-      # error or response.status == "failed" with a nested error block.
       err = data.get("error") or (
         data.get("response", {}).get("error") if data.get("status") == "failed" else None
       )

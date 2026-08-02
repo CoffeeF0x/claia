@@ -13,11 +13,12 @@ from typing import Any, Dict, Generator, List, Optional
 import torch
 from diffusers import DiffusionPipeline
 
+from claia.core.data.artifacts import BaseArtifact, TextArtifact
 from claia.core.data.chunks import BaseChunk, ImageChunk, TextChunk
-from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
 from claia.core.enums.data import ImageFormat
 from ..base import LocalModel
+from ..base.base import ModelInputs
 
 
 logger = logging.getLogger(__name__)
@@ -95,16 +96,16 @@ class DiffusersModel(LocalModel):
 
   def generate(
     self,
-    sequence: MessageSequence,
+    inputs: ModelInputs,
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
-    """Generate one or more images from the latest user prompt."""
+    """Generate one or more images from text artifact input."""
     chunks: list = []
     if not self.loaded:
       self.load()
 
     try:
-      prompt = self._resolve_prompt(sequence, kwargs.get("prompt"))
+      prompt = self._resolve_prompt(inputs, kwargs.get("prompt"))
       pipeline_kwargs = self._build_pipeline_kwargs(prompt, kwargs)
 
       output = self.pipeline(**pipeline_kwargs)
@@ -183,15 +184,24 @@ class DiffusersModel(LocalModel):
       except Exception as e:
         logger.debug(f"Could not enable xformers memory efficient attention: {e}")
 
-  def _resolve_prompt(self, sequence: MessageSequence, prompt_override: Optional[str]) -> str:
-    """Resolve the prompt from explicit kwargs or the latest user message."""
+  def _resolve_prompt(self, inputs: ModelInputs, prompt_override: Optional[str]) -> str:
+    """Resolve the prompt from kwargs or text artifacts."""
     if prompt_override:
       return prompt_override
 
-    text = sequence.latest_user_text()
-    if not text:
-      raise ValueError("No user prompt found for image generation.")
-    return text
+    artifacts = self._as_artifacts(inputs)
+    for artifact in reversed(artifacts):
+      if isinstance(artifact, TextArtifact) and artifact.content:
+        return artifact.content
+    raise ValueError("No text artifact found for image generation.")
+
+  @staticmethod
+  def _as_artifacts(inputs: ModelInputs) -> List[BaseArtifact]:
+    if isinstance(inputs, BaseArtifact):
+      return [inputs]
+    if isinstance(inputs, (list, tuple)):
+      return list(inputs)
+    raise TypeError("DiffusersModel expects an artifact list input")
 
   def _build_pipeline_kwargs(self, prompt: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Translate Claia runtime kwargs into Diffusers pipeline kwargs."""

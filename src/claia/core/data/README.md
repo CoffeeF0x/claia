@@ -8,26 +8,31 @@ Pure CLAIA data models for IO and conversation state. Nothing here owns persiste
 - `artifacts/` — durable IO payloads: text, image, audio, file, link, raw, tool
 - `chunks/` — streamed content: text, image, audio, raw
 - `response.py` — `ModelResponse` (chunks + complete/error)
-- `models/` — `Conversation`, `Message`, `MessageSequence`, `Prompt` (not IO artifacts)
+- `models/` — `Conversation`, `Message`, `MessageSequence`, `MessageSequenceOrdered`, `Prompt`
 - `events.py` — `DomainEvent` / `EventType`
 - `utils/` — text, image, and tool-call parsing helpers
 
-MIME enums live in `claia.core.enums.data` (`MediaType`, `TextFormat`, `ArtifactType`, `SequenceKind`, …).
+MIME enums live in `claia.core.enums.data` (`MediaType`, `TextFormat`, `ArtifactType`, …).
 
 ## Model boundary
 
-**Conversation → deployment.translate → `MessageSequence` → `ModelResponse`.**
-Deployments own translation using `ModelDefinition.supported_artifacts` and `sequence_kind`. Models consume sequences only.
+**Conversation → deployment.translate → `MessageSequence` or artifact list → `ModelResponse`.**
+
+`ModelDefinition.supported_inputs` lists `ArtifactType` values and optional complex types (`MessageSequence` / `MessageSequenceOrdered`). Deployments choose the sequence class or extract artifacts from the latest message.
 
 ```python
-from claia.core.data import Conversation
+from claia.core.data import Conversation, MessageSequence
 from claia.core.definitions.model_definition import ModelDefinition
 from claia.core.deployments.dummy import DummyDeploymentPlugin
 from claia.core.enums.conversation import MessageRole
+from claia.core.enums.data import ArtifactType
 
 conversation = Conversation(title="Example")
 conversation.add_message(MessageRole.USER, "Hello")
-sequence = DummyDeploymentPlugin().translate(conversation, ModelDefinition())
+inputs = DummyDeploymentPlugin().translate(
+  conversation,
+  ModelDefinition(supported_inputs=[ArtifactType.TEXT, MessageSequence]),
+)
 ```
 
 See [docs/data-architecture.md](../../../../docs/data-architecture.md).

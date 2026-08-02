@@ -410,7 +410,7 @@ class SimpleAgent(BaseAgent):
         format=image_fmt,
         metadata=metadata,
       )
-      process.conversation.attach_file(message_id, artifact.id)
+      process.conversation.attach_artifact(message_id, artifact)
       process.emit("artifact", artifact, message_id)
     except Exception as e:
       logging.exception(f"Failed to attach generated image artifact: {e}")
@@ -443,7 +443,7 @@ class SimpleAgent(BaseAgent):
         sample_rate=metadata.get("sample_rate"),
         metadata=metadata,
       )
-      process.conversation.attach_file(message_id, artifact.id)
+      process.conversation.attach_artifact(message_id, artifact)
       process.emit("artifact", artifact, message_id)
     except Exception as e:
       logging.exception(f"Failed to attach generated audio artifact: {e}")

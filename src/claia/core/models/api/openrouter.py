@@ -16,6 +16,8 @@ from ..base import APIModel
 from claia.core.data.chunks import BaseChunk, TextChunk
 from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
+from claia.core.enums.conversation import MessageRole
+from ..base.base import ModelInputs
 
 
 ########################################################################
@@ -52,21 +54,34 @@ class OpenRouterModel(APIModel):
 
   def _format_messages(self, sequence: MessageSequence) -> List[Dict[str, Any]]:
     """Format a message sequence for the OpenRouter API."""
-    messages = sequence.to_chat_dicts(include_system=True)
+    messages: List[Dict[str, Any]] = []
+    if sequence.system:
+      messages.append({"role": "system", "content": sequence.system})
+    for message in sequence.messages:
+      if message.speaker not in (MessageRole.USER, MessageRole.ASSISTANT):
+        continue
+      if not message.content:
+        continue
+      messages.append({
+        "role": message.speaker.value,
+        "content": message.content,
+      })
     logger.debug(f"Sending {len(messages)} messages to OpenRouter API")
     return messages
 
   def generate(
     self,
-    sequence: MessageSequence,
+    inputs: ModelInputs,
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate a response using the OpenRouter API."""
     chunks: list = []
     try:
+      if not isinstance(inputs, MessageSequence):
+        raise TypeError("OpenRouterModel expects a MessageSequence input")
       request_data = {
         "model": self.model_name,
-        "messages": self._format_messages(sequence),
+        "messages": self._format_messages(inputs),
       }
 
       for param in (

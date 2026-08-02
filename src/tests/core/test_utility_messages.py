@@ -7,8 +7,8 @@ Covers:
   ``source_message_id``, ``start_index``, ``end_index``,
   ``attributes``) and round-trips them through ``to_dict`` /
   ``from_dict``.
-- Backwards compatibility: legacy serialized messages (without the
-  utility fields) deserialize unchanged with field defaults.
+- Minimal serialized messages (without utility fields) deserialize
+  with field defaults.
 - ``Conversation.append_utility`` emits ``MESSAGE_CREATED`` with
   utility metadata, advances the active head, and stores the new
   message inline in the messages list.
@@ -146,31 +146,30 @@ class TestMessageSerialization:
     data = msg.to_dict()
     assert "attributes" not in data
 
-  def test_legacy_payload_round_trip_unchanged(self):
-    """Dicts written before Phase 3 deserialize without errors and
-    yield the documented defaults for the new fields."""
-    legacy = {
-      "message_id": "legacy-1",
+  def test_minimal_payload_round_trip(self):
+    """A content-only dict hydrates a TextArtifact and re-serializes
+    without optional utility fields."""
+    payload = {
+      "message_id": "msg-1",
       "parent_id": None,
       "speaker": "user",
       "content": "hello",
-      "file_ids": [],
       "created_at": 1.0,
       "updated_at": 1.0,
       "inline_args": {},
     }
-    msg = Message.from_dict(legacy)
+    msg = Message.from_dict(payload)
     assert msg.tag_type is None
     assert msg.source_message_id is None
     assert msg.start_index is None
     assert msg.end_index is None
     assert msg.attributes == {}
     assert msg.content == "hello"
-    # Legacy content migrates onto a primary TextArtifact; optional
-    # Phase-3 fields stay absent on re-serialize.
     data = msg.to_dict()
-    for key, value in legacy.items():
-      assert data[key] == value
+    assert data["message_id"] == "msg-1"
+    assert data["speaker"] == "user"
+    assert "content" not in data
+    assert "file_ids" not in data
     assert "tag_type" not in data
     assert "artifacts" in data
     assert len(data["artifacts"]) == 1
@@ -378,10 +377,10 @@ class TestConversationRoundTrip:
     assert util.attributes == {"guid": "abc"}
     assert util.content == "cited body"
 
-  def test_legacy_conversation_round_trip_unchanged(self):
-    """A legacy conversation with no utility messages survives the
-    round-trip without growing utility-only fields anywhere."""
-    conv = Conversation(title="legacy")
+  def test_plain_conversation_round_trip(self):
+    """A conversation with no utility messages round-trips without
+    growing utility-only fields on messages."""
+    conv = Conversation(title="plain")
     conv.add_message(MessageRole.USER, "hi")
     conv.add_message(MessageRole.ASSISTANT, "hello")
     data = conv.to_dict()
@@ -391,6 +390,8 @@ class TestConversationRoundTrip:
       assert "start_index" not in m
       assert "end_index" not in m
       assert "attributes" not in m
+      assert "file_ids" not in m
+      assert "artifacts" in m
     restored = Conversation.from_dict(data)
     assert [m.speaker for m in restored.messages] == [
       MessageRole.USER,

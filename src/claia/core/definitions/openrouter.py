@@ -5,8 +5,8 @@ from typing import Dict, List, Optional
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition, artifacts_from_modalities
-from ..enums.data import SequenceKind
 from ..modality import Modality
+from claia.core.data.models.conversation.message_sequence import MessageSequence
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,6 @@ def _definition(
   input_modalities: Optional[List[Modality]] = None,
   license: str = "Commercial",
   url: Optional[str] = None,
-  sequence_kind: SequenceKind = SequenceKind.MESSAGE,
 ) -> ModelDefinition:
   """Build a definition for a model primarily exposed through OpenRouter."""
   modalities = input_modalities or [Modality.TEXT]
@@ -41,8 +40,7 @@ def _definition(
     identifiers={"openrouter": provider_id},
     input_modalities=modalities,
     output_modalities=[Modality.TEXT],
-    supported_artifacts=artifacts_from_modalities(modalities),
-    sequence_kind=sequence_kind,
+    supported_inputs=[*artifacts_from_modalities(modalities), MessageSequence],
   )
 
 

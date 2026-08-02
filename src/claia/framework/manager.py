@@ -861,21 +861,18 @@ class Manager:
               identifiers=self._merge_dicts(existing.identifiers, definition.identifiers),
               input_modalities=(
                 definition.input_modalities
-                if definition.input_modalities != existing.input_modalities
-                and definition.input_modalities
+                if definition.input_modalities
                 else existing.input_modalities
-              ) or definition.input_modalities,
+              ),
               output_modalities=(
                 definition.output_modalities
-                if definition.output_modalities != existing.output_modalities
-                and definition.output_modalities
+                if definition.output_modalities
                 else existing.output_modalities
-              ) or definition.output_modalities,
-              supported_artifacts=list(dict.fromkeys([
-                *(existing.supported_artifacts or []),
-                *(definition.supported_artifacts or []),
+              ),
+              supported_inputs=list(dict.fromkeys([
+                *(existing.supported_inputs or []),
+                *(definition.supported_inputs or []),
               ])),
-              sequence_kind=definition.sequence_kind,
               tag_overrides=self._merge_tag_overrides(
                 existing.tag_overrides, definition.tag_overrides
               ),

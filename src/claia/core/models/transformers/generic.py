@@ -16,7 +16,9 @@ import torch
 from claia.core.data.chunks import BaseChunk, TextChunk
 from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
+from claia.core.enums.conversation import MessageRole
 from ..base import LocalModel
+from ..base.base import ModelInputs
 
 
 ########################################################################
@@ -80,7 +82,7 @@ class GenericTransformerModel(LocalModel):
 
   def generate(
     self,
-    sequence: MessageSequence,
+    inputs: ModelInputs,
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate a response using the transformer model."""
@@ -89,7 +91,9 @@ class GenericTransformerModel(LocalModel):
       self.load()
 
     try:
-      prompt = self._convert_sequence_to_prompt(sequence)
+      if not isinstance(inputs, MessageSequence):
+        raise TypeError("GenericTransformerModel expects a MessageSequence input")
+      prompt = self._convert_sequence_to_prompt(inputs)
       inputs = self._tokenize_prompt(prompt)
 
       if kwargs.get("stream", False):
@@ -221,7 +225,18 @@ class GenericTransformerModel(LocalModel):
 
   def _convert_sequence_to_prompt(self, sequence: MessageSequence) -> str:
     """Convert a MessageSequence to a text prompt."""
-    return sequence.to_prompt_lines(include_system=True, assistant_suffix="Assistant:")
+    parts = []
+    if sequence.system:
+      parts.append(f"System: {sequence.system}")
+    for message in sequence.messages:
+      if message.speaker == MessageRole.SYSTEM:
+        parts.append(f"System: {message.content}")
+      elif message.speaker == MessageRole.USER:
+        parts.append(f"User: {message.content}")
+      elif message.speaker == MessageRole.ASSISTANT:
+        parts.append(f"Assistant: {message.content}")
+    parts.append("Assistant:")
+    return "\n".join(parts)
 
   def tokenize(self, text: str) -> List[int]:
     """Tokenize the input text."""

@@ -29,8 +29,7 @@ from .models import (
   Conversation,
   Message,
   MessageSequence,
-  OrderedMessageSequence,
-  SequenceMessage,
+  MessageSequenceOrdered,
 )
 from .events import DomainEvent, EventType
 from . import utils
@@ -55,8 +54,7 @@ __all__ = [
   "Conversation",
   "Message",
   "MessageSequence",
-  "OrderedMessageSequence",
-  "SequenceMessage",
+  "MessageSequenceOrdered",
   "DomainEvent",
   "EventType",
   "utils",

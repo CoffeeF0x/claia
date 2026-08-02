@@ -2,36 +2,30 @@
 Abstract base class for deployment plugins.
 
 A deployment takes an architecture's model class plus a conversation,
-translates the conversation into a ``MessageSequence`` using the resolved
-model definition's caps, and streams ``BaseChunk`` content items.
-Completion and errors live on ``ModelResponse``, not as control chunks.
-
-Shared resolve/cache/stream/translate logic lives here so concrete
-deployments only override construction (``create_model``) or
-``translate`` when they need provider-specific shaping.
+translates the conversation into model inputs using the resolved
+model definition's ``supported_inputs``, and streams ``BaseChunk``
+content items. Completion and errors live on ``ModelResponse``.
 """
 
 from __future__ import annotations
 
 import logging
 from abc import ABC
-from typing import Any, ClassVar, Dict, Generator, Iterator, Optional, Type
+from typing import Any, ClassVar, Dict, Generator, Iterator, List, Optional, Type, Union
 
 from ..data import Conversation
+from ..data.artifacts import BaseArtifact
 from ..data.chunks import BaseChunk, RawChunk, TextChunk
-from ..data.models.conversation.message_sequence import (
-  MessageSequence,
-  OrderedMessageSequence,
-  SequenceMessage,
-  filter_artifacts,
-)
+from ..data.models.conversation.message_sequence import MessageSequence
 from ..data.response import ModelResponse
 from ..definitions.model_definition import ModelDefinition
-from ..enums.data import ArtifactType, SequenceKind
+from ..enums.data import ArtifactType
 from ..plugins.base import DeploymentInfo
 
 
 logger = logging.getLogger(__name__)
+
+ModelInputs = Union[MessageSequence, List[BaseArtifact]]
 
 
 class BaseDeployment(ABC):
@@ -53,11 +47,7 @@ class BaseDeployment(ABC):
     model_class: Type,
     init_kwargs: Dict[str, Any],
   ) -> Any:
-    """Construct a fresh model instance.
-
-    Override when the model constructor needs positional args beyond
-    ``model_name`` (e.g. local device/path, remote server URL).
-    """
+    """Construct a fresh model instance."""
     return model_class(model_name=model_name, **init_kwargs)
 
   def resolve_model(
@@ -80,12 +70,7 @@ class BaseDeployment(ABC):
     return instance
 
   def resolve_artifact(self, artifact: Any) -> Any:
-    """Resolve/fetch/convert an artifact before filtering.
-
-    Default is identity. Override for provider-specific fetch (e.g.
-    ``Link`` / ``file://`` → bytes). Full conversion matrix is out of
-    scope for the base path.
-    """
+    """Resolve/fetch/convert an artifact before filtering. Default: identity."""
     return artifact
 
   def translate(
@@ -93,43 +78,35 @@ class BaseDeployment(ABC):
     conversation: Conversation,
     definition: Optional[ModelDefinition] = None,
     **kwargs,
-  ) -> MessageSequence:
-    """Translate a conversation into a model-ready message sequence.
+  ) -> ModelInputs:
+    """Translate a conversation into model inputs.
 
-    1. Export the active thread from the conversation.
-    2. Resolve each message artifact (hook: ``resolve_artifact``).
-    3. Filter to ``definition.supported_artifacts``.
-    4. Shape per ``definition.sequence_kind``.
+    - If the definition lists ``MessageSequenceOrdered`` / ``MessageSequence``,
+      build that sequence (artifacts filtered to declared ArtifactTypes).
+    - Otherwise take supported artifacts from the latest thread message
+      (possibly empty).
     """
-    del kwargs  # reserved for deployment-specific options
+    del kwargs
     definition = definition or ModelDefinition()
-    supported = list(definition.supported_artifacts or [ArtifactType.TEXT])
-    kind = definition.sequence_kind or SequenceKind.MESSAGE
-    system = conversation.get_system_prompt() or None
-    if system is not None and not str(system).strip():
-      system = None
+    artifact_types = definition.artifact_types() or [ArtifactType.TEXT]
+    sequence_cls = definition.sequence_class()
 
-    turns: list[SequenceMessage] = []
-    for message in conversation.export_thread():
-      resolved = [self.resolve_artifact(a) for a in (message.artifacts or [])]
-      filtered = filter_artifacts(resolved, supported)
-      if not filtered:
-        continue
-      turns.append(SequenceMessage(
-        role=message.speaker,
-        artifacts=filtered,
-        message_id=message.message_id,
-      ))
+    if sequence_cls is not None:
+      return conversation.to_message_sequence(
+        supported_artifact_types=artifact_types,
+        sequence_cls=sequence_cls,
+      )
 
-    if kind == SequenceKind.ORDERED:
-      return OrderedMessageSequence(messages=turns, system=system)
-    if kind == SequenceKind.NONE:
-      return MessageSequence.flatten(turns, system=system)
-    return MessageSequence(
-      messages=turns,
-      system=system,
-      kind=SequenceKind.MESSAGE,
-    )
+    thread = conversation.export_thread()
+    if not thread:
+      return []
+    latest = thread[-1]
+    out: List[BaseArtifact] = []
+    for artifact in latest.artifacts or []:
+      resolved = self.resolve_artifact(artifact)
+      if ArtifactType.from_artifact(resolved) in artifact_types:
+        out.append(resolved)
+    return out
 
   @staticmethod
   def normalize_chunk(item: Any) -> BaseChunk:
@@ -145,16 +122,11 @@ class BaseDeployment(ABC):
   def stream_generate(
     self,
     model: Any,
-    sequence: MessageSequence,
+    inputs: ModelInputs,
     runtime_kwargs: Dict[str, Any],
   ) -> Generator[BaseChunk, None, ModelResponse]:
-    """Call ``model.generate``, yield chunks, return a ``ModelResponse``.
-
-    Supports both direct ``ModelResponse`` returns and streaming
-    generators that yield chunks (or plain strings/bytes) and return a
-    ``ModelResponse`` or scalar.
-    """
-    result = model.generate(sequence, **runtime_kwargs)
+    """Call ``model.generate``, yield chunks, return a ``ModelResponse``."""
+    result = model.generate(inputs, **runtime_kwargs)
 
     if isinstance(result, ModelResponse):
       for chunk in result.chunks:
@@ -197,27 +169,14 @@ class BaseDeployment(ABC):
     runtime_kwargs: Dict[str, Any],
     definition: Optional[ModelDefinition] = None,
   ) -> Iterator[BaseChunk]:
-    """
-    Deploy (if needed), translate the conversation, and run inference.
-
-    Yields ``BaseChunk`` content items as they arrive. Completion and
-    errors are carried by the model's ``ModelResponse`` (generator
-    return value), not by control chunks.
-
-    Kwargs are split by ``ParamSpec`` scope at the framework boundary
-    (``Registry._run_stream``) and handed in as two dicts:
-
-    - ``init_kwargs`` — INIT-scoped kwargs for model construction
-    - ``runtime_kwargs`` — RUNTIME-scoped kwargs for ``model.generate``
-
-    Errors are raised as exceptions (typically ``DeploymentError``).
-    """
+    """Deploy (if needed), translate the conversation, and run inference."""
     model_instance = self.resolve_model(
       model_name, model_class, cache, init_kwargs
     )
-    sequence = self.translate(conversation, definition)
-    logger.debug(
-      f"Running model inference: {model_name} "
-      f"({len(sequence)} turns, kind={sequence.kind.value})"
-    )
-    yield from self.stream_generate(model_instance, sequence, runtime_kwargs)
+    inputs = self.translate(conversation, definition)
+    if isinstance(inputs, MessageSequence):
+      label = f"{len(inputs)} turns ({type(inputs).__name__})"
+    else:
+      label = f"{len(inputs)} artifacts"
+    logger.debug(f"Running model inference: {model_name} ({label})")
+    yield from self.stream_generate(model_instance, inputs, runtime_kwargs)

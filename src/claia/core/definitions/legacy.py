@@ -9,8 +9,9 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from ..enums.data import ArtifactType, SequenceKind
+from ..enums.data import ArtifactType
 from ..modality import Modality
+from claia.core.data.models.conversation.message_sequence import MessageSequence
 
 
 logger = logging.getLogger(__name__)
@@ -51,8 +52,7 @@ class LegacyDefinitionsPlugin(BaseDefinitionProvider):
           "transformers_gemma3": "google/gemma-3-4b"
         },
         input_modalities=[Modality.TEXT, Modality.IMAGE],
-        supported_artifacts=[ArtifactType.TEXT, ArtifactType.IMAGE],
-        sequence_kind=SequenceKind.MESSAGE,
+        supported_inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
       ),
       "gemma-3-12b": ModelDefinition(
         title="Gemma 3 12B",
@@ -65,8 +65,7 @@ class LegacyDefinitionsPlugin(BaseDefinitionProvider):
           "transformers_gemma3": "google/gemma-3-12b"
         },
         input_modalities=[Modality.TEXT, Modality.IMAGE],
-        supported_artifacts=[ArtifactType.TEXT, ArtifactType.IMAGE],
-        sequence_kind=SequenceKind.MESSAGE,
+        supported_inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
       ),
       "gemma-3-27b": ModelDefinition(
         title="Gemma 3 27B",
@@ -79,8 +78,7 @@ class LegacyDefinitionsPlugin(BaseDefinitionProvider):
           "transformers_gemma3": "google/gemma-3-27b"
         },
         input_modalities=[Modality.TEXT, Modality.IMAGE],
-        supported_artifacts=[ArtifactType.TEXT, ArtifactType.IMAGE],
-        sequence_kind=SequenceKind.MESSAGE,
+        supported_inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
       ),
       "minicpm3-4b": ModelDefinition(
         title="MiniCPM3-4B",
@@ -138,8 +136,7 @@ class LegacyDefinitionsPlugin(BaseDefinitionProvider):
         },
         input_modalities=[Modality.TEXT],
         output_modalities=[Modality.IMAGE],
-        supported_artifacts=[ArtifactType.TEXT],
-        sequence_kind=SequenceKind.NONE,
+        supported_inputs=[ArtifactType.TEXT],
       ),
       "stable-diffusion-v1-5": ModelDefinition(
         title="Stable Diffusion v1.5",
@@ -150,8 +147,7 @@ class LegacyDefinitionsPlugin(BaseDefinitionProvider):
         aliases=["sd-v1.5", "sd1.5", "stable-diffusion-1.5"],
         input_modalities=[Modality.TEXT],
         output_modalities=[Modality.IMAGE],
-        supported_artifacts=[ArtifactType.TEXT],
-        sequence_kind=SequenceKind.NONE,
+        supported_inputs=[ArtifactType.TEXT],
       ),
       "qwen3-tts-0.6b": ModelDefinition(
         title="Qwen3 TTS 0.6B",
@@ -165,8 +161,7 @@ class LegacyDefinitionsPlugin(BaseDefinitionProvider):
         },
         input_modalities=[Modality.TEXT],
         output_modalities=[Modality.AUDIO],
-        supported_artifacts=[ArtifactType.TEXT],
-        sequence_kind=SequenceKind.NONE,
+        supported_inputs=[ArtifactType.TEXT],
       ),
       "llama-3.2-1b": ModelDefinition(
         title="Llama 3.2 1B",

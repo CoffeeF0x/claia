@@ -749,7 +749,7 @@ class Registry:
 
       # Filter kwargs against the agent's declared ParamSpecs. If the
       # agent has no declared params, forward the entire combined set
-      # so legacy agents keep working.
+      # so existing agents keep working.
       if agent_info and getattr(agent_info, 'params', None):
         init_kwargs = Manager.filter_init_kwargs(combined_kwargs, agent_info.params)
         runtime_kwargs = Manager.filter_runtime_kwargs(combined_kwargs, agent_info.params)

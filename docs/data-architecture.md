@@ -10,7 +10,7 @@ Reference for how CLAIA models, events, and storage work.
 2. **Persistence is the host runtime's job.** The CLI saves JSON files. The Slate API will use a database. CLAIA's models don't care which.
 3. **Domain events are the single mutation record.** Every state change emits a `DomainEvent` that both persists to the audit trail and notifies runtime listeners. There is no separate "action" system.
 4. **Everything round-trips through `to_dict()` / `from_dict()`.** Serialization is always a plain dict. The host runtime decides the wire format (JSON files, database rows, API responses).
-5. **Model IO contract: `MessageSequence` in, `ModelResponse` out.** Deployments translate conversations using definition caps. Chunks are content only; status lives on the response wrapper.
+5. **Model IO contract: sequence or artifacts in, `ModelResponse` out.** Deployments translate conversations using `supported_inputs`. Chunks are content only; status lives on the response wrapper.
 
 ---
 
@@ -24,8 +24,8 @@ claia/core/
     artifacts/         # durable IO payloads (in)
     chunks/            # streamed content pieces (out)
     response.py        # ModelResponse
-    models/            # Conversation, Message, MessageSequence, Prompt
-                       #   Conversation.export_thread() → deployment.translate()
+    models/            # Conversation, Message, MessageSequence(Ordered), Prompt
+                       #   Conversation.to_message_sequence() / deployment.translate()
 ```
 
 ---
@@ -128,7 +128,7 @@ Returned by `BaseModel.generate`. Carries content plus status:
 | `error` | `Any \| None` | Optional error info |
 | `metadata` | `dict` | Usage, finish_reason, … |
 
-Streaming models may yield `BaseChunk` items and `return` a `ModelResponse` via the generator return value. Deployments translate a `Conversation` via `BaseDeployment.translate(conversation, definition)` into a `MessageSequence` before calling the model (`BaseDeployment.run` / `stream_generate`).
+Streaming models may yield `BaseChunk` items and `return` a `ModelResponse` via the generator return value. Deployments translate a `Conversation` via `BaseDeployment.translate(conversation, definition)` into a `MessageSequence` / `MessageSequenceOrdered` or a latest-message artifact list before calling the model.
 
 ```python
 from claia.core.data import ModelResponse, TextChunk
@@ -172,8 +172,8 @@ Messages form a directed tree via `parent_id`. Multiple children of the same par
 | `message_id` | `str` | UUID |
 | `parent_id` | `str \| None` | Parent in the message tree |
 | `speaker` | `MessageRole` | `USER`, `ASSISTANT`, `SYSTEM`, `INTERNAL`, … |
-| `content` | `str` | Message text |
-| `file_ids` | `List[str]` | IDs of attached artifacts |
+| `artifacts` | `List[BaseArtifact]` | Ordered payload (text, image, file, link, …) |
+| `content` | `str` (accessor) | Primary text artifact convenience view |
 | `inline_args` | `dict` | Extracted inline arguments from content |
 | `created_at` | `float` | Unix timestamp |
 | `updated_at` | `float` | Unix timestamp |

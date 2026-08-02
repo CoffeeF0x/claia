@@ -5,9 +5,11 @@ are validated. Keep this file minimal and disposable.
 """
 
 from claia.core.data import Conversation, ModelResponse, TextChunk
+from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.definitions.model_definition import ModelDefinition
 from claia.core.deployments.dummy import DummyDeploymentPlugin
 from claia.core.enums.conversation import MessageRole
+from claia.core.enums.data import ArtifactType
 from claia.core.models.dummy import DummyModel
 
 MODULE = DummyModel
@@ -33,13 +35,15 @@ def run_model():
   model = MODULE(model_name="dummy-model")
   conversation = Conversation(title="sanity-models")
   conversation.add_message(MessageRole.USER, "Tell me a story.")
-  definition = ModelDefinition()
+  definition = ModelDefinition(
+    supported_inputs=[ArtifactType.TEXT, MessageSequence],
+  )
   sequence = DummyDeploymentPlugin().translate(conversation, definition)
   message_count_before = len(conversation.messages)
 
   print(f"model: {model.model_name} ({type(model).__name__})")
   print(f"story length: {model.story_length} chars")
-  print(f"sequence turns: {len(sequence)} (kind={sequence.kind.value})")
+  print(f"sequence turns: {len(sequence)} ({type(sequence).__name__})")
   print()
 
   chunks, response = drain(model.generate(
@@ -75,7 +79,9 @@ def run_deployment():
     cache={},
     init_kwargs={},
     runtime_kwargs={"chars_per_second": 1_000_000, "chars_per_chunk": 10_000},
-    definition=ModelDefinition(),
+    definition=ModelDefinition(
+      supported_inputs=[ArtifactType.TEXT, MessageSequence],
+    ),
   ))
 
   preview = "".join(

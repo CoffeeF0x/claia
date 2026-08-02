@@ -83,10 +83,15 @@ def _import_diffusers_module(monkeypatch):
   return importlib.import_module("claia.core.models.transformers.diffusers")
 
 
-def _sequence(conversation):
+def _artifacts(conversation):
   from claia.core.deployments.dummy import DummyDeploymentPlugin
   from claia.core.definitions.model_definition import ModelDefinition
-  return DummyDeploymentPlugin().translate(conversation, ModelDefinition())
+  from claia.core.enums.data import ArtifactType
+  return DummyDeploymentPlugin().translate(
+    conversation,
+    ModelDefinition(supported_inputs=[ArtifactType.TEXT]),
+  )
+
 
 
 def _conversation():
@@ -104,7 +109,7 @@ def test_diffusers_model_yields_text_and_image_chunks(monkeypatch):
   )
 
   chunks = list(model.generate(
-    _sequence(_conversation()),
+    _artifacts(_conversation()),
     height=32,
     width=64,
     num_inference_steps=7,
@@ -143,7 +148,7 @@ def test_diffusers_model_allows_prompt_override(monkeypatch):
   model = diffusers.DiffusersModel("example/image-model", defer_loading=True)
 
   chunks = list(model.generate(
-    _sequence(_conversation()),
+    _artifacts(_conversation()),
     prompt="Override prompt",
   ))
 

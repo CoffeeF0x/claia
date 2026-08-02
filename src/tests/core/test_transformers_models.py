@@ -108,7 +108,13 @@ def _model(monkeypatch):
 def _sequence(conversation):
   from claia.core.deployments.dummy import DummyDeploymentPlugin
   from claia.core.definitions.model_definition import ModelDefinition
-  return DummyDeploymentPlugin().translate(conversation, ModelDefinition())
+  from claia.core.data.models.conversation.message_sequence import MessageSequence
+  from claia.core.enums.data import ArtifactType
+  return DummyDeploymentPlugin().translate(
+    conversation,
+    ModelDefinition(supported_inputs=[ArtifactType.TEXT, MessageSequence]),
+  )
+
 
 
 def _conversation():

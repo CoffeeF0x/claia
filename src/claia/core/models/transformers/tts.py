@@ -11,11 +11,12 @@ import importlib
 import logging
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
+from claia.core.data.artifacts import BaseArtifact, TextArtifact
 from claia.core.data.chunks import AudioChunk, BaseChunk, TextChunk
-from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
 from claia.core.enums.data import AudioFormat
 from ..base import LocalModel
+from ..base.base import ModelInputs
 
 
 logger = logging.getLogger(__name__)
@@ -67,16 +68,16 @@ class LocalTTSModel(LocalModel):
 
   def generate(
     self,
-    sequence: MessageSequence,
+    inputs: ModelInputs,
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
-    """Generate speech audio from the latest user text or a prompt override."""
+    """Generate speech audio from text artifact input or a prompt override."""
     chunks: list = []
     if not self.loaded:
       self.load()
 
     try:
-      text = self._resolve_text(sequence, kwargs.get("prompt") or kwargs.get("input"))
+      text = self._resolve_text(inputs, kwargs.get("prompt") or kwargs.get("input"))
       response_format = self._normalize_response_format(kwargs.get("response_format"))
       backend_kwargs = dict(kwargs)
       backend_kwargs.pop("response_format", None)
@@ -136,15 +137,24 @@ class LocalTTSModel(LocalModel):
       )
     raise ValueError(f"Unsupported tts_backend '{backend_name}'.")
 
-  def _resolve_text(self, sequence: MessageSequence, prompt_override: Optional[str]) -> str:
-    """Resolve synthesis text from explicit kwargs or the latest user message."""
+  def _resolve_text(self, inputs: ModelInputs, prompt_override: Optional[str]) -> str:
+    """Resolve synthesis text from kwargs or text artifacts."""
     if prompt_override:
       return prompt_override
 
-    text = sequence.latest_user_text()
-    if not text:
-      raise ValueError("No user text found for speech generation.")
-    return text
+    artifacts = self._as_artifacts(inputs)
+    for artifact in reversed(artifacts):
+      if isinstance(artifact, TextArtifact) and artifact.content:
+        return artifact.content
+    raise ValueError("No text artifact found for speech generation.")
+
+  @staticmethod
+  def _as_artifacts(inputs: ModelInputs) -> List[BaseArtifact]:
+    if isinstance(inputs, BaseArtifact):
+      return [inputs]
+    if isinstance(inputs, (list, tuple)):
+      return list(inputs)
+    raise TypeError("LocalTTSModel expects an artifact list input")
 
   def _normalize_response_format(self, response_format: Optional[str]) -> str:
     """Normalize response format for audio metadata and encoding."""

@@ -19,7 +19,6 @@ from .data import (
   VideoFormat,
   ApplicationFormat,
   ArtifactType,
-  SequenceKind,
 )
 
 __all__ = [
@@ -31,5 +30,5 @@ __all__ = [
   "ProcessQueueHook",
   "MediaType", "TextFormat", "ImageFormat", "AudioFormat",
   "VideoFormat", "ApplicationFormat",
-  "ArtifactType", "SequenceKind",
+  "ArtifactType",
 ]

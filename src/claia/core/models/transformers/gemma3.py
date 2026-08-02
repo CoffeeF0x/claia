@@ -44,11 +44,11 @@ class Gemma3Model(GenericTransformerModel):
       prompt_parts.append(f"<start_of_turn>system\n{sequence.system}<end_of_turn>")
 
     for message in sequence.messages:
-      if message.role == MessageRole.SYSTEM:
+      if message.speaker == MessageRole.SYSTEM:
         prompt_parts.append(f"<start_of_turn>system\n{message.content}<end_of_turn>")
-      elif message.role == MessageRole.USER:
+      elif message.speaker == MessageRole.USER:
         prompt_parts.append(f"<start_of_turn>user\n{message.content}<end_of_turn>")
-      elif message.role == MessageRole.ASSISTANT:
+      elif message.speaker == MessageRole.ASSISTANT:
         prompt_parts.append(f"<start_of_turn>model\n{message.content}<end_of_turn>")
 
     prompt_parts.append("<start_of_turn>model\n")

@@ -61,10 +61,15 @@ def _import_tts_module(monkeypatch):
   return importlib.import_module("claia.core.models.transformers.tts")
 
 
-def _sequence(conversation):
+def _artifacts(conversation):
   from claia.core.deployments.dummy import DummyDeploymentPlugin
   from claia.core.definitions.model_definition import ModelDefinition
-  return DummyDeploymentPlugin().translate(conversation, ModelDefinition())
+  from claia.core.enums.data import ArtifactType
+  return DummyDeploymentPlugin().translate(
+    conversation,
+    ModelDefinition(supported_inputs=[ArtifactType.TEXT]),
+  )
+
 
 
 def _conversation():
@@ -84,7 +89,7 @@ def test_local_tts_model_yields_text_and_audio_chunks(monkeypatch):
   )
 
   chunks = list(model.generate(
-    _sequence(_conversation()),
+    _artifacts(_conversation()),
     language="English",
     reference_audio_path="/tmp/ref.wav",
     response_format="wav",
@@ -117,7 +122,7 @@ def test_local_tts_model_allows_prompt_override(monkeypatch):
   model = tts.LocalTTSModel("example/tts", defer_loading=True)
 
   chunks = list(model.generate(
-    _sequence(_conversation()),
+    _artifacts(_conversation()),
     prompt="Override text.",
     reference_audio_path="/tmp/ref.wav",
   ))
@@ -131,7 +136,7 @@ def test_local_tts_model_explains_qwen_reference_audio_requirement(monkeypatch):
   tts = _import_tts_module(monkeypatch)
   model = tts.LocalTTSModel("Qwen/Qwen3-TTS-12Hz-0.6B-Base", defer_loading=True)
 
-  chunks = list(model.generate(_sequence(_conversation())))
+  chunks = list(model.generate(_artifacts(_conversation())))
 
   assert isinstance(chunks[0], TextChunk)
   assert "reference_audio_path" in chunks[0].data

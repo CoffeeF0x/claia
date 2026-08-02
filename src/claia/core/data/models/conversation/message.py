@@ -1,10 +1,9 @@
 """
 Message data model for conversations.
 
-Messages represent individual turns in a conversation. Each message
-carries an ordered list of artifacts (text, image, tool, …). A thin
-``content`` property reads/writes the primary text artifact so
-streaming and legacy callers keep working.
+Messages are wrappers around an ordered list of artifacts. A thin
+``content`` property reads/writes the primary ``TextArtifact`` for
+streaming convenience.
 """
 
 from __future__ import annotations
@@ -70,8 +69,7 @@ class Message:
   A turn in a conversation tree.
 
   Payload lives in ``artifacts`` (ordered). ``content`` is a convenience
-  view over the primary ``TextArtifact``. Utility-message metadata
-  (tag_type, source offsets, …) is unchanged from the tools overhaul.
+  view over the primary ``TextArtifact``.
   """
 
   def __init__(
@@ -80,7 +78,6 @@ class Message:
     content: str = "",
     message_id: Optional[str] = None,
     parent_id: Optional[str] = None,
-    file_ids: Optional[List[str]] = None,
     artifacts: Optional[List[Any]] = None,
     created_at: Optional[float] = None,
     updated_at: Optional[float] = None,
@@ -122,12 +119,6 @@ class Message:
         format=TextFormat.PLAIN,
       ))
 
-    if file_ids is not None:
-      self.file_ids = file_ids
-    else:
-      primary = self._primary_text_artifact()
-      self.file_ids = [a.id for a in self.artifacts if a is not primary]
-
     self._content_lock = threading.Lock()
 
   def _primary_text_artifact(self):
@@ -162,11 +153,17 @@ class Message:
     self.updated_at = time.time()
 
   def add_artifact(self, artifact) -> None:
-    """Append an artifact and refresh transitional file_ids."""
+    """Append an artifact to this message."""
     self.artifacts.append(artifact)
-    primary = self._primary_text_artifact()
-    self.file_ids = [a.id for a in self.artifacts if a is not primary]
     self.updated_at = time.time()
+
+  def copy_with_artifacts(self, artifacts: List[Any]) -> "Message":
+    """Return a copy of this message carrying ``artifacts`` only."""
+    data = self.to_dict()
+    data["artifacts"] = [
+      a.to_dict() if hasattr(a, "to_dict") else a for a in artifacts
+    ]
+    return Message.from_dict(data)
 
   def is_utility(self) -> bool:
     """Return ``True`` if this message is a parsed-tag sibling."""
@@ -177,8 +174,6 @@ class Message:
       "message_id": self.message_id,
       "parent_id": self.parent_id,
       "speaker": self.speaker.value,
-      "content": self.content,
-      "file_ids": self.file_ids,
       "artifacts": [a.to_dict() for a in self.artifacts],
       "created_at": self.created_at,
       "updated_at": self.updated_at,
@@ -198,13 +193,17 @@ class Message:
 
   @classmethod
   def from_dict(cls, data: Dict[str, Any]) -> Message:
+    artifacts = data.get("artifacts")
+    content = ""
+    if not artifacts and data.get("content"):
+      # API convenience when only a text string is present.
+      content = data.get("content", "")
     return cls(
       speaker=data.get("speaker", MessageRole.USER.value),
-      content=data.get("content", "") if not data.get("artifacts") else "",
+      content=content,
       message_id=data.get("message_id"),
       parent_id=data.get("parent_id"),
-      file_ids=data.get("file_ids", []),
-      artifacts=data.get("artifacts"),
+      artifacts=artifacts,
       created_at=data.get("created_at"),
       updated_at=data.get("updated_at"),
       inline_args=data.get("inline_args", {}) or data.get("query_args", {}),

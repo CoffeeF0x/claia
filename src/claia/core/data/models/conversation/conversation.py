@@ -127,7 +127,7 @@ class Conversation:
                  name: Optional[str] = None,
                  metadata: Optional[Dict[str, Any]] = None,
                  **kwargs):
-        del kwargs  # accept and ignore legacy artifact kwargs
+        del kwargs  # accept and ignore unused constructor kwargs
         self.id = id or str(uuid.uuid4())
         self.name = name or f"conversation-{self.id}"
         self.title = title
@@ -303,17 +303,45 @@ class Conversation:
         self.updated_at = time.time()
 
     # ---------------------------------------------------------------------- #
-    # Active-thread export                                                     #
+    # Model-ready sequence                                                     #
     # ---------------------------------------------------------------------- #
 
     def export_thread(self, include_utility: bool = False) -> List[Message]:
-        """Export the active message view (structural, not model-ready).
-
-        Returns ordered messages on the active branch with their artifact
-        lists intact. Deployments translate this into a ``MessageSequence``
-        using the resolved model's supported artifact types.
-        """
+        """Return the active message view (structural, not model-ready)."""
         return self.get_thread(include_utility=include_utility)
+
+    def to_message_sequence(
+        self,
+        supported_artifact_types,
+        sequence_cls=None,
+        include_utility: bool = False,
+    ):
+        """Build a filtered message sequence for a model.
+
+        Copies each active-thread message, keeps only artifacts whose
+        ``ArtifactType`` is in ``supported_artifact_types``, drops turns
+        that end up empty, and returns an instance of ``sequence_cls``
+        (default ``MessageSequence``).
+        """
+        from claia.core.enums.data import ArtifactType
+        from .message_sequence import MessageSequence
+
+        if sequence_cls is None:
+            sequence_cls = MessageSequence
+
+        allowed = set(supported_artifact_types or [])
+        copies = []
+        for message in self.export_thread(include_utility=include_utility):
+            filtered = [
+                a for a in (message.artifacts or [])
+                if ArtifactType.from_artifact(a) in allowed
+            ]
+            if not filtered:
+                continue
+            copies.append(message.copy_with_artifacts(filtered))
+
+        system = self.get_system_prompt()
+        return sequence_cls(messages=copies, system=system)
 
     # ---------------------------------------------------------------------- #
     # Tree traversal                                                           #
@@ -407,8 +435,8 @@ class Conversation:
 
     def add_message(self,
                     speaker: Union[MessageRole, str],
-                    content: str,
-                    file_ids: Optional[List[str]] = None,
+                    content: str = "",
+                    artifacts: Optional[List[Any]] = None,
                     parent_id: Optional[str] = None) -> Message:
         """Add a message to the conversation tree."""
         effective_parent_id = parent_id if parent_id is not None else self.active_head_id
@@ -416,7 +444,7 @@ class Conversation:
         message = Message(
             speaker=speaker,
             content=content,
-            file_ids=file_ids or [],
+            artifacts=artifacts,
             parent_id=effective_parent_id,
         )
         message.extract_inline_args()
@@ -526,7 +554,7 @@ class Conversation:
         return message
 
     def update_message(self, message_id: str, content: Optional[str] = None,
-                       file_ids: Optional[List[str]] = None) -> Optional[Message]:
+                       artifacts: Optional[List[Any]] = None) -> Optional[Message]:
         """Update a message in-place (content fix, not a branch)."""
         for message in self.messages:
             if message.message_id == message_id:
@@ -534,8 +562,8 @@ class Conversation:
                     message.content = content
                     message.inline_args = {}
                     message.extract_inline_args()
-                if file_ids is not None:
-                    message.file_ids = file_ids
+                if artifacts is not None:
+                    message.artifacts = list(artifacts)
 
                 message.updated_at = time.time()
                 self.updated_at = time.time()
@@ -613,8 +641,7 @@ class Conversation:
 
     def start_streaming_message(self,
                                 speaker: Union[MessageRole, str],
-                                parent_id: Optional[str] = None,
-                                file_ids: Optional[List[str]] = None) -> Message:
+                                parent_id: Optional[str] = None) -> Message:
         """
         Create an empty message that subsequent ``append_stream_chunk`` calls
         will fill in, and emit MESSAGE_STREAM_START.
@@ -629,7 +656,6 @@ class Conversation:
         message = Message(
             speaker=speaker,
             content="",
-            file_ids=file_ids or [],
             parent_id=effective_parent_id,
         )
 
@@ -692,42 +718,51 @@ class Conversation:
         return None
 
     # ---------------------------------------------------------------------- #
-    # File attachment methods                                                  #
+    # Artifact attachment                                                      #
     # ---------------------------------------------------------------------- #
 
-    def attach_file(self, message_id: str, file_id: str) -> bool:
+    def attach_artifact(self, message_id: str, artifact) -> bool:
+        """Attach an artifact (File, Link, Image, …) to a message."""
         message = self.get_message(message_id)
         if not message:
-            logger.error(f"Cannot attach file: message not found: {message_id}")
+            logger.error(f"Cannot attach artifact: message not found: {message_id}")
             return False
-        if file_id in message.file_ids:
-            return True
 
-        message.file_ids.append(file_id)
-        message.updated_at = time.time()
+        message.add_artifact(artifact)
         self.updated_at = time.time()
 
         self._record(EventType.ATTACHMENT_ADDED, message,
-                     {"message_id": message_id, "file_id": file_id},
+                     {"message_id": message_id, "artifact_id": getattr(artifact, "id", None)},
                      entity_id=message_id, parent_id=message.parent_id)
         return True
 
-    def detach_file(self, message_id: str, file_id: str) -> bool:
+    def detach_artifact(self, message_id: str, artifact_id: str) -> bool:
+        """Remove an artifact from a message by id."""
         message = self.get_message(message_id)
         if not message:
-            logger.error(f"Cannot detach file: message not found: {message_id}")
-            return False
-        if file_id not in message.file_ids:
+            logger.error(f"Cannot detach artifact: message not found: {message_id}")
             return False
 
-        message.file_ids.remove(file_id)
+        before = len(message.artifacts)
+        message.artifacts = [a for a in message.artifacts if a.id != artifact_id]
+        if len(message.artifacts) == before:
+            return False
+
         message.updated_at = time.time()
         self.updated_at = time.time()
 
         self._record(EventType.ATTACHMENT_REMOVED, message,
-                     {"message_id": message_id, "file_id": file_id},
+                     {"message_id": message_id, "artifact_id": artifact_id},
                      entity_id=message_id, parent_id=message.parent_id)
         return True
+
+    def attach_file(self, message_id: str, artifact) -> bool:
+        """Alias for :meth:`attach_artifact`."""
+        return self.attach_artifact(message_id, artifact)
+
+    def detach_file(self, message_id: str, artifact_id: str) -> bool:
+        """Alias for :meth:`detach_artifact`."""
+        return self.detach_artifact(message_id, artifact_id)
 
     # ---------------------------------------------------------------------- #
     # Prompt management                                                        #
@@ -767,26 +802,19 @@ class Conversation:
         })
 
     # ---------------------------------------------------------------------- #
-    # File management convenience methods                                      #
+    # Artifact helpers                                                         #
     # ---------------------------------------------------------------------- #
 
-    def load_message_files(self, message_id: str, file_repo, load_content: bool = False) -> List:
+    def get_message_artifacts(self, message_id: str) -> List:
+        """Return artifacts attached to a message."""
         message = self.get_message(message_id)
-        if not message or not message.file_ids:
+        if not message:
             return []
-        return file_repo.load_multiple(message.file_ids, load_content=load_content)
+        return list(message.artifacts or [])
 
-    def load_all_files(self, file_repo, load_content: bool = False) -> Dict[str, List]:
-        result = {}
-        for message in self.get_thread():
-            if message.file_ids:
-                files = file_repo.load_multiple(message.file_ids, load_content=load_content)
-                if files:
-                    result[message.message_id] = files
-        return result
-
-    def get_all_file_ids(self) -> List[str]:
-        file_ids = set()
+    def get_all_artifacts(self) -> List:
+        """Return all artifacts across every message."""
+        artifacts = []
         for message in self.messages:
-            file_ids.update(message.file_ids)
-        return list(file_ids)
+            artifacts.extend(message.artifacts or [])
+        return artifacts

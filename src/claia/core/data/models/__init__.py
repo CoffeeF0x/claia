@@ -2,7 +2,8 @@
 Conversation-domain models.
 
 Artifacts live under ``claia.core.data.artifacts``. This package keeps
-Conversation, Message, and Prompt — types that are not IO artifacts.
+Conversation, Message, MessageSequence, and Prompt — types that are not
+IO artifacts.
 """
 
 from claia.core.data.artifacts import (
@@ -19,8 +20,7 @@ from .conversation import (
   Conversation,
   Message,
   MessageSequence,
-  OrderedMessageSequence,
-  SequenceMessage,
+  MessageSequenceOrdered,
 )
 
 __all__ = [
@@ -35,6 +35,5 @@ __all__ = [
   "Conversation",
   "Message",
   "MessageSequence",
-  "OrderedMessageSequence",
-  "SequenceMessage",
+  "MessageSequenceOrdered",
 ]

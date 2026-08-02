@@ -24,11 +24,11 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from ..enums.data import ArtifactType, SequenceKind
+from ..enums.data import ArtifactType
 from ..modality import Modality
+from claia.core.data.models.conversation.message_sequence import MessageSequenceOrdered
 
-_TEXT_IMAGE = [ArtifactType.TEXT, ArtifactType.IMAGE]
-_ORDERED = SequenceKind.ORDERED
+_CHAT = [ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered]
 
 
 logger = logging.getLogger(__name__)
@@ -59,8 +59,7 @@ class AnthropicDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"anthropic": "claude-opus-4-7", "openrouter": "anthropic/claude-opus-4.7"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_ORDERED,
+        supported_inputs=_CHAT,
       ),
 
       "claude-opus-4-6": ModelDefinition(
@@ -77,8 +76,7 @@ class AnthropicDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"anthropic": "claude-opus-4-6", "openrouter": "anthropic/claude-opus-4.6"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_ORDERED,
+        supported_inputs=_CHAT,
       ),
 
       "claude-opus-4-5": ModelDefinition(
@@ -95,8 +93,7 @@ class AnthropicDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"anthropic": "claude-opus-4-5-20251101", "openrouter": "anthropic/claude-opus-4.5"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_ORDERED,
+        supported_inputs=_CHAT,
       ),
 
       "claude-opus-4-1": ModelDefinition(
@@ -113,8 +110,7 @@ class AnthropicDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"anthropic": "claude-opus-4-1-20250805", "openrouter": "anthropic/claude-opus-4.1"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_ORDERED,
+        supported_inputs=_CHAT,
       ),
 
       "claude-opus-4-0": ModelDefinition(
@@ -131,8 +127,7 @@ class AnthropicDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"anthropic": "claude-opus-4-20250514", "openrouter": "anthropic/claude-opus-4"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_ORDERED,
+        supported_inputs=_CHAT,
       ),
 
       # ----------------------------------------------------------------
@@ -154,8 +149,7 @@ class AnthropicDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"anthropic": "claude-sonnet-4-6", "openrouter": "anthropic/claude-sonnet-4.6"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_ORDERED,
+        supported_inputs=_CHAT,
       ),
 
       "claude-sonnet-4-5": ModelDefinition(
@@ -172,8 +166,7 @@ class AnthropicDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"anthropic": "claude-sonnet-4-5-20250929", "openrouter": "anthropic/claude-sonnet-4.5"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_ORDERED,
+        supported_inputs=_CHAT,
       ),
 
       "claude-sonnet-4-0": ModelDefinition(
@@ -190,8 +183,7 @@ class AnthropicDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"anthropic": "claude-sonnet-4-20250514", "openrouter": "anthropic/claude-sonnet-4"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_ORDERED,
+        supported_inputs=_CHAT,
       ),
 
       # ----------------------------------------------------------------
@@ -213,7 +205,6 @@ class AnthropicDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"anthropic": "claude-haiku-4-5-20251001", "openrouter": "anthropic/claude-haiku-4.5"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_ORDERED,
+        supported_inputs=_CHAT,
       ),
     }

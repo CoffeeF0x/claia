@@ -67,12 +67,10 @@ def test_simple_agent_attaches_image_artifacts(process):
   assert updated.status == ProcessStatus.COMPLETED
   assistant_message = updated.conversation.get_latest_message()
   assert assistant_message.content == "Generated image."
-  assert len(assistant_message.file_ids) == 1
   assert len(artifacts) == 1
   artifact, message_id = artifacts[0]
   assert message_id == assistant_message.message_id
-  assert artifact.id == assistant_message.file_ids[0]
-  assert artifact.media_type == "image/png"
+  assert artifact in assistant_message.artifacts
   assert artifact.load_bytes() == PNG_BYTES
 
 
@@ -102,10 +100,9 @@ def test_simple_agent_attaches_audio_artifacts(process):
   assert updated.status == ProcessStatus.COMPLETED
   assistant_message = updated.conversation.get_latest_message()
   assert assistant_message.content == "Generated audio."
-  assert len(assistant_message.file_ids) == 1
+  assert any(a.id == artifacts[0][0].id for a in assistant_message.artifacts)
   assert len(artifacts) == 1
   artifact, message_id = artifacts[0]
   assert message_id == assistant_message.message_id
-  assert artifact.id == assistant_message.file_ids[0]
-  assert artifact.media_type == "audio/wav"
+  assert artifact in assistant_message.artifacts
   assert artifact.load_content() == AUDIO_BYTES

@@ -9,7 +9,6 @@ from .audio import AudioFormat
 from .video import VideoFormat
 from .application import ApplicationFormat
 from .artifact_type import ArtifactType
-from .sequence_kind import SequenceKind
 
 __all__ = [
   "MediaType",
@@ -19,5 +18,4 @@ __all__ = [
   "VideoFormat",
   "ApplicationFormat",
   "ArtifactType",
-  "SequenceKind",
 ]

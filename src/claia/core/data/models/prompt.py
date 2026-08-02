@@ -31,7 +31,7 @@ class Prompt:
     updated_at: Optional[float] = None,
     **kwargs,
   ):
-    del kwargs  # accept and ignore legacy artifact kwargs
+    del kwargs  # accept and ignore unused constructor kwargs
     if not name.endswith(".json"):
       name = f"{name}.json"
 

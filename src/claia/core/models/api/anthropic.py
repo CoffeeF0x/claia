@@ -13,7 +13,9 @@ from typing import Dict, Any, Optional, Generator
 from claia.core.data.chunks import BaseChunk
 from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
+from claia.core.enums.conversation import MessageRole
 from ..base import APIModel
+from ..base.base import ModelInputs
 
 
 
@@ -52,17 +54,15 @@ class AnthropicModel(APIModel):
 
   def generate(
     self,
-    sequence: MessageSequence,
+    inputs: ModelInputs,
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
-    """Generate a response using Anthropic's API.
-
-    Yields text chunks (legacy string tokens are normalized by the
-    deployment layer); returns a ``ModelResponse``.
-    """
+    """Generate a response using Anthropic's API."""
     chunks: list = []
     try:
-      system_message, messages = self._convert_sequence(sequence)
+      if not isinstance(inputs, MessageSequence):
+        raise TypeError("AnthropicModel expects a MessageSequence input")
+      system_message, messages = self._convert_sequence(inputs)
 
       request_data = {
         "model": self.model_name,
@@ -117,7 +117,13 @@ class AnthropicModel(APIModel):
 
   def _convert_sequence(self, sequence: MessageSequence) -> tuple:
     """Convert a MessageSequence to Anthropic messages format."""
-    return sequence.system or "", sequence.to_chat_dicts(include_system=False)
+    messages = []
+    for message in sequence.messages:
+      if message.speaker == MessageRole.USER and message.content:
+        messages.append({"role": "user", "content": message.content})
+      elif message.speaker == MessageRole.ASSISTANT and message.content:
+        messages.append({"role": "assistant", "content": message.content})
+    return sequence.system or "", messages
 
   def _handle_streaming_response(self, request_data: Dict[str, Any]) -> Generator[str, None, str]:
     """Handle streaming response from Anthropic API. Yields tokens, returns full response."""

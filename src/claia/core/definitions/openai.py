@@ -19,11 +19,11 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from ..enums.data import ArtifactType, SequenceKind
+from ..enums.data import ArtifactType
 from ..modality import Modality
+from claia.core.data.models.conversation.message_sequence import MessageSequence
 
-_TEXT_IMAGE = [ArtifactType.TEXT, ArtifactType.IMAGE]
-_MESSAGE = SequenceKind.MESSAGE
+_CHAT = [ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence]
 
 
 logger = logging.getLogger(__name__)
@@ -52,8 +52,7 @@ class OpenAIDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"openai": "gpt-5.5", "openrouter": "openai/gpt-5.5"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_MESSAGE,
+        supported_inputs=_CHAT,
       ),
 
       # ----------------------------------------------------------------
@@ -73,8 +72,7 @@ class OpenAIDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"openai": "gpt-5.4-2026-03-05", "openrouter": "openai/gpt-5.4"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_MESSAGE,
+        supported_inputs=_CHAT,
       ),
 
       "gpt-5.4-mini": ModelDefinition(
@@ -91,8 +89,7 @@ class OpenAIDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"openai": "gpt-5.4-mini-2026-03-17", "openrouter": "openai/gpt-5.4-mini"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_MESSAGE,
+        supported_inputs=_CHAT,
       ),
 
       "gpt-5.4-nano": ModelDefinition(
@@ -109,8 +106,7 @@ class OpenAIDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"openai": "gpt-5.4-nano-2026-03-17", "openrouter": "openai/gpt-5.4-nano"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_MESSAGE,
+        supported_inputs=_CHAT,
       ),
 
       # ----------------------------------------------------------------
@@ -130,8 +126,7 @@ class OpenAIDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"openai": "gpt-5-2025-08-07", "openrouter": "openai/gpt-5"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_MESSAGE,
+        supported_inputs=_CHAT,
       ),
 
       # ----------------------------------------------------------------
@@ -151,8 +146,7 @@ class OpenAIDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"openai": "gpt-4o", "openrouter": "openai/gpt-4o"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_MESSAGE,
+        supported_inputs=_CHAT,
       ),
 
       "gpt-4o-mini": ModelDefinition(
@@ -169,7 +163,6 @@ class OpenAIDefinitionsPlugin(BaseDefinitionProvider):
         identifiers={"openai": "gpt-4o-mini", "openrouter": "openai/gpt-4o-mini"},
         input_modalities=[Modality.TEXT, Modality.IMAGE],
         output_modalities=[Modality.TEXT],
-        supported_artifacts=_TEXT_IMAGE,
-        sequence_kind=_MESSAGE,
+        supported_inputs=_CHAT,
       ),
     }

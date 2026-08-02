@@ -9,21 +9,21 @@ lives in the corresponding architecture plugin.
 Definition plugins return a dict of ``{model_name: ModelDefinition}``
 which the framework merges across all installed providers.
 
-``supported_artifacts`` / ``sequence_kind`` are the model IO contract
-used by ``BaseDeployment.translate``. Coarse ``Modality`` lists remain
-for application-level filtering.
+``supported_inputs`` is the model IO contract used by
+``BaseDeployment.translate``. Entries are ``ArtifactType`` values and/or
+complex types (``MessageSequence``, ``MessageSequenceOrdered``).
 
 ``tag_overrides`` lets a definition swap the global default
 ``TagSpec`` for one or more ``TagType`` values when this model emits
-non-default delimiter strings (e.g., a model that uses
-``<tool_call>``/``</tool_call>`` instead of ``[TOOL_CALL]``).
-Resolution happens via ``claia.core.parser.resolve_tag_specs``.
+non-default delimiter strings.
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from __future__ import annotations
 
-from ..enums.data import ArtifactType, SequenceKind
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Sequence, Type
+
+from ..enums.data import ArtifactType
 from ..modality import Modality
 from ..parser.types import TagSpec, TagType
 
@@ -47,27 +47,19 @@ def artifacts_from_modalities(modalities: Optional[List[Modality]]) -> List[Arti
   return out or [ArtifactType.TEXT]
 
 
+def default_supported_inputs() -> List[Any]:
+  """Default chat contract: text artifacts shaped as a message sequence."""
+  from claia.core.data.models.conversation.message_sequence import MessageSequence
+  return [ArtifactType.TEXT, MessageSequence]
+
+
 @dataclass
 class ModelDefinition:
   """Metadata describing a single model.
 
-  Most fields default to ``None`` so that providers can contribute
-  partial definitions; the framework merges definitions across
-  providers, preferring later non-None values.
-
-  ``supported_artifacts`` lists native ``ArtifactType`` values the
-  model can ingest after deployment translation. ``sequence_kind``
-  selects how the active thread is shaped (flat / message / ordered).
-
-  ``input_modalities`` / ``output_modalities`` remain for coarse
-  application filtering; prefer ``supported_artifacts`` at the
-  deployment → model boundary.
-
-  ``tag_overrides`` is a per-``TagType`` replacement map for the
-  global default ``TagSpec`` registry. ``None`` (the default) means
-  the model uses the global defaults for every tag type. Entries in
-  the map fully replace the corresponding default; there is no
-  field-level merging within a ``TagSpec`` (see plan §3.7).
+  ``supported_inputs`` lists what the model accepts after deployment
+  translation: ``ArtifactType`` values and optional complex types
+  (``MessageSequence`` / ``MessageSequenceOrdered``).
   """
   title: Optional[str] = None
   aliases: Optional[List[str]] = None
@@ -87,15 +79,37 @@ class ModelDefinition:
   output_modalities: List[Modality] = field(
     default_factory=lambda: [Modality.TEXT]
   )
-  supported_artifacts: List[ArtifactType] = field(
-    default_factory=lambda: [ArtifactType.TEXT]
-  )
-  sequence_kind: SequenceKind = SequenceKind.MESSAGE
+  supported_inputs: List[Any] = field(default_factory=default_supported_inputs)
   tag_overrides: Optional[Dict[TagType, TagSpec]] = None
 
+  def artifact_types(self) -> List[ArtifactType]:
+    """ArtifactType entries from ``supported_inputs``."""
+    return [x for x in (self.supported_inputs or []) if isinstance(x, ArtifactType)]
+
+  def sequence_class(self) -> Optional[Type]:
+    """Preferred message-sequence class, if any.
+
+    ``MessageSequenceOrdered`` wins when both sequence types are listed.
+    """
+    from claia.core.data.models.conversation.message_sequence import (
+      MessageSequence,
+      MessageSequenceOrdered,
+    )
+    inputs = self.supported_inputs or []
+    if MessageSequenceOrdered in inputs:
+      return MessageSequenceOrdered
+    if MessageSequence in inputs:
+      return MessageSequence
+    return None
+
   def __post_init__(self) -> None:
-    # Expand default TEXT-only artifacts when modalities advertise more.
-    if self.supported_artifacts == [ArtifactType.TEXT] and self.input_modalities:
+    # Expand default TEXT-only artifact entries when modalities advertise more.
+    arts = self.artifact_types()
+    if arts == [ArtifactType.TEXT] and self.input_modalities:
       derived = artifacts_from_modalities(self.input_modalities)
       if derived != [ArtifactType.TEXT]:
-        self.supported_artifacts = derived
+        complex_types = [
+          x for x in (self.supported_inputs or [])
+          if not isinstance(x, ArtifactType)
+        ]
+        self.supported_inputs = [*derived, *complex_types]
