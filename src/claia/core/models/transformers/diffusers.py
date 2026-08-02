@@ -14,7 +14,6 @@ import torch
 from diffusers import DiffusionPipeline
 
 from claia.core.data import Conversation
-from claia.core.data.adapters import artifacts_to_conversation
 from claia.core.data.artifacts import BaseArtifact
 from claia.core.data.chunks import BaseChunk, ImageChunk, TextChunk
 from claia.core.data.response import ModelResponse
@@ -102,7 +101,7 @@ class DiffusersModel(LocalModel):
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate one or more images from the latest user prompt."""
-    conversation = artifacts_to_conversation(artifacts)
+    conversation = Conversation.from_artifacts(artifacts)
     chunks: list = []
     if not self.loaded:
       self.load()

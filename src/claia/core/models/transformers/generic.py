@@ -14,7 +14,6 @@ import torch
 
 # Internal dependencies
 from claia.core.data import Conversation
-from claia.core.data.adapters import artifacts_to_conversation
 from claia.core.data.artifacts import BaseArtifact
 from claia.core.data.chunks import BaseChunk, TextChunk
 from claia.core.data.response import ModelResponse
@@ -87,7 +86,7 @@ class GenericTransformerModel(LocalModel):
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate a response using the transformer model."""
-    conversation = artifacts_to_conversation(artifacts)
+    conversation = Conversation.from_artifacts(artifacts)
     chunks: list = []
     if not self.loaded:
       self.load()

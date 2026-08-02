@@ -7,7 +7,6 @@ import sys
 import types
 
 from claia.core.data import Conversation
-from claia.core.data.adapters import conversation_to_artifacts
 from claia.core.data.chunks import AudioChunk, TextChunk
 from claia.core.enums.conversation import MessageRole
 
@@ -79,7 +78,7 @@ def test_local_tts_model_yields_text_and_audio_chunks(monkeypatch):
   )
 
   chunks = list(model.generate(
-    conversation_to_artifacts(_conversation()),
+    _conversation().to_artifacts(),
     language="English",
     reference_audio_path="/tmp/ref.wav",
     response_format="wav",
@@ -112,7 +111,7 @@ def test_local_tts_model_allows_prompt_override(monkeypatch):
   model = tts.LocalTTSModel("example/tts", defer_loading=True)
 
   chunks = list(model.generate(
-    conversation_to_artifacts(_conversation()),
+    _conversation().to_artifacts(),
     prompt="Override text.",
     reference_audio_path="/tmp/ref.wav",
   ))
@@ -126,7 +125,7 @@ def test_local_tts_model_explains_qwen_reference_audio_requirement(monkeypatch):
   tts = _import_tts_module(monkeypatch)
   model = tts.LocalTTSModel("Qwen/Qwen3-TTS-12Hz-0.6B-Base", defer_loading=True)
 
-  chunks = list(model.generate(conversation_to_artifacts(_conversation())))
+  chunks = list(model.generate(_conversation().to_artifacts()))
 
   assert isinstance(chunks[0], TextChunk)
   assert "reference_audio_path" in chunks[0].data

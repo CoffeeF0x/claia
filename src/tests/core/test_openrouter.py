@@ -4,7 +4,6 @@ Tests for the OpenRouter API architecture and definitions.
 
 from claia.core.architectures.openrouter import OpenRouterPlugin
 from claia.core.data import Conversation
-from claia.core.data.adapters import conversation_to_artifacts
 from claia.core.definitions.anthropic import AnthropicDefinitionsPlugin
 from claia.core.definitions.openai import OpenAIDefinitionsPlugin
 from claia.core.definitions.openrouter import OpenRouterDefinitionsPlugin
@@ -53,7 +52,7 @@ def test_openrouter_model_builds_non_streaming_request():
   )
 
   chunks = list(model.generate(
-    conversation_to_artifacts(_conversation()),
+    _conversation().to_artifacts(),
     stream=False,
     max_tokens=25,
     temperature=0,
@@ -84,7 +83,7 @@ def test_openrouter_model_streams_deltas():
   model = RecordingOpenRouterModel("anthropic/claude-sonnet-4.5", response=response)
 
   chunks = list(model.generate(
-    conversation_to_artifacts(_conversation()),
+    _conversation().to_artifacts(),
     stream=True,
     max_tokens=25,
   ))
@@ -102,7 +101,7 @@ def test_openrouter_model_surfaces_api_errors():
   })
   model = RecordingOpenRouterModel("bad/model", response=response)
 
-  chunks = list(model.generate(conversation_to_artifacts(_conversation()), stream=False))
+  chunks = list(model.generate(_conversation().to_artifacts(), stream=False))
 
   assert [c.data for c in chunks] == ["OpenRouter error (invalid_model): Unknown model"]
 

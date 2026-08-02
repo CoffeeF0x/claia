@@ -12,7 +12,6 @@ import logging
 from typing import Any, Dict, Generator, List, Optional, Sequence, Tuple
 
 from claia.core.data import Conversation
-from claia.core.data.adapters import artifacts_to_conversation
 from claia.core.data.artifacts import BaseArtifact
 from claia.core.data.chunks import AudioChunk, BaseChunk, TextChunk
 from claia.core.data.response import ModelResponse
@@ -74,7 +73,7 @@ class LocalTTSModel(LocalModel):
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate speech audio from the latest user text or a prompt override."""
-    conversation = artifacts_to_conversation(artifacts)
+    conversation = Conversation.from_artifacts(artifacts)
     chunks: list = []
     if not self.loaded:
       self.load()

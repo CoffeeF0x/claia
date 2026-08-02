@@ -20,7 +20,6 @@ from typing import Dict, Any, Optional, Generator, Sequence
 
 # Internal dependencies
 from claia.core.data import Conversation
-from claia.core.data.adapters import artifacts_to_conversation
 from claia.core.data.artifacts import BaseArtifact
 from claia.core.data.chunks import BaseChunk, TextChunk
 from claia.core.data.response import ModelResponse
@@ -54,7 +53,7 @@ class OpenAIModel(APIModel):
 
     Yields ``TextChunk`` tokens; returns a ``ModelResponse``.
     """
-    conversation = artifacts_to_conversation(artifacts)
+    conversation = Conversation.from_artifacts(artifacts)
     chunks = []
     try:
       instructions, input_messages = self._convert_conversation(conversation)

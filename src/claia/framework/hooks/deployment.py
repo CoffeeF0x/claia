@@ -34,9 +34,9 @@ class DeploymentHooks:
   ) -> Iterator[BaseChunk]:
     """Deploy (if needed) and yield ``BaseChunk`` items from the model.
 
-    ``init_kwargs`` feed the model constructor; ``runtime_kwargs`` feed
-    ``model.generate``. Both are pre-filtered by ``ParamSpec`` scope at
-    the registry boundary.
+    Default implementation lives on ``BaseDeployment.run``. Subclasses
+    typically only override ``create_model``. ``init_kwargs`` feed the
+    model constructor; ``runtime_kwargs`` feed ``model.generate``.
     """
 
 

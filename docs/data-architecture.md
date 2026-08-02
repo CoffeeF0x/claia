@@ -24,8 +24,8 @@ claia/core/
     artifacts/         # durable IO payloads (in)
     chunks/            # streamed content pieces (out)
     response.py        # ModelResponse
-    adapters.py        # Conversation <-> artifacts
     models/            # Conversation, Message, Prompt (not IO artifacts)
+                       #   Conversation.to_artifacts() / from_artifacts()
 ```
 
 ---
@@ -127,7 +127,7 @@ Returned by `BaseModel.generate`. Carries content plus status:
 | `error` | `Any \| None` | Optional error info |
 | `metadata` | `dict` | Usage, finish_reason, … |
 
-Streaming models may yield `BaseChunk` items and `return` a `ModelResponse` via the generator return value. Deployments flatten a `Conversation` to artifacts via `conversation_to_artifacts` before calling the model.
+Streaming models may yield `BaseChunk` items and `return` a `ModelResponse` via the generator return value. Deployments flatten a `Conversation` via `conversation.to_artifacts()` before calling the model (`BaseDeployment.run` / `stream_generate`).
 
 ```python
 from claia.core.data import ModelResponse, TextChunk

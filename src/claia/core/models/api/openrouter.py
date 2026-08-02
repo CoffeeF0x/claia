@@ -14,7 +14,6 @@ from typing import Any, Dict, Generator, List, Optional, Sequence
 # Internal dependencies
 from ..base import APIModel
 from claia.core.data import Conversation
-from claia.core.data.adapters import artifacts_to_conversation
 from claia.core.data.artifacts import BaseArtifact
 from claia.core.data.chunks import BaseChunk, TextChunk
 from claia.core.data.response import ModelResponse
@@ -83,7 +82,7 @@ class OpenRouterModel(APIModel):
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate a response using the OpenRouter API."""
-    conversation = artifacts_to_conversation(artifacts)
+    conversation = Conversation.from_artifacts(artifacts)
     chunks: list = []
     try:
       request_data = {

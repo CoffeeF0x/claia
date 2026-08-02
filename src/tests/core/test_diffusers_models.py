@@ -7,7 +7,6 @@ import sys
 import types
 
 from claia.core.data import Conversation
-from claia.core.data.adapters import conversation_to_artifacts
 from claia.core.data.chunks import ImageChunk, TextChunk
 from claia.core.data.response import ModelResponse
 from claia.core.deployments.local import LocalDeploymentPlugin
@@ -99,7 +98,7 @@ def test_diffusers_model_yields_text_and_image_chunks(monkeypatch):
   )
 
   chunks = list(model.generate(
-    conversation_to_artifacts(_conversation()),
+    _conversation().to_artifacts(),
     height=32,
     width=64,
     num_inference_steps=7,
@@ -138,7 +137,7 @@ def test_diffusers_model_allows_prompt_override(monkeypatch):
   model = diffusers.DiffusersModel("example/image-model", defer_loading=True)
 
   chunks = list(model.generate(
-    conversation_to_artifacts(_conversation()),
+    _conversation().to_artifacts(),
     prompt="Override prompt",
   ))
 

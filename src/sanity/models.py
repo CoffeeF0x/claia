@@ -5,8 +5,6 @@ are validated. Keep this file minimal and disposable.
 """
 
 from claia.core.data import Conversation, ModelResponse, TextChunk
-from claia.core.data.adapters import conversation_to_artifacts
-from claia.core.data.generate import drain_generate
 from claia.core.deployments.dummy import DummyDeploymentPlugin
 from claia.core.enums.conversation import MessageRole
 from claia.core.models.dummy import DummyModel
@@ -34,7 +32,7 @@ def run_model():
   model = MODULE(model_name="dummy-model")
   conversation = Conversation(title="sanity-models")
   conversation.add_message(MessageRole.USER, "Tell me a story.")
-  artifacts = conversation_to_artifacts(conversation)
+  artifacts = conversation.to_artifacts()
   message_count_before = len(conversation.messages)
 
   print(f"model: {model.model_name} ({type(model).__name__})")
@@ -68,12 +66,6 @@ def run_deployment():
 
   print(f"deployment: {info.name} - {info.description}")
 
-  chunks = list(drain_generate(
-    MODULE(model_name="dummy-model"),
-    conversation_to_artifacts(conversation),
-    {"chars_per_second": 1_000_000, "chars_per_chunk": 10_000},
-  ))
-  # Also exercise deployment.run for the full path
   deploy_chunks = list(deployment.run(
     model_name="dummy-model",
     model_class=MODULE,

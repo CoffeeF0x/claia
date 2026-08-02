@@ -8,7 +8,6 @@ import types
 from queue import Queue
 
 from claia.core.data import Conversation
-from claia.core.data.adapters import conversation_to_artifacts
 from claia.core.enums.conversation import MessageRole
 
 
@@ -116,7 +115,7 @@ def test_generic_transformer_streams_text_deltas(monkeypatch):
   model = _model(monkeypatch)
 
   chunks = list(model.generate(
-    conversation_to_artifacts(_conversation()),
+    _conversation().to_artifacts(),
     stream=True,
     max_tokens=10,
   ))
@@ -128,7 +127,7 @@ def test_generic_transformer_omits_unset_top_k(monkeypatch):
   model = _model(monkeypatch)
 
   chunks = list(model.generate(
-    conversation_to_artifacts(_conversation()),
+    _conversation().to_artifacts(),
     stream=False,
     top_k=None,
   ))
