@@ -35,6 +35,12 @@ class RecordingOpenRouterModel(OpenRouterModel):
     return self.response
 
 
+def _sequence(conversation):
+  from claia.core.deployments.dummy import DummyDeploymentPlugin
+  from claia.core.definitions.model_definition import ModelDefinition
+  return DummyDeploymentPlugin().translate(conversation, ModelDefinition())
+
+
 def _conversation():
   conversation = Conversation(title="T", prompt={"system": "Be brief"})
   conversation.add_message(MessageRole.USER, "Hello")
@@ -52,7 +58,7 @@ def test_openrouter_model_builds_non_streaming_request():
   )
 
   chunks = list(model.generate(
-    _conversation().to_artifacts(),
+    _sequence(_conversation()),
     stream=False,
     max_tokens=25,
     temperature=0,
@@ -83,7 +89,7 @@ def test_openrouter_model_streams_deltas():
   model = RecordingOpenRouterModel("anthropic/claude-sonnet-4.5", response=response)
 
   chunks = list(model.generate(
-    _conversation().to_artifacts(),
+    _sequence(_conversation()),
     stream=True,
     max_tokens=25,
   ))
@@ -101,7 +107,7 @@ def test_openrouter_model_surfaces_api_errors():
   })
   model = RecordingOpenRouterModel("bad/model", response=response)
 
-  chunks = list(model.generate(_conversation().to_artifacts(), stream=False))
+  chunks = list(model.generate(_sequence(_conversation()), stream=False))
 
   assert [c.data for c in chunks] == ["OpenRouter error (invalid_model): Unknown model"]
 

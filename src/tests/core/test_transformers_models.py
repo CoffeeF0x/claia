@@ -105,6 +105,12 @@ def _model(monkeypatch):
   return model
 
 
+def _sequence(conversation):
+  from claia.core.deployments.dummy import DummyDeploymentPlugin
+  from claia.core.definitions.model_definition import ModelDefinition
+  return DummyDeploymentPlugin().translate(conversation, ModelDefinition())
+
+
 def _conversation():
   conversation = Conversation(title="T")
   conversation.add_message(MessageRole.USER, "Say hi")
@@ -115,7 +121,7 @@ def test_generic_transformer_streams_text_deltas(monkeypatch):
   model = _model(monkeypatch)
 
   chunks = list(model.generate(
-    _conversation().to_artifacts(),
+    _sequence(_conversation()),
     stream=True,
     max_tokens=10,
   ))
@@ -127,7 +133,7 @@ def test_generic_transformer_omits_unset_top_k(monkeypatch):
   model = _model(monkeypatch)
 
   chunks = list(model.generate(
-    _conversation().to_artifacts(),
+    _sequence(_conversation()),
     stream=False,
     top_k=None,
   ))

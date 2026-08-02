@@ -14,6 +14,7 @@ from .artifacts import (
   FileArtifact,
   LinkArtifact,
   RawArtifact,
+  ToolArtifact,
 )
 from .chunks import (
   BaseChunk,
@@ -27,6 +28,9 @@ from .models import (
   Prompt,
   Conversation,
   Message,
+  MessageSequence,
+  OrderedMessageSequence,
+  SequenceMessage,
 )
 from .events import DomainEvent, EventType
 from . import utils
@@ -40,6 +44,7 @@ __all__ = [
   "FileArtifact",
   "LinkArtifact",
   "RawArtifact",
+  "ToolArtifact",
   "BaseChunk",
   "TextChunk",
   "ImageChunk",
@@ -49,6 +54,9 @@ __all__ = [
   "Prompt",
   "Conversation",
   "Message",
+  "MessageSequence",
+  "OrderedMessageSequence",
+  "SequenceMessage",
   "DomainEvent",
   "EventType",
   "utils",

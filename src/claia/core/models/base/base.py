@@ -10,16 +10,16 @@ contract for a model's generation knobs (``temperature``,
 specs before calling ``generate``, so concrete models just consume the
 kwargs that arrive.
 
-Contract: artifacts in, ``ModelResponse`` out. Implementations may yield
-``BaseChunk`` items while streaming and return the filled
+Contract: ``MessageSequence`` in, ``ModelResponse`` out. Implementations
+may yield ``BaseChunk`` items while streaming and return the filled
 ``ModelResponse`` via the generator's return value.
 """
 
 from abc import ABC, abstractmethod
-from typing import Generator, Sequence, Union
+from typing import Generator, Union
 
-from claia.core.data.artifacts import BaseArtifact
 from claia.core.data.chunks import BaseChunk
+from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
 
 
@@ -35,16 +35,16 @@ class BaseModel(ABC):
   @abstractmethod
   def generate(
     self,
-    artifacts: Sequence[BaseArtifact],
+    sequence: MessageSequence,
     **kwargs,
   ) -> Union[ModelResponse, Generator[BaseChunk, None, ModelResponse]]:
-    """Generate a response from an ordered list of input artifacts.
+    """Generate a response from a model-ready message sequence.
 
     Prefer returning a ``ModelResponse`` directly. Streaming models may
     instead yield ``BaseChunk`` items and ``return`` a ``ModelResponse``
     when the generator is exhausted (StopIteration value).
 
-    The model must NOT mutate the input artifacts; assembly into
+    The model must NOT mutate the input sequence; assembly into
     conversation state is the deployment / host's responsibility.
 
     ``kwargs`` contains the RUNTIME parameters already filtered and

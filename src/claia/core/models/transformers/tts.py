@@ -9,13 +9,11 @@ small backend adapters.
 import io
 import importlib
 import logging
-from typing import Any, Dict, Generator, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
-from claia.core.data import Conversation
-from claia.core.data.artifacts import BaseArtifact
 from claia.core.data.chunks import AudioChunk, BaseChunk, TextChunk
+from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
-from claia.core.enums.conversation import MessageRole
 from claia.core.enums.data import AudioFormat
 from ..base import LocalModel
 
@@ -69,17 +67,16 @@ class LocalTTSModel(LocalModel):
 
   def generate(
     self,
-    artifacts: Sequence[BaseArtifact],
+    sequence: MessageSequence,
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate speech audio from the latest user text or a prompt override."""
-    conversation = Conversation.from_artifacts(artifacts)
     chunks: list = []
     if not self.loaded:
       self.load()
 
     try:
-      text = self._resolve_text(conversation, kwargs.get("prompt") or kwargs.get("input"))
+      text = self._resolve_text(sequence, kwargs.get("prompt") or kwargs.get("input"))
       response_format = self._normalize_response_format(kwargs.get("response_format"))
       backend_kwargs = dict(kwargs)
       backend_kwargs.pop("response_format", None)
@@ -139,18 +136,15 @@ class LocalTTSModel(LocalModel):
       )
     raise ValueError(f"Unsupported tts_backend '{backend_name}'.")
 
-  def _resolve_text(self, conversation: Conversation, prompt_override: Optional[str]) -> str:
+  def _resolve_text(self, sequence: MessageSequence, prompt_override: Optional[str]) -> str:
     """Resolve synthesis text from explicit kwargs or the latest user message."""
     if prompt_override:
       return prompt_override
 
-    user_messages = [
-      message for message in conversation.get_thread()
-      if message.speaker == MessageRole.USER and message.content
-    ]
-    if not user_messages:
+    text = sequence.latest_user_text()
+    if not text:
       raise ValueError("No user text found for speech generation.")
-    return user_messages[-1].content
+    return text
 
   def _normalize_response_format(self, response_format: Optional[str]) -> str:
     """Normalize response format for audio metadata and encoding."""

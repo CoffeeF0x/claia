@@ -9,7 +9,7 @@ import logging
 from typing import Any, Dict, Optional
 
 # Internal dependencies
-from claia.core.data import Conversation
+from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.enums.conversation import MessageRole
 from .generic import GenericTransformerModel
 
@@ -36,22 +36,22 @@ class Gemma3Model(GenericTransformerModel):
   def __init__(self, model_name: str, model_path: str, defer_loading: bool = False, device: str = "cpu", huggingface_api_token: Optional[str] = None):
     super().__init__(model_name, model_path, defer_loading, device, huggingface_api_token)
 
-  def _convert_conversation_to_prompt(self, conversation: Conversation) -> str:
-    """Convert a Conversation object to Gemma3-specific prompt format."""
+  def _convert_sequence_to_prompt(self, sequence: MessageSequence) -> str:
+    """Convert a MessageSequence to Gemma3-specific prompt format."""
     prompt_parts = []
 
-    # Gemma3 uses specific formatting tokens
-    for message in conversation.get_thread():
-      if message.speaker == MessageRole.SYSTEM:
+    if sequence.system:
+      prompt_parts.append(f"<start_of_turn>system\n{sequence.system}<end_of_turn>")
+
+    for message in sequence.messages:
+      if message.role == MessageRole.SYSTEM:
         prompt_parts.append(f"<start_of_turn>system\n{message.content}<end_of_turn>")
-      elif message.speaker == MessageRole.USER:
+      elif message.role == MessageRole.USER:
         prompt_parts.append(f"<start_of_turn>user\n{message.content}<end_of_turn>")
-      elif message.speaker == MessageRole.ASSISTANT:
+      elif message.role == MessageRole.ASSISTANT:
         prompt_parts.append(f"<start_of_turn>model\n{message.content}<end_of_turn>")
 
-    # Add model turn for generation
     prompt_parts.append("<start_of_turn>model\n")
-
     return "".join(prompt_parts)
 
   def load(self) -> None:

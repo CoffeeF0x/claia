@@ -8,16 +8,14 @@ using the Hugging Face transformers library.
 import logging
 from queue import Empty
 from threading import Thread
-from typing import Any, Dict, List, Optional, Generator, Sequence
+from typing import Any, Dict, List, Optional, Generator
 from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
 import torch
 
 # Internal dependencies
-from claia.core.data import Conversation
-from claia.core.data.artifacts import BaseArtifact
 from claia.core.data.chunks import BaseChunk, TextChunk
+from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
-from claia.core.enums.conversation import MessageRole
 from ..base import LocalModel
 
 
@@ -82,17 +80,16 @@ class GenericTransformerModel(LocalModel):
 
   def generate(
     self,
-    artifacts: Sequence[BaseArtifact],
+    sequence: MessageSequence,
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate a response using the transformer model."""
-    conversation = Conversation.from_artifacts(artifacts)
     chunks: list = []
     if not self.loaded:
       self.load()
 
     try:
-      prompt = self._convert_conversation_to_prompt(conversation)
+      prompt = self._convert_sequence_to_prompt(sequence)
       inputs = self._tokenize_prompt(prompt)
 
       if kwargs.get("stream", False):
@@ -222,22 +219,9 @@ class GenericTransformerModel(LocalModel):
     """Post-process the complete model response."""
     return response.strip()
 
-  def _convert_conversation_to_prompt(self, conversation: Conversation) -> str:
-    """Convert a Conversation object to a text prompt."""
-    prompt_parts = []
-
-    for message in conversation.get_thread():
-      if message.speaker == MessageRole.SYSTEM:
-        prompt_parts.append(f"System: {message.content}")
-      elif message.speaker == MessageRole.USER:
-        prompt_parts.append(f"User: {message.content}")
-      elif message.speaker == MessageRole.ASSISTANT:
-        prompt_parts.append(f"Assistant: {message.content}")
-
-    # Add assistant prompt for generation
-    prompt_parts.append("Assistant:")
-
-    return "\n".join(prompt_parts)
+  def _convert_sequence_to_prompt(self, sequence: MessageSequence) -> str:
+    """Convert a MessageSequence to a text prompt."""
+    return sequence.to_prompt_lines(include_system=True, assistant_suffix="Assistant:")
 
   def tokenize(self, text: str) -> List[int]:
     """Tokenize the input text."""

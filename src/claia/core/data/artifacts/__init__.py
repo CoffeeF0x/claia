@@ -7,6 +7,7 @@ from .audio import AudioArtifact
 from .file import FileArtifact
 from .link import LinkArtifact
 from .raw import RawArtifact
+from .tool import ToolArtifact
 
 __all__ = [
   "BaseArtifact",
@@ -16,4 +17,5 @@ __all__ = [
   "FileArtifact",
   "LinkArtifact",
   "RawArtifact",
+  "ToolArtifact",
 ]

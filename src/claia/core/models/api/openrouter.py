@@ -9,15 +9,13 @@ true and yields one complete text response otherwise.
 
 import json
 import logging
-from typing import Any, Dict, Generator, List, Optional, Sequence
+from typing import Any, Dict, Generator, List, Optional
 
 # Internal dependencies
 from ..base import APIModel
-from claia.core.data import Conversation
-from claia.core.data.artifacts import BaseArtifact
 from claia.core.data.chunks import BaseChunk, TextChunk
+from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
-from claia.core.enums.conversation import MessageRole
 
 
 ########################################################################
@@ -52,42 +50,23 @@ class OpenRouterModel(APIModel):
     if openrouter_api_token:
       self.set_api_key(openrouter_api_token)
 
-  def _format_messages(self, conversation: Conversation) -> List[Dict[str, Any]]:
-    """Format conversation messages for the OpenRouter API."""
-    messages = []
-
-    system_prompt = conversation.get_system_prompt()
-    if system_prompt:
-      messages.append({
-        "role": "system",
-        "content": system_prompt
-      })
-
-    for message in conversation.get_thread():
-      if message.speaker not in (MessageRole.USER, MessageRole.ASSISTANT):
-        continue
-      if not message.content:
-        continue
-      messages.append({
-        "role": message.speaker.value,
-        "content": message.content
-      })
-
+  def _format_messages(self, sequence: MessageSequence) -> List[Dict[str, Any]]:
+    """Format a message sequence for the OpenRouter API."""
+    messages = sequence.to_chat_dicts(include_system=True)
     logger.debug(f"Sending {len(messages)} messages to OpenRouter API")
     return messages
 
   def generate(
     self,
-    artifacts: Sequence[BaseArtifact],
+    sequence: MessageSequence,
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate a response using the OpenRouter API."""
-    conversation = Conversation.from_artifacts(artifacts)
     chunks: list = []
     try:
       request_data = {
         "model": self.model_name,
-        "messages": self._format_messages(conversation),
+        "messages": self._format_messages(sequence),
       }
 
       for param in (

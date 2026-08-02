@@ -23,7 +23,7 @@ operations. Persistence is handled by host runtimes (CLI, API, workers)
 using emitted domain events and/or direct serialization.
 """
 
-from typing import Dict, Any, Optional, List, Union, Callable, Sequence, TYPE_CHECKING
+from typing import Dict, Any, Optional, List, Union, Callable
 import logging
 import json
 import time
@@ -32,11 +32,7 @@ import uuid
 from ...events import DomainEvent, EventType
 from .message import Message
 from ....enums.conversation import MessageRole
-from ....enums.data import TextFormat
 from ....parser.types import TagType
-
-if TYPE_CHECKING:
-    from ...artifacts import BaseArtifact
 
 
 DEFAULT_CONVERSATION_TITLE = "New Conversation"
@@ -307,73 +303,17 @@ class Conversation:
         self.updated_at = time.time()
 
     # ---------------------------------------------------------------------- #
-    # Artifact IO                                                              #
+    # Active-thread export                                                     #
     # ---------------------------------------------------------------------- #
 
-    def to_artifacts(self) -> List["BaseArtifact"]:
-        """Flatten the active thread into an ordered artifact list for models.
+    def export_thread(self, include_utility: bool = False) -> List[Message]:
+        """Export the active message view (structural, not model-ready).
 
-        System prompt (if present) becomes the first text artifact. Each
-        message on the active thread becomes a text artifact with speaker
-        recorded in metadata.
+        Returns ordered messages on the active branch with their artifact
+        lists intact. Deployments translate this into a ``MessageSequence``
+        using the resolved model's supported artifact types.
         """
-        from ...artifacts import TextArtifact
-
-        artifacts: List["BaseArtifact"] = []
-
-        system = (self.prompt or {}).get("system") or ""
-        if system.strip():
-            artifacts.append(TextArtifact.from_content(
-                system,
-                name="system",
-                format=TextFormat.PLAIN,
-                metadata={"role": MessageRole.SYSTEM.value},
-            ))
-
-        for message in self.get_thread():
-            artifacts.append(TextArtifact.from_content(
-                message.content or "",
-                name=f"message-{message.message_id[:8]}",
-                format=TextFormat.PLAIN,
-                metadata={
-                    "role": (
-                        message.speaker.value
-                        if hasattr(message.speaker, "value")
-                        else str(message.speaker)
-                    ),
-                    "message_id": message.message_id,
-                    "file_ids": list(message.file_ids or []),
-                },
-            ))
-
-        return artifacts
-
-    @classmethod
-    def from_artifacts(cls, artifacts: Sequence["BaseArtifact"]) -> "Conversation":
-        """Rebuild a Conversation from text artifacts (role in metadata).
-
-        Used by model implementations that still format provider payloads
-        from a conversation tree. Non-text artifacts are skipped for now.
-        """
-        from ...artifacts import TextArtifact
-
-        conversation = cls(title="from-artifacts")
-        system_parts = []
-        for artifact in artifacts:
-            if not isinstance(artifact, TextArtifact):
-                continue
-            role = (artifact.metadata or {}).get("role", MessageRole.USER.value)
-            if role == MessageRole.SYSTEM.value:
-                system_parts.append(artifact.content)
-            else:
-                try:
-                    speaker = MessageRole(role)
-                except ValueError:
-                    speaker = MessageRole.USER
-                conversation.add_message(speaker, artifact.content)
-        if system_parts:
-            conversation.prompt = {"system": "\n".join(system_parts)}
-        return conversation
+        return self.get_thread(include_utility=include_utility)
 
     # ---------------------------------------------------------------------- #
     # Tree traversal                                                           #

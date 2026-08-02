@@ -16,14 +16,12 @@ Key differences from the old Chat Completions endpoint:
 
 import json
 import logging
-from typing import Dict, Any, Optional, Generator, Sequence
+from typing import Dict, Any, Optional, Generator
 
 # Internal dependencies
-from claia.core.data import Conversation
-from claia.core.data.artifacts import BaseArtifact
 from claia.core.data.chunks import BaseChunk, TextChunk
+from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
-from claia.core.enums.conversation import MessageRole
 from ..base import APIModel
 
 
@@ -46,17 +44,16 @@ class OpenAIModel(APIModel):
 
   def generate(
     self,
-    artifacts: Sequence[BaseArtifact],
+    sequence: MessageSequence,
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate a response using OpenAI's Responses API.
 
     Yields ``TextChunk`` tokens; returns a ``ModelResponse``.
     """
-    conversation = Conversation.from_artifacts(artifacts)
     chunks = []
     try:
-      instructions, input_messages = self._convert_conversation(conversation)
+      instructions, input_messages = self._convert_sequence(sequence)
 
       # Build base request — excluded fields are handled explicitly below.
       # n, stop, and top_k are Chat Completions params not supported by the
@@ -102,24 +99,13 @@ class OpenAIModel(APIModel):
       yield chunk
       return ModelResponse(chunks=chunks, complete=False, error=str(e))
 
-  def _convert_conversation(self, conversation: Conversation) -> tuple:
-    """Convert a Conversation to (instructions, input_messages) for the Responses API.
+  def _convert_sequence(self, sequence: MessageSequence) -> tuple:
+    """Convert a MessageSequence to (instructions, input_messages).
 
     The system prompt becomes the top-level `instructions` field.
     Only user and assistant turns are included in `input`.
     """
-    instructions = conversation.get_system_prompt() or None
-
-    input_messages = []
-    for message in conversation.get_thread():
-      if message.speaker not in (MessageRole.USER, MessageRole.ASSISTANT):
-        continue
-      if not message.content:
-        continue
-      role = "user" if message.speaker == MessageRole.USER else "assistant"
-      input_messages.append({"role": role, "content": message.content})
-
-    return instructions, input_messages
+    return sequence.system, sequence.to_chat_dicts(include_system=False)
 
   def _handle_streaming_response(self, request_data: Dict[str, Any]) -> Generator[str, None, str]:
     """Handle streaming response from the Responses API. Yields tokens, returns full response.

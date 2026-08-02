@@ -83,6 +83,12 @@ def _import_diffusers_module(monkeypatch):
   return importlib.import_module("claia.core.models.transformers.diffusers")
 
 
+def _sequence(conversation):
+  from claia.core.deployments.dummy import DummyDeploymentPlugin
+  from claia.core.definitions.model_definition import ModelDefinition
+  return DummyDeploymentPlugin().translate(conversation, ModelDefinition())
+
+
 def _conversation():
   conversation = Conversation(title="T")
   conversation.add_message(MessageRole.USER, "A small fox in a library")
@@ -98,7 +104,7 @@ def test_diffusers_model_yields_text_and_image_chunks(monkeypatch):
   )
 
   chunks = list(model.generate(
-    _conversation().to_artifacts(),
+    _sequence(_conversation()),
     height=32,
     width=64,
     num_inference_steps=7,
@@ -137,7 +143,7 @@ def test_diffusers_model_allows_prompt_override(monkeypatch):
   model = diffusers.DiffusersModel("example/image-model", defer_loading=True)
 
   chunks = list(model.generate(
-    _conversation().to_artifacts(),
+    _sequence(_conversation()),
     prompt="Override prompt",
   ))
 
@@ -156,7 +162,7 @@ def test_local_deployment_passes_image_chunks_through():
     def __init__(self, model_name, model_path=None, defer_loading=False, device="cpu"):
       self.model_name = model_name
 
-    def generate(self, artifacts, **kwargs):
+    def generate(self, sequence, **kwargs):
       yield image_chunk
       return ModelResponse(chunks=[image_chunk], complete=True)
 

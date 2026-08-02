@@ -490,6 +490,7 @@ class Registry:
       cache=self.cache,
       init_kwargs=init_kwargs,
       runtime_kwargs=runtime_kwargs,
+      definition=model_def,
     )
 
   def run(
@@ -504,8 +505,8 @@ class Registry:
 
     Args:
         model_name: Model identifier (e.g. "gpt-4")
-        conversation: Conversation to process (flattened to artifacts
-          before the model is called)
+        conversation: Conversation to process (translated to a
+          MessageSequence by the deployment before the model is called)
         streaming: If True, returns an ``Iterator[BaseChunk]``.
                    If False (default), consumes the chunk stream and
                    returns a ``Result`` with the concatenated text.

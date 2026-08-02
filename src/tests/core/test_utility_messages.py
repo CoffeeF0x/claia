@@ -165,9 +165,16 @@ class TestMessageSerialization:
     assert msg.start_index is None
     assert msg.end_index is None
     assert msg.attributes == {}
-    # Re-serializing yields a dict that is a (subset-equal) match to
-    # the legacy form: the new optional fields stay absent.
-    assert msg.to_dict() == legacy
+    assert msg.content == "hello"
+    # Legacy content migrates onto a primary TextArtifact; optional
+    # Phase-3 fields stay absent on re-serialize.
+    data = msg.to_dict()
+    for key, value in legacy.items():
+      assert data[key] == value
+    assert "tag_type" not in data
+    assert "artifacts" in data
+    assert len(data["artifacts"]) == 1
+    assert data["artifacts"][0]["content"] == "hello"
 
 
 ########################################################################

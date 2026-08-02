@@ -8,16 +8,14 @@ goes in, typed image byte chunks come out.
 
 import io
 import logging
-from typing import Any, Dict, Generator, List, Optional, Sequence
+from typing import Any, Dict, Generator, List, Optional
 
 import torch
 from diffusers import DiffusionPipeline
 
-from claia.core.data import Conversation
-from claia.core.data.artifacts import BaseArtifact
 from claia.core.data.chunks import BaseChunk, ImageChunk, TextChunk
+from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
-from claia.core.enums.conversation import MessageRole
 from claia.core.enums.data import ImageFormat
 from ..base import LocalModel
 
@@ -97,17 +95,16 @@ class DiffusersModel(LocalModel):
 
   def generate(
     self,
-    artifacts: Sequence[BaseArtifact],
+    sequence: MessageSequence,
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate one or more images from the latest user prompt."""
-    conversation = Conversation.from_artifacts(artifacts)
     chunks: list = []
     if not self.loaded:
       self.load()
 
     try:
-      prompt = self._resolve_prompt(conversation, kwargs.get("prompt"))
+      prompt = self._resolve_prompt(sequence, kwargs.get("prompt"))
       pipeline_kwargs = self._build_pipeline_kwargs(prompt, kwargs)
 
       output = self.pipeline(**pipeline_kwargs)
@@ -186,18 +183,15 @@ class DiffusersModel(LocalModel):
       except Exception as e:
         logger.debug(f"Could not enable xformers memory efficient attention: {e}")
 
-  def _resolve_prompt(self, conversation: Conversation, prompt_override: Optional[str]) -> str:
+  def _resolve_prompt(self, sequence: MessageSequence, prompt_override: Optional[str]) -> str:
     """Resolve the prompt from explicit kwargs or the latest user message."""
     if prompt_override:
       return prompt_override
 
-    user_messages = [
-      message for message in conversation.get_thread()
-      if message.speaker == MessageRole.USER and message.content
-    ]
-    if not user_messages:
+    text = sequence.latest_user_text()
+    if not text:
       raise ValueError("No user prompt found for image generation.")
-    return user_messages[-1].content
+    return text
 
   def _build_pipeline_kwargs(self, prompt: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Translate Claia runtime kwargs into Diffusers pipeline kwargs."""

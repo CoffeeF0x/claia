@@ -1,5 +1,5 @@
 """
-Data-layer enums: IANA media types and per-category format subtypes.
+Data-layer enums: IANA media types, format subtypes, and artifact contracts.
 """
 
 from .media_type import MediaType
@@ -8,6 +8,8 @@ from .image import ImageFormat
 from .audio import AudioFormat
 from .video import VideoFormat
 from .application import ApplicationFormat
+from .artifact_type import ArtifactType
+from .sequence_kind import SequenceKind
 
 __all__ = [
   "MediaType",
@@ -16,4 +18,6 @@ __all__ = [
   "AudioFormat",
   "VideoFormat",
   "ApplicationFormat",
+  "ArtifactType",
+  "SequenceKind",
 ]

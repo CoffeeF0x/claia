@@ -4,7 +4,8 @@ import logging
 from typing import Dict, List, Optional
 
 from .base import BaseDefinitionProvider
-from .model_definition import ModelDefinition
+from .model_definition import ModelDefinition, artifacts_from_modalities
+from ..enums.data import SequenceKind
 from ..modality import Modality
 
 
@@ -22,8 +23,10 @@ def _definition(
   input_modalities: Optional[List[Modality]] = None,
   license: str = "Commercial",
   url: Optional[str] = None,
+  sequence_kind: SequenceKind = SequenceKind.MESSAGE,
 ) -> ModelDefinition:
   """Build a definition for a model primarily exposed through OpenRouter."""
+  modalities = input_modalities or [Modality.TEXT]
   return ModelDefinition(
     title=title,
     aliases=aliases,
@@ -36,8 +39,10 @@ def _definition(
     license=license,
     url=url or f"https://openrouter.ai/models/{provider_id}",
     identifiers={"openrouter": provider_id},
-    input_modalities=input_modalities or [Modality.TEXT],
+    input_modalities=modalities,
     output_modalities=[Modality.TEXT],
+    supported_artifacts=artifacts_from_modalities(modalities),
+    sequence_kind=sequence_kind,
   )
 
 

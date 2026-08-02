@@ -5,6 +5,7 @@ are validated. Keep this file minimal and disposable.
 """
 
 from claia.core.data import Conversation, ModelResponse, TextChunk
+from claia.core.definitions.model_definition import ModelDefinition
 from claia.core.deployments.dummy import DummyDeploymentPlugin
 from claia.core.enums.conversation import MessageRole
 from claia.core.models.dummy import DummyModel
@@ -32,16 +33,17 @@ def run_model():
   model = MODULE(model_name="dummy-model")
   conversation = Conversation(title="sanity-models")
   conversation.add_message(MessageRole.USER, "Tell me a story.")
-  artifacts = conversation.to_artifacts()
+  definition = ModelDefinition()
+  sequence = DummyDeploymentPlugin().translate(conversation, definition)
   message_count_before = len(conversation.messages)
 
   print(f"model: {model.model_name} ({type(model).__name__})")
   print(f"story length: {model.story_length} chars")
-  print(f"artifacts in: {len(artifacts)}")
+  print(f"sequence turns: {len(sequence)} (kind={sequence.kind.value})")
   print()
 
   chunks, response = drain(model.generate(
-    artifacts,
+    sequence,
     chars_per_second=1_000_000,
     chars_per_chunk=10_000,
   ))
@@ -58,7 +60,7 @@ def run_model():
 
 
 def run_deployment():
-  """Same path through DummyDeploymentPlugin (conversation → artifacts)."""
+  """Conversation → deployment.translate → generate."""
   deployment = DummyDeploymentPlugin()
   info = deployment.get_deployment_info()
   conversation = Conversation(title="sanity-models-deploy")
@@ -73,6 +75,7 @@ def run_deployment():
     cache={},
     init_kwargs={},
     runtime_kwargs={"chars_per_second": 1_000_000, "chars_per_chunk": 10_000},
+    definition=ModelDefinition(),
   ))
 
   preview = "".join(

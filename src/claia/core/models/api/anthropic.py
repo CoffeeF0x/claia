@@ -7,14 +7,12 @@ including support for streaming and non-streaming responses.
 
 import json
 import logging
-from typing import Dict, Any, Optional, Generator, Sequence
+from typing import Dict, Any, Optional, Generator
 
 # Internal dependencies
-from claia.core.data import Conversation
-from claia.core.data.artifacts import BaseArtifact
 from claia.core.data.chunks import BaseChunk
+from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.data.response import ModelResponse
-from claia.core.enums.conversation import MessageRole
 from ..base import APIModel
 
 
@@ -54,7 +52,7 @@ class AnthropicModel(APIModel):
 
   def generate(
     self,
-    artifacts: Sequence[BaseArtifact],
+    sequence: MessageSequence,
     **kwargs,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate a response using Anthropic's API.
@@ -62,10 +60,9 @@ class AnthropicModel(APIModel):
     Yields text chunks (legacy string tokens are normalized by the
     deployment layer); returns a ``ModelResponse``.
     """
-    conversation = Conversation.from_artifacts(artifacts)
     chunks: list = []
     try:
-      system_message, messages = self._convert_conversation_to_messages(conversation)
+      system_message, messages = self._convert_sequence(sequence)
 
       request_data = {
         "model": self.model_name,
@@ -118,24 +115,9 @@ class AnthropicModel(APIModel):
       yield chunk
       return ModelResponse(chunks=chunks, complete=False, error=str(e))
 
-  def _convert_conversation_to_messages(self, conversation: Conversation) -> tuple:
-    """Convert a Conversation object to Anthropic messages format."""
-    system_message = conversation.get_system_prompt()
-    messages = []
-
-    for message in conversation.get_thread():
-      if message.speaker == MessageRole.USER:
-        messages.append({
-          "role": "user",
-          "content": message.content
-        })
-      elif message.speaker == MessageRole.ASSISTANT:
-        messages.append({
-          "role": "assistant",
-          "content": message.content
-        })
-
-    return system_message, messages
+  def _convert_sequence(self, sequence: MessageSequence) -> tuple:
+    """Convert a MessageSequence to Anthropic messages format."""
+    return sequence.system or "", sequence.to_chat_dicts(include_system=False)
 
   def _handle_streaming_response(self, request_data: Dict[str, Any]) -> Generator[str, None, str]:
     """Handle streaming response from Anthropic API. Yields tokens, returns full response."""

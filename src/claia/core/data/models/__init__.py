@@ -18,6 +18,9 @@ from .prompt import Prompt
 from .conversation import (
   Conversation,
   Message,
+  MessageSequence,
+  OrderedMessageSequence,
+  SequenceMessage,
 )
 
 __all__ = [
@@ -31,4 +34,7 @@ __all__ = [
   "Prompt",
   "Conversation",
   "Message",
+  "MessageSequence",
+  "OrderedMessageSequence",
+  "SequenceMessage",
 ]
