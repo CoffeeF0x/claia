@@ -14,6 +14,12 @@ from claia.core.models.dummy import DummyModel
 
 MODULE = DummyModel
 
+# Visible streaming for manual sanity runs (DummyModel defaults).
+STREAM_KWARGS = {
+  "chars_per_second": 2000,
+  "chars_per_chunk": 20,
+}
+
 
 def drain(generator):
   """Collect yielded chunks and the generator's return value."""
@@ -30,15 +36,18 @@ def drain(generator):
     return chunks, stop.value
 
 
+def _definition():
+  return ModelDefinition(
+    supported_inputs=[ArtifactType.TEXT, MessageSequence],
+  )
+
+
 def run_model():
   """Construct DummyModel directly and stream a response."""
   model = MODULE(model_name="dummy-model")
   conversation = Conversation(title="sanity-models")
   conversation.add_message(MessageRole.USER, "Tell me a story.")
-  definition = ModelDefinition(
-    supported_inputs=[ArtifactType.TEXT, MessageSequence],
-  )
-  sequence = DummyDeploymentPlugin().translate(conversation, definition)
+  sequence = DummyDeploymentPlugin().translate(conversation, _definition())
   message_count_before = len(conversation.messages)
 
   print(f"model: {model.model_name} ({type(model).__name__})")
@@ -46,11 +55,7 @@ def run_model():
   print(f"sequence turns: {len(sequence)} ({type(sequence).__name__})")
   print()
 
-  chunks, response = drain(model.generate(
-    sequence,
-    chars_per_second=1_000_000,
-    chars_per_chunk=10_000,
-  ))
+  chunks, response = drain(model.generate(sequence, **STREAM_KWARGS))
 
   assert isinstance(response, ModelResponse)
   preview = response.text()[:120].replace("\n", " ")
@@ -64,7 +69,7 @@ def run_model():
 
 
 def run_deployment():
-  """Conversation → deployment.translate → generate."""
+  """Conversation → deployment.translate → generate (streamed)."""
   deployment = DummyDeploymentPlugin()
   info = deployment.get_deployment_info()
   conversation = Conversation(title="sanity-models-deploy")
@@ -72,23 +77,21 @@ def run_deployment():
 
   print(f"deployment: {info.name} - {info.description}")
 
-  deploy_chunks = list(deployment.run(
+  chunks, _ = drain(deployment.run(
     model_name="dummy-model",
     model_class=MODULE,
     conversation=conversation,
     cache={},
     init_kwargs={},
-    runtime_kwargs={"chars_per_second": 1_000_000, "chars_per_chunk": 10_000},
-    definition=ModelDefinition(
-      supported_inputs=[ArtifactType.TEXT, MessageSequence],
-    ),
+    runtime_kwargs=STREAM_KWARGS,
+    definition=_definition(),
   ))
 
   preview = "".join(
-    c.data for c in deploy_chunks if isinstance(c, TextChunk)
+    c.data for c in chunks if isinstance(c, TextChunk)
   )[:120].replace("\n", " ")
-  print(f"chunks: {len(deploy_chunks)}")
-  print(f"yielded chars: {sum(len(c.data) for c in deploy_chunks if isinstance(c, TextChunk))}")
+  print(f"chunks: {len(chunks)}")
+  print(f"yielded chars: {sum(len(c.data) for c in chunks if isinstance(c, TextChunk))}")
   print(f"preview: {preview}...")
   print()
 
