@@ -49,7 +49,7 @@ def artifacts_from_modalities(modalities: Optional[List[Modality]]) -> List[Arti
 
 def default_supported_inputs() -> List[Any]:
   """Default chat contract: text artifacts shaped as a message sequence."""
-  from claia.core.data.models.conversation.message_sequence import MessageSequence
+  from ..data.models.conversation.message_sequence import MessageSequence
   return [ArtifactType.TEXT, MessageSequence]
 
 
@@ -91,7 +91,7 @@ class ModelDefinition:
 
     ``MessageSequenceOrdered`` wins when both sequence types are listed.
     """
-    from claia.core.data.models.conversation.message_sequence import (
+    from ..data.models.conversation.message_sequence import (
       MessageSequence,
       MessageSequenceOrdered,
     )

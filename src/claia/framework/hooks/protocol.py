@@ -13,8 +13,8 @@ from typing import List
 
 import pluggy
 
-from claia.core.plugins.base import ProtocolInfo, ToolReference
-from claia.core.results import Result
+from ...core.plugins.base import ProtocolInfo, ToolReference
+from ...core.results import Result
 
 
 hookspec = pluggy.HookspecMarker("claia_tool_protocols")

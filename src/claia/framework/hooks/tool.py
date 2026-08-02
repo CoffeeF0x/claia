@@ -8,7 +8,7 @@ These specs mirror ``BaseToolModule`` in
 import pluggy
 from typing import Dict
 
-from claia.core.plugins.base import (
+from ...core.plugins.base import (
     ToolModuleInfo,
     ToolDefinition,
     ArgumentDefinition,

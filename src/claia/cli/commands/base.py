@@ -6,8 +6,8 @@ import logging
 from typing import List, Optional, Any
 from abc import ABC, abstractmethod
 
-from claia.core.results import Result
-from claia.framework.registry import Registry
+from ...core.results import Result
+from ...framework.registry import Registry
 
 
 class BaseCommand(ABC):

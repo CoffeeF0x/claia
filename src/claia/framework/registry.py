@@ -7,14 +7,14 @@ import logging
 import threading
 from typing import Any, Dict, Iterator, List, Optional, Union
 
-from claia.framework.manager import Manager
-from claia.core.results import Result, DeploymentError
-from claia.framework.process import Process
-from claia.framework.queue import ProcessQueue
-from claia.core.enums.process import ProcessStatus
-from claia.core.data import Conversation
-from claia.core.data.chunks import BaseChunk, TextChunk
-from claia.core.plugins.base import ParamScope, ParamSpec, ToolReference
+from .manager import Manager
+from ..core.results import Result, DeploymentError
+from .process import Process
+from .queue import ProcessQueue
+from ..core.enums.process import ProcessStatus
+from ..core.data import Conversation
+from ..core.data.chunks import BaseChunk, TextChunk
+from ..core.plugins.base import ParamScope, ParamSpec, ToolReference
 
 
 
@@ -355,7 +355,7 @@ class Registry:
     with later assignments overriding earlier ones. Tool callables
     must return ``Result`` or ``str``; anything else is an error.
     """
-    from claia.core.tools.protocols.simple.dispatcher import (
+    from ..core.tools.protocols.simple.dispatcher import (
       normalize_result, prepare_command_kwargs,
     )
 
@@ -576,7 +576,7 @@ class Registry:
     Returns:
         Result with the full response in data, or an error.
     """
-    from claia.core.enums.conversation import MessageRole
+    from ..core.enums.conversation import MessageRole
 
     if conversation is None:
       conversation = Conversation()

@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-from claia.core.enums.data import AudioFormat, MediaType
+from ...enums.data import AudioFormat, MediaType
 
 from .base import BaseArtifact
 

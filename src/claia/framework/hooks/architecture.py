@@ -10,7 +10,7 @@ to those plugins.
 import pluggy
 from typing import Type
 
-from claia.core.plugins.base import ArchitectureInfo
+from ...core.plugins.base import ArchitectureInfo
 
 
 hookspec = pluggy.HookspecMarker("claia_architectures")

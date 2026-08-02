@@ -8,7 +8,7 @@ cloud VMs, or other distributed systems.
 from typing import Any, Dict, Type
 
 from .base import BaseDeployment
-from claia.core.results import DeploymentError, Result
+from ..results import DeploymentError, Result
 from ..plugins.base import DeploymentInfo
 
 

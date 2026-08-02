@@ -13,10 +13,10 @@ from typing import Any, Dict, Generator, List, Optional
 import torch
 from diffusers import DiffusionPipeline
 
-from claia.core.data.artifacts import BaseArtifact, TextArtifact
-from claia.core.data.chunks import BaseChunk, ImageChunk, TextChunk
-from claia.core.data.response import ModelResponse
-from claia.core.enums.data import ImageFormat
+from ...data.artifacts import BaseArtifact, TextArtifact
+from ...data.chunks import BaseChunk, ImageChunk, TextChunk
+from ...data.response import ModelResponse
+from ...enums.data import ImageFormat
 from ..base import LocalModel
 from ..base.base import ModelInputs
 

@@ -8,8 +8,8 @@ import uuid, time, logging, threading
 from typing import Optional, Dict, Any, Callable, List
 
 # Internal dependencies
-from claia.core.enums.process import ProcessStatus
-from claia.core.data import Conversation
+from ..core.enums.process import ProcessStatus
+from ..core.data import Conversation
 
 
 logger = logging.getLogger(__name__)

@@ -7,9 +7,9 @@ from __future__ import annotations
 from abc import ABC
 from typing import Any, Dict, Optional
 
-from claia.core.data.common import DataObject
-from claia.core.data.common.data_object import FormatEnum
-from claia.core.enums.data import MediaType
+from ..common import DataObject
+from ..common.data_object import FormatEnum
+from ...enums.data import MediaType
 
 
 class BaseChunk(DataObject, ABC):

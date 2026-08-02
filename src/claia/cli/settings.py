@@ -21,11 +21,11 @@ from typing import Dict, Any, List, Tuple, Optional
 from dotenv import load_dotenv
 
 # Internal dependencies
-from claia.core.enums.logging import LogLevel, LogFormat
-from claia.core.plugins.base import ParamScope, ParamSpec, SettingCategory
-from claia.cli.params import APP_PARAMS
-from claia.framework.manager import Manager
-from claia.framework.registry import Registry
+from ..core.enums.logging import LogLevel, LogFormat
+from ..core.plugins.base import ParamScope, ParamSpec, SettingCategory
+from .params import APP_PARAMS
+from ..framework.manager import Manager
+from ..framework.registry import Registry
 
 
 ########################################################################

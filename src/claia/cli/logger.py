@@ -7,7 +7,7 @@ import os
 import logging
 
 # Internal dependencies
-from claia.core.enums.logging import LogLevel, LogFormat
+from ..core.enums.logging import LogLevel, LogFormat
 
 
 

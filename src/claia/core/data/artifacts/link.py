@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, Optional
 
-from claia.core.enums.data import MediaType, TextFormat
+from ...enums.data import MediaType, TextFormat
 
 from .base import BaseArtifact
 

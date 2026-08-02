@@ -20,7 +20,7 @@ below. Settings will pick it up automatically — there is no separate
 from typing import List
 
 # Internal dependencies
-from claia.core.plugins.base import ParamScope, ParamSpec, SettingCategory
+from ..core.plugins.base import ParamScope, ParamSpec, SettingCategory
 
 
 APP_PARAMS: List[ParamSpec] = [

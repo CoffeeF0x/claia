@@ -6,7 +6,7 @@ import json
 import time
 from typing import Any, Dict, Optional
 
-from claia.core.enums.data import ApplicationFormat, MediaType
+from ...enums.data import ApplicationFormat, MediaType
 
 from .base import BaseArtifact
 

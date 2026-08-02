@@ -6,7 +6,7 @@ Conversation, Message, MessageSequence, and Prompt — types that are not
 IO artifacts.
 """
 
-from claia.core.data.artifacts import (
+from ..artifacts import (
   AudioArtifact,
   BaseArtifact,
   FileArtifact,

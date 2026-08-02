@@ -11,10 +11,10 @@ import importlib
 import logging
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
-from claia.core.data.artifacts import BaseArtifact, TextArtifact
-from claia.core.data.chunks import AudioChunk, BaseChunk, TextChunk
-from claia.core.data.response import ModelResponse
-from claia.core.enums.data import AudioFormat
+from ...data.artifacts import BaseArtifact, TextArtifact
+from ...data.chunks import AudioChunk, BaseChunk, TextChunk
+from ...data.response import ModelResponse
+from ...enums.data import AudioFormat
 from ..base import LocalModel
 from ..base.base import ModelInputs
 

@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition, artifacts_from_modalities
 from ..modality import Modality
-from claia.core.data.models.conversation.message_sequence import MessageSequence
+from ..data.models.conversation.message_sequence import MessageSequence
 
 
 logger = logging.getLogger(__name__)

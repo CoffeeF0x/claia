@@ -7,7 +7,7 @@ from typing import Dict
 
 from .base import BaseToolModule
 from ...plugins.base import ToolModuleInfo, ToolDefinition
-from claia.core.results import Result
+from ...results import Result
 
 
 class SystemModulePlugin(BaseToolModule):

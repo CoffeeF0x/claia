@@ -70,19 +70,19 @@ import importlib.metadata as importlib_metadata
 import pyfiglet
 
 # Internal dependencies
-from claia.framework.process import Process
-from claia.core.results import Result
-from claia.core.enums.model import SourcePreference
-from claia.core.enums.conversation import MessageRole
-from claia.core.data import Conversation
-from claia.cli.storage import JsonStore
-from claia.cli.settings import Settings
-from claia.cli.commands import Commands
-from claia.cli.defaults import initialize_defaults
-from claia.cli.logger import initialize_logging
-from claia.cli.agents import register_cli_agents
-from claia.cli.renderer import PacedRenderer
-from claia.framework.registry import Registry
+from ..framework.process import Process
+from ..core.results import Result
+from ..core.enums.model import SourcePreference
+from ..core.enums.conversation import MessageRole
+from ..core.data import Conversation
+from .storage import JsonStore
+from .settings import Settings
+from .commands import Commands
+from .defaults import initialize_defaults
+from .logger import initialize_logging
+from .agents import register_cli_agents
+from .renderer import PacedRenderer
+from ..framework.registry import Registry
 
 
 
@@ -296,7 +296,7 @@ def main() -> None:
     # tools like ``cli.help`` or ``cli.settings_get`` work identically
     # whether invoked through a command wrapper (``:help``) or directly
     # (``:tool cli.help``).
-    from claia.cli.commands.specs import COMMAND_SPECS
+    from .commands.specs import COMMAND_SPECS
     registry.set_tool_context(
       settings=settings,
       command_specs=COMMAND_SPECS,

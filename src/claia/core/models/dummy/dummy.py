@@ -9,9 +9,9 @@ import random
 from typing import Generator
 
 from ..base import BaseModel
-from claia.core.data.chunks import BaseChunk, TextChunk
-from claia.core.data.response import ModelResponse
-from claia.core.enums.data import TextFormat
+from ...data.chunks import BaseChunk, TextChunk
+from ...data.response import ModelResponse
+from ...enums.data import TextFormat
 from ..base.base import ModelInputs
 
 

@@ -5,7 +5,7 @@ Get and Set commands for viewing and updating settings.
 import logging
 from typing import List, Optional, Any, Dict
 
-from claia.core.results import Result
+from ...core.results import Result
 from .base import BaseCommand
 
 

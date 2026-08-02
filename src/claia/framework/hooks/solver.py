@@ -7,8 +7,8 @@ These specs mirror ``BaseSolver`` in ``claia.core.solvers.base``.
 import pluggy
 from typing import Any, Dict, List, Optional
 
-from claia.core.results import Result
-from claia.core.plugins.base import SolverInfo, DeploymentParams
+from ...core.results import Result
+from ...core.plugins.base import SolverInfo, DeploymentParams
 
 
 hookspec = pluggy.HookspecMarker("claia_solvers")

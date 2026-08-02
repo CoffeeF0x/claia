@@ -11,7 +11,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Dict, Optional, Union
 
-from claia.core.enums.data import (
+from ...enums.data import (
   ApplicationFormat,
   AudioFormat,
   ImageFormat,

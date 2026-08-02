@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from claia.core.enums.data import AudioFormat, MediaType
+from ...enums.data import AudioFormat, MediaType
 
 from .base import BaseChunk
 

@@ -6,13 +6,13 @@ import logging
 import threading
 from typing import List, Optional, Any
 
-from claia.core.results import Result
-from claia.core.data.models import Conversation
-from claia.core.enums.conversation import MessageRole
-from claia.core.enums.model import SourcePreference
-from claia.framework.process import Process
-from claia.cli.renderer import PacedRenderer
-from claia.cli.storage import JsonStore
+from ...core.results import Result
+from ...core.data.models import Conversation
+from ...core.enums.conversation import MessageRole
+from ...core.enums.model import SourcePreference
+from ...framework.process import Process
+from ..renderer import PacedRenderer
+from ..storage import JsonStore
 from .base import BaseCommand
 
 

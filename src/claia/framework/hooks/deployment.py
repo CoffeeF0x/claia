@@ -7,10 +7,10 @@ These specs mirror ``BaseDeployment`` in ``claia.core.deployments.base``.
 import pluggy
 from typing import Any, Dict, Iterator, Optional, Type
 
-from claia.core.data import Conversation
-from claia.core.data.chunks import BaseChunk
-from claia.core.definitions.model_definition import ModelDefinition
-from claia.core.plugins.base import DeploymentInfo
+from ...core.data import Conversation
+from ...core.data.chunks import BaseChunk
+from ...core.definitions.model_definition import ModelDefinition
+from ...core.plugins.base import DeploymentInfo
 
 
 hookspec = pluggy.HookspecMarker("claia_deployments")

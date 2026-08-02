@@ -8,7 +8,7 @@ These specs mirror ``BaseDefinitionProvider`` in
 import pluggy
 from typing import Dict
 
-from claia.core.definitions.model_definition import ModelDefinition
+from ...core.definitions.model_definition import ModelDefinition
 
 
 hookspec = pluggy.HookspecMarker("claia_definitions")

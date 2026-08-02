@@ -9,8 +9,8 @@ import logging
 from typing import Any, Dict, Optional
 
 # Internal dependencies
-from claia.core.data.models.conversation.message_sequence import MessageSequence
-from claia.core.enums.conversation import MessageRole
+from ...data.models.conversation.message_sequence import MessageSequence
+from ...enums.conversation import MessageRole
 from .generic import GenericTransformerModel
 
 

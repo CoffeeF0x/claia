@@ -9,9 +9,9 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Union
 
-from claia.core.data.common import DataObject
-from claia.core.enums.data import MediaType
-from claia.core.data.common.data_object import FormatEnum
+from ..common import DataObject
+from ...enums.data import MediaType
+from ..common.data_object import FormatEnum
 
 
 class BaseArtifact(DataObject, ABC):

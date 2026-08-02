@@ -6,8 +6,8 @@ import threading
 import logging
 from typing import Optional
 
-from claia.framework.process import Process
-from claia.cli.storage import JsonStore
+from ..framework.process import Process
+from .storage import JsonStore
 
 
 logger = logging.getLogger(__name__)

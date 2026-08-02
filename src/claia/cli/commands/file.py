@@ -6,9 +6,9 @@ import mimetypes
 import os
 from typing import Any, List, Optional
 
-from claia.cli.storage import JsonStore
-from claia.core.data.models import AudioArtifact, BaseArtifact, ImageArtifact, TextArtifact
-from claia.core.results import Result
+from ..storage import JsonStore
+from ...core.data.models import AudioArtifact, BaseArtifact, ImageArtifact, TextArtifact
+from ...core.results import Result
 from .base import BaseCommand
 
 

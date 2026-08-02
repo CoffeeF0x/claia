@@ -25,8 +25,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
-from claia.core.plugins.base import ProtocolInfo, ToolReference
-from claia.core.results import Result
+from ....plugins.base import ProtocolInfo, ToolReference
+from ....results import Result
 
 from ..base import BaseProtocol
 from .dispatcher import find_tool, normalize_result, prepare_command_kwargs

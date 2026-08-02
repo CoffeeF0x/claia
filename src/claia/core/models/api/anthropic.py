@@ -10,10 +10,10 @@ import logging
 from typing import Dict, Any, Optional, Generator
 
 # Internal dependencies
-from claia.core.data.chunks import BaseChunk
-from claia.core.data.models.conversation.message_sequence import MessageSequence
-from claia.core.data.response import ModelResponse
-from claia.core.enums.conversation import MessageRole
+from ...data.chunks import BaseChunk
+from ...data.models.conversation.message_sequence import MessageSequence
+from ...data.response import ModelResponse
+from ...enums.conversation import MessageRole
 from ..base import APIModel
 from ..base.base import ModelInputs
 
@@ -93,7 +93,7 @@ class AnthropicModel(APIModel):
       else:
         token_gen = self._handle_non_streaming_response(request_data)
 
-      from claia.core.data.chunks import TextChunk
+      from ...data.chunks import TextChunk
       try:
         while True:
           token = next(token_gen)
@@ -109,7 +109,7 @@ class AnthropicModel(APIModel):
 
     except Exception as e:
       logger.error(f"Error generating response with Anthropic model {self.model_name}: {e}")
-      from claia.core.data.chunks import TextChunk
+      from ...data.chunks import TextChunk
       chunk = TextChunk(data=f"Error: {str(e)}")
       chunks.append(chunk)
       yield chunk

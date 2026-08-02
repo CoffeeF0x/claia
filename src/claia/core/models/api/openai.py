@@ -8,10 +8,10 @@ import json
 import logging
 from typing import Dict, Any, Optional, Generator, List
 
-from claia.core.data.chunks import BaseChunk, TextChunk
-from claia.core.data.models.conversation.message_sequence import MessageSequence
-from claia.core.data.response import ModelResponse
-from claia.core.enums.conversation import MessageRole
+from ...data.chunks import BaseChunk, TextChunk
+from ...data.models.conversation.message_sequence import MessageSequence
+from ...data.response import ModelResponse
+from ...enums.conversation import MessageRole
 from ..base import APIModel
 from ..base.base import ModelInputs
 

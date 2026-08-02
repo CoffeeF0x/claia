@@ -13,7 +13,7 @@ import shutil
 import tempfile
 from typing import Optional, List, Dict, Any, Union
 
-from claia.core.data import (
+from ...core.data import (
   BaseArtifact,
   TextArtifact,
   ImageArtifact,

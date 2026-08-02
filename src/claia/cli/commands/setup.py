@@ -5,7 +5,7 @@ Setup command for interactive API key configuration.
 import logging
 from typing import List, Optional, Any
 
-from claia.core.results import Result
+from ...core.results import Result
 from .base import BaseCommand
 
 

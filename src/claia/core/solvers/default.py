@@ -9,7 +9,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from .base import BaseSolver
-from claia.core.results import Result
+from ..results import Result
 from ..plugins.base import SolverInfo, DeploymentParams
 from ..definitions.model_definition import ModelDefinition
 

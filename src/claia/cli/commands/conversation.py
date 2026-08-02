@@ -5,9 +5,9 @@ Conversation command for managing conversations.
 import logging
 from typing import List, Optional, Any, Dict
 
-from claia.core.results import Result
-from claia.core.data.models import Conversation
-from claia.cli.storage import JsonStore
+from ...core.results import Result
+from ...core.data.models import Conversation
+from ..storage import JsonStore
 from .base import BaseCommand
 
 

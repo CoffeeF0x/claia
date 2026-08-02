@@ -13,12 +13,12 @@ import importlib.metadata as importlib_metadata
 from typing import Dict, Any, Optional, List
 from collections import defaultdict
 
-from claia.core.tools.modules.base import BaseToolModule
-from claia.framework.hooks.tool import ToolModuleInfo, ToolDefinition, ArgumentDefinition
-from claia.core.results import Result
-from claia.core.data.models import Conversation, Prompt
-from claia.cli.storage import JsonStore
-from claia.core.enums.conversation import MessageRole
+from ...core.tools.modules.base import BaseToolModule
+from ...framework.hooks.tool import ToolModuleInfo, ToolDefinition, ArgumentDefinition
+from ...core.results import Result
+from ...core.data.models import Conversation, Prompt
+from ..storage import JsonStore
+from ...core.enums.conversation import MessageRole
 
 
 logger = logging.getLogger(__name__)
@@ -808,7 +808,7 @@ class CLIModulePlugin(BaseToolModule):
         return output
       else:
         # Get all settings grouped by category
-        from claia.cli.settings import SettingCategory
+        from ..settings import SettingCategory
 
         output_lines = []
         output_lines.append("\n" + "=" * 70)

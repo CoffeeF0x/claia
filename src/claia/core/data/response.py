@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterator, List, Optional
 
-from claia.core.data.chunks import BaseChunk, TextChunk
+from .chunks import BaseChunk, TextChunk
 
 
 @dataclass

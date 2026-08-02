@@ -8,8 +8,8 @@ interactive (:command) modes.
 import logging
 from typing import Dict, Any, List, Optional, Tuple, Type
 
-from claia.core.results import Result
-from claia.framework.registry import Registry
+from ...core.results import Result
+from ...framework.registry import Registry
 from .specs import COMMAND_SPECS, CommandPriority, generate_cli_alias
 from .base import BaseCommand
 from .system import QuitCommand, HelpCommand, VersionCommand

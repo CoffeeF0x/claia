@@ -13,10 +13,10 @@ from typing import Any, Dict, Generator, List, Optional
 
 # Internal dependencies
 from ..base import APIModel
-from claia.core.data.chunks import BaseChunk, TextChunk
-from claia.core.data.models.conversation.message_sequence import MessageSequence
-from claia.core.data.response import ModelResponse
-from claia.core.enums.conversation import MessageRole
+from ...data.chunks import BaseChunk, TextChunk
+from ...data.models.conversation.message_sequence import MessageSequence
+from ...data.response import ModelResponse
+from ...enums.conversation import MessageRole
 from ..base.base import ModelInputs
 
 

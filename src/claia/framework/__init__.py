@@ -23,8 +23,8 @@ without having to import from two places.
 """
 
 # Re-exports from claia.core for convenience.
-from claia.core.results import Result, DeploymentError
-from claia.core.data import (
+from ..core.results import Result, DeploymentError
+from ..core.data import (
   Conversation,
   Message,
   DataObject,
@@ -45,7 +45,7 @@ from claia.core.data import (
   DomainEvent,
   EventType,
 )
-from claia.core.plugins.base import (
+from ..core.plugins.base import (
   ExtensionInfo,
   ArchitectureInfo,
   DeploymentInfo,
@@ -60,10 +60,10 @@ from claia.core.plugins.base import (
   ParamScope,
   SettingCategory,
 )
-from claia.core.definitions.model_definition import ModelDefinition
-from claia.core.enums.process_queue import ProcessQueueHook
-from claia.core.modality import Modality
-from claia.core.enums.data import (
+from ..core.definitions.model_definition import ModelDefinition
+from ..core.enums.process_queue import ProcessQueueHook
+from ..core.modality import Modality
+from ..core.enums.data import (
   MediaType,
   TextFormat,
   ImageFormat,

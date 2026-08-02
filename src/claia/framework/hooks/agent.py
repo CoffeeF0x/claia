@@ -11,8 +11,8 @@ import pluggy
 from dataclasses import dataclass, field
 from typing import Optional, Type
 
-from claia.core.plugins.base import ExtensionInfo
-from claia.framework.agents.base import BaseAgent
+from ...core.plugins.base import ExtensionInfo
+from ..agents.base import BaseAgent
 
 
 @dataclass

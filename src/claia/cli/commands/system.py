@@ -6,8 +6,8 @@ import logging
 from typing import List, Optional, Any
 from collections import defaultdict
 
-from claia.core.results import Result
-from claia.core.plugins.base import SettingCategory
+from ...core.results import Result
+from ...core.plugins.base import SettingCategory
 from .base import BaseCommand
 
 

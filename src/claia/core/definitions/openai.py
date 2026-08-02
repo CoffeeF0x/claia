@@ -21,7 +21,7 @@ from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
 from ..enums.data import ArtifactType
 from ..modality import Modality
-from claia.core.data.models.conversation.message_sequence import MessageSequence
+from ..data.models.conversation.message_sequence import MessageSequence
 
 _CHAT = [ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence]
 

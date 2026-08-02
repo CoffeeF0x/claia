@@ -6,7 +6,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Dict, Type
 
 if TYPE_CHECKING:
-  from claia.core.data.artifacts import BaseArtifact
+  from ...data.artifacts import BaseArtifact
 
 
 class ArtifactType(Enum):
@@ -34,7 +34,7 @@ class ArtifactType(Enum):
 
 
 def _ARTIFACT_CLASSES() -> Dict[ArtifactType, Type["BaseArtifact"]]:
-  from claia.core.data.artifacts import (
+  from ...data.artifacts import (
     AudioArtifact,
     FileArtifact,
     ImageArtifact,

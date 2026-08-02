@@ -9,8 +9,8 @@ from typing import Any, Callable, DefaultDict, Dict, List, Optional
 
 # Internal dependencies
 from .process import Process
-from claia.core.enums.process import ProcessStatus
-from claia.core.enums.process_queue import ProcessQueueHook
+from ..core.enums.process import ProcessStatus
+from ..core.enums.process_queue import ProcessQueueHook
 
 
 ########################################################################

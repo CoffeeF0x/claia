@@ -15,11 +15,11 @@ import logging
 from typing import Any, Iterable, List, Optional, Tuple, Type
 
 from .base import BaseAgent
-from claia.core.data.chunks import AudioChunk, BaseChunk, ImageChunk, TextChunk
-from claia.core.data.models import AudioArtifact, ImageArtifact
-from claia.core.enums.conversation import MessageRole
-from claia.core.enums.data import AudioFormat, ImageFormat
-from claia.core.parser import (
+from ...core.data.chunks import AudioChunk, BaseChunk, ImageChunk, TextChunk
+from ...core.data.models import AudioArtifact, ImageArtifact
+from ...core.enums.conversation import MessageRole
+from ...core.enums.data import AudioFormat, ImageFormat
+from ...core.parser import (
   ParseError,
   ParseEvent,
   TagEvent,
@@ -28,8 +28,8 @@ from claia.core.parser import (
   TextEvent,
   resolve_tag_specs,
 )
-from claia.core.results import Result
-from claia.core.tools.protocols.simple.payload import decode_payload
+from ...core.results import Result
+from ...core.tools.protocols.simple.payload import decode_payload
 from ..hooks import AgentInfo
 
 

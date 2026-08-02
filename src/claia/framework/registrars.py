@@ -19,9 +19,9 @@ import logging
 import pluggy
 from typing import Any, Dict, Iterator, List, Optional, Type
 
-from claia.core.data import Conversation
-from claia.core.data.chunks import BaseChunk
-from claia.core.plugins.base import (
+from ..core.data import Conversation
+from ..core.data.chunks import BaseChunk
+from ..core.plugins.base import (
   ArchitectureInfo,
   DeploymentInfo,
   ProtocolInfo,
@@ -30,8 +30,8 @@ from claia.core.plugins.base import (
   ToolModuleInfo,
   ToolReference,
 )
-from claia.core.definitions.model_definition import ModelDefinition
-from claia.core.results import Result
+from ..core.definitions.model_definition import ModelDefinition
+from ..core.results import Result
 
 
 logger = logging.getLogger(__name__)

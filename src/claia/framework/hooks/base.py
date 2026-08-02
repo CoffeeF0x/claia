@@ -7,6 +7,6 @@ in-framework import path so they don't each have to reach across
 packages.
 """
 
-from claia.core.plugins.base import ExtensionInfo
+from ...core.plugins.base import ExtensionInfo
 
 __all__ = ["ExtensionInfo"]

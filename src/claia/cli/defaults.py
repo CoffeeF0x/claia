@@ -8,8 +8,8 @@ It defines default prompts and other default settings.
 import logging
 
 # Internal dependencies
-from claia.core.data import Prompt
-from claia.cli.storage import JsonStore
+from ..core.data import Prompt
+from .storage import JsonStore
 from .settings import Settings
 
 

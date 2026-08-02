@@ -24,9 +24,9 @@ the register_cli_agents() function called in __main__.py.
 import logging
 
 # Internal dependencies
-from claia.framework.agents.base import BaseAgent
-from claia.core.data.chunks import TextChunk
-from claia.core.enums.conversation import MessageRole
+from ..framework.agents.base import BaseAgent
+from ..core.data.chunks import TextChunk
+from ..core.enums.conversation import MessageRole
 
 
 ########################################################################

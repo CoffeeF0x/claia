@@ -28,8 +28,8 @@ from .hooks import (
   DeploymentInfo, SolverInfo, ModelDefinition, ArchitectureInfo, AgentInfo
 )
 from .registrars import REGISTRAR_BY_GROUP
-from claia.core.models.base import BaseModel
-from claia.core.plugins.base import ParamScope, ParamSpec
+from ..core.models.base import BaseModel
+from ..core.plugins.base import ParamScope, ParamSpec
 from .agents.base import BaseAgent
 
 

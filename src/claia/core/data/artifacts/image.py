@@ -8,7 +8,7 @@ import logging
 import time
 from typing import Any, Dict, Optional, Tuple
 
-from claia.core.enums.data import ImageFormat, MediaType
+from ...enums.data import ImageFormat, MediaType
 
 from .base import BaseArtifact
 

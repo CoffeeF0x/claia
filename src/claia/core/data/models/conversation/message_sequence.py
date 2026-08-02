@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence, Type, Union
 
-from claia.core.enums.conversation import MessageRole
-from claia.core.enums.data import TextFormat
+from ....enums.conversation import MessageRole
+from ....enums.data import TextFormat
 
 
 class MessageSequence:

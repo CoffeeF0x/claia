@@ -13,7 +13,7 @@ common types from a single module if they prefer.
 """
 
 # Library / framework convenience re-exports
-from claia.core import (
+from ..core import (
     Result,
     DeploymentError,
     Conversation,
@@ -40,7 +40,7 @@ from claia.core import (
     SettingCategory,
     ModelDefinition,
 )
-from claia.framework import (
+from ..framework import (
     Registry,
     Process,
     ProcessQueue,

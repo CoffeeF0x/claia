@@ -323,7 +323,7 @@ class Conversation:
         that end up empty, and returns an instance of ``sequence_cls``
         (default ``MessageSequence``).
         """
-        from claia.core.enums.data import ArtifactType
+        from ....enums.data import ArtifactType
         from .message_sequence import MessageSequence
 
         if sequence_cls is None:

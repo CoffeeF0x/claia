@@ -10,10 +10,10 @@ generator's return value.
 from abc import ABC, abstractmethod
 from typing import Generator, List, Sequence, Union
 
-from claia.core.data.artifacts import BaseArtifact
-from claia.core.data.chunks import BaseChunk
-from claia.core.data.models.conversation.message_sequence import MessageSequence
-from claia.core.data.response import ModelResponse
+from ...data.artifacts import BaseArtifact
+from ...data.chunks import BaseChunk
+from ...data.models.conversation.message_sequence import MessageSequence
+from ...data.response import ModelResponse
 
 
 ModelInputs = Union[MessageSequence, Sequence[BaseArtifact], BaseArtifact, List[BaseArtifact]]
