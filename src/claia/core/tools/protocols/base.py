@@ -8,7 +8,7 @@ holds no callables of its own; it assembles a unified index of
 ``ToolReference`` objects across all loaded protocols and routes
 ``execute_tool`` calls back to the owning protocol.
 
-See ``docs/tools-overhaul-plan.md`` §6 for the full rationale, and
+See the ExoFox docs repo ``claia/tools-overhaul-plan.md`` §6 for the full rationale, and
 ``_legacy.py`` in this package for the deprecated pre-overhaul
 contract.
 """

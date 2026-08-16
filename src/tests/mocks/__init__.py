@@ -13,5 +13,5 @@ Layout mirrors the concepts being mocked, e.g.:
   mocks/conversations.py -> Conversation/Message builders
 
 Populated module-by-module as tests migrate to the mirrored structure described
-in docs/design-philosophy.md.
+in the ExoFox docs repo at claia/design-philosophy.md.
 """

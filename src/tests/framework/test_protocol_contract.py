@@ -2,7 +2,7 @@
 Phase 4 — Protocol contract rewrite tests.
 
 Exercises the post-overhaul protocol contract described in
-``docs/tools-overhaul-plan.md`` §6:
+the ExoFox docs repo ``claia/tools-overhaul-plan.md`` §6:
 
 - ``ToolReference`` dataclass shape and defaults.
 - New ``BaseProtocol`` ABC (abstract method enforcement, default

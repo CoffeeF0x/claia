@@ -20,6 +20,12 @@ CLAIA is a project I've been working on to abstract away the model loading. Star
   - `claia.framework` provides plugin discovery, the `Registry`, process queues, and agent orchestration.
   - `claia.cli` implements the command-line app on top of the framework.
 
+## Documentation
+
+Documentation lives in the ExoFox docs repo under `claia/` (a temporary
+landing area pending a docs-structure redesign). Per-package READMEs
+next to the source stay with the code.
+
 ## Installation
 
 CLAIA is a Python package targeting Python 3.12+.
