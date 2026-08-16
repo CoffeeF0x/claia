@@ -364,8 +364,8 @@ class Conversation:
                 of an assistant message — parsed tag spans that
                 consumers like the model-facing prompt builder should
                 not echo back. Pass ``True`` to include them (e.g., for
-                UI rendering, debugging, or replay). See
-                the ExoFox docs repo ``claia/data-architecture.md`` Decisions.
+                UI rendering, debugging, or replay). See the ExoFox
+                docs repo ``claia/reference/conversation.md`` Decisions.
         """
         target = head_id or self.active_head_id
         if not target or not self.messages:
