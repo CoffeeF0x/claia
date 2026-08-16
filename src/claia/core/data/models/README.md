@@ -9,4 +9,4 @@ Artifacts and chunks live under:
 - `claia.core.data.common` (`DataObject`)
 - `claia.core.data.response` (`ModelResponse`)
 
-See `claia/data-architecture.md` in the ExoFox docs repo.
+See `claia/reference/` in the ExoFox docs repo.

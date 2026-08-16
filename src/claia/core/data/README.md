@@ -35,4 +35,4 @@ inputs = DummyDeploymentPlugin().translate(
 )
 ```
 
-See `claia/data-architecture.md` in the ExoFox docs repo.
+See `claia/reference/` in the ExoFox docs repo.
