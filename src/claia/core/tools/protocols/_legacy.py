@@ -6,7 +6,7 @@ Kept importable so third-party code that extended the pre-overhaul
 ``DeprecationWarning`` fires at import time and again on subclass
 creation so downstream authors know to migrate to the new
 ``claia.core.tools.protocols.base.BaseProtocol`` contract (see
-the ExoFox docs repo ``claia/tools-overhaul-plan.md`` §6).
+the ExoFox docs repo ``claia/overview.md`` Decisions).
 
 No CLAIA code should depend on this module — the in-tree
 ``SimpleProtocolPlugin`` implements the new contract directly. This
@@ -27,7 +27,7 @@ from ...plugins.base import ProtocolInfo
 warnings.warn(
   "claia.core.tools.protocols._legacy.LegacyBaseProtocol is deprecated. "
   "Migrate to claia.core.tools.protocols.base.BaseProtocol; see "
-  "ExoFox docs repo claia/tools-overhaul-plan.md §6 for the new contract.",
+  "ExoFox docs repo claia/overview.md Decisions for the new contract.",
   DeprecationWarning,
   stacklevel=2,
 )

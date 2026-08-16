@@ -19,7 +19,8 @@ class MessageRole(Enum):
                    ``end_index`` / ``attributes``. Stored inline in
                    ``Conversation.messages`` but excluded from the
                    default linearization sent to models. See
-                   ``tools-overhaul-plan.md`` §2.4 / §4.
+                   the ExoFox docs repo ``claia/data-architecture.md``
+                   Decisions.
     """
     USER = "user"
     ASSISTANT = "assistant"

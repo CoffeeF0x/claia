@@ -22,9 +22,8 @@ CLAIA is a project I've been working on to abstract away the model loading. Star
 
 ## Documentation
 
-Documentation lives in the ExoFox docs repo under `claia/` (a temporary
-landing area pending a docs-structure redesign). Per-package READMEs
-next to the source stay with the code.
+Documentation lives in the ExoFox docs repo under `claia/`. Per-package
+READMEs next to the source stay with the code.
 
 ## Installation
 

@@ -365,7 +365,7 @@ class Conversation:
                 consumers like the model-facing prompt builder should
                 not echo back. Pass ``True`` to include them (e.g., for
                 UI rendering, debugging, or replay). See
-                ``tools-overhaul-plan.md`` §4.2.
+                the ExoFox docs repo ``claia/data-architecture.md`` Decisions.
         """
         target = head_id or self.active_head_id
         if not target or not self.messages:

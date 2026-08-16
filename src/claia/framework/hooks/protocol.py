@@ -2,8 +2,9 @@
 Pluggy hookspecs for tool-protocol plugins.
 
 These specs mirror ``BaseProtocol`` in
-``claia.core.tools.protocols.base`` as of the tools-overhaul (plan
-§6.3). The old pre-overhaul ``execute`` signature lives under
+``claia.core.tools.protocols.base`` (see the ExoFox docs repo
+``claia/overview.md`` Decisions). The old pre-overhaul ``execute``
+signature lives under
 ``claia.core.tools.protocols._legacy`` and is not surfaced through
 pluggy; legacy plugins must migrate to the new contract before they
 can register.

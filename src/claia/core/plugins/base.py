@@ -249,7 +249,7 @@ class ToolReference:
   Schema dict for MCP, etc.). Callers that need to introspect arguments
   (UIs, renderers) must dispatch on the owning protocol.
 
-  See the ExoFox docs repo `claia/tools-overhaul-plan.md` §6.1 for the full rationale.
+  See the ExoFox docs repo `claia/overview.md` Decisions for the full rationale.
 
   Fields:
     - ``qualified_name``: fully-namespaced tool name, e.g.

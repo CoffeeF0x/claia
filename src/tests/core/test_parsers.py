@@ -531,8 +531,7 @@ class TestResolveTagSpecs:
 ########################################################################
 class TestResolveTagSpecsModelDefinition:
   """End-to-end coverage that ``ModelDefinition`` carries
-  ``tag_overrides`` correctly through the resolver. Phase 2 of the
-  tools-overhaul plan introduces the real field; these tests prove
+  ``tag_overrides`` correctly through the resolver. These tests prove
   the resolver works against an actual ``ModelDefinition`` and not
   just a duck-typed stand-in."""
 
