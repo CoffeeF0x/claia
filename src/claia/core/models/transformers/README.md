@@ -9,10 +9,12 @@ Local transformer model wrappers.
 - `diffusers.py` — generic Diffusers-backed image generation pipeline.
 - `tts.py` — generic local text-to-speech wrapper with backend adapters.
 
-These models typically:
-- wrap a local/hosted transformer model
-- implement the base model interfaces from `claia.core.models.base`
-- may expose INIT `ParamSpec`s (e.g., model path, device) for safe configuration.
+These classes are the architecture plugins: they wrap a local transformer
+or Diffusers/TTS backend, implement `claia.core.models.base`, and declare
+their `ArchitectureInfo` via `@architecture` / `@architecture.param`.
+`Gemma3Model` subclasses `GenericTransformerModel` and declares only the
+overrides (name, title, description, and generation defaults). The
+`claia.architectures` entry points target these classes directly.
 
 ## Stable Diffusion 2 Smoke Test
 

@@ -16,7 +16,14 @@ import torch
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.response import ModelResponse
+from ...decorators import architecture
 from ...enums.conversation import MessageRole
+from ...plugins.base import (
+  COMMON_TEXT_RUNTIME_PARAMS,
+  ParamScope,
+  ParamSpec,
+  SettingCategory,
+)
 from ..base import LocalModel
 from ..base.base import ModelInputs
 
@@ -30,6 +37,19 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                               CLASSES                                #
 ########################################################################
+@architecture
+@architecture.name("transformers_generic")
+@architecture.title("Generic Transformers Architecture")
+@architecture.description("Generic HF Transformers implementation")
+@architecture.param(ParamSpec(
+  name="huggingface_api_token",
+  type=str,
+  scope=ParamScope.INIT,
+  secret=True,
+  category=SettingCategory.API,
+  description="Hugging Face API Token (required for gated models)",
+))
+@architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)
 class GenericTransformerModel(LocalModel):
   """Generic transformer model implementation using Hugging Face transformers."""
 

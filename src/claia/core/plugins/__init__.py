@@ -6,8 +6,9 @@ This subpackage defines:
 - Helper dataclasses such as ``ToolDefinition`` and ``DeploymentParams``.
 
 The actual ABCs that implementations subclass live alongside their domain:
-- ``claia.core.architectures.base.BaseArchitecture``
+- ``claia.core.models.base.BaseModel`` (architecture entry points)
 - ``claia.core.deployments.base.BaseDeployment``
+- ``claia.core.definitions.base.BaseDefinitionProvider``
 - ``claia.core.tools.protocols.base.BaseProtocol``
 - ``claia.core.tools.modules.base.BaseToolModule``
 
@@ -21,6 +22,7 @@ from .base import (
     DeploymentInfo,
     ProtocolInfo,
     ToolModuleInfo,
+    DefinitionsInfo,
     ToolDefinition,
     ArgumentDefinition,
     ToolReference,
@@ -33,6 +35,7 @@ __all__ = [
     "DeploymentInfo",
     "ProtocolInfo",
     "ToolModuleInfo",
+    "DefinitionsInfo",
     "ToolDefinition",
     "ArgumentDefinition",
     "ToolReference",

@@ -1,19 +1,17 @@
 """
-Model definitions plugin package.
+Model definition providers.
 
 This package provides comprehensive model definitions organized by provider/type.
 """
 
-# Import model definitions plugins
-from .legacy import LegacyDefinitionsPlugin
-from .openai import OpenAIDefinitionsPlugin
-from .anthropic import AnthropicDefinitionsPlugin
-from .openrouter import OpenRouterDefinitionsPlugin
+from .legacy import LegacyDefinitions
+from .openai import OpenAIDefinitions
+from .anthropic import AnthropicDefinitions
+from .openrouter import OpenRouterDefinitions
 
-# Export all plugins
 __all__ = [
-  "LegacyDefinitionsPlugin",
-  "OpenAIDefinitionsPlugin",
-  "AnthropicDefinitionsPlugin",
-  "OpenRouterDefinitionsPlugin"
+  "LegacyDefinitions",
+  "OpenAIDefinitions",
+  "AnthropicDefinitions",
+  "OpenRouterDefinitions"
 ]

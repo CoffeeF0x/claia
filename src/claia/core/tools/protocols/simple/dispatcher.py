@@ -145,10 +145,10 @@ def find_tool(modules, qualified_name: str) -> Optional[Tuple[Any, Any]]:
   Returns ``(module, ToolDefinition)`` or ``None``. Accepts:
 
   - ``"module.tool"`` — the canonical qualified form emitted by
-    :meth:`SimpleProtocolPlugin.get_tool_references`.
+    :meth:`SimpleProtocol.get_tool_references`.
   - ``"tool"`` (bare) — first match across all modules wins.
 
-  Modules whose ``get_module_info`` / ``get_module_tools`` raise are
+  Modules whose ``info`` / ``get_module_tools`` raise are
   skipped; one broken module must not poison the whole walk.
   """
   if not modules:
@@ -161,7 +161,7 @@ def find_tool(modules, qualified_name: str) -> Optional[Tuple[Any, Any]]:
 
   for module in modules:
     try:
-      module_info = module.get_module_info()
+      module_info = module.info
       tools = module.get_module_tools() or {}
     except Exception:
       logger.exception("Failed to introspect module %r", module)
@@ -187,7 +187,7 @@ def normalize_result(qualified_name: str, value: Any) -> Result:
   ``Result`` passes through unchanged, ``str`` becomes ``Result.ok``,
   every other type triggers a ``Result.fail`` with a typed diagnostic
   so contract violations surface loudly. Same semantics as the
-  pre-overhaul ``SimpleProtocolPlugin.execute``.
+  pre-overhaul ``SimpleProtocol.execute``.
   """
   if isinstance(value, Result):
     return value

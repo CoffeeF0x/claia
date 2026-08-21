@@ -11,7 +11,14 @@ from typing import Dict, Any, Optional, Generator, List
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.response import ModelResponse
+from ...decorators import architecture
 from ...enums.conversation import MessageRole
+from ...plugins.base import (
+  COMMON_TEXT_RUNTIME_PARAMS,
+  ParamScope,
+  ParamSpec,
+  SettingCategory,
+)
 from ..base import APIModel
 from ..base.base import ModelInputs
 
@@ -25,6 +32,20 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                               CLASSES                                #
 ########################################################################
+@architecture
+@architecture.name("openai")
+@architecture.title("OpenAI API Architecture")
+@architecture.description("Implements OpenAI chat/completions API-backed models")
+@architecture.param(ParamSpec(
+  name="openai_api_token",
+  type=str,
+  scope=ParamScope.INIT,
+  required=True,
+  secret=True,
+  category=SettingCategory.API,
+  description="OpenAI API Token",
+))
+@architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)
 class OpenAIModel(APIModel):
   """OpenAI API model implementation using the Responses API."""
 

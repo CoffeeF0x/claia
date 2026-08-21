@@ -7,7 +7,7 @@ Concrete tool integrations providing callable commands (the “tools” the mode
 - `sample.py` — sample module with multiple tools (`current_time`, `add`, `subtract`, `echo`).
 - `system.py` — terminal/CLI utilities (`clear`, `exit`).
 
-Each module subclasses `BaseToolModule` from `claia.core.tools.modules.base` and exposes a class-level `info: ToolModuleInfo` attribute plus a `get_module_tools()` method.
+Each module subclasses `BaseToolModule` from `claia.core.tools.modules.base` and exposes a class-level `info: ToolModuleInfo` attribute plus a `get_module_tools()` method. Built-in modules are `SystemToolModule`, `SampleToolModule`, and `CLIToolModule`.
 
 ## How tools fit in
 

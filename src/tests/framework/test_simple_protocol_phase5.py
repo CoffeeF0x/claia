@@ -9,8 +9,8 @@ Exercises the plumbing that lives in
   envelope JSON shapes and rejects everything else with ``ValueError``.
 - The ``dispatcher`` helpers — ``convert_type``, ``find_tool``,
   ``prepare_command_kwargs``, ``normalize_result`` — drive both
-  ``SimpleProtocolPlugin.execute`` and ``Registry.run_command``.
-- ``SimpleProtocolPlugin`` still resolves at the same package path
+  ``SimpleProtocol.execute`` and ``Registry.run_command``.
+- ``SimpleProtocol`` still resolves at the same package path
   the entry point already uses, so the on-disk split is invisible to
   the framework.
 - ``Manager`` binds native tool modules into the simple protocol
@@ -40,7 +40,7 @@ from claia.core.plugins.base import (
 )
 from claia.core.results import Result
 from claia.core.tools.protocols.base import BaseProtocol
-from claia.core.tools.protocols.simple import SimpleProtocolPlugin
+from claia.core.tools.protocols.simple import SimpleProtocol
 from claia.core.tools.protocols.simple.dispatcher import (
   convert_type,
   find_tool,
@@ -55,8 +55,7 @@ from claia.core.tools.protocols.simple.payload import decode_payload
 # ---------------------------------------------------------------------------
 def _make_module(module_name: str, tools: Dict[str, ToolDefinition]):
   class _Module:
-    def get_module_info(self) -> ToolModuleInfo:
-      return ToolModuleInfo(name=module_name, title=module_name, description="")
+    info = ToolModuleInfo(name=module_name, title=module_name, description="")
 
     def get_module_tools(self) -> Dict[str, ToolDefinition]:
       return tools
@@ -82,8 +81,8 @@ class TestSimpleProtocolPackageLayout:
   def test_simple_module_exposes_plugin_class(self):
     import claia.core.tools.protocols.simple as simple_pkg
 
-    assert hasattr(simple_pkg, "SimpleProtocolPlugin")
-    assert simple_pkg.SimpleProtocolPlugin is SimpleProtocolPlugin
+    assert hasattr(simple_pkg, "SimpleProtocol")
+    assert simple_pkg.SimpleProtocol is SimpleProtocol
 
   def test_internal_split_imports(self):
     from claia.core.tools.protocols.simple import dispatcher, payload, protocol
@@ -93,10 +92,10 @@ class TestSimpleProtocolPackageLayout:
     assert hasattr(dispatcher, "normalize_result")
     assert hasattr(dispatcher, "convert_type")
     assert hasattr(payload, "decode_payload")
-    assert protocol.SimpleProtocolPlugin is SimpleProtocolPlugin
+    assert protocol.SimpleProtocol is SimpleProtocol
 
   def test_simple_protocol_still_subclass_of_base(self):
-    assert issubclass(SimpleProtocolPlugin, BaseProtocol)
+    assert issubclass(SimpleProtocol, BaseProtocol)
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +225,8 @@ class TestFindTool:
 
   def test_skips_module_that_raises_during_introspection(self):
     class _Broken:
-      def get_module_info(self):
+      @property
+      def info(self):
         raise RuntimeError("boom")
 
       def get_module_tools(self):  # pragma: no cover
@@ -337,11 +337,11 @@ class TestNormalizeResult:
 
 
 # ---------------------------------------------------------------------------
-# SimpleProtocolPlugin under the new layout
+# SimpleProtocol under the new layout
 # ---------------------------------------------------------------------------
-class TestSimpleProtocolPluginIntegration:
+class TestSimpleProtocolIntegration:
   def test_get_tool_references_after_bind(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
     plugin.bind_tool_modules([
       _make_module("demo", {"ping": _tool("ping", lambda: Result.ok("pong"))}),
     ])
@@ -351,7 +351,7 @@ class TestSimpleProtocolPluginIntegration:
     assert refs[0].protocol_name == "simple"
 
   def test_bind_tool_modules_replaces_prior_modules(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
     plugin.bind_tool_modules([
       _make_module("first", {"x": _tool("x", lambda: "old")}),
     ])
@@ -362,7 +362,7 @@ class TestSimpleProtocolPluginIntegration:
     assert refs == ["second.y"]
 
   def test_bound_modules_property_is_read_only_view(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
     src = [_make_module("demo", {})]
     plugin.bind_tool_modules(src)
     snapshot = plugin.bound_modules
@@ -373,7 +373,7 @@ class TestSimpleProtocolPluginIntegration:
   def test_execute_runs_callable_via_payload_then_dispatcher(self):
     """Smoke test: the new ``execute`` path uses ``decode_payload``,
     ``find_tool``, ``prepare_command_kwargs``, and ``normalize_result``."""
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
 
     captured: Dict[str, Any] = {}
 
@@ -411,7 +411,7 @@ class TestSimpleProtocolPluginIntegration:
     assert captured["conversation"] is sentinel_conv
 
   def test_execute_propagates_required_arg_error(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
     plugin.bind_tool_modules([
       _make_module("demo", {
         "greet": _tool(
@@ -445,7 +445,7 @@ class TestManagerBinding:
     from claia.framework.manager import Manager, PluginEntry
 
     manager = Manager()
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
 
     # Inject one tool module + the simple protocol directly.
     proto_entry = PluginEntry(
@@ -488,7 +488,7 @@ class TestManagerBinding:
 
     manager = Manager()
     bad = _BadBinder()
-    good = SimpleProtocolPlugin()
+    good = SimpleProtocol()
 
     bad_entry = PluginEntry(
       name="bad", group="claia.tool_protocols", entry_point=None,
@@ -525,14 +525,11 @@ class _StubProtocol(BaseProtocol):
   """Concrete BaseProtocol whose inventory is settable in tests."""
 
   def __init__(self, name: str, refs: List[ToolReference]):
-    # Stash on the instance and override ``get_protocol_info`` since the
-    # ABC default reads from the class, not the instance.
-    self._info = ProtocolInfo(name=name, title=name, description="")
+    # Instance-level ``info`` so each stub can use a distinct name
+    # without sharing a class attribute.
+    self.info = ProtocolInfo(name=name, title=name, description="")
     self._refs = refs
     self.execute_calls: List[Dict[str, Any]] = []
-
-  def get_protocol_info(self) -> ProtocolInfo:
-    return self._info
 
   def get_tool_references(self) -> List[ToolReference]:
     return list(self._refs)
@@ -545,7 +542,7 @@ class _StubProtocol(BaseProtocol):
       "kwargs": kwargs,
     }
     self.execute_calls.append(call)
-    return Result.ok(f"{self._info.name}:{qualified_name}")
+    return Result.ok(f"{self.info.name}:{qualified_name}")
 
 
 def _registry_with_protocols(monkeypatch, protocols: List[BaseProtocol]):

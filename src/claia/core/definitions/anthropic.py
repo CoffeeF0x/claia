@@ -1,5 +1,5 @@
 """
-Anthropic model definitions plugin.
+Anthropic model definitions.
 
 Provides definitions for Anthropic Claude models.
 
@@ -36,8 +36,11 @@ logger = logging.getLogger(__name__)
 
 
 @definitions
-class AnthropicDefinitionsPlugin(BaseDefinitionProvider):
-  """Anthropic model definitions plugin."""
+@definitions.name("anthropic")
+@definitions.title("Anthropic Definitions")
+@definitions.description("Provides definitions for Anthropic Claude models.")
+class AnthropicDefinitions(BaseDefinitionProvider):
+  """Anthropic model definitions."""
 
   def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get Anthropic model definitions."""

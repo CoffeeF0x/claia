@@ -41,6 +41,7 @@ from .plugins.base import (
   DeploymentInfo,
   ProtocolInfo,
   ToolModuleInfo,
+  DefinitionsInfo,
   ToolDefinition,
   ArgumentDefinition,
   ToolReference,
@@ -74,7 +75,7 @@ __all__ = [
   # Plugin metadata + contracts
   "ExtensionInfo",
   "ArchitectureInfo", "DeploymentInfo",
-  "ProtocolInfo", "ToolModuleInfo",
+  "ProtocolInfo", "ToolModuleInfo", "DefinitionsInfo",
   "ToolDefinition", "ArgumentDefinition", "ToolReference", "DeploymentParams",
   "ParamSpec", "ParamScope", "SettingCategory",
   "ModelDefinition",

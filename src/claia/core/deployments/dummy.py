@@ -1,5 +1,5 @@
 """
-Dummy deployment plugin.
+Dummy deployment.
 
 Provides deployment capabilities for the dummy model.
 """
@@ -12,8 +12,8 @@ from ..decorators import deployment
 @deployment.name("dummy")
 @deployment.title("Dummy Deployment")
 @deployment.description("Dummy local deployment for testing")
-class DummyDeploymentPlugin(BaseDeployment):
-  """Deployment plugin for dummy models."""
+class DummyDeployment(BaseDeployment):
+  """Deployment for dummy models."""
 
   def create_model(self, model_name, model_class, init_kwargs):
     # DummyModel takes no init-time configuration.

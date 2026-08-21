@@ -1,5 +1,5 @@
 """
-Abstract base class for tool-module plugins.
+Abstract base class for tool modules.
 
 A tool module groups one or more callable tools (commands) under a
 common namespace. Each tool is described by a ``ToolDefinition`` that
@@ -20,13 +20,6 @@ class BaseToolModule(ABC):
   """Contract for tool-module plugins."""
 
   info: ClassVar[ToolModuleInfo]
-
-  def get_module_info(self) -> ToolModuleInfo:
-    """Return metadata describing this tool module.
-
-    Default implementation returns the class-level ``info`` attribute.
-    """
-    return type(self).info
 
   def get_module_tools(self) -> Dict[str, ToolDefinition]:
     """Return the tools provided by this module keyed by tool name.

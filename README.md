@@ -131,7 +131,7 @@ These values are passed to plugins through the `Registry` and filtered by each p
     - `add_process(process: Process)` — add a process to the registry's queue
 
 - Plugin System: Extensions are discovered via Python entry points. Built-in groups include:
-  - `claia.architectures` — provider architecture adapters mapping to model classes
+  - `claia.architectures` — model classes that implement a provider architecture
   - `claia.deployments` — runtime backends (e.g., API, local)
   - `claia.definitions` — model metadata and canonical IDs
   - `claia.agents` — model orchestration strategies

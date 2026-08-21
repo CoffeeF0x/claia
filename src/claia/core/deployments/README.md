@@ -9,8 +9,8 @@ Runtime backends that define **how and where** models run.
 - `remote.py` — remote runtime (e.g., worker/service backends).
 - `dummy.py` — no-op/testing backend.
 
-Each deployment plugin exposes a `DeploymentInfo` and is discovered via the
-`claia.deployments` entry point.
+Each deployment class exposes a class-level `info: DeploymentInfo` and is
+discovered via the `claia.deployments` entry point.
 
 ## How deployments fit in
 

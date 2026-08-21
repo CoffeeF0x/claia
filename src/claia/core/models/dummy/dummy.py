@@ -11,6 +11,7 @@ from typing import Generator
 from ..base import BaseModel
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.response import ModelResponse
+from ...decorators import architecture
 from ...enums.data import TextFormat
 from ..base.base import ModelInputs
 
@@ -105,6 +106,10 @@ CHARS_PER_CHUNK = 20
 ########################################################################
 #                               CLASSES                                #
 ########################################################################
+@architecture
+@architecture.name("dummy")
+@architecture.title("Dummy Architecture")
+@architecture.description("Dummy local model architecture for testing")
 class DummyModel(BaseModel):
   """
   A dummy model that returns a predefined story.

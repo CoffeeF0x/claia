@@ -5,7 +5,7 @@ streaming `TagParser` produces a `TagEvent` of type `TOOL`.
 
 ## What lives here
 
-- `simple/` — package implementing `SimpleProtocolPlugin`, the
+- `simple/` — package implementing `SimpleProtocol`, the
   in-tree default. Bridges native `BaseToolModule` plugins through
   the unified protocol contract; see the package README for the
   internal split (`protocol.py` / `dispatcher.py` / `payload.py`).

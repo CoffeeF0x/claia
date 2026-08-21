@@ -13,7 +13,7 @@ from ...results import Result
 @tool.name("system")
 @tool.title("System Utilities")
 @tool.description("Clear the screen or exit the application")
-class SystemModulePlugin(BaseToolModule):
+class SystemToolModule(BaseToolModule):
   """System module implementing terminal utilities."""
 
   @tool

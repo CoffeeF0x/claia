@@ -12,8 +12,9 @@ This module handles loading and coordinating all plugin types:
 Extensions are lazy-loaded: definitions/metadata are discovered first
 without instantiation, allowing each plugin's declared ``ParamSpec``
 list to be collected for dynamic settings. Full instantiation occurs
-when the extension is first accessed. Agents are never instantiated —
-discovery records the class and fills ``AgentInfo.agent_class``.
+when the extension is first accessed. Agents and architectures are
+never instantiated — discovery records the class (and, for agents,
+fills ``AgentInfo.agent_class``).
 """
 
 import logging
@@ -35,9 +36,8 @@ from .agents.base import AgentInfo, BaseAgent
 # All per-plugin entry point groups the manager discovers first.
 # Plugins declare their metadata via a class-level ``info`` attribute
 # (subclass of ``ExtensionInfo``); the ``info.params`` list drives
-# Settings, CLI flags, and init-kwarg filtering. Definition plugins
-# are the one exception — they don't carry an ``info`` object and
-# expose their metadata via ``get_definitions()`` instead.
+# Settings, CLI flags, and init-kwarg filtering. Every group — including
+# definitions — keys entries by ``info.name``.
 #
 # ``claia.plugins`` is a package-manifest group handled separately
 # after this loop (import the named module, then register every
@@ -63,7 +63,8 @@ class PluginEntry:
   the class reference and ``info`` object are read from the plugin
   class, never from an instance. Instantiation happens later in
   :meth:`Manager.load_all_plugins` once the full kwarg environment
-  (Settings) is available. Agent entries stay uninstantiated.
+  (Settings) is available. Agent and architecture entries stay
+  uninstantiated.
   """
   name: str                    # Entry point name
   group: str                   # Entry point group (e.g. ``claia.tool_modules``)
@@ -105,7 +106,7 @@ class Manager:
     # Programmatically registered agents
     self._registered_agents: Dict[str, AgentInfo] = {}
 
-    # group -> {info.name (or entry-point name): PluginEntry}
+    # group -> {info.name: PluginEntry}
     self._lazy_plugins: Dict[str, Dict[str, PluginEntry]] = {}
     self._plugins_discovered = False
     self._plugins_loaded = False
@@ -130,11 +131,13 @@ class Manager:
     1. Load the class (unavoidable).
     2. For agents, require a ``BaseAgent`` subclass; skip others with
        a warning. Fill ``info.agent_class`` from the loaded class.
+       For architectures, require a ``BaseModel`` subclass; skip
+       others with a warning. Neither group is instantiated.
     3. Read ``cls.info`` (subclass of ``ExtensionInfo``); no instance
-       is ever created during discovery. Architectures are expected
-       to declare their full param contract — both INIT (credentials,
-       endpoints) and RUNTIME (generation knobs like ``temperature``)
-       — directly on ``ArchitectureInfo.params``.
+       is ever created during discovery. Architectures declare their
+       full param contract — both INIT (credentials, endpoints) and
+       RUNTIME (generation knobs like ``temperature``) — directly on
+       ``ArchitectureInfo.params``.
     4. Store the :class:`PluginEntry` keyed by ``info.name`` (falling
        back to the entry-point name). First-in-wins on collisions.
     5. Load each ``claia.plugins`` manifest module (importing it runs
@@ -189,9 +192,10 @@ class Manager:
     """Validate, key, and store a plugin class in ``_lazy_plugins``.
 
     Shared by the per-plugin entry-point loop and the manifest
-    collection walk. Covers agent validation (``BaseAgent`` subclass
-    check and ``info.agent_class`` fill), metadata population, name
-    keying, first-in-wins collision handling, and discovery logging.
+    collection walk. Covers class-only validation (``BaseAgent`` /
+    ``BaseModel`` subclass checks and ``info.agent_class`` fill),
+    metadata population, name keying, first-in-wins collision
+    handling, and discovery logging.
 
     Returns the stored :class:`PluginEntry`, or ``None`` when the
     class is skipped.
@@ -205,6 +209,12 @@ class Manager:
       if not (isinstance(cls, type) and issubclass(cls, BaseAgent)):
         logger.warning(
           f"Skipping {name} from {group}: expected a BaseAgent subclass, got {cls!r}"
+        )
+        return None
+    elif group == 'claia.architectures':
+      if not (isinstance(cls, type) and issubclass(cls, BaseModel)):
+        logger.warning(
+          f"Skipping {name} from {group}: expected a BaseModel subclass, got {cls!r}"
         )
         return None
 
@@ -270,15 +280,10 @@ class Manager:
   def _populate_entry_metadata(self, entry: PluginEntry) -> None:
     """Read ``entry.info`` and flatten ``entry.params`` from the class.
 
-    Plugins are required to expose metadata through a class-level
-    ``info`` attribute; definition providers are the one exception
-    (they publish their metadata via ``get_definitions()``, so
-    ``info`` stays ``None`` and their params list stays empty).
-
+    Plugins expose metadata through a class-level ``info`` attribute.
     Architectures declare their full param contract — both INIT
     (credentials, endpoints) and RUNTIME (generation knobs) — on the
-    ``ArchitectureInfo`` itself. There is no fold-in from the model
-    class; the architecture plugin is the single source of truth.
+    ``ArchitectureInfo`` itself; the model class *is* the plugin.
     """
     cls = entry.plugin_class
     class_info = getattr(cls, 'info', None)
@@ -405,11 +410,11 @@ class Manager:
       # protocols (simple) don't go down with it.
       self._start_protocols()
 
-      # Agent plugins are discovered only — never instantiated.
+      # Agent and architecture plugins are discovered only — never instantiated.
       self._load_plugins(group='claia.agents', label='agent', allow_empty=True)
-
-      # Load model plugins (required)
       self._load_plugins(group='claia.architectures', label='architecture', allow_empty=False)
+
+      # Load deployment plugins (required)
       self._load_plugins(group='claia.deployments', label='deployment', allow_empty=False)
 
       self._plugins_loaded = True
@@ -436,22 +441,22 @@ class Manager:
   def _load_plugins(self, group: str, label: str, allow_empty: bool = False) -> None:
     """Instantiate discovered plugins and store them on their entries.
 
-    Plugin classes are stateless metadata + factory objects: they
-    expose an ``info`` attribute and (for architectures) a
-    ``get_model_class`` factory, but don't own the credentials or
-    runtime state themselves. INIT-scoped ``ParamSpec`` entries on
-    ``info.params`` describe what the *downstream* object (a model
-    instance, an outbound API call, ...) consumes; the registry
-    filters kwargs against those specs at dispatch time. The plugin
-    itself is always instantiated with no arguments.
+    Most plugin classes are stateless metadata holders: they expose
+    an ``info`` attribute and don't own credentials or runtime state
+    themselves. INIT-scoped ``ParamSpec`` entries on ``info.params``
+    describe what the *downstream* object (a model instance, an
+    outbound API call, ...) consumes; the registry filters kwargs
+    against those specs at dispatch time. Instantiable plugins are
+    constructed with no arguments.
 
-    Agent plugins are never instantiated — discovery already recorded
-    the class and filled ``info.agent_class``.
+    Agent and architecture plugins are never instantiated —
+    discovery already recorded the class. For agents that also fills
+    ``info.agent_class``; for architectures the class *is* the model.
     """
     loaded_count = 0
 
     try:
-      if group == 'claia.agents':
+      if group in ('claia.agents', 'claia.architectures'):
         loaded_count = len(self._lazy_plugins.get(group, {}))
       else:
         for entry in self._iter_entries(group):
@@ -589,11 +594,12 @@ class Manager:
   ) -> Optional[Any]:
     """Instantiate a plugin class with no arguments.
 
-    Plugins are stateless factories in this codebase; any INIT kwargs
-    they declare are consumed by the object the plugin constructs
-    (e.g. the model instance), not by the plugin class itself.
-    Returns ``None`` if instantiation fails so the caller can skip
-    the entry with a warning rather than aborting all plugin loading.
+    Instantiable plugins (deployments, protocols, modules, definition
+    providers) take no constructor args. INIT kwargs they declare are
+    consumed by the object they construct or invoke, not by the
+    plugin class itself. Returns ``None`` if instantiation fails so
+    the caller can skip the entry with a warning rather than aborting
+    all plugin loading.
     """
     try:
       return cls()
@@ -790,32 +796,24 @@ class Manager:
     return missing
 
   # Generic helpers for lookups and info collection
-  def _find_plugin_by_name(self, group: str, info_method: str, name: str) -> Tuple[Optional[Any], Optional[Any]]:
-    """Find a loaded plugin by its info.name using the given info_method.
+  def _find_plugin_by_name(self, group: str, name: str) -> Tuple[Optional[Any], Optional[Any]]:
+    """Find a plugin by ``info.name``.
 
-    Returns (plugin, info) tuple; (None, None) if not found.
+    Entries are already keyed by ``info.name``, so this is a dict
+    lookup. Returns ``(instance, info)``; ``(None, None)`` if not
+    found. ``instance`` is ``None`` for class-only groups.
     """
-    for inst in self._iter_instances(group):
-      try:
-        info = getattr(inst, info_method)()
-        if info and getattr(info, 'name', None) == name:
-          return inst, info
-      except Exception as e:
-        logger.warning(f"Failed retrieving {info_method} for plugin {inst}: {e}")
-    return None, None
+    entry = self._lazy_plugins.get(group, {}).get(name)
+    if entry is None:
+      return None, None
+    return entry.instance, entry.info
 
-  def _collect_info_dict(self, group: str, info_method: str) -> Dict[str, Any]:
-    """Collect instance-method info objects into a dict keyed by info.name."""
+  def _collect_info_dict(self, group: str) -> Dict[str, Any]:
+    """Collect ``entry.info`` objects into a dict keyed by ``info.name``."""
     all_items: Dict[str, Any] = {}
-    for inst in self._iter_instances(group):
-      try:
-        info = getattr(inst, info_method)()
-        if info:
-          name = getattr(info, 'name', None)
-          if name:
-            all_items[name] = info
-      except Exception as e:
-        logger.warning(f"Failed collecting items via {info_method}: {e}")
+    for key, entry in self._lazy_plugins.get(group, {}).items():
+      if entry.info:
+        all_items[key] = entry.info
     return all_items
 
 
@@ -825,31 +823,30 @@ class Manager:
   # MODELS
   def get_available_architectures(self) -> Dict[str, ArchitectureInfo]:
     """
-    Get all available architecture plugins and their info keyed by name.
+    Get all available architectures and their info keyed by name.
 
     Each ``ArchitectureInfo.params`` already carries the plugin's full
     contract (both INIT and RUNTIME specs); there's no post-processing
     here. Dispatch-time consumers (``Registry._run_stream``) filter
-    kwargs directly against this list.
+    kwargs directly against this list. Architectures are class-only —
+    info is read from the discovered entries, never from an instance.
     """
     self.load_all_plugins()
-    all_arch = self._collect_info_dict('claia.architectures', 'get_architecture_info')
+    all_arch = self._collect_info_dict('claia.architectures')
     logger.debug(f"Collected {len(all_arch)} architectures")
     return all_arch
 
   def get_model_class(self, architecture_name: str) -> Optional[Type[BaseModel]]:
-    """Get the model class for a specific architecture by name."""
+    """Get the model class for a specific architecture by name.
+
+    The architecture entry *is* the model class; this is a direct
+    lookup of ``entry.plugin_class``.
+    """
     self.load_all_plugins()
-    for inst in self._iter_instances('claia.architectures'):
-      try:
-        info = inst.get_architecture_info()
-        if info and info.name == architecture_name:
-          model_class = inst.get_model_class()
-          if model_class:
-            logger.debug(f"Found model class for architecture {architecture_name}")
-            return model_class
-      except Exception as e:
-        logger.warning(f"Failed retrieving model class for architecture {architecture_name}: {e}")
+    entry = self._lazy_plugins.get('claia.architectures', {}).get(architecture_name)
+    if entry and entry.plugin_class:
+      logger.debug(f"Found model class for architecture {architecture_name}")
+      return entry.plugin_class
 
     logger.debug(f"No model class found for architecture {architecture_name}")
     return None
@@ -881,29 +878,33 @@ class Manager:
   def get_available_deployments(self) -> Dict[str, DeploymentInfo]:
     """Get all available deployment methods."""
     self.load_all_plugins()
-    all_deployments = self._collect_info_dict('claia.deployments', 'get_deployment_info')
+    all_deployments = self._collect_info_dict('claia.deployments')
     logger.debug(f"Collected {len(all_deployments)} deployment methods")
     return all_deployments
 
   def get_deployment_plugin(self, deployment_name: str):
     """Get a specific deployment plugin by name."""
     self.load_all_plugins()
-    plugin, _ = self._find_plugin_by_name(
-      'claia.deployments', 'get_deployment_info', deployment_name
-    )
+    plugin, _ = self._find_plugin_by_name('claia.deployments', deployment_name)
     return plugin
 
 
   # TOOLS
   def get_protocol_by_name(self, name: str):
-    """Get a tool protocol plugin by name."""
+    """Get a tool protocol plugin by name.
+
+    Returns ``(instance, info)`` or ``(None, None)``.
+    """
     self.load_all_plugins()
-    return self._find_plugin_by_name('claia.tool_protocols', 'get_protocol_info', name)
+    return self._find_plugin_by_name('claia.tool_protocols', name)
 
   def get_module_by_name(self, name: str):
-    """Get a tool module plugin by name."""
+    """Get a tool module plugin by name.
+
+    Returns ``(instance, info)`` or ``(None, None)``.
+    """
     self.load_all_plugins()
-    return self._find_plugin_by_name('claia.tool_modules', 'get_module_info', name)
+    return self._find_plugin_by_name('claia.tool_modules', name)
 
   def get_tool_by_name(self, command_name: str):
     """Find a tool by name across all loaded modules."""
@@ -911,20 +912,21 @@ class Manager:
 
     if '.' in command_name:
       module_name, cmd_name = command_name.split('.', 1)
-      for inst in self._iter_instances('claia.tool_modules'):
-        info = inst.get_module_info()
-        if info and info.name == module_name and hasattr(inst, 'get_module_tools'):
-          commands = inst.get_module_tools()
-          if cmd_name in commands:
-            return inst, commands[cmd_name], info
+      inst, info = self._find_plugin_by_name('claia.tool_modules', module_name)
+      if inst is not None and info is not None and hasattr(inst, 'get_module_tools'):
+        commands = inst.get_module_tools()
+        if cmd_name in commands:
+          return inst, commands[cmd_name], info
       return None, None, None
 
-    for inst in self._iter_instances('claia.tool_modules'):
-      info = inst.get_module_info()
-      if info and hasattr(inst, 'get_module_tools'):
-        commands = inst.get_module_tools()
-        if command_name in commands:
-          return inst, commands[command_name], info
+    for entry in self._iter_entries('claia.tool_modules'):
+      inst = entry.instance
+      info = entry.info
+      if inst is None or info is None or not hasattr(inst, 'get_module_tools'):
+        continue
+      commands = inst.get_module_tools()
+      if command_name in commands:
+        return inst, commands[command_name], info
     return None, None, None
 
   def get_all_commands(self) -> Dict[str, Dict]:
@@ -932,9 +934,10 @@ class Manager:
     self.load_all_plugins()
     result = {}
 
-    for inst in self._iter_instances('claia.tool_modules'):
-      info = inst.get_module_info()
-      if not info or not hasattr(inst, 'get_module_tools'):
+    for entry in self._iter_entries('claia.tool_modules'):
+      inst = entry.instance
+      info = entry.info
+      if inst is None or info is None or not hasattr(inst, 'get_module_tools'):
         continue
 
       module_entry = {

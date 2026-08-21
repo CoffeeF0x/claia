@@ -83,11 +83,10 @@ def fake_manager():
 
     def get_deployment_plugin(self, deployment_name):
       class Deployment:
-        def get_deployment_info(self):
-          class Info:
-            name = "api"
-            params = []
-          return Info()
+        class Info:
+          name = "api"
+          params = []
+        info = Info()
 
         def run(self, model_name, model_class, conversation, cache, **kwargs):
           yield TextChunk(data=f"deployed {model_name} via {deployment_name}")

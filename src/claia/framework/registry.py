@@ -180,12 +180,7 @@ class Registry:
     protocols: Dict[str, Any] = {}
 
     for inst in self.manager.iter_protocol_instances():
-      try:
-        info = inst.get_protocol_info()
-      except Exception:
-        logger.exception("Failed to read protocol_info from %r", inst)
-        continue
-      protocol_name = getattr(info, "name", None)
+      protocol_name = getattr(getattr(inst, "info", None), "name", None)
       if not protocol_name:
         continue
 
@@ -487,7 +482,7 @@ class Registry:
     if not selected_deployment:
       raise DeploymentError(f"Deployment method '{deployment_params.deployment_name}' not available")
 
-    deployment_info = selected_deployment.get_deployment_info()
+    deployment_info = selected_deployment.info
     deployment_params_specs = getattr(deployment_info, 'params', None)
     deployment_init_kwargs = Manager.filter_init_kwargs(combined_kwargs, deployment_params_specs)
 

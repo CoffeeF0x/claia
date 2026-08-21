@@ -1,5 +1,5 @@
 """
-``SimpleProtocolPlugin`` — the post-overhaul ``BaseProtocol`` impl
+``SimpleProtocol`` — the post-overhaul ``BaseProtocol`` impl
 that bridges native ``BaseToolModule`` plugins.
 
 The plugin is constructed at framework startup (via the
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 @protocol.name("simple")
 @protocol.title("Simple Local Protocol")
 @protocol.description("Resolves tool name to a command module plugin and executes it.")
-class SimpleProtocolPlugin(BaseProtocol):
+class SimpleProtocol(BaseProtocol):
   """Bridge between native tool modules and the new protocol contract."""
 
   def __init__(self) -> None:
@@ -90,7 +90,7 @@ class SimpleProtocolPlugin(BaseProtocol):
     refs: List[ToolReference] = []
     for module in self._modules:
       try:
-        module_info = module.get_module_info()
+        module_info = module.info
         tools = module.get_module_tools() or {}
       except Exception:
         logger.exception("Failed to collect tools from module %r", module)
@@ -155,4 +155,4 @@ class SimpleProtocolPlugin(BaseProtocol):
     return normalize_result(qualified_name, result)
 
 
-__all__ = ["SimpleProtocolPlugin"]
+__all__ = ["SimpleProtocol"]

@@ -8,8 +8,8 @@ language.
 Layout mirrors the concepts being mocked, e.g.:
 
   mocks/definitions.py   -> ModelDefinition builders
-  mocks/architectures.py -> fake architecture plugins
-  mocks/deployments.py   -> fake deployment plugins
+  mocks/architectures.py -> fake architecture / model classes
+  mocks/deployments.py   -> fake deployments
   mocks/conversations.py -> Conversation/Message builders
 
 Populated module-by-module as tests migrate to the mirrored structure described

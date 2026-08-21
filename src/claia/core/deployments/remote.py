@@ -1,7 +1,7 @@
 """
-Remote deployment method plugin.
+Remote deployment.
 
-This deployment method handles remote models that run on remote servers,
+This deployment handles remote models that run on remote servers,
 cloud VMs, or other distributed systems.
 """
 
@@ -16,8 +16,8 @@ from ..results import DeploymentError, Result
 @deployment.name("remote")
 @deployment.title("Remote Deployment")
 @deployment.description("Deploy models on remote servers or cloud VMs")
-class RemoteDeploymentPlugin(BaseDeployment):
-  """Remote deployment method plugin for distributed models."""
+class RemoteDeployment(BaseDeployment):
+  """Remote deployment for distributed models."""
 
   def create_model(
     self,

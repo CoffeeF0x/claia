@@ -1,5 +1,5 @@
 """
-OpenAI model definitions plugin.
+OpenAI model definitions.
 
 Provides definitions for OpenAI models.
 
@@ -31,8 +31,11 @@ logger = logging.getLogger(__name__)
 
 
 @definitions
-class OpenAIDefinitionsPlugin(BaseDefinitionProvider):
-  """OpenAI model definitions plugin."""
+@definitions.name("openai")
+@definitions.title("OpenAI Definitions")
+@definitions.description("Provides definitions for OpenAI models.")
+class OpenAIDefinitions(BaseDefinitionProvider):
+  """OpenAI model definitions."""
 
   def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get OpenAI model definitions."""

@@ -1,4 +1,4 @@
-"""OpenRouter-only model definitions plugin."""
+"""OpenRouter-only model definitions."""
 
 import logging
 from typing import Dict, List, Optional
@@ -46,8 +46,11 @@ def _definition(
 
 
 @definitions
-class OpenRouterDefinitionsPlugin(BaseDefinitionProvider):
-  """OpenRouter model definitions plugin."""
+@definitions.name("openrouter")
+@definitions.title("OpenRouter Definitions")
+@definitions.description("OpenRouter-only model definitions.")
+class OpenRouterDefinitions(BaseDefinitionProvider):
+  """OpenRouter model definitions."""
 
   def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get large non-native provider models available through OpenRouter."""

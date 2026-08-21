@@ -1,5 +1,5 @@
 """
-Abstract base class for deployment plugins.
+Abstract base class for deployments.
 
 A deployment takes an architecture's model class plus a conversation,
 translates the conversation into model inputs using the resolved
@@ -29,13 +29,9 @@ ModelInputs = Union[MessageSequence, List[BaseArtifact]]
 
 
 class BaseDeployment(ABC):
-  """Contract and shared run path for deployment plugins."""
+  """Contract and shared run path for deployments."""
 
   info: ClassVar[DeploymentInfo]
-
-  def get_deployment_info(self) -> DeploymentInfo:
-    """Return metadata describing this deployment method."""
-    return type(self).info
 
   def cache_key(self, model_name: str) -> str:
     """Cache key for a deployed model instance under this deployment."""

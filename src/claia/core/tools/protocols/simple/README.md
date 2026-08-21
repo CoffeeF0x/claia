@@ -10,15 +10,15 @@ through this protocol.
 
 | File              | Responsibility                                                           |
 | ----------------- | ------------------------------------------------------------------------ |
-| `protocol.py`     | `SimpleProtocolPlugin` — `BaseProtocol` impl, lifecycle, inventory.      |
+| `protocol.py`     | `SimpleProtocol` — `BaseProtocol` impl, lifecycle, inventory.      |
 | `dispatcher.py`   | `find_tool`, `prepare_command_kwargs`, `convert_type`, `normalize_result`. |
 | `payload.py`      | `decode_payload(raw_payload) -> (parameters, name_hint)`.                |
-| `__init__.py`     | Re-exports `SimpleProtocolPlugin` so the `claia.tool_protocols` entry point still resolves at the package path. |
+| `__init__.py`     | Re-exports `SimpleProtocol` so the `claia.tool_protocols` entry point still resolves at the package path. |
 
 ## How dispatch flows
 
-1. The framework loads `SimpleProtocolPlugin` via the
-   `simple = "claia.core.tools.protocols.simple:SimpleProtocolPlugin"`
+1. The framework loads `SimpleProtocol` via the
+   `simple = "claia.core.tools.protocols.simple:SimpleProtocol"`
    entry point.
 2. After every `claia.tool_modules` plugin is instantiated, the
    `Manager` calls `bind_tool_modules(modules)` so the protocol owns

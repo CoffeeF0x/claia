@@ -113,37 +113,37 @@ claia = "claia.cli.__main__:main"
 # migration so external plugins that already register against them keep
 # working.
 [project.entry-points."claia.architectures"]
-openai = "claia.core.architectures.openai:OpenAIPlugin"
-anthropic = "claia.core.architectures.anthropic:AnthropicPlugin"
-openrouter = "claia.core.architectures.openrouter:OpenRouterPlugin"
-transformers_generic = "claia.core.architectures.transformers_generic:TransformersGenericPlugin"
-transformers_gemma3 = "claia.core.architectures.transformers_gemma3:TransformersGemma3Plugin"
-diffusers = "claia.core.architectures.diffusers:DiffusersPlugin"
-tts = "claia.core.architectures.tts:TTSPlugin"
-dummy = "claia.core.architectures.dummy:DummyArchitecturePlugin"
+openai = "claia.core.models.api.openai:OpenAIModel"
+anthropic = "claia.core.models.api.anthropic:AnthropicModel"
+openrouter = "claia.core.models.api.openrouter:OpenRouterModel"
+transformers_generic = "claia.core.models.transformers.generic:GenericTransformerModel"
+transformers_gemma3 = "claia.core.models.transformers.gemma3:Gemma3Model"
+diffusers = "claia.core.models.transformers.diffusers:DiffusersModel"
+tts = "claia.core.models.transformers.tts:LocalTTSModel"
+dummy = "claia.core.models.dummy.dummy:DummyModel"
 
 [project.entry-points."claia.deployments"]
-api = "claia.core.deployments.api:APIDeploymentPlugin"
-local = "claia.core.deployments.local:LocalDeploymentPlugin"
-remote = "claia.core.deployments.remote:RemoteDeploymentPlugin"
-dummy = "claia.core.deployments.dummy:DummyDeploymentPlugin"
+api = "claia.core.deployments.api:APIDeployment"
+local = "claia.core.deployments.local:LocalDeployment"
+remote = "claia.core.deployments.remote:RemoteDeployment"
+dummy = "claia.core.deployments.dummy:DummyDeployment"
 
 [project.entry-points."claia.definitions"]
-openai = "claia.core.definitions.openai:OpenAIDefinitionsPlugin"
-anthropic = "claia.core.definitions.anthropic:AnthropicDefinitionsPlugin"
-openrouter = "claia.core.definitions.openrouter:OpenRouterDefinitionsPlugin"
-legacy = "claia.core.definitions.legacy:LegacyDefinitionsPlugin"
+openai = "claia.core.definitions.openai:OpenAIDefinitions"
+anthropic = "claia.core.definitions.anthropic:AnthropicDefinitions"
+openrouter = "claia.core.definitions.openrouter:OpenRouterDefinitions"
+legacy = "claia.core.definitions.legacy:LegacyDefinitions"
 
 [project.entry-points."claia.agents"]
 simple = "claia.framework.agents.simple:SimpleAgent"
 
 [project.entry-points."claia.tool_protocols"]
-simple = "claia.core.tools.protocols.simple:SimpleProtocolPlugin"
+simple = "claia.core.tools.protocols.simple:SimpleProtocol"
 
 [project.entry-points."claia.tool_modules"]
-cli = "claia.cli.commands.extension:CLIModulePlugin"
-sample = "claia.core.tools.modules.sample:SampleModulePlugin"
-system = "claia.core.tools.modules.system:SystemModulePlugin"
+cli = "claia.cli.commands.extension:CLIToolModule"
+sample = "claia.core.tools.modules.sample:SampleToolModule"
+system = "claia.core.tools.modules.system:SystemToolModule"
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]

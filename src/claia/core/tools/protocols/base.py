@@ -1,5 +1,5 @@
 """
-Abstract base class for tool-protocol plugins.
+Abstract base class for tool protocols.
 
 A *protocol* is a tool-execution backend. It owns its own tool
 inventory (returned via :meth:`BaseProtocol.get_tool_references`) and
@@ -33,13 +33,6 @@ class BaseProtocol(ABC):
   """
 
   info: ClassVar[ProtocolInfo]
-
-  def get_protocol_info(self) -> ProtocolInfo:
-    """Return metadata describing this protocol.
-
-    Default implementation returns the class-level ``info`` attribute.
-    """
-    return type(self).info
 
   def start(self) -> None:
     """Open sessions, validate config, warm caches.

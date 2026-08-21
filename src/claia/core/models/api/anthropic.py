@@ -13,7 +13,14 @@ from typing import Dict, Any, Optional, Generator
 from ...data.chunks import BaseChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.response import ModelResponse
+from ...decorators import architecture
 from ...enums.conversation import MessageRole
+from ...plugins.base import (
+  COMMON_TEXT_RUNTIME_PARAMS,
+  ParamScope,
+  ParamSpec,
+  SettingCategory,
+)
 from ..base import APIModel
 from ..base.base import ModelInputs
 
@@ -36,6 +43,20 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                               CLASSES                                #
 ########################################################################
+@architecture
+@architecture.name("anthropic")
+@architecture.title("Anthropic API Architecture")
+@architecture.description("Implements Anthropic Claude API-backed models")
+@architecture.param(ParamSpec(
+  name="anthropic_api_token",
+  type=str,
+  scope=ParamScope.INIT,
+  required=True,
+  secret=True,
+  category=SettingCategory.API,
+  description="Anthropic API Token",
+))
+@architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)
 class AnthropicModel(APIModel):
   """Anthropic Claude API model implementation."""
 

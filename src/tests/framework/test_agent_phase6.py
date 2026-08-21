@@ -457,5 +457,5 @@ class TestLegacySurfaceRemoved:
     assert not hasattr(Registry, "get_commands_catalog")
 
   def test_simple_protocol_no_longer_has_execute_legacy(self):
-    from claia.core.tools.protocols.simple import SimpleProtocolPlugin
-    assert not hasattr(SimpleProtocolPlugin, "execute_legacy")
+    from claia.core.tools.protocols.simple import SimpleProtocol
+    assert not hasattr(SimpleProtocol, "execute_legacy")

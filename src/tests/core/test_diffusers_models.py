@@ -9,7 +9,7 @@ import types
 from claia.core.data import Conversation
 from claia.core.data.chunks import ImageChunk, TextChunk
 from claia.core.data.response import ModelResponse
-from claia.core.deployments.local import LocalDeploymentPlugin
+from claia.core.deployments.local import LocalDeployment
 from claia.core.enums.conversation import MessageRole
 from claia.core.enums.data import ImageFormat
 
@@ -84,10 +84,10 @@ def _import_diffusers_module(monkeypatch):
 
 
 def _artifacts(conversation):
-  from claia.core.deployments.dummy import DummyDeploymentPlugin
+  from claia.core.deployments.dummy import DummyDeployment
   from claia.core.definitions.model_definition import ModelDefinition
   from claia.core.enums.data import ArtifactType
-  return DummyDeploymentPlugin().translate(
+  return DummyDeployment().translate(
     conversation,
     ModelDefinition(supported_inputs=[ArtifactType.TEXT]),
   )
@@ -171,7 +171,7 @@ def test_local_deployment_passes_image_chunks_through():
       yield image_chunk
       return ModelResponse(chunks=[image_chunk], complete=True)
 
-  deployment = LocalDeploymentPlugin()
+  deployment = LocalDeployment()
   chunks = list(deployment.run(
     model_name="fake-image-model",
     model_class=ImageModel,

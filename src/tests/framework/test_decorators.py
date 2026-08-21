@@ -213,9 +213,9 @@ def test_manifest_entry_point_import_registers_new_class(monkeypatch):
   modules = manager._lazy_plugins["claia.tool_modules"]
   assert "fake_manifest_mod" in modules
   assert modules["fake_manifest_mod"].plugin_class is captured["cls"]
-  from claia.core.tools.modules.sample import SampleModulePlugin
+  from claia.core.tools.modules.sample import SampleToolModule
   assert "sample" in modules
-  assert modules["sample"].plugin_class is SampleModulePlugin
+  assert modules["sample"].plugin_class is SampleToolModule
   agents = manager._lazy_plugins["claia.agents"]
   assert agents["simple"].plugin_class is SimpleAgent
 

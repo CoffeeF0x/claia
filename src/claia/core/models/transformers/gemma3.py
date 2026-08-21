@@ -10,7 +10,9 @@ from typing import Any, Dict, Optional
 
 # Internal dependencies
 from ...data.models.conversation.message_sequence import MessageSequence
+from ...decorators import architecture
 from ...enums.conversation import MessageRole
+from ...plugins.base import ParamScope, ParamSpec, SettingCategory
 from .generic import GenericTransformerModel
 
 
@@ -23,14 +25,39 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                               CLASSES                                #
 ########################################################################
+@architecture
+@architecture.name("transformers_gemma3")
+@architecture.title("Gemma3 Transformers Architecture")
+@architecture.description("Specialized implementation for Gemma3 transformer models")
+@architecture.param(ParamSpec(
+  name="huggingface_api_token",
+  type=str,
+  scope=ParamScope.INIT,
+  secret=True,
+  category=SettingCategory.API,
+  description="Hugging Face API Token (required for gated Gemma3 checkpoints)",
+))
+@architecture.param(
+  ParamSpec(name="max_tokens", type=int, scope=ParamScope.RUNTIME, default=2048,
+            category=SettingCategory.GENERATION,
+            description="Maximum number of tokens to generate."),
+  ParamSpec(name="temperature", type=float, scope=ParamScope.RUNTIME, default=0.8,
+            category=SettingCategory.GENERATION,
+            description="Sampling temperature."),
+  ParamSpec(name="top_p", type=float, scope=ParamScope.RUNTIME, default=0.95,
+            category=SettingCategory.GENERATION,
+            description="Nucleus sampling probability mass."),
+  ParamSpec(name="top_k", type=int, scope=ParamScope.RUNTIME, default=40,
+            category=SettingCategory.GENERATION,
+            description="Restrict sampling to the top-k tokens."),
+)
 class Gemma3Model(GenericTransformerModel):
   """Specialized Gemma3 transformer model implementation.
 
   Generation defaults (``max_tokens``, ``temperature``, ``top_p``,
-  ``top_k``) for this model live on
-  ``TransformersGemma3Plugin.info.params`` as RUNTIME ``ParamSpec``
-  entries; the framework resolves them into ``kwargs`` before calling
-  ``generate``.
+  ``top_k``) override the inherited generic stack as RUNTIME
+  ``ParamSpec`` entries; the framework resolves them into ``kwargs``
+  before calling ``generate``.
   """
 
   def __init__(self, model_name: str, model_path: str, defer_loading: bool = False, device: str = "cpu", huggingface_api_token: Optional[str] = None):

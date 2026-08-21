@@ -2,11 +2,10 @@
 Tests for the OpenRouter API architecture and definitions.
 """
 
-from claia.core.architectures.openrouter import OpenRouterPlugin
 from claia.core.data import Conversation
-from claia.core.definitions.anthropic import AnthropicDefinitionsPlugin
-from claia.core.definitions.openai import OpenAIDefinitionsPlugin
-from claia.core.definitions.openrouter import OpenRouterDefinitionsPlugin
+from claia.core.definitions.anthropic import AnthropicDefinitions
+from claia.core.definitions.openai import OpenAIDefinitions
+from claia.core.definitions.openrouter import OpenRouterDefinitions
 from claia.core.enums.conversation import MessageRole
 from claia.core.models.api.openrouter import OpenRouterModel
 from claia.core.modality import Modality
@@ -36,11 +35,11 @@ class RecordingOpenRouterModel(OpenRouterModel):
 
 
 def _sequence(conversation):
-  from claia.core.deployments.dummy import DummyDeploymentPlugin
+  from claia.core.deployments.dummy import DummyDeployment
   from claia.core.definitions.model_definition import ModelDefinition
   from claia.core.data.models.conversation.message_sequence import MessageSequence
   from claia.core.enums.data import ArtifactType
-  return DummyDeploymentPlugin().translate(
+  return DummyDeployment().translate(
     conversation,
     ModelDefinition(supported_inputs=[ArtifactType.TEXT, MessageSequence]),
   )
@@ -119,18 +118,17 @@ def test_openrouter_model_surfaces_api_errors():
 
 
 def test_openrouter_architecture_exposes_model_and_params():
-  info = OpenRouterPlugin().get_architecture_info()
+  info = OpenRouterModel.info
 
-  assert OpenRouterPlugin().get_model_class() is OpenRouterModel
   assert info.name == "openrouter"
   assert info.param("openrouter_api_token") is not None
   assert info.param("stream").default is True
 
 
 def test_native_provider_definitions_include_openrouter_endpoint():
-  gpt = OpenAIDefinitionsPlugin().get_definitions()["gpt-5.5"]
-  openai = OpenAIDefinitionsPlugin().get_definitions()["gpt-4o-mini"]
-  anthropic = AnthropicDefinitionsPlugin().get_definitions()["claude-sonnet-4-6"]
+  gpt = OpenAIDefinitions().get_definitions()["gpt-5.5"]
+  openai = OpenAIDefinitions().get_definitions()["gpt-4o-mini"]
+  anthropic = AnthropicDefinitions().get_definitions()["claude-sonnet-4-6"]
 
   assert gpt.aliases == ["gpt"]
   assert gpt.identifiers == {"openai": "gpt-5.5", "openrouter": "openai/gpt-5.5"}
@@ -141,7 +139,7 @@ def test_native_provider_definitions_include_openrouter_endpoint():
 
 
 def test_openrouter_definitions_are_large_open_models():
-  definitions = OpenRouterDefinitionsPlugin().get_definitions()
+  definitions = OpenRouterDefinitions().get_definitions()
   kimi = definitions["kimi-k2.6"]
   deepseek = definitions["deepseek-v4-pro"]
   glm = definitions["glm-5.1"]

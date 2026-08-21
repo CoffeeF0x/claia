@@ -6,10 +6,9 @@
 
 - `data/` — artifacts, prompts, conversations, messages, domain events, and utilities.
 - `plugins/` — shared metadata dataclasses such as `ParamSpec`, `ArchitectureInfo`, `ToolDefinition`, and `DeploymentParams`.
-- `architectures/` — adapters that map model definitions to model classes.
 - `deployments/` — API, local, remote, and dummy execution backends.
 - `definitions/` — canonical model IDs, provider metadata, and definition merging.
-- `models/` — concrete API, transformer, dummy, and base model classes.
+- `models/` — concrete API, transformer, dummy, and base model classes. Architecture entry points target these classes directly.
 - `tools/` — tool modules and execution protocols.
 - `enums/`, `modality.py`, and `results.py` — shared value types used across the layers.
 

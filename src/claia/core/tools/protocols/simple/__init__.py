@@ -1,8 +1,8 @@
 """
-SimpleProtocolPlugin package — bridges native ``BaseToolModule``
+SimpleProtocol package — bridges native ``BaseToolModule``
 plugins into the post-overhaul ``BaseProtocol`` contract.
 
-Public surface is :class:`SimpleProtocolPlugin`. Internals are split
+Public surface is :class:`SimpleProtocol`. Internals are split
 across three modules per plan §8:
 
 - ``protocol.py``   — the ``BaseProtocol`` implementation.
@@ -12,11 +12,11 @@ across three modules per plan §8:
 - ``payload.py``    — ``raw_payload`` (JSON) decoding into
   ``(parameters, name_hint)`` tuples.
 
-The ``simple = "claia.core.tools.protocols.simple:SimpleProtocolPlugin"``
+The ``simple = "claia.core.tools.protocols.simple:SimpleProtocol"``
 entry point continues to resolve here because the package re-exports
 the class at module level.
 """
 
-from .protocol import SimpleProtocolPlugin
+from .protocol import SimpleProtocol
 
-__all__ = ["SimpleProtocolPlugin"]
+__all__ = ["SimpleProtocol"]

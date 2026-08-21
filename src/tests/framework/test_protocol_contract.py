@@ -6,8 +6,8 @@ Exercises the protocol contract described in the ExoFox docs repo
 
 - ``ToolReference`` dataclass shape and defaults.
 - ``BaseProtocol`` ABC (abstract method enforcement, default
-  lifecycle no-ops, ``get_protocol_info`` passthrough).
-- ``SimpleProtocolPlugin`` implementing the ABC: ``execute`` via
+  lifecycle no-ops, class-level ``info``).
+- ``SimpleProtocol`` implementing the ABC: ``execute`` via
   JSON payload and ``get_tool_references`` reflecting bound modules.
 - ``Manager`` lifecycle: ``start()`` fires at load time,
   ``stop_protocols()`` / ``refresh_protocols()`` iterate loaded
@@ -34,7 +34,7 @@ from claia.core.plugins.base import (
 )
 from claia.core.results import Result
 from claia.core.tools.protocols.base import BaseProtocol
-from claia.core.tools.protocols.simple import SimpleProtocolPlugin
+from claia.core.tools.protocols.simple import SimpleProtocol
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +116,7 @@ class TestBaseProtocolContract:
     assert inst.stop() is None
     assert inst.refresh() is None
 
-  def test_get_protocol_info_returns_class_info(self):
+  def test_info_is_reachable_from_instance(self):
     class Minimal(BaseProtocol):
       info = ProtocolInfo(name="m", title="M", description="D")
 
@@ -127,9 +127,8 @@ class TestBaseProtocolContract:
         return Result.ok("noop")
 
     inst = Minimal()
-    retrieved = inst.get_protocol_info()
-    assert retrieved is Minimal.info
-    assert retrieved.name == "m"
+    assert inst.info is Minimal.info
+    assert inst.info.name == "m"
 
 
 # ---------------------------------------------------------------------------
@@ -178,13 +177,12 @@ class TestLegacyProtocolDeprecation:
 
 
 # ---------------------------------------------------------------------------
-# SimpleProtocolPlugin
+# SimpleProtocol
 # ---------------------------------------------------------------------------
 def _make_module(module_name: str, tools: Dict[str, Any]):
   """Construct a minimal ``BaseToolModule``-compatible duck."""
   class _Module:
-    def get_module_info(self) -> ToolModuleInfo:
-      return ToolModuleInfo(name=module_name, title=module_name, description="")
+    info = ToolModuleInfo(name=module_name, title=module_name, description="")
 
     def get_module_tools(self):
       return tools
@@ -201,21 +199,21 @@ def _tool_def(name: str, fn, **arg_defs: ArgumentDefinition) -> ToolDefinition:
   )
 
 
-class TestSimpleProtocolPluginContract:
-  """``SimpleProtocolPlugin`` honors the new ``BaseProtocol`` ABC."""
+class TestSimpleProtocolContract:
+  """``SimpleProtocol`` honors the new ``BaseProtocol`` ABC."""
 
   def test_is_concrete_instantiable_and_info_matches(self):
-    plugin = SimpleProtocolPlugin()
-    info = plugin.get_protocol_info()
+    plugin = SimpleProtocol()
+    info = plugin.info
     assert info.name == "simple"
     assert info.title.startswith("Simple")
 
   def test_get_tool_references_empty_when_no_modules_bound(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
     assert plugin.get_tool_references() == []
 
   def test_get_tool_references_emits_qualified_names(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
 
     def _echo(message: str) -> Result:
       return Result.ok(message)
@@ -239,10 +237,11 @@ class TestSimpleProtocolPluginContract:
     assert "message" in ref.parameter_schema
 
   def test_get_tool_references_tolerates_module_failure(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
 
     class _Broken:
-      def get_module_info(self):
+      @property
+      def info(self):
         raise RuntimeError("boom")
 
       def get_module_tools(self):  # pragma: no cover - unreachable
@@ -252,13 +251,13 @@ class TestSimpleProtocolPluginContract:
     assert plugin.get_tool_references() == []
 
   def test_execute_returns_not_found_without_modules(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
     result = plugin.execute("demo.echo", "{}", conversation=None)
     assert result.is_error()
     assert "demo.echo" in result.get_message()
 
   def test_execute_dispatches_from_json_payload(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
 
     def _echo(message: str) -> Result:
       return Result.ok(f"echo:{message}")
@@ -279,7 +278,7 @@ class TestSimpleProtocolPluginContract:
     assert result.get_data() == "echo:hi"
 
   def test_execute_accepts_envelope_payload(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
 
     def _add(a: int, b: int) -> str:
       return str(a + b)
@@ -303,7 +302,7 @@ class TestSimpleProtocolPluginContract:
     assert result.get_data() == "5"
 
   def test_execute_rejects_non_json_payload(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
     plugin.bind_tool_modules([
       _make_module("demo", {"echo": _tool_def("echo", lambda **_: "ok")}),
     ])
@@ -313,7 +312,7 @@ class TestSimpleProtocolPluginContract:
     assert "JSON" in result.get_message()
 
   def test_execute_rejects_non_object_payload(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
     plugin.bind_tool_modules([
       _make_module("demo", {"echo": _tool_def("echo", lambda **_: "ok")}),
     ])
@@ -323,7 +322,7 @@ class TestSimpleProtocolPluginContract:
     assert "object" in result.get_message()
 
   def test_execute_handles_empty_payload(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
 
     def _ping() -> Result:
       return Result.ok("pong")
@@ -337,7 +336,7 @@ class TestSimpleProtocolPluginContract:
     assert result.get_data() == "pong"
 
   def test_execute_wraps_string_return_in_result_ok(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
     plugin.bind_tool_modules([
       _make_module("demo", {"greet": _tool_def("greet", lambda: "hello")}),
     ])
@@ -346,7 +345,7 @@ class TestSimpleProtocolPluginContract:
     assert result.get_data() == "hello"
 
   def test_execute_fails_on_invalid_return_type(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
     plugin.bind_tool_modules([
       _make_module("demo", {"bad": _tool_def("bad", lambda: 42)}),
     ])
@@ -355,7 +354,7 @@ class TestSimpleProtocolPluginContract:
     assert "invalid type" in result.get_message()
 
   def test_execute_translates_callable_exception(self):
-    plugin = SimpleProtocolPlugin()
+    plugin = SimpleProtocol()
 
     def _boom():
       raise RuntimeError("kaboom")

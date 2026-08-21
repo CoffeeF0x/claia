@@ -21,8 +21,8 @@ from claia.core.decorators import (
 )
 from claia.core.plugins.base import ParamSpec, ProtocolInfo, ToolModuleInfo
 from claia.core.tools.modules.base import BaseToolModule
-from claia.core.tools.modules.sample import SampleModulePlugin
-from claia.core.tools.modules.system import SystemModulePlugin
+from claia.core.tools.modules.sample import SampleToolModule
+from claia.core.tools.modules.system import SystemToolModule
 
 
 ########################################################################
@@ -381,9 +381,9 @@ def test_default_get_module_tools_empty_without_decorated_methods():
 
 
 def test_sample_module_uses_decorators_and_preserves_catalog():
-  plugin = SampleModulePlugin()
-  assert SampleModulePlugin.info.name == "sample"
-  assert SampleModulePlugin.info.title == "Sample Utilities"
+  plugin = SampleToolModule()
+  assert SampleToolModule.info.name == "sample"
+  assert SampleToolModule.info.title == "Sample Utilities"
   tools = plugin.get_module_tools()
   assert set(tools) == {"current_time", "add", "subtract", "echo"}
 
@@ -404,15 +404,15 @@ def test_sample_module_uses_decorators_and_preserves_catalog():
 
 
 def test_system_module_uses_decorators():
-  plugin = SystemModulePlugin()
-  assert SystemModulePlugin.info.name == "system"
-  assert SystemModulePlugin.info.title == "System Utilities"
+  plugin = SystemToolModule()
+  assert SystemToolModule.info.name == "system"
+  assert SystemToolModule.info.title == "System Utilities"
   tools = plugin.get_module_tools()
   assert set(tools) == {"clear", "exit"}
   assert tools["clear"].description == "Clear the terminal screen"
   assert tools["exit"].description == "Exit the application"
   assert tools["exit"].callable.__self__ is plugin
-  assert PENDING_ATTR not in SystemModulePlugin.__dict__
+  assert PENDING_ATTR not in SystemToolModule.__dict__
 
 
 def test_definitions_decorator_records_class():
@@ -426,7 +426,9 @@ def test_definitions_decorator_records_class():
       return {}
 
   assert ("claia.definitions", ProbeDefinitions) in iter_decorated_plugins()
-  assert "info" not in ProbeDefinitions.__dict__
+  assert ProbeDefinitions.info.name == "probe_definitions"
+  assert ProbeDefinitions.info.title == "Probe Definitions"
+  assert ProbeDefinitions.info.description == "Probe provider."
 
-  with pytest.raises(TypeError, match="expected a class"):
+  with pytest.raises(TypeError, match="cannot be applied to a function"):
     definitions(lambda: None)

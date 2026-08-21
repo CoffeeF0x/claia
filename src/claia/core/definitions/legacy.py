@@ -1,5 +1,5 @@
 """
-Legacy model definitions plugin.
+Legacy model definitions.
 
 Provides comprehensive model definitions for legacy models including GPT, Claude, and various open-source models.
 """
@@ -26,8 +26,11 @@ DEFAULT_SETTINGS = {
 
 
 @definitions
-class LegacyDefinitionsPlugin(BaseDefinitionProvider):
-  """Legacy model definitions plugin containing comprehensive model metadata."""
+@definitions.name("legacy")
+@definitions.title("Legacy Definitions")
+@definitions.description("Provides comprehensive model definitions for legacy models including GPT, Claude, and various open-source models.")
+class LegacyDefinitions(BaseDefinitionProvider):
+  """Legacy model definitions containing comprehensive model metadata."""
 
   def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get legacy model definitions."""

@@ -95,12 +95,11 @@ def test_model_registry_resolves_diffusers_provider_identifier(monkeypatch):
 
     def get_deployment_plugin(self, deployment_name):
       class Deployment:
-        def get_deployment_info(self):
-          return DeploymentInfo(
-            name="local",
-            title="Local",
-            description="Local test deployment",
-          )
+        info = DeploymentInfo(
+          name="local",
+          title="Local",
+          description="Local test deployment",
+        )
 
         def run(self, model_name, model_class, conversation, cache, init_kwargs, runtime_kwargs, definition=None):
           from claia.core.data.chunks import TextChunk
@@ -167,12 +166,11 @@ def test_model_registry_resolves_tts_provider_identifier(monkeypatch):
 
     def get_deployment_plugin(self, deployment_name):
       class Deployment:
-        def get_deployment_info(self):
-          return DeploymentInfo(
-            name="local",
-            title="Local",
-            description="Local test deployment",
-          )
+        info = DeploymentInfo(
+          name="local",
+          title="Local",
+          description="Local test deployment",
+        )
 
         def run(self, model_name, model_class, conversation, cache, init_kwargs, runtime_kwargs, definition=None):
           from claia.core.data.chunks import TextChunk

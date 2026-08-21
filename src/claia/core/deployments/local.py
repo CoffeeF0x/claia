@@ -1,7 +1,7 @@
 """
-Local deployment method plugin.
+Local deployment.
 
-This deployment method handles local models that run on the user's machine,
+This deployment handles local models that run on the user's machine,
 typically transformer models loaded via HuggingFace transformers.
 """
 
@@ -15,8 +15,8 @@ from ..decorators import deployment
 @deployment.name("local")
 @deployment.title("Local Deployment")
 @deployment.description("Deploy models locally using transformers/torch")
-class LocalDeploymentPlugin(BaseDeployment):
-  """Local deployment method plugin for transformer-based models."""
+class LocalDeployment(BaseDeployment):
+  """Local deployment for transformer-based models."""
 
   def create_model(
     self,

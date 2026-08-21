@@ -138,14 +138,16 @@ class ExtensionInfo:
   Base information class for all CLAIA extension plugins.
 
   Provides a consistent interface across all plugin types
-  (Architectures, Deployments, Protocols, Tool Modules, Agents):
+  (Architectures, Deployments, Definitions, Protocols, Tool Modules,
+  Agents):
 
   - ``name``: unique identifier used for lookups.
   - ``title``: human-readable display name.
   - ``description``: what the extension does.
   - ``params``: ``ParamSpec`` declarations the extension consumes.
-    The framework filters kwargs against these specs at plugin
-    construction (INIT-scoped) and per-call dispatch (RUNTIME-scoped).
+    The framework filters kwargs against these specs when constructing
+    the object the extension runs — e.g. a model instance — (INIT-scoped)
+    and at per-call dispatch (RUNTIME-scoped).
   """
   name: str
   title: str
@@ -173,7 +175,7 @@ class ExtensionInfo:
 ########################################################################
 @dataclass
 class ArchitectureInfo(ExtensionInfo):
-  """Information about an architecture plugin."""
+  """Information about a model architecture."""
   pass
 
 
@@ -192,6 +194,12 @@ class ProtocolInfo(ExtensionInfo):
 @dataclass
 class ToolModuleInfo(ExtensionInfo):
   """Information about a tool-module plugin."""
+  pass
+
+
+@dataclass
+class DefinitionsInfo(ExtensionInfo):
+  """Information about a model-definition provider."""
   pass
 
 

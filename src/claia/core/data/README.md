@@ -23,13 +23,13 @@ MIME enums live in `claia.core.enums.data` (`MediaType`, `TextFormat`, `Artifact
 ```python
 from claia.core.data import Conversation, MessageSequence
 from claia.core.definitions.model_definition import ModelDefinition
-from claia.core.deployments.dummy import DummyDeploymentPlugin
+from claia.core.deployments.dummy import DummyDeployment
 from claia.core.enums.conversation import MessageRole
 from claia.core.enums.data import ArtifactType
 
 conversation = Conversation(title="Example")
 conversation.add_message(MessageRole.USER, "Hello")
-inputs = DummyDeploymentPlugin().translate(
+inputs = DummyDeployment().translate(
   conversation,
   ModelDefinition(supported_inputs=[ArtifactType.TEXT, MessageSequence]),
 )

@@ -8,11 +8,13 @@ Model metadata and configuration objects used by deployments and architectures.
 - `legacy.py` — helpers/mappings for older model naming schemes.
 - `model_definition.py` — `ModelDefinition` and `merge_model_definitions`.
 
-Definitions expose `ModelDefinition` objects through `BaseDefinitionProvider.get_definitions()`
-and are discovered through the `claia.definitions` entry point. When two providers
-contribute the same model name, `merge_model_definitions` walks the dataclass fields
-and unions lists, overlays dicts, and keeps richer modality lists when a later
-provider leaves the default.
+Definition providers carry a class-level `info: DefinitionsInfo` (name,
+title, description) and expose `ModelDefinition` objects through
+`BaseDefinitionProvider.get_definitions()`. They are discovered through
+the `claia.definitions` entry point. When two providers contribute the
+same model name, `merge_model_definitions` walks the dataclass fields
+and unions lists, overlays dicts, and keeps richer modality lists when a
+later provider leaves the default.
 
 ## How definitions fit in
 

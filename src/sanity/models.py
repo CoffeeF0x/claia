@@ -7,7 +7,7 @@ are validated. Keep this file minimal and disposable.
 from claia.core.data import Conversation, ModelResponse, TextChunk
 from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.definitions.model_definition import ModelDefinition
-from claia.core.deployments.dummy import DummyDeploymentPlugin
+from claia.core.deployments.dummy import DummyDeployment
 from claia.core.enums.conversation import MessageRole
 from claia.core.enums.data import ArtifactType
 from claia.core.models.dummy import DummyModel
@@ -47,7 +47,7 @@ def run_model():
   model = MODULE(model_name="dummy-model")
   conversation = Conversation(title="sanity-models")
   conversation.add_message(MessageRole.USER, "Tell me a story.")
-  sequence = DummyDeploymentPlugin().translate(conversation, _definition())
+  sequence = DummyDeployment().translate(conversation, _definition())
   message_count_before = len(conversation.messages)
 
   print(f"model: {model.model_name} ({type(model).__name__})")
@@ -70,8 +70,8 @@ def run_model():
 
 def run_deployment():
   """Conversation → deployment.translate → generate (streamed)."""
-  deployment = DummyDeploymentPlugin()
-  info = deployment.get_deployment_info()
+  deployment = DummyDeployment()
+  info = deployment.info
   conversation = Conversation(title="sanity-models-deploy")
   conversation.add_message(MessageRole.USER, "Tell me a story.")
 

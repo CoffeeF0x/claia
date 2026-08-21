@@ -1,18 +1,18 @@
 """
-Internal deployment method plugins.
+Internal deployment methods.
 
-This package contains built-in deployment method plugins for
-different ways to deploy and run models.
+This package contains built-in deployments for different ways to
+run models.
 """
 
-from .dummy import DummyDeploymentPlugin
-from .api import APIDeploymentPlugin
-from .local import LocalDeploymentPlugin
-from .remote import RemoteDeploymentPlugin
+from .dummy import DummyDeployment
+from .api import APIDeployment
+from .local import LocalDeployment
+from .remote import RemoteDeployment
 
 __all__ = [
-  'DummyDeploymentPlugin',
-  'APIDeploymentPlugin',
-  'LocalDeploymentPlugin',
-  'RemoteDeploymentPlugin'
+  'DummyDeployment',
+  'APIDeployment',
+  'LocalDeployment',
+  'RemoteDeployment'
 ]

@@ -14,7 +14,7 @@ from ...decorators import tool
 @tool.name("sample")
 @tool.title("Sample Utilities")
 @tool.description("Sample module with utility tools for demonstration")
-class SampleModulePlugin(BaseToolModule):
+class SampleToolModule(BaseToolModule):
   """Sample module implementing multiple utility tools."""
 
   @tool

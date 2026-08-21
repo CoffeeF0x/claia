@@ -26,6 +26,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type
 from .plugins.base import (
   ArgumentDefinition,
   ArchitectureInfo,
+  DefinitionsInfo,
   DeploymentInfo,
   ParamSpec,
   ProtocolInfo,
@@ -491,23 +492,7 @@ tool = PluginDecorator(
 protocol = PluginDecorator(ProtocolInfo, "claia.tool_protocols", label="protocol")
 architecture = PluginDecorator(ArchitectureInfo, "claia.architectures", label="architecture")
 deployment = PluginDecorator(DeploymentInfo, "claia.deployments", label="deployment")
-
-
-def definitions(cls: type) -> type:
-  """Record a definition-provider class for manifest discovery.
-
-  Definition providers carry no ``info`` object (they publish
-  ``{name: ModelDefinition}`` via ``get_definitions``), so there is
-  no metadata to build and no kwargs or stacked modifiers — this
-  decorator only records the class so manifest-registered packages
-  (``claia.plugins``) can ship definition providers.
-  """
-  if not inspect.isclass(cls):
-    raise TypeError(
-      f"definitions decorator expected a class, got {type(cls).__name__}"
-    )
-  record_plugin("claia.definitions", cls)
-  return cls
+definitions = PluginDecorator(DefinitionsInfo, "claia.definitions", label="definitions")
 
 
 __all__ = [

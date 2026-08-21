@@ -16,7 +16,14 @@ from ..base import APIModel
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.response import ModelResponse
+from ...decorators import architecture
 from ...enums.conversation import MessageRole
+from ...plugins.base import (
+  COMMON_TEXT_RUNTIME_PARAMS,
+  ParamScope,
+  ParamSpec,
+  SettingCategory,
+)
 from ..base.base import ModelInputs
 
 
@@ -36,6 +43,35 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                               CLASSES                                #
 ########################################################################
+@architecture
+@architecture.name("openrouter")
+@architecture.title("OpenRouter API Architecture")
+@architecture.description("Implements OpenRouter's OpenAI-compatible chat completions API")
+@architecture.param(ParamSpec(
+  name="openrouter_api_token",
+  type=str,
+  scope=ParamScope.INIT,
+  secret=True,
+  category=SettingCategory.API,
+  description="OpenRouter API Token",
+))
+@architecture.param(ParamSpec(
+  name="openrouter_http_referer",
+  type=str,
+  scope=ParamScope.INIT,
+  default="http://localhost:3000",
+  category=SettingCategory.ENDPOINT,
+  description="HTTP-Referer header sent to OpenRouter for app attribution.",
+))
+@architecture.param(ParamSpec(
+  name="openrouter_x_title",
+  type=str,
+  scope=ParamScope.INIT,
+  default="CLAIA",
+  category=SettingCategory.APPLICATION,
+  description="X-Title header sent to OpenRouter for app attribution.",
+))
+@architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)
 class OpenRouterModel(APIModel):
   """OpenRouter API model implementation."""
 

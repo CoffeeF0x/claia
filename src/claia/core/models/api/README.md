@@ -8,6 +8,8 @@ Clients/adapters for hosted LLM APIs.
 - `openai.py` — OpenAI client/adapter.
 - `openrouter.py` — OpenRouter client/adapter.
 
-These classes typically:
-- inherit from base API model types (see `lib/model/base/`)
-- declare INIT-scoped `ParamSpec` entries (e.g., API keys, base URLs) so the `Registry` only passes the kwargs they need.
+These classes are the architecture plugins: they inherit from base API
+model types (see `claia.core.models.base`) and declare their
+`ArchitectureInfo` via `@architecture` / `@architecture.param`
+(credentials, endpoints, and generation knobs). The `claia.architectures`
+entry points target these classes directly.

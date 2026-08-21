@@ -4,7 +4,7 @@ ModelDefinition dataclass.
 A ``ModelDefinition`` is pure metadata about a model — its display title,
 aliases, supported deployments and architectures, capabilities, and
 input/output contracts. It does not implement model behaviour; that
-lives in the corresponding architecture plugin.
+lives in the corresponding architecture (the model class).
 
 Definition plugins return a dict of ``{model_name: ModelDefinition}``
 which the framework merges across all installed providers.

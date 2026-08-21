@@ -32,7 +32,7 @@ DIVIDER = "-" * 70
 @tool.name("cli")
 @tool.title("CLI Tools")
 @tool.description("Model, agent, prompt, conversation, and settings management tools")
-class CLIModulePlugin(BaseToolModule):
+class CLIToolModule(BaseToolModule):
   """CLI module implementing tools for models, agents, prompts, conversations, and settings."""
 
   def get_module_tools(self) -> Dict[str, ToolDefinition]:
