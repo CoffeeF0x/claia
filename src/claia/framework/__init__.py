@@ -3,8 +3,9 @@ claia.framework — the CLAIA orchestration runtime.
 
 Provides the inversion-of-control runtime on top of ``claia.core``:
 
-- ``Manager`` discovers plugins via pluggy entry points (architectures,
-  deployments, solvers, definitions, tool protocols/modules, agents).
+- ``Manager`` discovers plugins via ``importlib.metadata`` entry points
+  (architectures, deployments, definitions, tool protocols/modules,
+  agents).
 - ``Registry`` is the application-facing composition root that
   orchestrates models, tools, and agents.
 - ``Process`` and ``ProcessQueue`` model units of work; worker threads
@@ -49,7 +50,6 @@ from ..core.plugins.base import (
   ExtensionInfo,
   ArchitectureInfo,
   DeploymentInfo,
-  SolverInfo,
   ProtocolInfo,
   ToolModuleInfo,
   ToolDefinition,
@@ -95,7 +95,7 @@ __all__ = [
   "DomainEvent", "EventType",
   # Plugin metadata
   "ExtensionInfo",
-  "ArchitectureInfo", "DeploymentInfo", "SolverInfo",
+  "ArchitectureInfo", "DeploymentInfo",
   "ProtocolInfo", "ToolModuleInfo",
   "ToolDefinition", "ArgumentDefinition", "ToolReference", "DeploymentParams",
   "ParamSpec", "ParamScope", "SettingCategory",

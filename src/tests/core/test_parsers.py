@@ -591,64 +591,6 @@ class TestResolveTagSpecsModelDefinition:
 
 
 ########################################################################
-#                  ModelDefinition MERGE BEHAVIOR                      #
-########################################################################
-class TestModelDefinitionTagOverridesMerge:
-  """Verify the ``Manager.get_supported_models`` merge path preserves
-  ``tag_overrides`` correctly when two providers contribute the same
-  model name. The merge helper is private, so these tests exercise it
-  through a lightweight ``Manager`` instance."""
-
-  def _make_manager(self):
-    from claia.framework.manager import Manager
-    return Manager.__new__(Manager)
-
-  def test_merge_neither_override_returns_none(self):
-    manager = self._make_manager()
-    result = manager._merge_tag_overrides(None, None)
-    assert result is None
-
-  def test_merge_only_existing_preserved(self):
-    manager = self._make_manager()
-    existing = {TagType.TOOL: TagSpec(TagType.TOOL, "<a>", "</a>")}
-    result = manager._merge_tag_overrides(existing, None)
-    assert result == existing
-
-  def test_merge_only_incoming_preserved(self):
-    manager = self._make_manager()
-    incoming = {TagType.TOOL: TagSpec(TagType.TOOL, "<a>", "</a>")}
-    result = manager._merge_tag_overrides(None, incoming)
-    assert result == incoming
-
-  def test_merge_disjoint_keys_combined(self):
-    manager = self._make_manager()
-    existing = {TagType.TOOL: TagSpec(TagType.TOOL, "<a>", "</a>")}
-    incoming = {TagType.THINKING: TagSpec(TagType.THINKING, "<b>", "</b>")}
-    result = manager._merge_tag_overrides(existing, incoming)
-    assert result is not None
-    assert result[TagType.TOOL] == existing[TagType.TOOL]
-    assert result[TagType.THINKING] == incoming[TagType.THINKING]
-
-  def test_merge_incoming_wins_on_conflict(self):
-    manager = self._make_manager()
-    existing = {TagType.TOOL: TagSpec(TagType.TOOL, "<old>", "</old>")}
-    incoming = {TagType.TOOL: TagSpec(TagType.TOOL, "<new>", "</new>")}
-    result = manager._merge_tag_overrides(existing, incoming)
-    assert result is not None
-    assert result[TagType.TOOL] == incoming[TagType.TOOL]
-
-  def test_merge_does_not_mutate_inputs(self):
-    manager = self._make_manager()
-    existing = {TagType.TOOL: TagSpec(TagType.TOOL, "<a>", "</a>")}
-    incoming = {TagType.THINKING: TagSpec(TagType.THINKING, "<b>", "</b>")}
-    existing_snapshot = dict(existing)
-    incoming_snapshot = dict(incoming)
-    manager._merge_tag_overrides(existing, incoming)
-    assert existing == existing_snapshot
-    assert incoming == incoming_snapshot
-
-
-########################################################################
 #                          HELPERS                                     #
 ########################################################################
 def _serialize(events: List[ParseEvent]) -> List[tuple]:

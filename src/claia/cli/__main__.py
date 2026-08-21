@@ -28,7 +28,7 @@
 # - make command input separate from actual text and scrolling (think vim) to allow interacting with AI while it's processing (things like commands to show multiple agent workers at once)
 # - throw error if required INIT ParamSpecs aren't provided to an agent, but don't filter (agents need to pass kwargs to models). Otherwise, find a way to create some kind of secret store (singleton?) to pull args from
 
-# - use pluggy for file types?
+# - use entry-point plugins for file types?
 # - double check metadata updates when adding new content to files
 
 # - overhaul the image resize method
@@ -53,7 +53,7 @@
 #   - Is format metadata even needed since we have mime type?
 #   - Make mime type rely on our enum
 
-# - add tools/commands for each module type (solver, architecture, definitions, etc)
+# - add tools/commands for each module type (architecture, definitions, etc)
 # - add update system (with on launch invocation) for debian repo publishing
 # - model_id in process parameters being ignored? Bob's code example doesn't work
 

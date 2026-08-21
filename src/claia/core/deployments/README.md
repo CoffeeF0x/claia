@@ -14,7 +14,7 @@ Each deployment plugin exposes a `DeploymentInfo` and is discovered via the
 
 ## How deployments fit in
 
-- A solver chooses a `deployment_name` and `architecture_name`.
+- The registry resolve step chooses a `deployment_name` and `architecture_name`.
 - The deployment:
   - validates/filters kwargs against its declared `ParamSpec` list
   - instantiates the architecture or client

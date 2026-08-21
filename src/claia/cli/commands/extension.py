@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional, List
 from collections import defaultdict
 
 from ...core.tools.modules.base import BaseToolModule
-from ...framework.hooks.tool import ToolModuleInfo, ToolDefinition, ArgumentDefinition
+from ...core.plugins.base import ToolModuleInfo, ToolDefinition, ArgumentDefinition
 from ...core.results import Result
 from ...core.data.models import Conversation, Prompt
 from ..storage import JsonStore

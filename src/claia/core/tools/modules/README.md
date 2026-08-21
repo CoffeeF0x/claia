@@ -7,12 +7,12 @@ Concrete tool integrations providing callable commands (the “tools” the mode
 - `sample.py` — sample module with multiple tools (`current_time`, `add`, `subtract`, `echo`).
 - `system.py` — terminal/CLI utilities (`clear`, `exit`).
 
-Each module subclasses `BaseToolModule` from `claia.core.tools.modules.base` and exposes a class-level `info: ToolModuleInfo` attribute plus a `get_module_tools()` method. The framework layer wraps it in a `ToolModuleRegistrar` that adds the `@hookimpl` markers pluggy needs, so the core plugin itself stays pluggy-free.
+Each module subclasses `BaseToolModule` from `claia.core.tools.modules.base` and exposes a class-level `info: ToolModuleInfo` attribute plus a `get_module_tools()` method.
 
 ## How tools fit in
 
 - Tool modules are discovered via the `claia.tool_modules` entry point.
-- `Manager` builds a per-module **commands catalog** (`get_all_commands()`) by calling each module's hooks; the CLI uses this for the `:tool` / `:help` listings.
+- `Manager` builds a per-module **commands catalog** (`get_all_commands()`) from each module instance; the CLI uses this for the `:tool` / `:help` listings.
 - The built-in **simple** protocol consumes that catalog, registers a `ToolReference` per tool with the `Registry`, and dispatches calls.
 - Streaming tool-call extraction lives in `claia.core.parser` (`TagParser`); the agent loop drives the parser and routes `TOOL`-tag events through `Registry.execute_tool`.
 

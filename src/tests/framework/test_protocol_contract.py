@@ -1,25 +1,20 @@
 """
-Phase 4 — Protocol contract rewrite tests.
+Protocol contract tests.
 
-Exercises the post-overhaul protocol contract described in
-the ExoFox docs repo ``claia/overview.md`` Decisions:
+Exercises the protocol contract described in the ExoFox docs repo
+``claia/overview.md`` Decisions:
 
 - ``ToolReference`` dataclass shape and defaults.
-- New ``BaseProtocol`` ABC (abstract method enforcement, default
+- ``BaseProtocol`` ABC (abstract method enforcement, default
   lifecycle no-ops, ``get_protocol_info`` passthrough).
-- ``SimpleProtocolPlugin`` implementing the new ABC: ``execute`` via
+- ``SimpleProtocolPlugin`` implementing the ABC: ``execute`` via
   JSON payload and ``get_tool_references`` reflecting bound modules.
-- ``ProtocolRegistrar`` wiring the new hooks through to the plugin.
 - ``Manager`` lifecycle: ``start()`` fires at load time,
   ``stop_protocols()`` / ``refresh_protocols()`` iterate loaded
   protocols and swallow per-plugin errors.
 - ``Registry.refresh_tools`` / ``Registry.shutdown`` surface the
   lifecycle entry points without tripping over unloaded plugins.
 - Deprecation banner on the legacy ABC import.
-
-Note: the phase 5 ``execute_legacy`` shim and the corresponding
-``Registry.process_content`` flow were retired in phase 6; tests that
-covered them have been removed alongside the production code.
 """
 
 from __future__ import annotations
@@ -40,8 +35,6 @@ from claia.core.plugins.base import (
 from claia.core.results import Result
 from claia.core.tools.protocols.base import BaseProtocol
 from claia.core.tools.protocols.simple import SimpleProtocolPlugin
-from claia.framework.hooks.protocol import ProtocolHooks
-from claia.framework.registrars import ProtocolRegistrar
 
 
 # ---------------------------------------------------------------------------
@@ -83,11 +76,9 @@ class TestToolReference:
   def test_exports_from_public_surfaces(self):
     from claia.core.plugins import ToolReference as core_exported
     from claia.framework import ToolReference as framework_exported
-    from claia.framework.hooks import ToolReference as hooks_exported
 
     assert core_exported is ToolReference
     assert framework_exported is ToolReference
-    assert hooks_exported is ToolReference
 
 
 # ---------------------------------------------------------------------------
@@ -378,104 +369,6 @@ class TestSimpleProtocolPluginContract:
 
 
 # ---------------------------------------------------------------------------
-# ProtocolRegistrar
-# ---------------------------------------------------------------------------
-class TestProtocolRegistrar:
-  """The pluggy adapter around ``BaseProtocol`` forwards every hook."""
-
-  def test_registrar_delegates_all_lifecycle_methods(self):
-    plugin = MagicMock(spec=[
-      "get_protocol_info", "start", "stop", "refresh",
-      "get_tool_references", "execute",
-    ])
-    plugin.get_protocol_info.return_value = ProtocolInfo(
-      name="mock", title="Mock", description="",
-    )
-    plugin.get_tool_references.return_value = [
-      ToolReference(qualified_name="mock.one", description="", protocol_name="mock"),
-    ]
-    plugin.execute.return_value = Result.ok("ran")
-
-    reg = ProtocolRegistrar(plugin)
-
-    info = reg.get_protocol_info()
-    assert info.name == "mock"
-
-    reg.start(); reg.stop(); reg.refresh()
-    plugin.start.assert_called_once()
-    plugin.stop.assert_called_once()
-    plugin.refresh.assert_called_once()
-
-    refs = reg.get_tool_references()
-    assert [r.qualified_name for r in refs] == ["mock.one"]
-
-    result = reg.execute(
-      qualified_name="mock.one",
-      raw_payload='{"x": 1}',
-      conversation=None,
-      custom_kwarg="abc",
-    )
-    plugin.execute.assert_called_once_with(
-      qualified_name="mock.one",
-      raw_payload='{"x": 1}',
-      conversation=None,
-      custom_kwarg="abc",
-    )
-    assert result.get_data() == "ran"
-
-  def test_registrar_execute_forwards_kwargs_only(self):
-    """``execute`` delegates via keyword args so plugins can rely on
-    keyword parameters matching the contract."""
-    captured: Dict[str, Any] = {}
-
-    class _Plugin(BaseProtocol):
-      info = ProtocolInfo(name="cap", title="C", description="")
-
-      def get_tool_references(self):
-        return []
-
-      def execute(self, qualified_name, raw_payload, conversation, **kwargs):
-        captured.update(
-          qualified_name=qualified_name,
-          raw_payload=raw_payload,
-          kwargs=kwargs,
-        )
-        return Result.ok("done")
-
-    reg = ProtocolRegistrar(_Plugin())
-    reg.execute("cap.x", "{}", None, flag=True)
-    assert captured["qualified_name"] == "cap.x"
-    assert captured["raw_payload"] == "{}"
-    assert captured["kwargs"] == {"flag": True}
-
-
-# ---------------------------------------------------------------------------
-# ProtocolHooks signatures
-# ---------------------------------------------------------------------------
-class TestProtocolHooksSignatures:
-  """The pluggy hookspec mirrors the new ABC."""
-
-  def test_hookspec_declares_all_lifecycle_hooks(self):
-    declared = {
-      name for name in dir(ProtocolHooks)
-      if not name.startswith("_")
-    }
-    assert {
-      "get_protocol_info",
-      "start",
-      "stop",
-      "refresh",
-      "get_tool_references",
-      "execute",
-    } <= declared
-
-  def test_execute_signature_uses_new_parameters(self):
-    import inspect
-    params = list(inspect.signature(ProtocolHooks.execute).parameters)
-    assert params[:4] == ["self", "qualified_name", "raw_payload", "conversation"]
-
-
-# ---------------------------------------------------------------------------
 # Manager lifecycle integration
 # ---------------------------------------------------------------------------
 class _TrackingProtocol(BaseProtocol):
@@ -526,17 +419,17 @@ class _BrokenProtocol(BaseProtocol):
 
 
 class TestManagerProtocolLifecycle:
-  """Manager wires protocol lifecycle hooks (plan §11 Phase 4 bullet 5)."""
+  """Manager wires protocol lifecycle hooks."""
 
   def _inject_protocols(self, manager, protocols):
     """Populate the manager's lazy-plugin table directly for tests.
 
-    Avoids pluggy entry-point discovery so the tests don't depend on
+    Avoids entry-point discovery so the tests don't depend on
     installed entry points or package state.
     """
     from claia.framework.manager import PluginEntry
 
-    entries = []
+    entries = {}
     for proto in protocols:
       entry = PluginEntry(
         name=proto.info.name,
@@ -546,7 +439,12 @@ class TestManagerProtocolLifecycle:
         info=proto.info,
       )
       entry.instance = proto
-      entries.append(entry)
+      key = proto.info.name
+      suffix = 1
+      while key in entries:
+        suffix += 1
+        key = f"{proto.info.name}-{suffix}"
+      entries[key] = entry
     manager._lazy_plugins["claia.tool_protocols"] = entries
 
   def test_start_fires_at_load_time(self):
@@ -564,11 +462,10 @@ class TestManagerProtocolLifecycle:
     for group in (
       'claia.definitions', 'claia.tool_modules',
       'claia.agents', 'claia.architectures', 'claia.deployments',
-      'claia.solvers',
     ):
-      manager._lazy_plugins[group] = []
+      manager._lazy_plugins[group] = {}
 
-    with patch.object(manager, "_load_plugins", wraps=lambda group, pm, label, allow_empty=False, ctor_kwargs=None: None):
+    with patch.object(manager, "_load_plugins", wraps=lambda group, label, allow_empty=False: None):
       manager.load_all_plugins()
 
     assert tracker.calls == ["start"]
@@ -633,10 +530,9 @@ class TestRegistryRefreshAndShutdown:
 
     registry = Registry()
     registry._plugins_loaded = True
-    # Phase 5: ``_commands_catalog`` is gone; ``refresh_tools`` instead
-    # invalidates the unified ``_tool_index`` / ``_protocols_by_name``
-    # so the next access rebuilds them from the post-refresh
-    # inventories.
+    # ``refresh_tools`` invalidates the unified ``_tool_index`` /
+    # ``_protocols_by_name`` so the next access rebuilds them from
+    # the post-refresh inventories.
     registry._tool_index = {"stale.tool": object()}  # type: ignore[assignment]
     registry._protocols_by_name = {"simple": object()}
     registry.manager.refresh_protocols = MagicMock()

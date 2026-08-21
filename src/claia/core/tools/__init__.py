@@ -9,8 +9,7 @@ Two plugin types compose the post-overhaul tool system:
   plugins; future protocols (MCP, etc.) plug in alongside.
 
 ABCs for each live alongside their concrete implementations under this
-package; the framework exposes mirrored hookspecs in
-``claia.framework.hooks``. Streaming tool-call extraction lives in
-``claia.core.parser``; the agent loop drives the parser and routes
-TOOL-tag events through ``Registry.execute_tool``.
+package. Streaming tool-call extraction lives in ``claia.core.parser``;
+the agent loop drives the parser and routes TOOL-tag events through
+``Registry.execute_tool``.
 """

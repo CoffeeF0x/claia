@@ -4,10 +4,12 @@ Shared metadata and configuration contracts for CLAIA extensions. This package t
 
 ## What Lives Here
 
-- `ExtensionInfo` and specialized info dataclasses for architectures, deployments, solvers, tool protocols, tool modules, and agents.
+- `ExtensionInfo` and specialized info dataclasses for architectures, deployments, tool protocols, and tool modules.
 - `ParamSpec`, `ParamScope`, and `SettingCategory` for declaring plugin settings and runtime parameters.
 - `DeploymentParams`, `ToolDefinition`, `ArgumentDefinition`, and `ToolReference` for model and tool execution contracts.
 - `COMMON_TEXT_RUNTIME_PARAMS` for common generation parameters such as `temperature`, `max_tokens`, and `stream`.
+
+Agent metadata (`AgentInfo`) lives in `claia.framework.agents.base` because it references `BaseAgent`.
 
 ## How It Fits
 

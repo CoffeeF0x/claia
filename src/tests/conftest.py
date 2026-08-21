@@ -4,12 +4,12 @@ Shared pytest fixtures for CLAIA tests.
 
 # External dependencies
 import pytest
-from types import SimpleNamespace
 
 # Internal dependencies
 from claia.core.results import Result, DeploymentError
 from claia.core.data import Conversation
 from claia.core.data.chunks import TextChunk
+from claia.core.definitions.model_definition import ModelDefinition
 from claia.framework.process import Process
 from claia.core.enums.process import ProcessStatus
 
@@ -65,26 +65,16 @@ def fake_manager():
       return None
 
     def get_supported_models(self):
-      return {"dummy": {"aliases": ["alias1"]}}
+      return {
+        "dummy": ModelDefinition(
+          aliases=["alias1"],
+          deployments=["api"],
+          architectures=["dummy_arch"],
+        )
+      }
 
     def get_available_deployments(self):
       return {"api": object()}
-
-    def get_solver_plugin(self, solver_name=None):
-      class Solver:
-        def get_solver_info(self):
-          class Info:
-            name = "default"
-            params = []
-          return Info()
-
-        def solve_deployment(self, model_name, available_deployments, available_models, cache, deployment_preference=None, deployment_method=None, **kwargs):
-          return Result.ok(SimpleNamespace(
-            deployment_name="api",
-            model_name=model_name,
-            architecture_name="dummy_arch"
-          ))
-      return Solver()
 
     def get_model_class(self, architecture_name):
       class DummyModel:
@@ -112,8 +102,8 @@ def fake_manager():
 
 
 @pytest.fixture
-def fake_manager_no_solver():
-  """A fake manager that returns no solver, to exercise error handling path."""
+def fake_manager_unknown_model():
+  """A fake manager with no model definitions, to exercise resolve failures."""
   class FM:
     def discover_plugins(self):
       return None
@@ -123,8 +113,6 @@ def fake_manager_no_solver():
       return {}
     def get_available_deployments(self):
       return {}
-    def get_solver_plugin(self, solver_name=None):
-      return None
   return FM()
 
 
@@ -165,9 +153,9 @@ def registry_with_fake_manager(fake_manager, monkeypatch):
 
 
 @pytest.fixture
-def registry_with_no_solver(fake_manager_no_solver, monkeypatch):
-  """Unified Registry instance whose manager returns no solver plugin."""
+def registry_with_unknown_model(fake_manager_unknown_model, monkeypatch):
+  """Unified Registry instance whose manager has no resolvable models."""
   import claia.framework.registry as regmod
-  monkeypatch.setattr(regmod, "Manager", _make_fake_manager_class(fake_manager_no_solver))
+  monkeypatch.setattr(regmod, "Manager", _make_fake_manager_class(fake_manager_unknown_model))
   from claia.framework.registry import Registry
   return Registry()

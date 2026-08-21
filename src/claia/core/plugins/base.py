@@ -3,12 +3,8 @@ Plugin metadata dataclasses.
 
 All plugin types share a common ``ExtensionInfo`` base. Per-plugin-type
 subclasses add fields specific to that plugin kind. These dataclasses are
-pure data (no pluggy, no IoC) and live in ``claia.core`` so that:
-
-- Plugin implementations can construct them without depending on the
-  framework.
-- The framework's hookspecs in ``claia.framework.hooks`` can use them as
-  type hints and pluggy return types.
+pure data (no IoC) and live in ``claia.core`` so that plugin
+implementations can construct them without depending on the framework.
 
 Parameters consumed by a plugin are declared as ``ParamSpec`` objects in
 ``ExtensionInfo.params``. Each spec declares its scope:
@@ -142,8 +138,7 @@ class ExtensionInfo:
   Base information class for all CLAIA extension plugins.
 
   Provides a consistent interface across all plugin types
-  (Architectures, Deployments, Solvers, Patterns, Protocols, Tool
-  Modules, Agents):
+  (Architectures, Deployments, Protocols, Tool Modules, Agents):
 
   - ``name``: unique identifier used for lookups.
   - ``title``: human-readable display name.
@@ -186,12 +181,6 @@ class ArchitectureInfo(ExtensionInfo):
 class DeploymentInfo(ExtensionInfo):
   """Information about a deployment-method plugin."""
   pass
-
-
-@dataclass
-class SolverInfo(ExtensionInfo):
-  """Information about a deployment-solver plugin."""
-  settings: Optional[Dict[str, Any]] = field(default=None)
 
 
 @dataclass
@@ -272,7 +261,7 @@ class ToolReference:
 
 @dataclass
 class DeploymentParams:
-  """Resolved deployment parameters returned by a solver."""
+  """Resolved deployment, model, and architecture for a run."""
   deployment_name: str
   model_name: str
   architecture_name: str

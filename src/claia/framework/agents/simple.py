@@ -1,20 +1,20 @@
 """
-Simple agent plugin for CLAIA.
+Simple agent for CLAIA.
 
-Phase 6 (plan §9) makes the agent the owner of the per-turn
-``TagParser``. As deployment chunks arrive the agent feeds them
-through the parser, appends utility messages for any closed tags, and
-dispatches ``TagType.TOOL`` events through ``Registry.execute_tool``
-inline — the result text is appended to the streaming assistant
-message and emitted as a ``"token"`` event so terminal renderers see
-the call → response flow without a separate post-stream pass.
+Owns the per-turn ``TagParser``. As deployment chunks arrive the agent
+feeds them through the parser, appends utility messages for any closed
+tags, and dispatches ``TagType.TOOL`` events through
+``Registry.execute_tool`` inline — the result text is appended to the
+streaming assistant message and emitted as a ``"token"`` event so
+terminal renderers see the call → response flow without a separate
+post-stream pass.
 """
 
 import json
 import logging
-from typing import Any, Iterable, List, Optional, Tuple, Type
+from typing import Iterable, Optional
 
-from .base import BaseAgent
+from .base import AgentInfo, BaseAgent
 from ...core.data.chunks import AudioChunk, BaseChunk, ImageChunk, TextChunk
 from ...core.data.models import AudioArtifact, ImageArtifact
 from ...core.enums.conversation import MessageRole
@@ -30,7 +30,6 @@ from ...core.parser import (
 )
 from ...core.results import Result
 from ...core.tools.protocols.simple.payload import decode_payload
-from ..hooks import AgentInfo
 
 
 logger = logging.getLogger(__name__)
@@ -54,6 +53,12 @@ class SimpleAgent(BaseAgent):
 
   Non-text chunks (image / audio) follow the artifact attachment path.
   """
+
+  info = AgentInfo(
+    name="simple",
+    title="Simple Agent",
+    description="A simple agent that directly calls a model for inference",
+  )
 
   @classmethod
   def process_request(cls, process, registry=None, **kwargs) -> object:
@@ -379,7 +384,7 @@ class SimpleAgent(BaseAgent):
     return out
 
   # ------------------------------------------------------------------
-  # Non-text chunk handling (unchanged from pre-phase-6)
+  # Non-text chunk handling
   # ------------------------------------------------------------------
   @staticmethod
   def _attach_image_chunk(process, message_id: str, chunk: BaseChunk) -> None:
@@ -447,32 +452,3 @@ class SimpleAgent(BaseAgent):
       process.emit("artifact", artifact, message_id)
     except Exception as e:
       logging.exception(f"Failed to attach generated audio artifact: {e}")
-
-
-########################################################################
-#                            PLUGIN HOOKS                              #
-########################################################################
-class SimpleAgentPlugin:
-  """Plugin implementation for the simple agent.
-
-  The framework wraps this plain class in an :class:`AgentRegistrar`
-  before registering it with pluggy, so no ``@hookimpl`` decorators are
-  needed here.
-  """
-
-  info = AgentInfo(
-    name="simple",
-    title="Simple Agent",
-    description="A simple agent that directly calls a model for inference",
-    agent_class=SimpleAgent,
-  )
-
-  def get_agent_class(self, agent_name: str) -> Optional[Type[BaseAgent]]:
-    """Return the agent class for a given ``agent_name`` (or None)."""
-    if agent_name.lower() == "simple":
-      return SimpleAgent
-    return None
-
-  def get_agent_info(self) -> AgentInfo:
-    """Return metadata describing the simple agent."""
-    return type(self).info

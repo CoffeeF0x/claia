@@ -4,7 +4,6 @@ Manager for the CLAIA system.
 This module handles loading and coordinating all plugin types:
 - Model architectures (implement specific AI models)
 - Model deployments (handle deployment methods)
-- Model solvers (determine deployment strategies)
 - Model definitions (provide model metadata)
 - Tool protocols (handle tool execution)
 - Tool modules (provide tool implementations)
@@ -13,42 +12,34 @@ This module handles loading and coordinating all plugin types:
 Extensions are lazy-loaded: definitions/metadata are discovered first
 without instantiation, allowing each plugin's declared ``ParamSpec``
 list to be collected for dynamic settings. Full instantiation occurs
-when the extension is first accessed.
+when the extension is first accessed. Agents are never instantiated —
+discovery records the class and fills ``AgentInfo.agent_class``.
 """
 
-import pluggy
 import logging
 import importlib.metadata as metadata
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
 
-from .hooks import (
-  ArchitectureHooks, DeploymentHooks, SolverHooks, DefinitionHooks,
-  ProtocolHooks, ToolModuleHooks, AgentHooks,
-  DeploymentInfo, SolverInfo, ModelDefinition, ArchitectureInfo, AgentInfo
-)
-from .registrars import REGISTRAR_BY_GROUP
+from ..core.definitions.model_definition import ModelDefinition, merge_model_definitions
 from ..core.models.base import BaseModel
-from ..core.plugins.base import ParamScope, ParamSpec
-from .agents.base import BaseAgent
+from ..core.plugins.base import ArchitectureInfo, DeploymentInfo, ParamScope, ParamSpec
+from .agents.base import AgentInfo, BaseAgent
 
 
 
 ########################################################################
 #                              CONSTANTS                               #
 ########################################################################
-DEFAULT_SOLVER = "default"
-
 # All entry point groups the manager cares about. Plugins declare
 # their metadata via a class-level ``info`` attribute (subclass of
 # ``ExtensionInfo``); the ``info.params`` list drives Settings,
 # CLI flags, and init-kwarg filtering. Definition plugins are the one
 # exception — they don't carry an ``info`` object and expose their
-# metadata via the ``get_definitions`` hook instead.
+# metadata via ``get_definitions()`` instead.
 PLUGIN_GROUPS: Tuple[str, ...] = (
   'claia.architectures',
   'claia.deployments',
-  'claia.solvers',
   'claia.definitions',
   'claia.tool_protocols',
   'claia.tool_modules',
@@ -67,7 +58,7 @@ class PluginEntry:
   the class reference and ``info`` object are read from the plugin
   class, never from an instance. Instantiation happens later in
   :meth:`Manager.load_all_plugins` once the full kwarg environment
-  (Settings) is available.
+  (Settings) is available. Agent entries stay uninstantiated.
   """
   name: str                    # Entry point name
   group: str                   # Entry point group (e.g. ``claia.tool_modules``)
@@ -75,7 +66,6 @@ class PluginEntry:
   plugin_class: Type = None    # Loaded plugin class
   info: Any = None             # Class-level ``info`` (subclass of ExtensionInfo)
   instance: Any = None         # Pure plugin instance (ABC subclass), set at load time
-  registered: Any = None       # Registrar wrapper actually handed to pluggy
   params: List[ParamSpec] = field(default_factory=list)  # Flattened ParamSpec list
 
 
@@ -95,7 +85,7 @@ class Manager:
   Manager for all CLAIA plugin types.
 
   This class coordinates all plugin types for models, tools, and agents:
-  - Model: Architecture, Deployment, Solver, Definition plugins
+  - Model: Architecture, Deployment, Definition plugins
   - Tools: Protocol, ToolModule plugins
   - Agents: Agent plugins
 
@@ -107,35 +97,11 @@ class Manager:
 
   def __init__(self):
     """Initialize the manager."""
-    # Model plugin managers
-    self.architecture_pm = pluggy.PluginManager("claia_architectures")
-    self.architecture_pm.add_hookspecs(ArchitectureHooks)
-
-    self.deployment_pm = pluggy.PluginManager("claia_deployments")
-    self.deployment_pm.add_hookspecs(DeploymentHooks)
-
-    self.solver_pm = pluggy.PluginManager("claia_solvers")
-    self.solver_pm.add_hookspecs(SolverHooks)
-
-    self.definition_pm = pluggy.PluginManager("claia_definitions")
-    self.definition_pm.add_hookspecs(DefinitionHooks)
-
-    # Tool plugin managers
-    self.protocol_pm = pluggy.PluginManager("claia_tool_protocols")
-    self.protocol_pm.add_hookspecs(ProtocolHooks)
-
-    self.module_pm = pluggy.PluginManager("claia_tool_modules")
-    self.module_pm.add_hookspecs(ToolModuleHooks)
-
-    # Agent plugin manager
-    self.agent_pm = pluggy.PluginManager("claia_agents")
-    self.agent_pm.add_hookspecs(AgentHooks)
-
     # Programmatically registered agents
     self._registered_agents: Dict[str, AgentInfo] = {}
 
-    # Lazy loading state
-    self._lazy_plugins: Dict[str, List[PluginEntry]] = {}  # group -> list of entries
+    # group -> {info.name (or entry-point name): PluginEntry}
+    self._lazy_plugins: Dict[str, Dict[str, PluginEntry]] = {}
     self._plugins_discovered = False
     self._plugins_loaded = False
     logger.debug("Manager initialized")
@@ -157,13 +123,15 @@ class Manager:
     Steps per entry point:
 
     1. Load the class (unavoidable).
-    2. Read ``cls.info`` (subclass of ``ExtensionInfo``); no instance
+    2. For agents, require a ``BaseAgent`` subclass; skip others with
+       a warning. Fill ``info.agent_class`` from the loaded class.
+    3. Read ``cls.info`` (subclass of ``ExtensionInfo``); no instance
        is ever created during discovery. Architectures are expected
        to declare their full param contract — both INIT (credentials,
        endpoints) and RUNTIME (generation knobs like ``temperature``)
        — directly on ``ArchitectureInfo.params``.
-    3. Record a :class:`PluginEntry`. Registration with pluggy happens
-       later, when ``load_all_plugins`` has real kwargs.
+    4. Store the :class:`PluginEntry` keyed by ``info.name`` (falling
+       back to the entry-point name). First-in-wins on collisions.
     """
     if self._plugins_discovered:
       logger.debug("Plugins already discovered")
@@ -173,7 +141,7 @@ class Manager:
     total_secrets = 0
 
     for group in PLUGIN_GROUPS:
-      self._lazy_plugins[group] = []
+      self._lazy_plugins[group] = {}
 
       for ep in metadata.entry_points().select(group=group):
         entry = PluginEntry(name=ep.name, group=group, entry_point=ep)
@@ -184,11 +152,30 @@ class Manager:
           logger.warning(f"Failed to load plugin class {ep.name} from {group}: {e}")
           continue
 
+        if group == 'claia.agents':
+          cls = entry.plugin_class
+          if not (isinstance(cls, type) and issubclass(cls, BaseAgent)):
+            logger.warning(
+              f"Skipping {ep.name} from {group}: expected a BaseAgent subclass, got {cls!r}"
+            )
+            continue
+
         self._populate_entry_metadata(entry)
+
+        if group == 'claia.agents' and entry.info is not None:
+          entry.info.agent_class = entry.plugin_class
+
+        key = getattr(entry.info, 'name', None) or entry.name
+        if key in self._lazy_plugins[group]:
+          logger.warning(
+            f"Skipping {group}:{ep.name}; name {key!r} already registered (first-in wins)"
+          )
+          continue
+
         self._log_discovered_entry(entry)
         total_secrets += sum(1 for p in entry.params if getattr(p, 'secret', False))
 
-        self._lazy_plugins[group].append(entry)
+        self._lazy_plugins[group][key] = entry
         total_discovered += 1
 
     self._plugins_discovered = True
@@ -205,7 +192,7 @@ class Manager:
 
     Plugins are required to expose metadata through a class-level
     ``info`` attribute; definition providers are the one exception
-    (they publish their metadata via the ``get_definitions`` hook, so
+    (they publish their metadata via ``get_definitions()``, so
     ``info`` stays ``None`` and their params list stays empty).
 
     Architectures declare their full param contract — both INIT
@@ -260,9 +247,8 @@ class Manager:
     self.discover_plugins()
     result: Dict[str, List[ParamSpec]] = {}
     for group, entries in self._lazy_plugins.items():
-      for entry in entries:
-        key = f"{group}:{entry.name}"
-        result[key] = list(entry.params)
+      for key, entry in entries.items():
+        result[f"{group}:{key}"] = list(entry.params)
     return result
 
 
@@ -281,8 +267,8 @@ class Manager:
     """
     self.discover_plugins()
     seen: Dict[str, ParamSpec] = {}
-    for _, entries in self._lazy_plugins.items():
-      for entry in entries:
+    for entries in self._lazy_plugins.values():
+      for entry in entries.values():
         for spec in entry.params:
           if scope is not None and spec.scope != scope:
             continue
@@ -295,9 +281,11 @@ class Manager:
     """
     Load all plugins from entry points.
 
-    Uses lazy loading: if plugins were already discovered via discover_plugins(),
-    uses the cached entries and instantiates them with the provided kwargs.
-    Otherwise, discovers and loads in one step.
+    Uses lazy loading: if plugins were already discovered via
+    discover_plugins(), uses the cached entries and instantiates each
+    class with no arguments. Otherwise, discovers and loads in one
+    step. ``kwargs`` is accepted for the public load API and consumed
+    later at dispatch via ``ParamSpec`` filtering.
     """
     if self._plugins_loaded:
       logger.debug("Plugins already loaded")
@@ -308,33 +296,31 @@ class Manager:
 
     try:
       # Load definition plugins first (they're optional)
-      self._load_plugins(group='claia.definitions', pm=self.definition_pm, label='definition', allow_empty=True, ctor_kwargs=kwargs)
+      self._load_plugins(group='claia.definitions', label='definition', allow_empty=True)
 
-      # Load tool plugins (pass in kwargs; each plugin receives only its INIT-scoped params)
-      self._load_plugins(group='claia.tool_protocols', pm=self.protocol_pm, label='protocol', allow_empty=True, ctor_kwargs=kwargs)
-      self._load_plugins(group='claia.tool_modules', pm=self.module_pm, label='module', allow_empty=True, ctor_kwargs=kwargs)
+      # Load tool plugins (instances take no constructor args)
+      self._load_plugins(group='claia.tool_protocols', label='protocol', allow_empty=True)
+      self._load_plugins(group='claia.tool_modules', label='module', allow_empty=True)
 
-      # Overhaul phase 5: hand the freshly-loaded native tool modules
-      # to any protocol that opts in via a ``bind_tool_modules`` hook
-      # (currently only the simple protocol — see plan §8.2). Done
-      # before ``start()`` so a protocol's startup logic can already
-      # see its inventory.
+      # Hand the freshly-loaded native tool modules to any protocol
+      # that opts in via ``bind_tool_modules`` (currently only the
+      # simple protocol). Done before ``start()`` so a protocol's
+      # startup logic can already see its inventory.
       self._bind_native_tools_to_protocols()
 
-      # Overhaul phase 4: fire ``start()`` on each loaded protocol so
-      # session-bearing implementations (future MCP, remote RPC, etc.)
-      # can open their resources once plugins are wired in. Any failure
-      # logs and is skipped; the protocol still registers so other
-      # static protocols (simple) don't go down with it.
+      # Fire ``start()`` on each loaded protocol so session-bearing
+      # implementations (MCP, remote RPC, etc.) can open their
+      # resources once plugins are wired in. Any failure logs and is
+      # skipped; the protocol still registers so other static
+      # protocols (simple) don't go down with it.
       self._start_protocols()
 
-      # Load agent plugins (optional)
-      self._load_plugins(group='claia.agents', pm=self.agent_pm, label='agent', allow_empty=True, ctor_kwargs=kwargs)
+      # Agent plugins are discovered only — never instantiated.
+      self._load_plugins(group='claia.agents', label='agent', allow_empty=True)
 
       # Load model plugins (required)
-      self._load_plugins(group='claia.architectures', pm=self.architecture_pm, label='architecture', allow_empty=False, ctor_kwargs=kwargs)
-      self._load_plugins(group='claia.deployments', pm=self.deployment_pm, label='deployment', allow_empty=False, ctor_kwargs=kwargs)
-      self._load_plugins(group='claia.solvers', pm=self.solver_pm, label='solver', allow_empty=False, ctor_kwargs=kwargs)
+      self._load_plugins(group='claia.architectures', label='architecture', allow_empty=False)
+      self._load_plugins(group='claia.deployments', label='deployment', allow_empty=False)
 
       self._plugins_loaded = True
       logger.info("All plugins loaded")
@@ -347,9 +333,18 @@ class Manager:
   ######################################################################
   #                               UTILS                                #
   ######################################################################
-  # Generic plugin loading helper
-  def _load_plugins(self, group: str, pm: pluggy.PluginManager, label: str, allow_empty: bool = False, ctor_kwargs: Optional[Dict[str, Any]] = None) -> None:
-    """Instantiate discovered plugins and register them with ``pm``.
+  def _iter_entries(self, group: str):
+    """Yield :class:`PluginEntry` objects for ``group``."""
+    yield from self._lazy_plugins.get(group, {}).values()
+
+  def _iter_instances(self, group: str):
+    """Yield instantiated plugins for ``group`` (skips unloaded entries)."""
+    for entry in self._iter_entries(group):
+      if entry.instance is not None:
+        yield entry.instance
+
+  def _load_plugins(self, group: str, label: str, allow_empty: bool = False) -> None:
+    """Instantiate discovered plugins and store them on their entries.
 
     Plugin classes are stateless metadata + factory objects: they
     expose an ``info`` attribute and (for architectures) a
@@ -360,36 +355,28 @@ class Manager:
     filters kwargs against those specs at dispatch time. The plugin
     itself is always instantiated with no arguments.
 
-    ``ctor_kwargs`` is accepted for API compatibility with
-    :meth:`load_all_plugins` but intentionally unused here.
-
-    Steps per entry:
-
-    1. Instantiate the plugin class (no args).
-    2. Wrap the instance in the matching registrar from
-       :mod:`claia.framework.registrars` (adds the ``@hookimpl``
-       markers pluggy needs) and hand the wrapper to ``pm.register``.
+    Agent plugins are never instantiated — discovery already recorded
+    the class and filled ``info.agent_class``.
     """
-    del ctor_kwargs  # plugins are stateless; kwargs flow through at dispatch
-    registrar_cls = REGISTRAR_BY_GROUP[group]
     loaded_count = 0
 
     try:
-      for entry in self._lazy_plugins.get(group, []):
-        try:
-          inst = self._instantiate_plugin(entry.plugin_class, entry.name, label)
-          if inst is None:
-            continue
+      if group == 'claia.agents':
+        loaded_count = len(self._lazy_plugins.get(group, {}))
+      else:
+        for entry in self._iter_entries(group):
+          try:
+            inst = self._instantiate_plugin(entry.plugin_class, entry.name, label)
+            if inst is None:
+              continue
 
-          entry.instance = inst
-          entry.registered = registrar_cls(inst)
+            entry.instance = inst
+            loaded_count += 1
+            ep_value = getattr(entry.entry_point, 'value', None) or entry.name
+            logger.debug(f"Loaded {label} plugin: {entry.name} from {ep_value}")
 
-          pm.register(entry.registered)
-          loaded_count += 1
-          logger.debug(f"Loaded {label} plugin: {entry.name} from {entry.entry_point.value}")
-
-        except Exception as e:
-          logger.warning(f"Failed to load {label} plugin {entry.name}: {e}")
+          except Exception as e:
+            logger.warning(f"Failed to load {label} plugin {entry.name}: {e}")
 
       if loaded_count == 0:
         msg = f"No {label} plugins found in entry points"
@@ -405,39 +392,30 @@ class Manager:
         raise
 
   # ------------------------------------------------------------------
-  # Protocol lifecycle (overhaul phase 4)
+  # Protocol lifecycle
   # ------------------------------------------------------------------
   def iter_protocol_instances(self):
     """Yield the plain ``BaseProtocol`` instances for loaded protocols.
 
-    Unlike iterating ``self.protocol_pm.get_plugins()``, this returns
-    the wrapped plugin objects (not their registrar shells) so callers
-    can reach lifecycle hooks that aren't part of the pluggy dispatch
-    surface directly. ``Registry._rebuild_tool_index`` consumes this
-    to collect each protocol's ``ToolReference`` list.
+    ``Registry._rebuild_tool_index`` consumes this to collect each
+    protocol's ``ToolReference`` list.
     """
-    for entry in self._lazy_plugins.get('claia.tool_protocols', []):
-      inst = entry.instance
-      if inst is None:
-        continue
-      yield inst
+    yield from self._iter_instances('claia.tool_protocols')
 
   def _bind_native_tools_to_protocols(self) -> None:
     """Hand the loaded native ``BaseToolModule`` instances to any
     protocol that opts in to native-module binding.
 
-    Plan §8.2 specifies that the simple protocol owns the
-    ``BaseToolModule`` -> ``ToolReference`` projection. Rather than
-    hard-coding "simple" in the manager, this method duck-types on the
-    presence of ``bind_tool_modules`` so third-party protocols that
-    want native-module access can opt in without a new ABC method.
+    Duck-types on the presence of ``bind_tool_modules`` so third-party
+    protocols that want native-module access can opt in without a new
+    ABC method.
 
     Errors from any one protocol log + are swallowed so a malfunctioning
     binder cannot block other protocols from coming up.
     """
     modules = [
       entry.instance
-      for entry in self._lazy_plugins.get('claia.tool_modules', [])
+      for entry in self._iter_entries('claia.tool_modules')
       if entry.instance is not None
     ]
     self._dispatch_protocol_hook(
@@ -449,10 +427,9 @@ class Manager:
   def _start_protocols(self) -> None:
     """Call ``start()`` on every loaded protocol, swallowing errors.
 
-    Per plan §6.2 the default ``BaseProtocol.start`` is a no-op.
-    Session-bearing protocols (future MCP) open their connections
-    here. A single protocol's failure must not prevent other protocols
-    from running.
+    The default ``BaseProtocol.start`` is a no-op. Session-bearing
+    protocols (MCP) open their connections here. A single protocol's
+    failure must not prevent other protocols from running.
     """
     self._dispatch_protocol_hook(
       'start',
@@ -464,9 +441,8 @@ class Manager:
     """Call ``stop()`` on every loaded protocol.
 
     Exposed on ``Manager`` so the ``Registry`` can tear down external
-    sessions during application shutdown without reaching into pluggy
-    internals. Errors are logged and swallowed — teardown should never
-    crash the caller.
+    sessions during application shutdown. Errors are logged and
+    swallowed — teardown should never crash the caller.
     """
     self._dispatch_protocol_hook(
       'stop',
@@ -480,8 +456,7 @@ class Manager:
     Triggered by registry callers that need to react to dynamic
     inventory changes (e.g. an MCP ``notifications/tools/list_changed``).
     Errors log and are skipped; the registry rebuilds its index from
-    the post-refresh ``get_tool_references()`` outputs separately in
-    phase 5.
+    the post-refresh ``get_tool_references()`` outputs separately.
     """
     self._dispatch_protocol_hook(
       'refresh',
@@ -725,78 +700,33 @@ class Manager:
     return missing
 
   # Generic helpers for lookups and info collection
-  def _find_plugin_by_name(self, pm: pluggy.PluginManager, info_method: str, name: str) -> Tuple[Optional[Any], Optional[Any]]:
-    """Find a registered plugin by its info.name using the given info_method.
+  def _find_plugin_by_name(self, group: str, info_method: str, name: str) -> Tuple[Optional[Any], Optional[Any]]:
+    """Find a loaded plugin by its info.name using the given info_method.
 
     Returns (plugin, info) tuple; (None, None) if not found.
     """
-    for plugin in pm.get_plugins():
+    for inst in self._iter_instances(group):
       try:
-        info = getattr(plugin, info_method)()
+        info = getattr(inst, info_method)()
         if info and getattr(info, 'name', None) == name:
-          return plugin, info
+          return inst, info
       except Exception as e:
-        logger.warning(f"Failed retrieving {info_method} for plugin {plugin}: {e}")
+        logger.warning(f"Failed retrieving {info_method} for plugin {inst}: {e}")
     return None, None
 
-  def _collect_info_dict(self, pm: pluggy.PluginManager, hook_name: str) -> Dict[str, Any]:
-    """Collect hook-returned info objects into a dict keyed by info.name."""
+  def _collect_info_dict(self, group: str, info_method: str) -> Dict[str, Any]:
+    """Collect instance-method info objects into a dict keyed by info.name."""
     all_items: Dict[str, Any] = {}
-    try:
-      hook = getattr(pm.hook, hook_name)
-      results = hook()
-      for info in results:
+    for inst in self._iter_instances(group):
+      try:
+        info = getattr(inst, info_method)()
         if info:
           name = getattr(info, 'name', None)
           if name:
             all_items[name] = info
-    except Exception as e:
-      logger.warning(f"Failed collecting items via hook {hook_name}: {e}")
+      except Exception as e:
+        logger.warning(f"Failed collecting items via {info_method}: {e}")
     return all_items
-
-  def _merge_lists(self, list1: Optional[List[str]], list2: Optional[List[str]]) -> Optional[List[str]]:
-    """Merge two optional lists, removing duplicates."""
-    if not list1 and not list2:
-      return None
-    result = []
-    if list1:
-      result.extend(list1)
-    if list2:
-      for item in list2:
-        if item not in result:
-          result.append(item)
-    return result if result else None
-
-  def _merge_dicts(self, dict1: Optional[Dict[str, str]], dict2: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
-    """Merge two optional dicts with last-wins on key conflicts."""
-    if not dict1 and not dict2:
-      return None
-    merged: Dict[str, str] = {}
-    if dict1:
-      merged.update(dict1)
-    if dict2:
-      merged.update(dict2)  # dict2 overrides dict1 on conflicts
-    return merged if merged else None
-
-  def _merge_tag_overrides(
-    self,
-    existing: Optional[Dict[Any, Any]],
-    incoming: Optional[Dict[Any, Any]],
-  ) -> Optional[Dict[Any, Any]]:
-    """Merge two optional ``tag_overrides`` maps with last-wins on key.
-
-    Per plan §3.7, overrides are per-``TagType`` replacement; we do
-    not deep-merge individual ``TagSpec`` fields. ``incoming`` (the
-    later definition) wins on ``TagType`` conflicts.
-    """
-    if not existing and not incoming:
-      return None
-    merged: Dict[Any, Any] = {}
-    if existing:
-      merged.update(existing)
-    if incoming:
-      merged.update(incoming)
-    return merged if merged else None
 
 
   ######################################################################
@@ -813,18 +743,18 @@ class Manager:
     kwargs directly against this list.
     """
     self.load_all_plugins()
-    all_arch = self._collect_info_dict(self.architecture_pm, 'get_architecture_info')
+    all_arch = self._collect_info_dict('claia.architectures', 'get_architecture_info')
     logger.debug(f"Collected {len(all_arch)} architectures")
     return all_arch
 
   def get_model_class(self, architecture_name: str) -> Optional[Type[BaseModel]]:
     """Get the model class for a specific architecture by name."""
     self.load_all_plugins()
-    for plugin in self.architecture_pm.get_plugins():
+    for inst in self._iter_instances('claia.architectures'):
       try:
-        info = plugin.get_architecture_info()
+        info = inst.get_architecture_info()
         if info and info.name == architecture_name:
-          model_class = plugin.get_model_class()
+          model_class = inst.get_model_class()
           if model_class:
             logger.debug(f"Found model class for architecture {architecture_name}")
             return model_class
@@ -837,49 +767,23 @@ class Manager:
   def get_supported_models(self) -> Dict[str, ModelDefinition]:
     """Get all model definitions from registered definition plugins."""
     self.load_all_plugins()
-    all_definitions = {}
-    results = self.definition_pm.hook.get_definitions()
+    all_definitions: Dict[str, ModelDefinition] = {}
 
-    for plugin_definitions in results:
-      if plugin_definitions:
-        for name, definition in plugin_definitions.items():
-          if name in all_definitions:
-            # Merge definitions, allowing later plugins to extend/override
-            existing = all_definitions[name]
-            merged = ModelDefinition(
-              title=definition.title or existing.title,
-              aliases=self._merge_lists(existing.aliases, definition.aliases),
-              company=definition.company or existing.company,
-              deployments=self._merge_lists(existing.deployments, definition.deployments),
-              architectures=self._merge_lists(existing.architectures, definition.architectures),
-              description=definition.description or existing.description,
-              parameters=definition.parameters or existing.parameters,
-              context_length=definition.context_length or existing.context_length,
-              capabilities=self._merge_lists(existing.capabilities, definition.capabilities),
-              license=definition.license or existing.license,
-              url=definition.url or existing.url,
-              identifiers=self._merge_dicts(existing.identifiers, definition.identifiers),
-              input_modalities=(
-                definition.input_modalities
-                if definition.input_modalities
-                else existing.input_modalities
-              ),
-              output_modalities=(
-                definition.output_modalities
-                if definition.output_modalities
-                else existing.output_modalities
-              ),
-              supported_inputs=list(dict.fromkeys([
-                *(existing.supported_inputs or []),
-                *(definition.supported_inputs or []),
-              ])),
-              tag_overrides=self._merge_tag_overrides(
-                existing.tag_overrides, definition.tag_overrides
-              ),
-            )
-            all_definitions[name] = merged
-          else:
-            all_definitions[name] = definition
+    for inst in self._iter_instances('claia.definitions'):
+      try:
+        plugin_definitions = inst.get_definitions()
+      except Exception as e:
+        logger.warning(f"Failed collecting definitions from {inst}: {e}")
+        continue
+      if not plugin_definitions:
+        continue
+      for name, definition in plugin_definitions.items():
+        if name in all_definitions:
+          all_definitions[name] = merge_model_definitions(
+            all_definitions[name], definition
+          )
+        else:
+          all_definitions[name] = definition
 
     logger.debug(f"Collected {len(all_definitions)} model definitions")
     return all_definitions
@@ -887,45 +791,29 @@ class Manager:
   def get_available_deployments(self) -> Dict[str, DeploymentInfo]:
     """Get all available deployment methods."""
     self.load_all_plugins()
-    all_deployments = self._collect_info_dict(self.deployment_pm, 'get_deployment_info')
+    all_deployments = self._collect_info_dict('claia.deployments', 'get_deployment_info')
     logger.debug(f"Collected {len(all_deployments)} deployment methods")
     return all_deployments
 
   def get_deployment_plugin(self, deployment_name: str):
     """Get a specific deployment plugin by name."""
     self.load_all_plugins()
-    plugin, _ = self._find_plugin_by_name(self.deployment_pm, 'get_deployment_info', deployment_name)
+    plugin, _ = self._find_plugin_by_name(
+      'claia.deployments', 'get_deployment_info', deployment_name
+    )
     return plugin
-
-  def get_available_solvers(self) -> Dict[str, SolverInfo]:
-    """Get all available deployment solvers."""
-    self.load_all_plugins()
-    all_solvers = self._collect_info_dict(self.solver_pm, 'get_solver_info')
-    logger.debug(f"Collected {len(all_solvers)} solvers")
-    return all_solvers
-
-  def get_solver_plugin(self, solver_name: str = None):
-    """Get a specific solver plugin by name, or the default solver."""
-    self.load_all_plugins()
-    if not solver_name:
-      solver_name = DEFAULT_SOLVER
-    plugin, _ = self._find_plugin_by_name(self.solver_pm, 'get_solver_info', solver_name)
-    if plugin:
-      return plugin
-    logger.warning(f"Solver '{solver_name}' not found")
-    return None
 
 
   # TOOLS
   def get_protocol_by_name(self, name: str):
     """Get a tool protocol plugin by name."""
     self.load_all_plugins()
-    return self._find_plugin_by_name(self.protocol_pm, 'get_protocol_info', name)
+    return self._find_plugin_by_name('claia.tool_protocols', 'get_protocol_info', name)
 
   def get_module_by_name(self, name: str):
     """Get a tool module plugin by name."""
     self.load_all_plugins()
-    return self._find_plugin_by_name(self.module_pm, 'get_module_info', name)
+    return self._find_plugin_by_name('claia.tool_modules', 'get_module_info', name)
 
   def get_tool_by_name(self, command_name: str):
     """Find a tool by name across all loaded modules."""
@@ -933,20 +821,20 @@ class Manager:
 
     if '.' in command_name:
       module_name, cmd_name = command_name.split('.', 1)
-      for plugin in self.module_pm.get_plugins():
-        info = plugin.get_module_info()
-        if info and info.name == module_name and hasattr(plugin, 'get_module_tools'):
-          commands = plugin.get_module_tools()
+      for inst in self._iter_instances('claia.tool_modules'):
+        info = inst.get_module_info()
+        if info and info.name == module_name and hasattr(inst, 'get_module_tools'):
+          commands = inst.get_module_tools()
           if cmd_name in commands:
-            return plugin, commands[cmd_name], info
+            return inst, commands[cmd_name], info
       return None, None, None
 
-    for plugin in self.module_pm.get_plugins():
-      info = plugin.get_module_info()
-      if info and hasattr(plugin, 'get_module_tools'):
-        commands = plugin.get_module_tools()
+    for inst in self._iter_instances('claia.tool_modules'):
+      info = inst.get_module_info()
+      if info and hasattr(inst, 'get_module_tools'):
+        commands = inst.get_module_tools()
         if command_name in commands:
-          return plugin, commands[command_name], info
+          return inst, commands[command_name], info
     return None, None, None
 
   def get_all_commands(self) -> Dict[str, Dict]:
@@ -954,9 +842,9 @@ class Manager:
     self.load_all_plugins()
     result = {}
 
-    for plugin in self.module_pm.get_plugins():
-      info = plugin.get_module_info()
-      if not info or not hasattr(plugin, 'get_module_tools'):
+    for inst in self._iter_instances('claia.tool_modules'):
+      info = inst.get_module_info()
+      if not info or not hasattr(inst, 'get_module_tools'):
         continue
 
       module_entry = {
@@ -964,7 +852,7 @@ class Manager:
         "list_of_tools": []
       }
 
-      commands = plugin.get_module_tools()
+      commands = inst.get_module_tools()
       for cmd_name, cmd_def in commands.items():
         arguments_info = []
         if cmd_def.arguments:
@@ -998,7 +886,7 @@ class Manager:
     params: Optional[List[ParamSpec]] = None,
   ) -> None:
     """
-    Register an agent class programmatically without using pluggy.
+    Register an agent class programmatically.
 
     This allows developers to register custom agents directly:
         registry.register(MyCustomAgent, name="my_agent", description="My custom agent")
@@ -1044,8 +932,8 @@ class Manager:
   def get_agent_class(self, agent_name: str) -> Optional[Type[BaseAgent]]:
     """Get the agent class for a specific agent name.
 
-    Programmatically registered agents take priority over pluggy agents
-    when the same name is used.
+    Programmatically registered agents take priority over entry-point
+    agents when the same name is used.
     """
     # Load all agents from all sources
     all_agents = self.get_agents()
@@ -1062,9 +950,9 @@ class Manager:
   def get_agents(self) -> List[AgentInfo]:
     """Get all available agents from all sources.
 
-    Returns both programmatically registered agents and pluggy-based agents.
-    Programmatically registered agents are listed first, giving them priority
-    when multiple agents share the same name.
+    Returns both programmatically registered agents and entry-point
+    agents. Programmatically registered agents are listed first,
+    giving them priority when multiple agents share the same name.
     """
     self.load_all_plugins()
     agents = []
@@ -1072,25 +960,22 @@ class Manager:
     # Add programmatically registered agents first (priority)
     agents.extend(self._registered_agents.values())
 
-    # Add pluggy agents
-    try:
-      pluggy_agents = self.agent_pm.hook.get_agent_info()
-      # Only add pluggy agents that don't conflict with programmatic ones
-      programmatic_names = set(self._registered_agents.keys())
-      for agent_info in pluggy_agents:
-        if agent_info.name not in programmatic_names:
-          agents.append(agent_info)
-        else:
-          logger.debug(f"Pluggy agent '{agent_info.name}' shadowed by programmatic registration")
-    except Exception as e:
-      logger.warning(f"Failed collecting agent info: {e}")
+    programmatic_names = set(self._registered_agents.keys())
+    for entry in self._iter_entries('claia.agents'):
+      info = entry.info
+      if info is None:
+        continue
+      if info.name in programmatic_names:
+        logger.debug(f"Entry-point agent '{info.name}' shadowed by programmatic registration")
+        continue
+      agents.append(info)
     return agents
 
   def get_agent_info_by_name(self, agent_name: str) -> Optional[AgentInfo]:
     """Get agent info for a specific agent by name.
 
-    Searches through all available agents (both programmatic and pluggy).
-    Programmatically registered agents take priority over pluggy agents
+    Searches through all available agents (both programmatic and
+    entry-point). Programmatically registered agents take priority
     when the same name is used.
     """
     agents = self.get_agents()

@@ -8,11 +8,9 @@ This subpackage defines:
 The actual ABCs that implementations subclass live alongside their domain:
 - ``claia.core.architectures.base.BaseArchitecture``
 - ``claia.core.deployments.base.BaseDeployment``
-- ``claia.core.solvers.base.BaseSolver``
 - ``claia.core.tools.protocols.base.BaseProtocol``
 - ``claia.core.tools.modules.base.BaseToolModule``
 
-Pluggy hookspecs that mirror these ABCs live in ``claia.framework.hooks``.
 The contracts in this subpackage stay framework-free so plugin metadata can
 be imported without starting the runtime.
 """
@@ -21,7 +19,6 @@ from .base import (
     ExtensionInfo,
     ArchitectureInfo,
     DeploymentInfo,
-    SolverInfo,
     ProtocolInfo,
     ToolModuleInfo,
     ToolDefinition,
@@ -34,7 +31,6 @@ __all__ = [
     "ExtensionInfo",
     "ArchitectureInfo",
     "DeploymentInfo",
-    "SolverInfo",
     "ProtocolInfo",
     "ToolModuleInfo",
     "ToolDefinition",

@@ -14,7 +14,7 @@ from .queue import ProcessQueue
 from ..core.enums.process import ProcessStatus
 from ..core.data import Conversation
 from ..core.data.chunks import BaseChunk, TextChunk
-from ..core.plugins.base import ParamScope, ParamSpec, ToolReference
+from ..core.plugins.base import DeploymentParams, ParamScope, ParamSpec, ToolReference
 
 
 
@@ -33,7 +33,7 @@ class Registry:
   Unified registry coordinating tools, models, and agents.
 
   - Tools API: command catalog, tool-call processing, command execution.
-  - Models API: run() orchestration (Solver -> Deployment -> Architecture).
+  - Models API: run() orchestration (resolve -> Deployment -> Architecture).
   - Agents API: process queue + worker lifecycle and agent dispatch.
   """
 
@@ -42,12 +42,10 @@ class Registry:
     self._manager = Manager()
     self.cache: Dict[str, Any] = {}
 
-    # Tool-related
-    # Phase 5 (plan §7.1): the registry holds a unified
-    # ``qualified_name -> ToolReference`` index assembled from every
-    # loaded protocol's ``get_tool_references()``, plus a
+    # Unified ``qualified_name -> ToolReference`` index assembled from
+    # every loaded protocol's ``get_tool_references()``, plus a
     # ``protocol_name -> instance`` map so dispatch can route back to
-    # the owning protocol without re-scanning pluggy.
+    # the owning protocol.
     self._tool_index: Optional[Dict[str, ToolReference]] = None
     self._protocols_by_name: Optional[Dict[str, Any]] = None
 
@@ -157,8 +155,7 @@ class Registry:
   def _ensure_loaded(self) -> None:
     """Make sure plugins are loaded before tool dispatch.
 
-    Phase 5 (plan §7.1) drops the eagerly-cached ``_commands_catalog``;
-    the unified ``_tool_index`` is built lazily by
+    The unified ``_tool_index`` is built lazily by
     :meth:`_ensure_tool_index`. This method only handles the
     plugin-load side of the gate so callers that don't need the index
     (e.g., diagnostics) avoid the extra pass.
@@ -172,11 +169,11 @@ class Registry:
   def _rebuild_tool_index(self) -> None:
     """Assemble the unified ``qualified_name -> ToolReference`` index.
 
-    Walks every loaded protocol in pluggy registration order, asking
-    each for its ``get_tool_references()`` output. Duplicates are
-    skipped with a debug log (first-in-list wins, plan §2.8). Also
-    populates ``_protocols_by_name`` so ``execute_tool`` can route
-    back to the owning protocol without re-iterating.
+    Walks every loaded protocol in discovery order, asking each for
+    its ``get_tool_references()`` output. Duplicates are skipped with
+    a debug log (first-in-list wins). Also populates
+    ``_protocols_by_name`` so ``execute_tool`` can route back to the
+    owning protocol without re-iterating.
     """
     self._ensure_loaded()
     index: Dict[str, ToolReference] = {}
@@ -234,9 +231,8 @@ class Registry:
   def resolve_qualified_name(self, name: str) -> Optional[str]:
     """Resolve a possibly-bare tool name to its qualified form.
 
-    Phase 6 (plan §2.9) makes unqualified-name resolution the
-    consumer's problem. The agent loop calls this before
-    :meth:`execute_tool` so models that emit bare tool names (e.g.
+    The agent loop calls this before :meth:`execute_tool` so models
+    that emit bare tool names (e.g.
     ``{"name": "echo", ...}`` from a ``[TOOL_CALL]`` payload without
     a module prefix) still hit the right tool.
 
@@ -278,8 +274,8 @@ class Registry:
   ) -> Result:
     """Dispatch a tool call through its owning protocol.
 
-    Phase 5 surface (plan §7.2). The registry resolves the
-    ``ToolReference`` from its index, then forwards to
+    The registry resolves the ``ToolReference`` from its index, then
+    forwards to
     ``BaseProtocol.execute(qualified_name, raw_payload, conversation, **kwargs)``.
     The protocol decodes the raw payload (JSON for ``simple``, MCP
     envelope for the future MCP plugin, etc.) and runs the actual
@@ -339,8 +335,8 @@ class Registry:
   def run_command(self, command_name: str, parameters: Dict[str, Any], conversation, **kwargs) -> Result:
     """Execute a native command by name (CLI direct-execution path).
 
-    Plan §7.4 keeps ``run_command`` on the registry rather than
-    folding it into ``execute_tool``: CLI parameter dicts include
+    ``run_command`` stays on the registry rather than folding into
+    ``execute_tool``: CLI parameter dicts include
     non-JSON-serializable Python objects (``registry``,
     ``command_specs``, etc.) that must reach the callable without
     JSON encoding. The kwarg-prep helper now lives in the simple
@@ -390,18 +386,72 @@ class Registry:
   ######################################################################
   #                             MODELS API                             #
   ######################################################################
+  @staticmethod
+  def _resolve_model_name(model_name: str, available_models: Dict[str, Any]) -> Optional[str]:
+    """Resolve a model name or alias to its canonical name."""
+    if model_name in available_models:
+      return model_name
+
+    for canonical_name, model_info in available_models.items():
+      aliases = getattr(model_info, 'aliases', None)
+      if aliases and model_name in aliases:
+        logger.debug(f"Resolved alias '{model_name}' to '{canonical_name}'")
+        return canonical_name
+
+    logger.debug(f"No resolution found for '{model_name}'")
+    return None
+
+  @staticmethod
+  def _resolve_deployment(
+    model_name: str,
+    available_models: Dict[str, Any],
+    available_deployments: List[str],
+    deployment_method: Optional[str] = None,
+  ) -> DeploymentParams:
+    """Resolve a model request to a deployment, architecture, and canonical name.
+
+    Resolve aliases against the merged definitions. If
+    ``deployment_method`` is given, it must be in both the available
+    deployments and the definition's list; otherwise take the
+    definition's first deployment and first architecture. Failures
+    raise ``DeploymentError``.
+    """
+    resolved_model_name = Registry._resolve_model_name(model_name, available_models)
+    if not resolved_model_name:
+      raise DeploymentError(f"Model '{model_name}' not found")
+    model_info = available_models[resolved_model_name]
+
+    deployments = getattr(model_info, 'deployments', None) or []
+    if deployment_method and deployment_method not in available_deployments:
+      raise DeploymentError(f"Deployment method '{deployment_method}' is not available.")
+    if deployment_method and deployment_method not in deployments:
+      raise DeploymentError(
+        f"Deployment method '{deployment_method}' is not available for model '{resolved_model_name}'."
+      )
+    if not deployments:
+      raise DeploymentError(f"No deployment methods available for model '{resolved_model_name}'.")
+
+    architectures = getattr(model_info, 'architectures', None) or []
+    if not architectures:
+      raise DeploymentError(f"No architecture specified for model '{resolved_model_name}'.")
+
+    return DeploymentParams(
+      deployment_name=deployment_method or deployments[0],
+      model_name=resolved_model_name,
+      architecture_name=architectures[0],
+    )
+
   def _run_stream(
     self,
     model_name: str,
     conversation: Conversation,
-    solver: Optional[str] = None,
     deployment_method: Optional[str] = None,
-    deployment_preference: Optional[str] = None,
     **kwargs
   ) -> Iterator[BaseChunk]:
     """
-    Internal: resolve solver/deployment and return the deployment's
-    ``BaseChunk`` iterator. Raises DeploymentError on failure.
+    Internal: resolve deployment/architecture and return the
+    deployment's ``BaseChunk`` iterator. Raises DeploymentError on
+    failure.
     """
     logger.debug(f"Running model {model_name}")
 
@@ -410,28 +460,16 @@ class Registry:
     available_models = self.manager.get_supported_models()
     available_deployments = list(self.manager.get_available_deployments().keys())
 
-    selected_solver = self.manager.get_solver_plugin(solver)
-    if not selected_solver:
-      raise DeploymentError(f"No solver available (requested: {solver})")
-
-    solver_info = selected_solver.get_solver_info()
-    solver_kwargs = Manager.filter_init_kwargs(combined_kwargs, getattr(solver_info, 'params', None))
-
-    params_result = selected_solver.solve_deployment(
-      model_name=model_name,
-      available_deployments=available_deployments,
-      available_models=available_models,
-      cache=self.cache,
-      deployment_preference=deployment_preference,
+    deployment_params = self._resolve_deployment(
+      model_name,
+      available_models,
+      available_deployments,
       deployment_method=deployment_method,
-      **solver_kwargs
     )
-
-    if params_result.is_error():
-      raise DeploymentError(params_result.get_message())
-
-    deployment_params = params_result.data
-    logger.debug(f"Solver result: deployment={deployment_params.deployment_name} model={deployment_params.model_name} arch={deployment_params.architecture_name}")
+    logger.debug(
+      f"Resolve result: deployment={deployment_params.deployment_name} "
+      f"model={deployment_params.model_name} arch={deployment_params.architecture_name}"
+    )
 
     model_class = self.manager.get_model_class(deployment_params.architecture_name)
     if not model_class:
@@ -501,7 +539,7 @@ class Registry:
     **kwargs
   ) -> Union[Result, Iterator[BaseChunk]]:
     """
-    Orchestrate model execution via solver -> deployment -> architecture.
+    Orchestrate model execution via resolve -> deployment -> architecture.
 
     Args:
         model_name: Model identifier (e.g. "gpt-4")
@@ -510,7 +548,8 @@ class Registry:
         streaming: If True, returns an ``Iterator[BaseChunk]``.
                    If False (default), consumes the chunk stream and
                    returns a ``Result`` with the concatenated text.
-        **kwargs: Forwarded to solver/deployment/architecture
+        **kwargs: Forwarded to deployment/architecture (``deployment_method``
+          selects an explicit deployment when provided)
 
     Returns:
         ``Result`` (streaming=False) or
@@ -623,10 +662,6 @@ class Registry:
     """Get all available deployment methods."""
     return self.manager.get_available_deployments()
 
-  def get_available_solvers(self) -> Dict[str, Any]:
-    """Get all available deployment solvers."""
-    return self.manager.get_available_solvers()
-
   def get_loaded_models(self) -> Dict[str, Any]:
     """Get dictionary of currently loaded models."""
     return {key: type(model).__name__ for key, model in self.cache.items()}
@@ -680,8 +715,8 @@ class Registry:
     """
     Register a custom agent class programmatically.
 
-    This allows developers to register agents without creating pluggy
-    extensions. The agent class must inherit from ``BaseAgent`` and
+    This allows developers to register agents without an entry-point
+    plugin. The agent class must inherit from ``BaseAgent`` and
     implement the ``process_request`` method.
 
     Example:

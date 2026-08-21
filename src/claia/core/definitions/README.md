@@ -1,20 +1,24 @@
 # Model Definitions
 
-Model metadata and configuration objects used by solvers, deployments, and architectures.
+Model metadata and configuration objects used by deployments and architectures.
 
 ## What lives here
 
 - `openai.py`, `anthropic.py` — definitions for provider-specific models.
 - `legacy.py` — helpers/mappings for older model naming schemes.
+- `model_definition.py` — `ModelDefinition` and `merge_model_definitions`.
 
-Definitions expose `ModelDefinition` objects through the contract mirrored by `claia.framework.hooks.definition` and are
-discovered through the `claia.definitions` entry point.
+Definitions expose `ModelDefinition` objects through `BaseDefinitionProvider.get_definitions()`
+and are discovered through the `claia.definitions` entry point. When two providers
+contribute the same model name, `merge_model_definitions` walks the dataclass fields
+and unions lists, overlays dicts, and keeps richer modality lists when a later
+provider leaves the default.
 
 ## How definitions fit in
 
 - Describe **canonical model names**, **aliases**, **architectures**, and **deployment methods**.
 - Provide metadata used by:
-  - solvers (to resolve aliases and capabilities)
+  - the registry resolve step (to resolve aliases and pick a deployment/architecture)
   - deployments (to know which backends are valid)
   - architectures (to know how to initialize models).
 

@@ -5,8 +5,11 @@ Provides a common interface for all agent implementations.
 
 # External dependencies
 import logging
+from dataclasses import dataclass, field
+from typing import Optional, Type
 
 # Internal dependencies
+from ...core.plugins.base import ExtensionInfo
 from ..process import Process
 
 
@@ -120,3 +123,18 @@ class BaseAgent:
         A string description of the agent
     """
     return cls.__doc__ or "No description available"
+
+
+########################################################################
+#                              AGENT INFO                              #
+########################################################################
+@dataclass
+class AgentInfo(ExtensionInfo):
+  """Information about an agent implementation.
+
+  Extends ``ExtensionInfo`` with the concrete ``agent_class`` used for
+  dispatch. Entry-point agents leave ``agent_class`` unset; the manager
+  fills it from the loaded class at discovery. Programmatic
+  ``Registry.register`` supplies it directly.
+  """
+  agent_class: Optional[Type[BaseAgent]] = field(default=None)

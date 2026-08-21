@@ -1,10 +1,9 @@
 """
 Phase 5 — Simple protocol rewrite tests.
 
-Exercises the post-overhaul plumbing that lives in
-``claia.core.tools.protocols.simple`` (the package, not the old
-single-file module) and the new tool-index surface on
-``Registry`` (plan §7.1, §7.2, §7.4 / §11 Phase 5):
+Exercises the plumbing that lives in
+``claia.core.tools.protocols.simple`` and the tool-index surface on
+``Registry``:
 
 - The ``payload.decode_payload`` helper accepts both flat and
   envelope JSON shapes and rejects everything else with ``ValueError``.
@@ -462,8 +461,8 @@ class TestManagerBinding:
     )
     mod_entry.instance = fake_module
 
-    manager._lazy_plugins["claia.tool_protocols"] = [proto_entry]
-    manager._lazy_plugins["claia.tool_modules"] = [mod_entry]
+    manager._lazy_plugins["claia.tool_protocols"] = {proto_entry.name: proto_entry}
+    manager._lazy_plugins["claia.tool_modules"] = {mod_entry.name: mod_entry}
 
     manager._bind_native_tools_to_protocols()
 
@@ -501,7 +500,10 @@ class TestManagerBinding:
       plugin_class=type(good), info=good.info,
     )
     good_entry.instance = good
-    manager._lazy_plugins["claia.tool_protocols"] = [bad_entry, good_entry]
+    manager._lazy_plugins["claia.tool_protocols"] = {
+      bad_entry.name: bad_entry,
+      good_entry.name: good_entry,
+    }
 
     fake_module = _make_module("demo", {"ping": _tool("ping", lambda: "pong")})
     mod_entry = PluginEntry(
@@ -509,7 +511,7 @@ class TestManagerBinding:
       plugin_class=type(fake_module),
     )
     mod_entry.instance = fake_module
-    manager._lazy_plugins["claia.tool_modules"] = [mod_entry]
+    manager._lazy_plugins["claia.tool_modules"] = {mod_entry.name: mod_entry}
 
     manager._bind_native_tools_to_protocols()
     # Good binder still received its modules.

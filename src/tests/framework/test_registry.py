@@ -38,18 +38,18 @@ def test_model_registry_stream_text_flattens_to_strings(registry_with_fake_manag
   assert any("deployed dummy via api" in t for t in tokens)
 
 
-def test_model_registry_no_solver(registry_with_no_solver, tmp_path):
+def test_model_registry_unknown_model(registry_with_unknown_model, tmp_path):
   conv = Conversation(title="T")
-  reg: Registry = registry_with_no_solver
+  reg: Registry = registry_with_unknown_model
   res: Result = reg.run("dummy", conv)
   assert res.is_error()
-  assert "No solver available" in res.get_message()
+  assert "not found" in res.get_message()
 
 
-def test_model_registry_no_solver_streaming_raises(registry_with_no_solver, tmp_path):
+def test_model_registry_unknown_model_streaming_raises(registry_with_unknown_model, tmp_path):
   conv = Conversation(title="T")
-  reg: Registry = registry_with_no_solver
-  with pytest.raises(DeploymentError, match="No solver available"):
+  reg: Registry = registry_with_unknown_model
+  with pytest.raises(DeploymentError, match="not found"):
     for _ in reg.run("dummy", conv, streaming=True):
       pass
 
@@ -58,7 +58,6 @@ def test_model_registry_resolves_diffusers_provider_identifier(monkeypatch):
   """Stable Diffusion resolves from Claia id to provider id before deployment."""
   from claia.core.definitions.model_definition import ModelDefinition
   from claia.core.plugins.base import ArchitectureInfo, DeploymentInfo
-  from claia.core.solvers.default import DefaultSolverPlugin
   from claia.framework.manager import Manager as RealManager
   import claia.framework.registry as registry_module
 
@@ -88,9 +87,6 @@ def test_model_registry_resolves_diffusers_provider_identifier(monkeypatch):
 
     def get_available_deployments(self):
       return {"local": object()}
-
-    def get_solver_plugin(self, solver_name=None):
-      return DefaultSolverPlugin()
 
     def get_model_class(self, architecture_name):
       class DummyModel:
@@ -134,7 +130,6 @@ def test_model_registry_resolves_tts_provider_identifier(monkeypatch):
   """Qwen TTS resolves from Claia id to provider id before deployment."""
   from claia.core.definitions.model_definition import ModelDefinition
   from claia.core.plugins.base import ArchitectureInfo, DeploymentInfo
-  from claia.core.solvers.default import DefaultSolverPlugin
   from claia.framework.manager import Manager as RealManager
   import claia.framework.registry as registry_module
 
@@ -164,9 +159,6 @@ def test_model_registry_resolves_tts_provider_identifier(monkeypatch):
 
     def get_available_deployments(self):
       return {"local": object()}
-
-    def get_solver_plugin(self, solver_name=None):
-      return DefaultSolverPlugin()
 
     def get_model_class(self, architecture_name):
       class DummyModel:

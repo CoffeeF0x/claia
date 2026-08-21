@@ -4,19 +4,17 @@ The framework layer is CLAIA's orchestration runtime. It loads plugins, exposes 
 
 ## What Lives Here
 
-- `manager.py` — discovers and loads entry-point plugins with pluggy.
+- `manager.py` — discovers entry-point plugins via `importlib.metadata` and instantiates them.
 - `registry.py` — the app-facing composition root for models, tools, and agents.
-- `registrars.py` — wraps core plugin implementations in pluggy-compatible registrars.
 - `process.py` and `queue.py` — units of work and queueing for agents.
 - `agents/` — base agent contract and built-in agent plugins.
-- `hooks/` — hookspecs for architectures, deployments, solvers, definitions, tools, and agents.
 
 ## Runtime Flow
 
 1. The CLI or host app builds settings.
 2. `Registry.load_plugins(**kwargs)` asks `Manager` to discover entry points and initialize extensions.
-3. Model calls flow through solver, deployment, and architecture plugins.
-4. Tool calls flow through pattern, protocol, and module plugins.
+3. Model calls resolve a deployment and architecture, then run through those plugins.
+4. Tool calls flow through protocol and module plugins.
 5. Agent work is represented as `Process` objects and can be handled directly or by registry workers.
 
 ## Library Entry Point

@@ -28,7 +28,6 @@ from ..core import (
     ExtensionInfo,
     ArchitectureInfo,
     DeploymentInfo,
-    SolverInfo,
     ProtocolInfo,
     ToolModuleInfo,
     ToolDefinition,
@@ -58,7 +57,7 @@ __all__ = [
     "BaseArtifact", "TextArtifact", "ImageArtifact", "AudioArtifact", "Prompt",
     # Library — plugin metadata
     "ExtensionInfo",
-    "ArchitectureInfo", "DeploymentInfo", "SolverInfo",
+    "ArchitectureInfo", "DeploymentInfo",
     "ProtocolInfo", "ToolModuleInfo",
     "ToolDefinition", "ArgumentDefinition", "ToolReference", "DeploymentParams",
     "ParamSpec", "ParamScope", "SettingCategory",

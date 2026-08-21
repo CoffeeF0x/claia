@@ -2,7 +2,7 @@
 claia.core — the CLAIA library.
 
 Pure data models, plugin contracts (ABCs), and concrete implementations of
-model architectures, deployments, solvers, definitions, and tools.
+model architectures, deployments, definitions, and tools.
 
 ``claia.core`` can be imported and used directly without starting the
 framework runtime. Applications that want plugin discovery, process
@@ -39,7 +39,6 @@ from .plugins.base import (
   ExtensionInfo,
   ArchitectureInfo,
   DeploymentInfo,
-  SolverInfo,
   ProtocolInfo,
   ToolModuleInfo,
   ToolDefinition,
@@ -74,7 +73,7 @@ __all__ = [
   "DomainEvent", "EventType",
   # Plugin metadata + contracts
   "ExtensionInfo",
-  "ArchitectureInfo", "DeploymentInfo", "SolverInfo",
+  "ArchitectureInfo", "DeploymentInfo",
   "ProtocolInfo", "ToolModuleInfo",
   "ToolDefinition", "ArgumentDefinition", "ToolReference", "DeploymentParams",
   "ParamSpec", "ParamScope", "SettingCategory",

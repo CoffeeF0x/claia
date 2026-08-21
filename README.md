@@ -8,15 +8,15 @@ CLAIA is a project I've been working on to abstract away the model loading. Star
 
 ## Highlights
 
-- Pluggable architecture using `pluggy` for simple extensibility
+- Pluggable architecture using Python entry points for simple extensibility
 - A single `Registry` API for:
-  - Models: solve, deploy, and run across providers and runtimes
+  - Models: resolve, deploy, and run across providers and runtimes
   - Tools: declarative tool modules and protocols
   - Agents: process orchestration and worker lifecycle
 - Supports models from both API sources as well as local deployments (with plans for remote deployment functionality)
 - Robust conversation object with a builtin changelog/audit system
 - A layered namespace package:
-  - `claia.core` contains pure models, plugin contracts, model implementations, definitions, deployments, solvers, and tools.
+  - `claia.core` contains pure models, plugin contracts, model implementations, definitions, deployments, and tools.
   - `claia.framework` provides plugin discovery, the `Registry`, process queues, and agent orchestration.
   - `claia.cli` implements the command-line app on top of the framework.
 
@@ -122,7 +122,7 @@ These values are passed to plugins through the `Registry` and filtered by each p
 - Registry: A single facade coordinating models, tools, and agents.
   Key APIs:
   - `load_plugins(**kwargs)` — discover and initialize registered extensions
-  - `run(model_name, conversation, **kwargs)` — model inference via solver, deployment, then architecture
+  - `run(model_name, conversation, **kwargs)` — model inference via resolve, deployment, then architecture
   - `query(model_name, prompt, **kwargs)` — one-shot text prompt helper
   - `run_command(command_name, parameters, conversation, **kwargs)` — invoke a tool by name
   - Agent processing and worker lifecycle for queued processes
@@ -133,8 +133,7 @@ These values are passed to plugins through the `Registry` and filtered by each p
 - Plugin System: Extensions are discovered via Python entry points. Built-in groups include:
   - `claia.architectures` — provider architecture adapters mapping to model classes
   - `claia.deployments` — runtime backends (e.g., API, local)
-  - `claia.solvers` — strategies that select deployment/architecture
-  - `claia.definitions` — model metadata and canonical IDs (to assist solvers)
+  - `claia.definitions` — model metadata and canonical IDs
   - `claia.agents` — model orchestration strategies
   - `claia.tool_modules` — concrete tool command modules
   - `claia.tool_protocols` — protocols that own a tool inventory and execute calls
@@ -169,7 +168,7 @@ Consumers should pin a version and upgrade deliberately; release notes carry the
 
 #### Modules are the unit of work
 
-CLAIA is a collection of modules held together by thin glue. A module is any self-contained capability with a contract — an architecture, a deployment, a solver, an agent, a tool module, or one of the data structures they exchange. Design, implementation, review, and testing all happen at the module boundary.
+CLAIA is a collection of modules held together by thin glue. A module is any self-contained capability with a contract — an architecture, a deployment, an agent, a tool module, or one of the data structures they exchange. Design, implementation, review, and testing all happen at the module boundary.
 
 The framework layer exists to discover modules and route between them. It grows only when modules need a new seam, never as a home for features that could not find a module to live in. A proposal that only makes sense as glue is a proposal worth re-examining.
 
@@ -223,7 +222,7 @@ The sanity folder is not a comprehensive test suite and must never grow into one
 
 The permanent, comprehensive test layer, and the first stage that runs without a human in the loop. Two conventions keep it navigable:
 
-- **Tests mirror the source tree.** A module at `src/claia/core/solvers/default.py` is tested at `src/tests/core/solvers/default.py`. Directory names match, and files carry no `test_` prefix.
+- **Tests mirror the source tree.** A module at `src/claia/core/deployments/api.py` is tested at `src/tests/core/deployments/api.py`. Directory names match, and files carry no `test_` prefix.
 - **Shared fixtures, fakes, and builders live in `src/tests/mocks/`.** Tests do not define their own, which keeps the structures under test consistent across the suite.
 
 Tests are modular in the same way the source is: each file covers its counterpart's contract and the edge cases sanity testing deliberately ignored.

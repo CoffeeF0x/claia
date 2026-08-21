@@ -8,14 +8,13 @@
 - `plugins/` — shared metadata dataclasses such as `ParamSpec`, `ArchitectureInfo`, `ToolDefinition`, and `DeploymentParams`.
 - `architectures/` — adapters that map model definitions to model classes.
 - `deployments/` — API, local, remote, and dummy execution backends.
-- `solvers/` — strategies that choose deployment and architecture for a model request.
-- `definitions/` — canonical model IDs and provider metadata.
+- `definitions/` — canonical model IDs, provider metadata, and definition merging.
 - `models/` — concrete API, transformer, dummy, and base model classes.
-- `tools/` — tool modules, tool-call patterns, and execution protocols.
+- `tools/` — tool modules and execution protocols.
 - `enums/`, `modality.py`, and `results.py` — shared value types used across the layers.
 
 ## How It Fits
 
-Core code is intentionally importable on its own. Plugin implementations can subclass core ABCs and return core metadata without importing `claia.framework`. The framework layer wraps these implementations with pluggy registrars and exposes them through `Registry`.
+Core code is intentionally importable on its own. Plugin implementations can subclass core ABCs and return core metadata without importing `claia.framework`. The framework layer discovers those implementations via entry points and exposes them through `Registry`.
 
-Use `claia.core` directly when you are implementing or testing a model, deployment, solver, definition, tool, or data model. Use `claia.framework` when you need discovery, orchestration, workers, or app-facing convenience imports.
+Use `claia.core` directly when you are implementing or testing a model, deployment, definition, tool, or data model. Use `claia.framework` when you need discovery, orchestration, workers, or app-facing convenience imports.

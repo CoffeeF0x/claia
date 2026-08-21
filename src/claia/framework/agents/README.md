@@ -7,15 +7,14 @@ Agent implementations that orchestrate processes, models, and tools.
 - `simple.py` — `SimpleAgent`, a minimal agent that:
   - reads a `Process` (including `process.parameters["model_id"]` and `process.conversation`)
   - calls `registry.run(...)` to execute a model
+  - parses streaming tags and dispatches tool calls
   - marks the process as completed or failed.
 
 ## How agents fit in
 
-- Agents are discovered via the `claia.agents` pluggy entry point.
-- The `Manager` and `Registry` use agent plugins to decide **how** to run work:
-  - which model to call
-  - how to update processes and conversations
-  - how to report results.
+- Agents are discovered via the `claia.agents` entry point, which points at a `BaseAgent` subclass with a class-level `info = AgentInfo(...)`.
+- The manager never instantiates agents; it fills `info.agent_class` from the loaded class at discovery.
+- Programmatic `Registry.register(...)` still shadows entry-point agents on name conflict.
 
 ## When to add/modify an agent
 
@@ -24,7 +23,6 @@ Agent implementations that orchestrate processes, models, and tools.
 
 ## Implementing a new agent (TL;DR)
 
-- Subclass `claia.framework.agents.base.BaseAgent` and implement a class method like `process_request(process, registry, **kwargs)`.
-- Provide a plugin class implementing the hooks in `claia.framework.hooks.agent`:
-  - `get_agent_class(agent_name) -> Type[BaseAgent]`
-  - `get_agent_info() -> AgentInfo` (name, description, `params: List[ParamSpec]`).
+- Subclass `claia.framework.agents.base.BaseAgent` and implement `process_request(process, registry, **kwargs)`.
+- Declare `info = AgentInfo(name=..., title=..., description=..., params=[...])` on the class. Leave `agent_class` unset — the manager fills it.
+- Register the class via the `claia.agents` entry point, or call `registry.register(...)`.

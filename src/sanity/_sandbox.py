@@ -1,7 +1,6 @@
 from claia.core.definitions.model_definition import ModelDefinition
-from claia.core.solvers.default import DefaultSolverPlugin
-
-MODULE = DefaultSolverPlugin
+from claia.core.results import DeploymentError
+from claia.framework.registry import Registry
 
 
 definitions = {
@@ -25,10 +24,6 @@ definitions = {
 
 available_deployments = ["api", "local"]
 
-solver = MODULE()
-print(solver.get_solver_info().name, "-", solver.get_solver_info().description)
-print()
-
 requests = [
   ("gpt-test", None),
   ("gpt", None),
@@ -40,16 +35,14 @@ requests = [
 ]
 
 for model_name, deployment_method in requests:
-  result = solver.solve_deployment(
-    model_name,
-    available_deployments,
-    definitions,
-    {},
-    deployment_method=deployment_method,
-  )
   label = f"{model_name} ({deployment_method or 'auto'})"
-  if result.is_success():
-    params = result.get_data()
+  try:
+    params = Registry._resolve_deployment(
+      model_name,
+      definitions,
+      available_deployments,
+      deployment_method=deployment_method,
+    )
     print(f"{label:28} -> {params.deployment_name} / {params.architecture_name} / {params.model_name}")
-  else:
-    print(f"{label:28} -> FAIL: {result.get_message()}")
+  except DeploymentError as e:
+    print(f"{label:28} -> FAIL: {e}")

@@ -3,7 +3,7 @@ CLI-specific agents for CLAIA.
 
 This module contains custom agents that are registered programmatically
 using the Registry.register() method, demonstrating how to create agents
-without requiring pluggy extensions.
+without requiring an entry-point plugin.
 
 Usage Example:
     # In the CLI, set the writer agent as active:
@@ -112,7 +112,7 @@ def register_cli_agents(registry) -> None:
   Register all CLI-specific agents with the provided registry.
 
   This demonstrates the programmatic agent registration approach using
-  Registry.register() instead of pluggy extensions.
+  Registry.register() instead of an entry-point plugin.
 
   Args:
       registry: The Registry instance to register agents with

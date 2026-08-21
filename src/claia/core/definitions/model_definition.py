@@ -20,7 +20,7 @@ non-default delimiter strings.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import MISSING, dataclass, field, fields
 from typing import Any, Dict, List, Optional, Sequence, Type
 
 from ..enums.data import ArtifactType
@@ -113,3 +113,91 @@ class ModelDefinition:
           if not isinstance(x, ArtifactType)
         ]
         self.supported_inputs = [*derived, *complex_types]
+
+
+########################################################################
+#                         DEFINITION MERGER                            #
+########################################################################
+_ORDERED_UNION_FIELDS = frozenset({
+  "aliases",
+  "deployments",
+  "architectures",
+  "capabilities",
+  "supported_inputs",
+})
+_OVERLAY_DICT_FIELDS = frozenset({
+  "identifiers",
+  "tag_overrides",
+})
+_DEFAULT_SENTINEL_FIELDS = frozenset({
+  "input_modalities",
+  "output_modalities",
+})
+
+
+def _field_default(f) -> Any:
+  """Return the declared default for a ``ModelDefinition`` field."""
+  if f.default_factory is not MISSING:
+    return f.default_factory()
+  if f.default is not MISSING:
+    return f.default
+  return None
+
+
+def _ordered_union(existing: Any, incoming: Any) -> Any:
+  """Concatenate two sequences, drop duplicates, keep first-seen order."""
+  result: List[Any] = []
+  for item in (*(existing or []), *(incoming or [])):
+    if item not in result:
+      result.append(item)
+  if not result:
+    return existing if existing is not None else incoming
+  return result
+
+
+def _overlay_dict(existing: Any, incoming: Any) -> Any:
+  """Shallow-merge two mappings; incoming wins per key."""
+  if not existing and not incoming:
+    return existing if existing is not None else incoming
+  merged: Dict[Any, Any] = {}
+  if existing:
+    merged.update(existing)
+  if incoming:
+    merged.update(incoming)
+  return merged
+
+
+def merge_model_definitions(
+  existing: ModelDefinition,
+  incoming: ModelDefinition,
+) -> ModelDefinition:
+  """Merge two ``ModelDefinition`` objects for the same model name.
+
+  Walks ``dataclasses.fields(ModelDefinition)`` so new fields pick up
+  a sane default instead of being dropped. Per-field rules:
+
+  - Ordered-union lists (``aliases``, ``deployments``, ``architectures``,
+    ``capabilities``, ``supported_inputs``): concatenate, dedupe, keep
+    first-seen order.
+  - Overlay dicts (``identifiers``, ``tag_overrides``): incoming wins
+    per key. Tag overrides replace per ``TagType``; no deep-merge of
+    individual ``TagSpec`` fields.
+  - Default-sentinel fields (``input_modalities``, ``output_modalities``):
+    incoming wins only when it differs from the field's declared
+    default, so a later provider that leaves the ``[Modality.TEXT]``
+    default does not clobber an earlier richer list.
+  - Everything else: incoming if not ``None``, else existing.
+  """
+  values: Dict[str, Any] = {}
+  for f in fields(ModelDefinition):
+    ev = getattr(existing, f.name)
+    iv = getattr(incoming, f.name)
+    if f.name in _ORDERED_UNION_FIELDS:
+      values[f.name] = _ordered_union(ev, iv)
+    elif f.name in _OVERLAY_DICT_FIELDS:
+      values[f.name] = _overlay_dict(ev, iv)
+    elif f.name in _DEFAULT_SENTINEL_FIELDS:
+      values[f.name] = iv if iv != _field_default(f) else ev
+    else:
+      values[f.name] = iv if iv is not None else ev
+  return ModelDefinition(**values)
