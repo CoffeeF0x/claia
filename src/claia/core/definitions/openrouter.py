@@ -4,13 +4,18 @@ import logging
 from typing import Dict, List, Optional
 
 from .base import BaseDefinitionProvider
-from .model_definition import ModelDefinition, artifacts_from_modalities
+from .model_definition import ModelDefinition
+from ..data.chunks import TextChunk
 from ..decorators import definitions
-from ..modality import Modality
+from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
 
 
 logger = logging.getLogger(__name__)
+
+_TEXT = [ArtifactType.TEXT, MessageSequence]
+_VISION = [ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence]
+_TEXT_OUT = [TextChunk]
 
 
 def _definition(
@@ -21,12 +26,11 @@ def _definition(
   context_length: int,
   capabilities: List[str],
   aliases: Optional[List[str]] = None,
-  input_modalities: Optional[List[Modality]] = None,
+  inputs: Optional[List] = None,
   license: str = "Commercial",
   url: Optional[str] = None,
 ) -> ModelDefinition:
   """Build a definition for a model primarily exposed through OpenRouter."""
-  modalities = input_modalities or [Modality.TEXT]
   return ModelDefinition(
     title=title,
     aliases=aliases,
@@ -39,9 +43,8 @@ def _definition(
     license=license,
     url=url or f"https://openrouter.ai/models/{provider_id}",
     identifiers={"openrouter": provider_id},
-    input_modalities=modalities,
-    output_modalities=[Modality.TEXT],
-    supported_inputs=[*artifacts_from_modalities(modalities), MessageSequence],
+    inputs=inputs or _TEXT,
+    outputs=_TEXT_OUT,
   )
 
 
@@ -54,7 +57,6 @@ class OpenRouterDefinitions(BaseDefinitionProvider):
 
   def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get large non-native provider models available through OpenRouter."""
-    vision = [Modality.TEXT, Modality.IMAGE]
     return {
       # ----------------------------------------------------------------
       # Moonshot AI / Kimi
@@ -67,7 +69,7 @@ class OpenRouterDefinitions(BaseDefinitionProvider):
         description="Next-generation multimodal model for long-horizon coding and multi-agent orchestration.",
         context_length=256000,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "agentic"],
-        input_modalities=vision,
+        inputs=_VISION,
         license="Open Weights",
       ),
       "kimi-k2.5": _definition(
@@ -78,7 +80,7 @@ class OpenRouterDefinitions(BaseDefinitionProvider):
         description="Multimodal Kimi K2 continuation with strong visual coding and agentic performance.",
         context_length=262144,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "agentic"],
-        input_modalities=vision,
+        inputs=_VISION,
         license="Open Weights",
       ),
       "kimi-k2-thinking": _definition(
@@ -233,7 +235,7 @@ class OpenRouterDefinitions(BaseDefinitionProvider):
         description="Largest Qwen3.5 native vision-language model for reasoning and long-context work.",
         context_length=262144,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "multilingual"],
-        input_modalities=vision,
+        inputs=_VISION,
         license="Commercial",
       ),
       "qwen3.5-122b-a10b": _definition(
@@ -244,7 +246,7 @@ class OpenRouterDefinitions(BaseDefinitionProvider):
         description="Large Qwen3.5 hybrid vision-language model for reasoning and coding.",
         context_length=262144,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "multilingual"],
-        input_modalities=vision,
+        inputs=_VISION,
         license="Commercial",
       ),
       "qwen3.5-35b-a3b": _definition(
@@ -255,7 +257,7 @@ class OpenRouterDefinitions(BaseDefinitionProvider):
         description="Sparse Qwen3.5 vision-language MoE for efficient reasoning and coding.",
         context_length=262144,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "multilingual"],
-        input_modalities=vision,
+        inputs=_VISION,
         license="Commercial",
       ),
       "qwen3.5-27b": _definition(
@@ -265,7 +267,7 @@ class OpenRouterDefinitions(BaseDefinitionProvider):
         description="Dense Qwen3.5 vision-language model for general reasoning and coding tasks.",
         context_length=262144,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "multilingual"],
-        input_modalities=vision,
+        inputs=_VISION,
         license="Commercial",
       ),
       "qwen3.5-flash": _definition(
@@ -276,7 +278,7 @@ class OpenRouterDefinitions(BaseDefinitionProvider):
         description="Fast Qwen3.5 vision-language model with a 1M-token context window.",
         context_length=1000000,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "multilingual"],
-        input_modalities=vision,
+        inputs=_VISION,
         license="Commercial",
       ),
       "qwen3-max": _definition(
@@ -321,7 +323,7 @@ class OpenRouterDefinitions(BaseDefinitionProvider):
         description="Large multimodal MoE model with broad multilingual text and code capabilities.",
         context_length=1000000,
         capabilities=["chat", "code", "reasoning", "vision", "multilingual"],
-        input_modalities=vision,
+        inputs=_VISION,
         license="Llama 4 Community License",
       ),
       "llama-4-scout": _definition(
@@ -332,7 +334,7 @@ class OpenRouterDefinitions(BaseDefinitionProvider):
         description="Multimodal MoE model with an extremely long context window.",
         context_length=10000000,
         capabilities=["chat", "code", "vision", "multilingual"],
-        input_modalities=vision,
+        inputs=_VISION,
         license="Llama 4 Community License",
       ),
     }

@@ -1,18 +1,10 @@
 """
-Tests for modality declarations and the new chunk / response contract.
-
-Covers ``Modality``, content chunk classes, and ``ModelResponse``.
+Tests for the chunk / response contract.
 """
 
 from claia.core.data.chunks import AudioChunk, ImageChunk, TextChunk
 from claia.core.data.response import ModelResponse
 from claia.core.enums.data import AudioFormat, ImageFormat, MediaType, TextFormat
-from claia.core.modality import Modality
-
-
-def test_modality_values():
-  values = {m.value for m in Modality}
-  assert {"text", "image", "audio", "video", "embedding"} <= values
 
 
 def test_text_chunk_defaults():

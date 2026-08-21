@@ -3,7 +3,7 @@ Abstract base class for deployments.
 
 A deployment takes an architecture's model class plus a conversation,
 translates the conversation into model inputs using the resolved
-model definition's ``supported_inputs``, and streams ``BaseChunk``
+model definition's ``inputs``, and streams ``BaseChunk``
 content items. Completion and errors live on ``ModelResponse``.
 """
 

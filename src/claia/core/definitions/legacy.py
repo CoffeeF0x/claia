@@ -9,9 +9,9 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
+from ..data.chunks import AudioChunk, ImageChunk, TextChunk
 from ..decorators import definitions
 from ..enums.data import ArtifactType
-from ..modality import Modality
 from ..data.models.conversation.message_sequence import MessageSequence
 
 
@@ -56,8 +56,8 @@ class LegacyDefinitions(BaseDefinitionProvider):
         identifiers={
           "transformers_gemma3": "google/gemma-3-4b"
         },
-        input_modalities=[Modality.TEXT, Modality.IMAGE],
-        supported_inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
       "gemma-3-12b": ModelDefinition(
         title="Gemma 3 12B",
@@ -69,8 +69,8 @@ class LegacyDefinitions(BaseDefinitionProvider):
         identifiers={
           "transformers_gemma3": "google/gemma-3-12b"
         },
-        input_modalities=[Modality.TEXT, Modality.IMAGE],
-        supported_inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
       "gemma-3-27b": ModelDefinition(
         title="Gemma 3 27B",
@@ -82,8 +82,8 @@ class LegacyDefinitions(BaseDefinitionProvider):
         identifiers={
           "transformers_gemma3": "google/gemma-3-27b"
         },
-        input_modalities=[Modality.TEXT, Modality.IMAGE],
-        supported_inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
       "minicpm3-4b": ModelDefinition(
         title="MiniCPM3-4B",
@@ -139,9 +139,8 @@ class LegacyDefinitions(BaseDefinitionProvider):
         identifiers={
           "diffusers": "sd2-community/stable-diffusion-2"
         },
-        input_modalities=[Modality.TEXT],
-        output_modalities=[Modality.IMAGE],
-        supported_inputs=[ArtifactType.TEXT],
+        inputs=[ArtifactType.TEXT],
+        outputs=[ImageChunk],
       ),
       "stable-diffusion-v1-5": ModelDefinition(
         title="Stable Diffusion v1.5",
@@ -150,9 +149,8 @@ class LegacyDefinitions(BaseDefinitionProvider):
         deployments=["local"],
         architectures=[],
         aliases=["sd-v1.5", "sd1.5", "stable-diffusion-1.5"],
-        input_modalities=[Modality.TEXT],
-        output_modalities=[Modality.IMAGE],
-        supported_inputs=[ArtifactType.TEXT],
+        inputs=[ArtifactType.TEXT],
+        outputs=[ImageChunk],
       ),
       "qwen3-tts-0.6b": ModelDefinition(
         title="Qwen3 TTS 0.6B",
@@ -164,9 +162,8 @@ class LegacyDefinitions(BaseDefinitionProvider):
         identifiers={
           "tts": "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
         },
-        input_modalities=[Modality.TEXT],
-        output_modalities=[Modality.AUDIO],
-        supported_inputs=[ArtifactType.TEXT],
+        inputs=[ArtifactType.TEXT],
+        outputs=[AudioChunk],
       ),
       "llama-3.2-1b": ModelDefinition(
         title="Llama 3.2 1B",

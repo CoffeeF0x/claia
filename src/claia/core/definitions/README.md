@@ -4,7 +4,7 @@ Model metadata and configuration objects used by deployments and architectures.
 
 ## What lives here
 
-- `openai.py`, `anthropic.py` — definitions for provider-specific models.
+- `openai.py`, `anthropic.py`, `openrouter.py` — definitions for provider-specific models.
 - `legacy.py` — helpers/mappings for older model naming schemes.
 - `model_definition.py` — `ModelDefinition` and `merge_model_definitions`.
 
@@ -13,8 +13,7 @@ title, description) and expose `ModelDefinition` objects through
 `BaseDefinitionProvider.get_definitions()`. They are discovered through
 the `claia.definitions` entry point. When two providers contribute the
 same model name, `merge_model_definitions` walks the dataclass fields
-and unions lists, overlays dicts, and keeps richer modality lists when a
-later provider leaves the default.
+and unions lists and overlays dicts.
 
 ## How definitions fit in
 

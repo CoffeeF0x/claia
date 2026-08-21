@@ -89,7 +89,7 @@ def _artifacts(conversation):
   from claia.core.enums.data import ArtifactType
   return DummyDeployment().translate(
     conversation,
-    ModelDefinition(supported_inputs=[ArtifactType.TEXT]),
+    ModelDefinition(inputs=[ArtifactType.TEXT]),
   )
 
 

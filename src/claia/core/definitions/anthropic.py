@@ -24,12 +24,13 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
+from ..data.chunks import TextChunk
 from ..decorators import definitions
 from ..enums.data import ArtifactType
-from ..modality import Modality
 from ..data.models.conversation.message_sequence import MessageSequenceOrdered
 
 _CHAT = [ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered]
+_TEXT = [TextChunk]
 
 
 logger = logging.getLogger(__name__)
@@ -62,9 +63,8 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://www.anthropic.com/claude",
         identifiers={"anthropic": "claude-opus-4-7", "openrouter": "anthropic/claude-opus-4.7"},
-        input_modalities=[Modality.TEXT, Modality.IMAGE],
-        output_modalities=[Modality.TEXT],
-        supported_inputs=_CHAT,
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
 
       "claude-opus-4-6": ModelDefinition(
@@ -79,9 +79,8 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://www.anthropic.com/claude",
         identifiers={"anthropic": "claude-opus-4-6", "openrouter": "anthropic/claude-opus-4.6"},
-        input_modalities=[Modality.TEXT, Modality.IMAGE],
-        output_modalities=[Modality.TEXT],
-        supported_inputs=_CHAT,
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
 
       "claude-opus-4-5": ModelDefinition(
@@ -96,9 +95,8 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://www.anthropic.com/claude",
         identifiers={"anthropic": "claude-opus-4-5-20251101", "openrouter": "anthropic/claude-opus-4.5"},
-        input_modalities=[Modality.TEXT, Modality.IMAGE],
-        output_modalities=[Modality.TEXT],
-        supported_inputs=_CHAT,
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
 
       "claude-opus-4-1": ModelDefinition(
@@ -113,9 +111,8 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://www.anthropic.com/claude",
         identifiers={"anthropic": "claude-opus-4-1-20250805", "openrouter": "anthropic/claude-opus-4.1"},
-        input_modalities=[Modality.TEXT, Modality.IMAGE],
-        output_modalities=[Modality.TEXT],
-        supported_inputs=_CHAT,
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
 
       "claude-opus-4-0": ModelDefinition(
@@ -130,9 +127,8 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://www.anthropic.com/claude",
         identifiers={"anthropic": "claude-opus-4-20250514", "openrouter": "anthropic/claude-opus-4"},
-        input_modalities=[Modality.TEXT, Modality.IMAGE],
-        output_modalities=[Modality.TEXT],
-        supported_inputs=_CHAT,
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
 
       # ----------------------------------------------------------------
@@ -152,9 +148,8 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://www.anthropic.com/claude",
         identifiers={"anthropic": "claude-sonnet-4-6", "openrouter": "anthropic/claude-sonnet-4.6"},
-        input_modalities=[Modality.TEXT, Modality.IMAGE],
-        output_modalities=[Modality.TEXT],
-        supported_inputs=_CHAT,
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
 
       "claude-sonnet-4-5": ModelDefinition(
@@ -169,9 +164,8 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://www.anthropic.com/claude",
         identifiers={"anthropic": "claude-sonnet-4-5-20250929", "openrouter": "anthropic/claude-sonnet-4.5"},
-        input_modalities=[Modality.TEXT, Modality.IMAGE],
-        output_modalities=[Modality.TEXT],
-        supported_inputs=_CHAT,
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
 
       "claude-sonnet-4-0": ModelDefinition(
@@ -186,9 +180,8 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://www.anthropic.com/claude",
         identifiers={"anthropic": "claude-sonnet-4-20250514", "openrouter": "anthropic/claude-sonnet-4"},
-        input_modalities=[Modality.TEXT, Modality.IMAGE],
-        output_modalities=[Modality.TEXT],
-        supported_inputs=_CHAT,
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
 
       # ----------------------------------------------------------------
@@ -208,8 +201,7 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://www.anthropic.com/claude",
         identifiers={"anthropic": "claude-haiku-4-5-20251001", "openrouter": "anthropic/claude-haiku-4.5"},
-        input_modalities=[Modality.TEXT, Modality.IMAGE],
-        output_modalities=[Modality.TEXT],
-        supported_inputs=_CHAT,
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
     }

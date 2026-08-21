@@ -51,7 +51,6 @@ from .plugins.base import (
   SettingCategory,
 )
 from .definitions.model_definition import ModelDefinition
-from .modality import Modality
 from .enums.data import (
   MediaType,
   TextFormat,
@@ -79,8 +78,7 @@ __all__ = [
   "ToolDefinition", "ArgumentDefinition", "ToolReference", "DeploymentParams",
   "ParamSpec", "ParamScope", "SettingCategory",
   "ModelDefinition",
-  # Modality / media enums
-  "Modality",
+  # Media enums
   "MediaType", "TextFormat", "ImageFormat", "AudioFormat",
   "VideoFormat", "ApplicationFormat",
 ]

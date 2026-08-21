@@ -7,8 +7,9 @@ from claia.core.definitions.anthropic import AnthropicDefinitions
 from claia.core.definitions.openai import OpenAIDefinitions
 from claia.core.definitions.openrouter import OpenRouterDefinitions
 from claia.core.enums.conversation import MessageRole
+from claia.core.data.chunks import TextChunk
+from claia.core.enums.data import ArtifactType
 from claia.core.models.api.openrouter import OpenRouterModel
-from claia.core.modality import Modality
 
 
 class FakeResponse:
@@ -41,7 +42,7 @@ def _sequence(conversation):
   from claia.core.enums.data import ArtifactType
   return DummyDeployment().translate(
     conversation,
-    ModelDefinition(supported_inputs=[ArtifactType.TEXT, MessageSequence]),
+    ModelDefinition(inputs=[ArtifactType.TEXT, MessageSequence]),
   )
 
 
@@ -156,5 +157,7 @@ def test_openrouter_definitions_are_large_open_models():
   assert qwen36.context_length == 1000000
   assert qwen35.identifiers == {"openrouter": "qwen/qwen3.5-397b-a17b"}
   assert llama.context_length == 1000000
-  assert Modality.IMAGE in kimi.input_modalities
-  assert Modality.IMAGE in qwen35.input_modalities
+  assert ArtifactType.IMAGE in kimi.inputs
+  assert ArtifactType.IMAGE in qwen35.inputs
+  assert kimi.outputs == [TextChunk]
+  assert qwen35.outputs == [TextChunk]

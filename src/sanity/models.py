@@ -38,7 +38,7 @@ def drain(generator):
 
 def _definition():
   return ModelDefinition(
-    supported_inputs=[ArtifactType.TEXT, MessageSequence],
+    inputs=[ArtifactType.TEXT, MessageSequence],
   )
 
 

@@ -112,7 +112,7 @@ def _sequence(conversation):
   from claia.core.enums.data import ArtifactType
   return DummyDeployment().translate(
     conversation,
-    ModelDefinition(supported_inputs=[ArtifactType.TEXT, MessageSequence]),
+    ModelDefinition(inputs=[ArtifactType.TEXT, MessageSequence]),
   )
 
 

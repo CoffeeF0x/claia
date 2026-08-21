@@ -29,8 +29,8 @@ Then run it through the registry and inspect the typed chunks:
 
 ```python
 from claia.core.data import Conversation
+from claia.core.data.chunks import ImageChunk, TextChunk
 from claia.core.enums.conversation import MessageRole
-from claia.core.modality import ChunkKind
 from claia.framework.registry import Registry
 
 conversation = Conversation(title="SD2 smoke")
@@ -45,9 +45,9 @@ for chunk in registry.run(
     num_inference_steps=20,
     seed=123,
 ):
-    if chunk.kind is ChunkKind.TEXT:
+    if isinstance(chunk, TextChunk):
         print(chunk.data)
-    elif chunk.kind is ChunkKind.IMAGE_BYTES:
+    elif isinstance(chunk, ImageChunk):
         print(chunk.metadata)
         with open("sd2-smoke.png", "wb") as f:
             f.write(chunk.data)
@@ -70,8 +70,8 @@ passes the request text as the reference text by default:
 
 ```python
 from claia.core.data import Conversation
+from claia.core.data.chunks import AudioChunk, TextChunk
 from claia.core.enums.conversation import MessageRole
-from claia.core.modality import ChunkKind
 from claia.framework.registry import Registry
 
 conversation = Conversation(title="Qwen TTS smoke")
@@ -86,9 +86,9 @@ for chunk in registry.run(
     language="English",
     reference_audio_path="/path/to/reference.wav",
 ):
-    if chunk.kind is ChunkKind.TEXT:
+    if isinstance(chunk, TextChunk):
         print(chunk.data)
-    elif chunk.kind is ChunkKind.AUDIO_BYTES:
+    elif isinstance(chunk, AudioChunk):
         print(chunk.metadata)
         with open("qwen-tts-smoke.wav", "wb") as f:
             f.write(chunk.data)

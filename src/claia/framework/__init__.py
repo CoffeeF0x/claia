@@ -62,7 +62,6 @@ from ..core.plugins.base import (
 )
 from ..core.definitions.model_definition import ModelDefinition
 from ..core.enums.process_queue import ProcessQueueHook
-from ..core.modality import Modality
 from ..core.enums.data import (
   MediaType,
   TextFormat,
@@ -104,8 +103,7 @@ __all__ = [
   "ToolDefinition", "ArgumentDefinition", "ToolReference", "DeploymentParams",
   "ParamSpec", "ParamScope", "SettingCategory",
   "ModelDefinition",
-  # Modality / media enums
-  "Modality",
+  # Media enums
   "MediaType", "TextFormat", "ImageFormat", "AudioFormat",
   "VideoFormat", "ApplicationFormat",
 ]

@@ -10,7 +10,7 @@
 - `definitions/` — canonical model IDs, provider metadata, and definition merging.
 - `models/` — concrete API, transformer, dummy, and base model classes. Architecture entry points target these classes directly.
 - `tools/` — tool modules and execution protocols.
-- `enums/`, `modality.py`, and `results.py` — shared value types used across the layers.
+- `enums/` and `results.py` — shared value types used across the layers.
 
 ## How It Fits
 

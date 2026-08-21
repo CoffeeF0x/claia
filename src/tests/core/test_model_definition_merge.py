@@ -1,16 +1,15 @@
 """Unit tests for ``merge_model_definitions``.
 
 Covers the generic field walk: ordered-union lists, overlay dicts,
-default-sentinel modalities (including the later-provider clobber
-regression), and the not-None fallback for scalars.
+and the not-None fallback for scalars.
 """
 
+from claia.core.data.chunks import AudioChunk, ImageChunk, TextChunk
 from claia.core.definitions.model_definition import (
   ModelDefinition,
   merge_model_definitions,
 )
 from claia.core.enums.data import ArtifactType
-from claia.core.modality import Modality
 from claia.core.parser import TagSpec, TagType
 
 
@@ -20,14 +19,16 @@ def test_ordered_union_lists_dedupe_and_keep_first_seen_order():
     deployments=["api"],
     architectures=["openai"],
     capabilities=["chat"],
-    supported_inputs=[ArtifactType.TEXT],
+    inputs=[ArtifactType.TEXT],
+    outputs=[TextChunk],
   )
   incoming = ModelDefinition(
     aliases=["chat", "gpt-4"],
     deployments=["local", "api"],
     architectures=["openai", "openrouter"],
     capabilities=["vision", "chat"],
-    supported_inputs=[ArtifactType.IMAGE, ArtifactType.TEXT],
+    inputs=[ArtifactType.IMAGE, ArtifactType.TEXT],
+    outputs=[ImageChunk, TextChunk],
   )
 
   merged = merge_model_definitions(existing, incoming)
@@ -36,7 +37,8 @@ def test_ordered_union_lists_dedupe_and_keep_first_seen_order():
   assert merged.deployments == ["api", "local"]
   assert merged.architectures == ["openai", "openrouter"]
   assert merged.capabilities == ["chat", "vision"]
-  assert merged.supported_inputs == [ArtifactType.TEXT, ArtifactType.IMAGE]
+  assert merged.inputs == [ArtifactType.TEXT, ArtifactType.IMAGE]
+  assert merged.outputs == [TextChunk, ImageChunk]
 
 
 def test_overlay_dicts_incoming_wins_per_key():
@@ -133,27 +135,16 @@ def test_scalar_fallback_incoming_if_not_none():
   assert merged.context_length == 256
 
 
-def test_later_provider_default_modalities_do_not_clobber_richer_list():
-  """Regression: a later provider that leaves the [TEXT] default used
-  to overwrite an earlier provider's richer modality list because the
-  default is truthy.
-  """
+def test_later_provider_default_io_unions_with_existing():
   existing = ModelDefinition(
-    input_modalities=[Modality.TEXT, Modality.IMAGE],
-    output_modalities=[Modality.TEXT, Modality.AUDIO],
+    inputs=[ArtifactType.TEXT, ArtifactType.IMAGE],
+    outputs=[TextChunk, AudioChunk],
   )
   incoming = ModelDefinition()
 
   merged = merge_model_definitions(existing, incoming)
 
-  assert merged.input_modalities == [Modality.TEXT, Modality.IMAGE]
-  assert merged.output_modalities == [Modality.TEXT, Modality.AUDIO]
-
-
-def test_incoming_non_default_modalities_replace():
-  existing = ModelDefinition(input_modalities=[Modality.TEXT, Modality.IMAGE])
-  incoming = ModelDefinition(input_modalities=[Modality.AUDIO])
-
-  merged = merge_model_definitions(existing, incoming)
-
-  assert merged.input_modalities == [Modality.AUDIO]
+  assert ArtifactType.TEXT in merged.inputs
+  assert ArtifactType.IMAGE in merged.inputs
+  assert TextChunk in merged.outputs
+  assert AudioChunk in merged.outputs

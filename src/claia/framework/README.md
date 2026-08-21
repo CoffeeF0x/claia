@@ -32,6 +32,6 @@ result = registry.run("gpt-4", conversation)
 print(result.get_data())
 ```
 
-Because `claia` is a namespace package, `claia.framework` also acts as a convenience hub. It re-exports common `claia.core` types such as `Conversation`, `Result`, `ParamSpec`, `ModelDefinition`, and modality chunk helpers.
+Because `claia` is a namespace package, `claia.framework` also acts as a convenience hub. It re-exports common `claia.core` types such as `Conversation`, `Result`, `ParamSpec`, `ModelDefinition`, and chunk classes.
 
 Run the CLI with `python -m claia.cli` from source or `claia` after installation.
