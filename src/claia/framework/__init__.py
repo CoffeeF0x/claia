@@ -78,11 +78,15 @@ from .queue import ProcessQueue
 from .registry import Registry
 from .manager import Manager
 from .agents.base import BaseAgent
+from ..core.decorators import tool, protocol, architecture, deployment
+from .decorators import agent
 
 __all__ = [
   # Framework primitives
   "Registry", "Manager", "Process", "ProcessQueue", "ProcessQueueHook",
   "BaseAgent",
+  # Plugin decorators
+  "tool", "protocol", "architecture", "deployment", "agent",
   # Results
   "Result", "DeploymentError",
   # Data

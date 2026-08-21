@@ -21,6 +21,7 @@ import importlib.metadata as metadata
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
 
+from ..core.decorators import PENDING_ATTR, iter_decorated_plugins
 from ..core.definitions.model_definition import ModelDefinition, merge_model_definitions
 from ..core.models.base import BaseModel
 from ..core.plugins.base import ArchitectureInfo, DeploymentInfo, ParamScope, ParamSpec
@@ -31,12 +32,16 @@ from .agents.base import AgentInfo, BaseAgent
 ########################################################################
 #                              CONSTANTS                               #
 ########################################################################
-# All entry point groups the manager cares about. Plugins declare
-# their metadata via a class-level ``info`` attribute (subclass of
-# ``ExtensionInfo``); the ``info.params`` list drives Settings,
-# CLI flags, and init-kwarg filtering. Definition plugins are the one
-# exception — they don't carry an ``info`` object and expose their
-# metadata via ``get_definitions()`` instead.
+# All per-plugin entry point groups the manager discovers first.
+# Plugins declare their metadata via a class-level ``info`` attribute
+# (subclass of ``ExtensionInfo``); the ``info.params`` list drives
+# Settings, CLI flags, and init-kwarg filtering. Definition plugins
+# are the one exception — they don't carry an ``info`` object and
+# expose their metadata via ``get_definitions()`` instead.
+#
+# ``claia.plugins`` is a package-manifest group handled separately
+# after this loop (import the named module, then register every
+# class recorded by the plugin decorators).
 PLUGIN_GROUPS: Tuple[str, ...] = (
   'claia.architectures',
   'claia.deployments',
@@ -132,6 +137,10 @@ class Manager:
        — directly on ``ArchitectureInfo.params``.
     4. Store the :class:`PluginEntry` keyed by ``info.name`` (falling
        back to the entry-point name). First-in-wins on collisions.
+    5. Load each ``claia.plugins`` manifest module (importing it runs
+       its decorators), then register every class recorded in the
+       decorator collection. A class already present in that group
+       by identity is skipped (debug log).
     """
     if self._plugins_discovered:
       logger.debug("Plugins already discovered")
@@ -144,39 +153,22 @@ class Manager:
       self._lazy_plugins[group] = {}
 
       for ep in metadata.entry_points().select(group=group):
-        entry = PluginEntry(name=ep.name, group=group, entry_point=ep)
-
         try:
-          entry.plugin_class = ep.load()
+          cls = ep.load()
         except Exception as e:
           logger.warning(f"Failed to load plugin class {ep.name} from {group}: {e}")
           continue
 
-        if group == 'claia.agents':
-          cls = entry.plugin_class
-          if not (isinstance(cls, type) and issubclass(cls, BaseAgent)):
-            logger.warning(
-              f"Skipping {ep.name} from {group}: expected a BaseAgent subclass, got {cls!r}"
-            )
-            continue
-
-        self._populate_entry_metadata(entry)
-
-        if group == 'claia.agents' and entry.info is not None:
-          entry.info.agent_class = entry.plugin_class
-
-        key = getattr(entry.info, 'name', None) or entry.name
-        if key in self._lazy_plugins[group]:
-          logger.warning(
-            f"Skipping {group}:{ep.name}; name {key!r} already registered (first-in wins)"
-          )
+        entry = self._register_plugin_class(group, ep.name, cls, entry_point=ep)
+        if entry is None:
           continue
-
-        self._log_discovered_entry(entry)
+        total_discovered += 1
         total_secrets += sum(1 for p in entry.params if getattr(p, 'secret', False))
 
-        self._lazy_plugins[group][key] = entry
-        total_discovered += 1
+    self._load_plugin_manifests()
+    added, secrets = self._register_decorated_plugins()
+    total_discovered += added
+    total_secrets += secrets
 
     self._plugins_discovered = True
     logger.info(
@@ -187,6 +179,94 @@ class Manager:
   # ------------------------------------------------------------------
   # Discovery helpers
   # ------------------------------------------------------------------
+  def _register_plugin_class(
+    self,
+    group: str,
+    name: str,
+    cls: Type,
+    entry_point: Any = None,
+  ) -> Optional[PluginEntry]:
+    """Validate, key, and store a plugin class in ``_lazy_plugins``.
+
+    Shared by the per-plugin entry-point loop and the manifest
+    collection walk. Covers agent validation (``BaseAgent`` subclass
+    check and ``info.agent_class`` fill), metadata population, name
+    keying, first-in-wins collision handling, and discovery logging.
+
+    Returns the stored :class:`PluginEntry`, or ``None`` when the
+    class is skipped.
+    """
+    entries = self._lazy_plugins.setdefault(group, {})
+    entry = PluginEntry(
+      name=name, group=group, entry_point=entry_point, plugin_class=cls,
+    )
+
+    if group == 'claia.agents':
+      if not (isinstance(cls, type) and issubclass(cls, BaseAgent)):
+        logger.warning(
+          f"Skipping {name} from {group}: expected a BaseAgent subclass, got {cls!r}"
+        )
+        return None
+
+    self._populate_entry_metadata(entry)
+
+    if group == 'claia.agents' and entry.info is not None:
+      entry.info.agent_class = entry.plugin_class
+
+    key = getattr(entry.info, 'name', None) or entry.name
+    if key in entries:
+      logger.warning(
+        f"Skipping {group}:{name}; name {key!r} already registered (first-in wins)"
+      )
+      return None
+
+    self._log_discovered_entry(entry)
+    entries[key] = entry
+    return entry
+
+  def _load_plugin_manifests(self) -> None:
+    """Import each ``claia.plugins`` entry-point module.
+
+    Importing the module runs its decorators, which record classes
+    into the core collection consumed by
+    :meth:`_register_decorated_plugins`.
+    """
+    for ep in metadata.entry_points().select(group='claia.plugins'):
+      try:
+        ep.load()
+      except Exception as e:
+        logger.warning(
+          f"Failed to load plugin manifest {ep.name} from claia.plugins: {e}"
+        )
+
+  def _register_decorated_plugins(self) -> Tuple[int, int]:
+    """Register classes recorded by plugin decorators (manifest path).
+
+    A class already stored in that group (``entry.plugin_class is
+    cls``) is skipped with a debug log so built-in plugins can be
+    decorated while staying on per-plugin entry points.
+
+    Returns ``(added, secret_count)`` for newly stored entries.
+    """
+    added = 0
+    secrets = 0
+    for group, cls in iter_decorated_plugins():
+      entries = self._lazy_plugins.setdefault(group, {})
+      if any(entry.plugin_class is cls for entry in entries.values()):
+        logger.debug(
+          f"Skipping {group}:{getattr(cls, '__name__', cls)}; "
+          f"already registered (identity dedupe)"
+        )
+        continue
+      info = getattr(cls, 'info', None)
+      name = getattr(info, 'name', None) or getattr(cls, '__name__', str(cls))
+      entry = self._register_plugin_class(group, name, cls, entry_point=None)
+      if entry is None:
+        continue
+      added += 1
+      secrets += sum(1 for p in entry.params if getattr(p, 'secret', False))
+    return added, secrets
+
   def _populate_entry_metadata(self, entry: PluginEntry) -> None:
     """Read ``entry.info`` and flatten ``entry.params`` from the class.
 
@@ -204,6 +284,16 @@ class Manager:
     class_info = getattr(cls, 'info', None)
     if class_info is not None and not isinstance(class_info, (property, classmethod, staticmethod)):
       entry.info = class_info
+
+    if (
+      isinstance(cls, type)
+      and PENDING_ATTR in cls.__dict__
+      and entry.info is None
+    ):
+      logger.warning(
+        f"Plugin class {cls.__qualname__} has leftover {PENDING_ATTR} "
+        f"but no info; the main plugin decorator was not applied"
+      )
 
     entry.params = list(getattr(entry.info, 'params', None) or [])
 

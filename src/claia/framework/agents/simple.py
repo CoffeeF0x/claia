@@ -14,7 +14,8 @@ import json
 import logging
 from typing import Iterable, Optional
 
-from .base import AgentInfo, BaseAgent
+from .base import BaseAgent
+from ..decorators import agent
 from ...core.data.chunks import AudioChunk, BaseChunk, ImageChunk, TextChunk
 from ...core.data.models import AudioArtifact, ImageArtifact
 from ...core.enums.conversation import MessageRole
@@ -38,6 +39,7 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                          SIMPLE AGENT CLASS                          #
 ########################################################################
+@agent(name="simple")
 class SimpleAgent(BaseAgent):
   """
   A simple agent that directly calls a model for inference.
@@ -53,12 +55,6 @@ class SimpleAgent(BaseAgent):
 
   Non-text chunks (image / audio) follow the artifact attachment path.
   """
-
-  info = AgentInfo(
-    name="simple",
-    title="Simple Agent",
-    description="A simple agent that directly calls a model for inference",
-  )
 
   @classmethod
   def process_request(cls, process, registry=None, **kwargs) -> object:
