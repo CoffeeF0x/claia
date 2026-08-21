@@ -10,11 +10,10 @@ from .base import BaseToolModule
 from ...decorators import tool
 
 
-@tool(
-  name="sample",
-  title="Sample Utilities",
-  description="Sample module with utility tools for demonstration",
-)
+@tool
+@tool.name("sample")
+@tool.title("Sample Utilities")
+@tool.description("Sample module with utility tools for demonstration")
 class SampleModulePlugin(BaseToolModule):
   """Sample module implementing multiple utility tools."""
 

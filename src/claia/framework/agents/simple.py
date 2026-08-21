@@ -39,7 +39,10 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                          SIMPLE AGENT CLASS                          #
 ########################################################################
-@agent(name="simple")
+@agent
+@agent.name("simple")
+@agent.title("Simple Agent")
+@agent.description("A simple agent that directly calls a model for inference")
 class SimpleAgent(BaseAgent):
   """
   A simple agent that directly calls a model for inference.

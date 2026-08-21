@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition, artifacts_from_modalities
+from ..decorators import definitions
 from ..modality import Modality
 from ..data.models.conversation.message_sequence import MessageSequence
 
@@ -44,6 +45,7 @@ def _definition(
   )
 
 
+@definitions
 class OpenRouterDefinitionsPlugin(BaseDefinitionProvider):
   """OpenRouter model definitions plugin."""
 

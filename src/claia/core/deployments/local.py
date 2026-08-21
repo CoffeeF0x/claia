@@ -8,17 +8,15 @@ typically transformer models loaded via HuggingFace transformers.
 from typing import Any, Dict, Type
 
 from .base import BaseDeployment
-from ..plugins.base import DeploymentInfo
+from ..decorators import deployment
 
 
+@deployment
+@deployment.name("local")
+@deployment.title("Local Deployment")
+@deployment.description("Deploy models locally using transformers/torch")
 class LocalDeploymentPlugin(BaseDeployment):
   """Local deployment method plugin for transformer-based models."""
-
-  info = DeploymentInfo(
-    name="local",
-    title="Local Deployment",
-    description="Deploy models locally using transformers/torch",
-  )
 
   def create_model(
     self,

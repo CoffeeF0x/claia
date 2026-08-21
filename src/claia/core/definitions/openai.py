@@ -19,6 +19,7 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
+from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..modality import Modality
 from ..data.models.conversation.message_sequence import MessageSequence
@@ -29,6 +30,7 @@ _CHAT = [ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence]
 logger = logging.getLogger(__name__)
 
 
+@definitions
 class OpenAIDefinitionsPlugin(BaseDefinitionProvider):
   """OpenAI model definitions plugin."""
 

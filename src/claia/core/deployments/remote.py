@@ -8,18 +8,16 @@ cloud VMs, or other distributed systems.
 from typing import Any, Dict, Type
 
 from .base import BaseDeployment
+from ..decorators import deployment
 from ..results import DeploymentError, Result
-from ..plugins.base import DeploymentInfo
 
 
+@deployment
+@deployment.name("remote")
+@deployment.title("Remote Deployment")
+@deployment.description("Deploy models on remote servers or cloud VMs")
 class RemoteDeploymentPlugin(BaseDeployment):
   """Remote deployment method plugin for distributed models."""
-
-  info = DeploymentInfo(
-    name="remote",
-    title="Remote Deployment",
-    description="Deploy models on remote servers or cloud VMs",
-  )
 
   def create_model(
     self,

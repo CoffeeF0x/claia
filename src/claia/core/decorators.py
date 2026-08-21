@@ -273,8 +273,15 @@ class PluginDecorator:
     """Stacked modifier that sets ``description``."""
     return self._scalar_modifier("description", value)
 
-  def param(self, spec: ParamSpec) -> Callable:
-    """Stacked modifier that appends a ``ParamSpec`` (classes only)."""
+  def param(self, *specs: ParamSpec) -> Callable:
+    """Stacked modifier that adds ``ParamSpec``s (classes only).
+
+    Accepts one or more specs so a shared list can be spread in a
+    single stage (``@architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)``).
+    Stacked ``.param`` stages fold in reading order — the params list
+    ends up exactly as written top-down, which is what first-match-wins
+    resolution (overrides declared before a spread of commons) needs.
+    """
     def decorator(target: Any) -> Any:
       if inspect.isfunction(target):
         raise ValueError(".param cannot be applied to a function")
@@ -282,7 +289,7 @@ class PluginDecorator:
         raise TypeError(
           f"{self.label}.param expected a class, got {type(target).__name__}"
         )
-      self._apply_param(target, spec)
+      self._apply_param(target, specs)
       return target
     return decorator
 
@@ -455,17 +462,24 @@ class PluginDecorator:
       )
     pending[field] = value
 
-  def _apply_param(self, cls: type, spec: ParamSpec) -> None:
+  def _apply_param(self, cls: type, specs: Tuple[ParamSpec, ...]) -> None:
+    """Fold a ``.param`` stage's specs into the class.
+
+    Decorators execute bottom-up, so each stage *prepends* its group:
+    the stage physically closest to the class lands first and each
+    stage above it slots in front, yielding reading order overall
+    (within one stage the given order is kept).
+    """
     if "info" in cls.__dict__:
-      cls.info.params.append(spec)
+      cls.info.params[0:0] = specs
       return
     inherited = getattr(cls, "info", None)
     if _is_info_value(inherited):
       cls.info = dataclasses.replace(inherited, params=list(inherited.params))
-      cls.info.params.append(spec)
+      cls.info.params[0:0] = specs
       return
     pending = _own_pending(cls)
-    pending.setdefault("params", []).append(spec)
+    pending.setdefault("params", [])[0:0] = specs
 
 
 ########################################################################
@@ -479,11 +493,29 @@ architecture = PluginDecorator(ArchitectureInfo, "claia.architectures", label="a
 deployment = PluginDecorator(DeploymentInfo, "claia.deployments", label="deployment")
 
 
+def definitions(cls: type) -> type:
+  """Record a definition-provider class for manifest discovery.
+
+  Definition providers carry no ``info`` object (they publish
+  ``{name: ModelDefinition}`` via ``get_definitions``), so there is
+  no metadata to build and no kwargs or stacked modifiers — this
+  decorator only records the class so manifest-registered packages
+  (``claia.plugins``) can ship definition providers.
+  """
+  if not inspect.isclass(cls):
+    raise TypeError(
+      f"definitions decorator expected a class, got {type(cls).__name__}"
+    )
+  record_plugin("claia.definitions", cls)
+  return cls
+
+
 __all__ = [
   "PENDING_ATTR",
   "TOOL_ATTR",
   "PluginDecorator",
   "architecture",
+  "definitions",
   "deployment",
   "iter_decorated_plugins",
   "protocol",

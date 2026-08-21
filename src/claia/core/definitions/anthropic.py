@@ -24,6 +24,7 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
+from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..modality import Modality
 from ..data.models.conversation.message_sequence import MessageSequenceOrdered
@@ -34,6 +35,7 @@ _CHAT = [ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered]
 logger = logging.getLogger(__name__)
 
 
+@definitions
 class AnthropicDefinitionsPlugin(BaseDefinitionProvider):
   """Anthropic model definitions plugin."""
 

@@ -13,8 +13,9 @@ import importlib.metadata as importlib_metadata
 from typing import Dict, Any, Optional, List
 from collections import defaultdict
 
+from ...core.decorators import tool
 from ...core.tools.modules.base import BaseToolModule
-from ...core.plugins.base import ToolModuleInfo, ToolDefinition, ArgumentDefinition
+from ...core.plugins.base import ToolDefinition, ArgumentDefinition
 from ...core.results import Result
 from ...core.data.models import Conversation, Prompt
 from ..storage import JsonStore
@@ -27,14 +28,12 @@ logger = logging.getLogger(__name__)
 DIVIDER = "-" * 70
 
 
+@tool
+@tool.name("cli")
+@tool.title("CLI Tools")
+@tool.description("Model, agent, prompt, conversation, and settings management tools")
 class CLIModulePlugin(BaseToolModule):
   """CLI module implementing tools for models, agents, prompts, conversations, and settings."""
-
-  info = ToolModuleInfo(
-    name="cli",
-    title="CLI Tools",
-    description="Model, agent, prompt, conversation, and settings management tools",
-  )
 
   def get_module_tools(self) -> Dict[str, ToolDefinition]:
     """Return all available tools in this module."""

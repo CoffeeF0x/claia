@@ -48,11 +48,11 @@ def test_agent_decorator_infers_title_and_description_leaves_class_unset():
   assert ProbeAgent.info.agent_class is None
 
 
-def test_simple_agent_inference_matches_previous_catalog():
+def test_simple_agent_stacked_decorators_match_catalog():
   assert SimpleAgent.info.name == "simple"
   assert SimpleAgent.info.title == "Simple Agent"
   assert SimpleAgent.info.description == (
-    "A simple agent that directly calls a model for inference."
+    "A simple agent that directly calls a model for inference"
   )
 
 

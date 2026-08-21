@@ -13,7 +13,6 @@ import pytest
 
 from claia.core.decorators import (
   PENDING_ATTR,
-  TOOL_ATTR,
   _decorated_plugins,
   iter_decorated_plugins,
   protocol,
@@ -122,17 +121,42 @@ def test_stacked_orders_converge_on_identical_info():
   assert OrderModifiersFirst.info.params == [spec]
 
 
-def test_param_modifier_is_additive():
+def test_param_stages_fold_in_reading_order():
   first = ParamSpec(name="precision", type=int, default=2)
   second = ParamSpec(name="mode", type=str, default="fast")
 
   @tool
-  @tool.param(second)
   @tool.param(first)
+  @tool.param(second)
   class WithParams(BaseToolModule):
     """Has params."""
 
   assert WithParams.info.params == [first, second]
+
+  @tool.param(first)
+  @tool.param(second)
+  @tool
+  class WithParamsMainFirst(BaseToolModule):
+    """Has params."""
+
+  assert WithParamsMainFirst.info.params == [first, second]
+
+
+def test_param_stage_accepts_spread_and_keeps_override_first():
+  override = ParamSpec(name="max_tokens", type=int, default=4000)
+  commons = [
+    ParamSpec(name="max_tokens", type=int, default=1000),
+    ParamSpec(name="temperature", type=float, default=0.7),
+  ]
+
+  @tool
+  @tool.param(override)
+  @tool.param(*commons)
+  class WithSpread(BaseToolModule):
+    """Override declared before the commons spread wins first-match."""
+
+  assert WithSpread.info.params == [override, *commons]
+  assert WithSpread.info.param("max_tokens").default == 4000
 
 
 def test_duplicate_scalar_kwarg_then_modifier_raises():
@@ -379,9 +403,30 @@ def test_sample_module_uses_decorators_and_preserves_catalog():
   assert tools["echo"].callable("hi") == "hi"
 
 
-def test_system_module_stays_manual():
+def test_system_module_uses_decorators():
   plugin = SystemModulePlugin()
+  assert SystemModulePlugin.info.name == "system"
+  assert SystemModulePlugin.info.title == "System Utilities"
   tools = plugin.get_module_tools()
   assert set(tools) == {"clear", "exit"}
-  assert not hasattr(plugin._clear, TOOL_ATTR)
+  assert tools["clear"].description == "Clear the terminal screen"
+  assert tools["exit"].description == "Exit the application"
+  assert tools["exit"].callable.__self__ is plugin
   assert PENDING_ATTR not in SystemModulePlugin.__dict__
+
+
+def test_definitions_decorator_records_class():
+  from claia.core.decorators import definitions
+
+  @definitions
+  class ProbeDefinitions:
+    """Probe provider."""
+
+    def get_definitions(self):
+      return {}
+
+  assert ("claia.definitions", ProbeDefinitions) in iter_decorated_plugins()
+  assert "info" not in ProbeDefinitions.__dict__
+
+  with pytest.raises(TypeError, match="expected a class"):
+    definitions(lambda: None)

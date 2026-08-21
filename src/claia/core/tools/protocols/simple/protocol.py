@@ -25,7 +25,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
-from ....plugins.base import ProtocolInfo, ToolReference
+from ....decorators import protocol
+from ....plugins.base import ToolReference
 from ....results import Result
 
 from ..base import BaseProtocol
@@ -36,14 +37,12 @@ from .payload import decode_payload
 logger = logging.getLogger(__name__)
 
 
+@protocol
+@protocol.name("simple")
+@protocol.title("Simple Local Protocol")
+@protocol.description("Resolves tool name to a command module plugin and executes it.")
 class SimpleProtocolPlugin(BaseProtocol):
   """Bridge between native tool modules and the new protocol contract."""
-
-  info = ProtocolInfo(
-    name="simple",
-    title="Simple Local Protocol",
-    description="Resolves tool name to a command module plugin and executes it.",
-  )
 
   def __init__(self) -> None:
     # Bound by the framework via :meth:`bind_tool_modules` once the

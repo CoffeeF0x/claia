@@ -6,14 +6,12 @@ to services like OpenAI, Anthropic, etc.
 """
 
 from .base import BaseDeployment
-from ..plugins.base import DeploymentInfo
+from ..decorators import deployment
 
 
+@deployment
+@deployment.name("api")
+@deployment.title("API Deployment")
+@deployment.description("Deploy models via external API services (OpenAI, Anthropic, etc.)")
 class APIDeploymentPlugin(BaseDeployment):
   """API deployment method plugin for remote API-based models."""
-
-  info = DeploymentInfo(
-    name="api",
-    title="API Deployment",
-    description="Deploy models via external API services (OpenAI, Anthropic, etc.)",
-  )
