@@ -47,7 +47,7 @@ def run_model():
   model = MODULE(model_name="dummy-model")
   conversation = Conversation(title="sanity-models")
   conversation.add_message(MessageRole.USER, "Tell me a story.")
-  sequence = DummyDeployment().translate(conversation, _definition())
+  sequence = conversation.to_model_inputs(_definition())
   message_count_before = len(conversation.messages)
 
   print(f"model: {model.model_name} ({type(model).__name__})")
@@ -69,7 +69,7 @@ def run_model():
 
 
 def run_deployment():
-  """Conversation → deployment.translate → generate (streamed)."""
+  """Conversation → to_model_inputs → deployment.run (streamed)."""
   deployment = DummyDeployment()
   info = deployment.info
   conversation = Conversation(title="sanity-models-deploy")
@@ -80,11 +80,10 @@ def run_deployment():
   chunks, _ = drain(deployment.run(
     model_name="dummy-model",
     model_class=MODULE,
-    conversation=conversation,
+    inputs=conversation.to_model_inputs(_definition()),
     cache={},
     init_kwargs={},
     runtime_kwargs=STREAM_KWARGS,
-    definition=_definition(),
   ))
 
   preview = "".join(

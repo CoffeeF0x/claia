@@ -16,22 +16,21 @@ MIME enums live in `claia.core.enums.data` (`MediaType`, `TextFormat`, `Artifact
 
 ## Model boundary
 
-**Conversation → deployment.translate → `MessageSequence` or artifact list → `ModelResponse`.**
+**Conversation → `to_model_inputs` → `MessageSequence` or artifact list → deployment / `ModelResponse`.**
 
-`ModelDefinition.inputs` lists `ArtifactType` values and optional complex types (`MessageSequence` / `MessageSequenceOrdered`). `outputs` lists the chunk classes the model is designed to yield. Deployments choose the sequence class or extract artifacts from the latest message.
+`ModelDefinition.inputs` lists `ArtifactType` values and optional complex types (`MessageSequence` / `MessageSequenceOrdered`). `outputs` lists the chunk classes the model is designed to yield. The conversation builds the sequence or takes artifacts from the latest message. Deployments do not see the conversation.
 
 ```python
 from claia.core.data import Conversation, MessageSequence
 from claia.core.definitions.model_definition import ModelDefinition
-from claia.core.deployments.dummy import DummyDeployment
 from claia.core.enums.conversation import MessageRole
 from claia.core.enums.data import ArtifactType
 
 conversation = Conversation(title="Example")
 conversation.add_message(MessageRole.USER, "Hello")
-inputs = DummyDeployment().translate(
-  conversation,
+inputs = conversation.to_model_inputs(
   ModelDefinition(inputs=[ArtifactType.TEXT, MessageSequence]),
+  system="Be brief",
 )
 ```
 

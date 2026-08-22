@@ -246,8 +246,6 @@ class GenericTransformerModel(LocalModel):
   def _convert_sequence_to_prompt(self, sequence: MessageSequence) -> str:
     """Convert a MessageSequence to a text prompt."""
     parts = []
-    if sequence.system:
-      parts.append(f"System: {sequence.system}")
     for message in sequence.messages:
       if message.speaker == MessageRole.SYSTEM:
         parts.append(f"System: {message.content}")

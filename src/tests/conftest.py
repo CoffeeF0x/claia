@@ -100,7 +100,7 @@ def fake_manager():
           params = []
         info = Info()
 
-        def run(self, model_name, model_class, conversation, cache, **kwargs):
+        def run(self, model_name, model_class, inputs, cache, **kwargs):
           yield TextChunk(data=f"deployed {model_name} via {deployment_name}")
       return Deployment()
 

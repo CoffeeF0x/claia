@@ -4,8 +4,9 @@ Conversation models represent chat state as a pure Python message tree with an e
 
 ## What Lives Here
 
-- `conversation.py` — `Conversation`, including title, messages, active branch tracking, serialization, and event emission.
+- `conversation.py` — `Conversation`, including title, messages, active branch tracking, serialization, event emission, and `to_model_inputs`.
 - `message.py` — `Message`, including role, content, attachments, parent links, and thread-safe content updates.
+- `message_sequence.py` — generate-time `MessageSequence` / `MessageSequenceOrdered` views (system is a `SYSTEM` turn).
 - `tool_definition.py` — compatibility re-export for tool definition dataclasses.
 
 All primary types are available from `claia.core.data`; `Conversation` and `Message` are also re-exported from `claia.framework`.
@@ -16,6 +17,7 @@ All primary types are available from `claia.core.data`; `Conversation` and `Mess
 - Mutations record `DomainEvent`s for auditing and host-runtime persistence.
 - Streaming updates can append chunks without flooding the event log.
 - Generation settings stay outside the data model and are passed at runtime through registry or process parameters.
+- `to_model_inputs` is the generate-time translation: a filtered message sequence or the latest message's artifacts. Deployments receive that result, not the conversation.
 
 ## Quick Example
 

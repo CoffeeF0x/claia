@@ -14,11 +14,13 @@ discovered via the `claia.deployments` entry point.
 
 ## How deployments fit in
 
-- The registry resolve step chooses a `deployment_name` and `architecture_name`.
+- The registry resolve step chooses a `deployment_name` and `architecture_name`, then translates the conversation into a sequence or artifact list.
 - The deployment:
-  - validates/filters kwargs against its declared `ParamSpec` list
   - instantiates the architecture or client
-  - executes the request and returns a result.
+  - runs `model.generate` on those inputs
+  - streams chunks back
+
+Deployments do not take a `Conversation`.
 
 ## When to add/modify a deployment
 

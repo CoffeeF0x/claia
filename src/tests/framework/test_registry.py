@@ -114,7 +114,7 @@ def test_model_registry_resolves_diffusers_provider_identifier(monkeypatch):
           description="Local test deployment",
         )
 
-        def run(self, model_name, model_class, conversation, cache, init_kwargs, runtime_kwargs, definition=None, system=None):
+        def run(self, model_name, model_class, inputs, cache, init_kwargs, runtime_kwargs):
           from claia.core.data.chunks import TextChunk
           yield TextChunk(data=model_name)
 
@@ -185,7 +185,7 @@ def test_model_registry_resolves_tts_provider_identifier(monkeypatch):
           description="Local test deployment",
         )
 
-        def run(self, model_name, model_class, conversation, cache, init_kwargs, runtime_kwargs, definition=None, system=None):
+        def run(self, model_name, model_class, inputs, cache, init_kwargs, runtime_kwargs):
           from claia.core.data.chunks import TextChunk
           yield TextChunk(data=model_name)
 

@@ -67,9 +67,6 @@ class Gemma3Model(GenericTransformerModel):
     """Convert a MessageSequence to Gemma3-specific prompt format."""
     prompt_parts = []
 
-    if sequence.system:
-      prompt_parts.append(f"<start_of_turn>system\n{sequence.system}<end_of_turn>")
-
     for message in sequence.messages:
       if message.speaker == MessageRole.SYSTEM:
         prompt_parts.append(f"<start_of_turn>system\n{message.content}<end_of_turn>")

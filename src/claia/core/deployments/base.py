@@ -1,25 +1,21 @@
 """
 Abstract base class for deployments.
 
-A deployment takes an architecture's model class plus a conversation,
-translates the conversation into model inputs using the resolved
-model definition's ``inputs``, and streams ``BaseChunk``
-content items. Completion and errors live on ``ModelResponse``.
+A deployment owns model-instance lifecycle and runs ``model.generate``
+on already-translated inputs (a ``MessageSequence`` or artifact list).
+Completion and errors live on ``ModelResponse``.
 """
 
 from __future__ import annotations
 
 import logging
 from abc import ABC
-from typing import Any, ClassVar, Dict, Generator, Iterator, List, Optional, Type, Union
+from typing import Any, ClassVar, Dict, Generator, Iterator, List, Type, Union
 
-from ..data import Conversation
 from ..data.artifacts import BaseArtifact
 from ..data.chunks import BaseChunk, RawChunk, TextChunk
 from ..data.models.conversation.message_sequence import MessageSequence
 from ..data.response import ModelResponse
-from ..definitions.model_definition import ModelDefinition
-from ..enums.data import ArtifactType
 from ..plugins.base import DeploymentInfo
 
 
@@ -64,51 +60,6 @@ class BaseDeployment(ABC):
     cache[key] = instance
     logger.debug(f"Successfully deployed and cached model: {model_name}")
     return instance
-
-  def resolve_artifact(self, artifact: Any) -> Any:
-    """Resolve/fetch/convert an artifact before filtering. Default: identity."""
-    return artifact
-
-  def translate(
-    self,
-    conversation: Conversation,
-    definition: Optional[ModelDefinition] = None,
-    system: Optional[str] = None,
-    **kwargs,
-  ) -> ModelInputs:
-    """Translate a conversation into model inputs.
-
-    - If the definition lists ``MessageSequenceOrdered`` / ``MessageSequence``,
-      build that sequence (artifacts filtered to declared ArtifactTypes).
-    - Otherwise take supported artifacts from the latest thread message
-      (possibly empty).
-
-    ``system`` is an optional generate-time inclusion. It is prepended
-    onto a message sequence for this call only and is not written to
-    the conversation.
-    """
-    del kwargs
-    definition = definition or ModelDefinition()
-    artifact_types = definition.artifact_types() or [ArtifactType.TEXT]
-    sequence_cls = definition.sequence_class()
-
-    if sequence_cls is not None:
-      return conversation.to_message_sequence(
-        supported_artifact_types=artifact_types,
-        sequence_cls=sequence_cls,
-        system=system,
-      )
-
-    thread = conversation.export_thread()
-    if not thread:
-      return []
-    latest = thread[-1]
-    out: List[BaseArtifact] = []
-    for artifact in latest.artifacts or []:
-      resolved = self.resolve_artifact(artifact)
-      if ArtifactType.from_artifact(resolved) in artifact_types:
-        out.append(resolved)
-    return out
 
   @staticmethod
   def normalize_chunk(item: Any) -> BaseChunk:
@@ -165,18 +116,15 @@ class BaseDeployment(ABC):
     self,
     model_name: str,
     model_class: Type,
-    conversation: Conversation,
+    inputs: ModelInputs,
     cache: Dict[str, Any],
     init_kwargs: Dict[str, Any],
     runtime_kwargs: Dict[str, Any],
-    definition: Optional[ModelDefinition] = None,
-    system: Optional[str] = None,
   ) -> Iterator[BaseChunk]:
-    """Deploy (if needed), translate the conversation, and run inference."""
+    """Deploy (if needed) and run inference on translated inputs."""
     model_instance = self.resolve_model(
       model_name, model_class, cache, init_kwargs
     )
-    inputs = self.translate(conversation, definition, system=system)
     if isinstance(inputs, MessageSequence):
       label = f"{len(inputs)} turns ({type(inputs).__name__})"
     else:

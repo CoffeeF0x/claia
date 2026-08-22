@@ -62,11 +62,9 @@ def _import_tts_module(monkeypatch):
 
 
 def _artifacts(conversation):
-  from claia.core.deployments.dummy import DummyDeployment
   from claia.core.definitions.model_definition import ModelDefinition
   from claia.core.enums.data import ArtifactType
-  return DummyDeployment().translate(
-    conversation,
+  return conversation.to_model_inputs(
     ModelDefinition(inputs=[ArtifactType.TEXT]),
   )
 

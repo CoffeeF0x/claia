@@ -106,12 +106,10 @@ def _model(monkeypatch):
 
 
 def _sequence(conversation):
-  from claia.core.deployments.dummy import DummyDeployment
   from claia.core.definitions.model_definition import ModelDefinition
   from claia.core.data.models.conversation.message_sequence import MessageSequence
   from claia.core.enums.data import ArtifactType
-  return DummyDeployment().translate(
-    conversation,
+  return conversation.to_model_inputs(
     ModelDefinition(inputs=[ArtifactType.TEXT, MessageSequence]),
   )
 

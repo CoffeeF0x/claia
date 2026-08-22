@@ -3,22 +3,40 @@ Message sequences — model-ready views of a conversation thread.
 
 Conversation builds these from its active thread, filtering each
 message's artifacts to what the model supports. Sequences are
-conceptually read-only views (copies of messages).
+conceptually read-only views (copies of messages). A generate-time
+system message is a ``MessageRole.SYSTEM`` turn in ``messages``.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence, Type, Union
+from typing import Any, Dict, List, Optional, Sequence, Type
 
 from ....enums.conversation import MessageRole
 from ....enums.data import TextFormat
 
 
+def _role(message) -> Optional[MessageRole]:
+  speaker = getattr(message, "speaker", None) or getattr(message, "role", None)
+  if speaker is None:
+    return None
+  return speaker if isinstance(speaker, MessageRole) else MessageRole(speaker)
+
+
+def _prepend_system(messages: List[Any], system: Optional[str]) -> List[Any]:
+  if system is None:
+    return messages
+  text = system.strip() if isinstance(system, str) else str(system).strip()
+  if not text:
+    return messages
+  from .message import Message
+  return [Message(speaker=MessageRole.SYSTEM, content=text), *messages]
+
+
 class MessageSequence:
   """Ordered thread messages with artifacts filtered for a model.
 
-  ``messages`` are conversation ``Message`` copies. ``system`` is
-  optional top-level instructions for this generate call only.
+  ``messages`` are conversation ``Message`` copies. A system message
+  is a ``MessageRole.SYSTEM`` turn in that list, not a sidecar field.
   """
 
   def __init__(
@@ -26,8 +44,7 @@ class MessageSequence:
     messages: Optional[Sequence[Any]] = None,
     system: Optional[str] = None,
   ):
-    self.messages: List[Any] = list(messages or [])
-    self.system = system or None
+    self.messages: List[Any] = _prepend_system(list(messages or []), system)
 
   def __len__(self) -> int:
     return len(self.messages)
@@ -35,9 +52,20 @@ class MessageSequence:
   def __iter__(self):
     return iter(self.messages)
 
+  @property
+  def system(self) -> Optional[str]:
+    """Concatenated text of ``SYSTEM`` turns, or None."""
+    parts = []
+    for message in self.messages:
+      if _role(message) != MessageRole.SYSTEM:
+        continue
+      text = getattr(message, "content", None)
+      if text and str(text).strip():
+        parts.append(str(text).strip())
+    return "\n\n".join(parts) if parts else None
+
   def to_dict(self) -> Dict[str, Any]:
     return {
-      "system": self.system,
       "messages": [
         m.to_dict() if hasattr(m, "to_dict") else m
         for m in self.messages
@@ -63,7 +91,8 @@ class MessageSequenceOrdered(MessageSequence):
   """Message sequence with user/assistant role alternation enforced.
 
   Consecutive same-role turns are merged. Leading assistant turns are
-  dropped. Only user/assistant turns are kept.
+  dropped. ``SYSTEM`` turns stay at the front; only user/assistant
+  turns are normalized.
   """
 
   def __init__(
@@ -79,22 +108,18 @@ class MessageSequenceOrdered(MessageSequence):
     from .message import Message
     from ...artifacts import TextArtifact
 
+    systems = [m for m in messages if _role(m) == MessageRole.SYSTEM]
     filtered = [
       m for m in messages
-      if getattr(m, "speaker", None) in (MessageRole.USER, MessageRole.ASSISTANT)
-      or getattr(m, "role", None) in (MessageRole.USER, MessageRole.ASSISTANT)
+      if _role(m) in (MessageRole.USER, MessageRole.ASSISTANT)
     ]
     if not filtered:
-      return []
-
-    def _role(message) -> MessageRole:
-      speaker = getattr(message, "speaker", None) or getattr(message, "role", None)
-      return speaker if isinstance(speaker, MessageRole) else MessageRole(speaker)
+      return list(systems)
 
     while filtered and _role(filtered[0]) == MessageRole.ASSISTANT:
       filtered.pop(0)
     if not filtered:
-      return []
+      return list(systems)
 
     merged: List[Any] = []
     for message in filtered:
@@ -121,9 +146,8 @@ class MessageSequenceOrdered(MessageSequence):
         else:
           prev.artifacts = list(prev.artifacts or []) + list(message.artifacts or [])
       else:
-        # Copy into a fresh Message so merges don't mutate the source tree.
         if isinstance(message, Message):
           merged.append(Message.from_dict(message.to_dict()))
         else:
           merged.append(message)
-    return merged
+    return list(systems) + merged

@@ -302,6 +302,42 @@ class Conversation:
             system = system.strip() or None
         return sequence_cls(messages=copies, system=system)
 
+    def to_model_inputs(
+        self,
+        definition=None,
+        system: Optional[str] = None,
+        include_utility: bool = False,
+    ):
+        """Translate this conversation into model inputs.
+
+        Sequence models get a filtered ``MessageSequence`` (optional
+        ``system`` becomes a ``SYSTEM`` turn). Other models get supported
+        artifacts from the latest thread message.
+        """
+        from ....definitions.model_definition import ModelDefinition
+        from ....enums.data import ArtifactType
+
+        definition = definition or ModelDefinition()
+        artifact_types = definition.artifact_types() or [ArtifactType.TEXT]
+        sequence_cls = definition.sequence_class()
+        if sequence_cls is not None:
+            return self.to_message_sequence(
+                supported_artifact_types=artifact_types,
+                sequence_cls=sequence_cls,
+                include_utility=include_utility,
+                system=system,
+            )
+
+        thread = self.export_thread(include_utility=include_utility)
+        if not thread:
+            return []
+        allowed = set(artifact_types)
+        return [
+            artifact
+            for artifact in (thread[-1].artifacts or [])
+            if ArtifactType.from_artifact(artifact) in allowed
+        ]
+
     # ---------------------------------------------------------------------- #
     # Tree traversal                                                           #
     # ---------------------------------------------------------------------- #

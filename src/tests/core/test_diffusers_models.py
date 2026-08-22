@@ -84,11 +84,9 @@ def _import_diffusers_module(monkeypatch):
 
 
 def _artifacts(conversation):
-  from claia.core.deployments.dummy import DummyDeployment
   from claia.core.definitions.model_definition import ModelDefinition
   from claia.core.enums.data import ArtifactType
-  return DummyDeployment().translate(
-    conversation,
+  return conversation.to_model_inputs(
     ModelDefinition(inputs=[ArtifactType.TEXT]),
   )
 
@@ -175,7 +173,7 @@ def test_local_deployment_passes_image_chunks_through():
   chunks = list(deployment.run(
     model_name="fake-image-model",
     model_class=ImageModel,
-    conversation=_conversation(),
+    inputs=_artifacts(_conversation()),
     cache={},
     init_kwargs={},
     runtime_kwargs={},

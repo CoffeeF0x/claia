@@ -9,7 +9,8 @@ lives in the corresponding architecture (the model class).
 Definition plugins return a dict of ``{model_name: ModelDefinition}``
 which the framework merges across all installed providers.
 
-``inputs`` is the model IO contract used by ``BaseDeployment.translate``.
+``inputs`` is the model IO contract used by
+``Conversation.to_model_inputs``.
 Entries are ``ArtifactType`` values and/or complex types
 (``MessageSequence``, ``MessageSequenceOrdered``).
 
@@ -46,7 +47,7 @@ def default_outputs() -> List[Type[BaseChunk]]:
 class ModelDefinition:
   """Metadata describing a single model.
 
-  ``inputs`` lists what the model accepts after deployment translation:
+  ``inputs`` lists what the model accepts after ``to_model_inputs``:
   ``ArtifactType`` values and optional complex types
   (``MessageSequence`` / ``MessageSequenceOrdered``).
 
