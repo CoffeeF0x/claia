@@ -1,11 +1,17 @@
-"""Alibaba / Qwen model definitions (OpenRouter)."""
+"""Alibaba / Qwen model definitions."""
 
 from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from ._openrouter import VISION, definition
+from ..data.chunks import TextChunk
 from ..decorators import definitions
+from ..enums.data import ArtifactType
+from ..data.models.conversation.message_sequence import MessageSequence
+
+_CHAT = [ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence]
+_PROMPT = [ArtifactType.TEXT, MessageSequence]
+_TEXT = [TextChunk]
 
 
 @definitions
@@ -16,111 +22,165 @@ class QwenDefinitions(BaseDefinitionProvider):
   """Qwen model definitions."""
 
   def get_definitions(self) -> Dict[str, ModelDefinition]:
+    """Get Qwen model definitions."""
     return {
-      "qwen3.6-plus": definition(
+      "qwen3.6-plus": ModelDefinition(
         title="Qwen3.6 Plus",
-        identifiers={"openrouter": "qwen/qwen3.6-plus"},
-        company="Alibaba Cloud",
         aliases=["qwen3.6", "qwen-plus", "qwen"],
-        description="Hybrid architecture model with 1M-token context for agentic coding, front-end work, and reasoning.",
+        company="Alibaba Cloud",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="Hybrid architecture model with 1M-token context for agentic coding, front-end work, and reasoning",
         context_length=1000000,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "agentic", "multilingual"],
-        inputs=VISION,
         license="Commercial",
+        url="https://openrouter.ai/models/qwen/qwen3.6-plus",
+        identifiers={"openrouter": "qwen/qwen3.6-plus"},
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
-      "qwen3.6-plus-preview": definition(
+
+      "qwen3.6-plus-preview": ModelDefinition(
         title="Qwen3.6 Plus Preview",
-        identifiers={"openrouter": "qwen/qwen3.6-plus-preview"},
-        company="Alibaba Cloud",
         aliases=["qwen3.6-preview"],
-        description="Preview release of Qwen3.6 Plus with 1M-token context for coding and reasoning workflows.",
+        company="Alibaba Cloud",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="Preview release of Qwen3.6 Plus with 1M-token context for coding and reasoning workflows",
         context_length=1000000,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "agentic", "multilingual"],
-        inputs=VISION,
         license="Commercial",
+        url="https://openrouter.ai/models/qwen/qwen3.6-plus-preview",
+        identifiers={"openrouter": "qwen/qwen3.6-plus-preview"},
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
-      "qwen3.5-397b-a17b": definition(
+
+      "qwen3.5-397b-a17b": ModelDefinition(
         title="Qwen3.5 397B A17B",
-        identifiers={"openrouter": "qwen/qwen3.5-397b-a17b"},
-        company="Alibaba Cloud",
         aliases=["qwen3.5", "qwen3.5-large"],
-        description="Largest Qwen3.5 native vision-language model for reasoning and long-context work.",
+        company="Alibaba Cloud",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="Largest Qwen3.5 native vision-language model for reasoning and long-context work",
         context_length=262144,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "multilingual"],
-        inputs=VISION,
         license="Commercial",
+        url="https://openrouter.ai/models/qwen/qwen3.5-397b-a17b",
+        identifiers={"openrouter": "qwen/qwen3.5-397b-a17b"},
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
-      "qwen3.5-122b-a10b": definition(
+
+      "qwen3.5-122b-a10b": ModelDefinition(
         title="Qwen3.5 122B A10B",
-        identifiers={"openrouter": "qwen/qwen3.5-122b-a10b"},
-        company="Alibaba Cloud",
         aliases=["qwen3.5-122b"],
-        description="Large Qwen3.5 hybrid vision-language model for reasoning and coding.",
+        company="Alibaba Cloud",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="Large Qwen3.5 hybrid vision-language model for reasoning and coding",
         context_length=262144,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "multilingual"],
-        inputs=VISION,
         license="Commercial",
+        url="https://openrouter.ai/models/qwen/qwen3.5-122b-a10b",
+        identifiers={"openrouter": "qwen/qwen3.5-122b-a10b"},
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
-      "qwen3.5-35b-a3b": definition(
+
+      "qwen3.5-35b-a3b": ModelDefinition(
         title="Qwen3.5 35B A3B",
-        identifiers={"openrouter": "qwen/qwen3.5-35b-a3b"},
-        company="Alibaba Cloud",
         aliases=["qwen3.5-35b"],
-        description="Sparse Qwen3.5 vision-language MoE for efficient reasoning and coding.",
+        company="Alibaba Cloud",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="Sparse Qwen3.5 vision-language MoE for efficient reasoning and coding",
         context_length=262144,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "multilingual"],
-        inputs=VISION,
         license="Commercial",
+        url="https://openrouter.ai/models/qwen/qwen3.5-35b-a3b",
+        identifiers={"openrouter": "qwen/qwen3.5-35b-a3b"},
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
-      "qwen3.5-27b": definition(
+
+      "qwen3.5-27b": ModelDefinition(
         title="Qwen3.5 27B",
-        identifiers={"openrouter": "qwen/qwen3.5-27b"},
+        aliases=None,
         company="Alibaba Cloud",
-        description="Dense Qwen3.5 vision-language model for general reasoning and coding tasks.",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="Dense Qwen3.5 vision-language model for general reasoning and coding tasks",
         context_length=262144,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "multilingual"],
-        inputs=VISION,
         license="Commercial",
+        url="https://openrouter.ai/models/qwen/qwen3.5-27b",
+        identifiers={"openrouter": "qwen/qwen3.5-27b"},
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
-      "qwen3.5-flash": definition(
+
+      "qwen3.5-flash": ModelDefinition(
         title="Qwen3.5 Flash",
-        identifiers={"openrouter": "qwen/qwen3.5-flash-02-23"},
-        company="Alibaba Cloud",
         aliases=["qwen3.5-fast"],
-        description="Fast Qwen3.5 vision-language model with a 1M-token context window.",
+        company="Alibaba Cloud",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="Fast Qwen3.5 vision-language model with a 1M-token context window",
         context_length=1000000,
         capabilities=["chat", "code", "reasoning", "vision", "tool_use", "multilingual"],
-        inputs=VISION,
         license="Commercial",
+        url="https://openrouter.ai/models/qwen/qwen3.5-flash-02-23",
+        identifiers={"openrouter": "qwen/qwen3.5-flash-02-23"},
+        inputs=_CHAT,
+        outputs=_TEXT,
       ),
-      "qwen3-max": definition(
+
+      "qwen3-max": ModelDefinition(
         title="Qwen3 Max",
-        identifiers={"openrouter": "qwen/qwen3-max"},
-        company="Alibaba Cloud",
         aliases=["qwen-max"],
-        description="Large Qwen model for reasoning, multilingual work, coding, and tool calling.",
+        company="Alibaba Cloud",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="Large Qwen model for reasoning, multilingual work, coding, and tool calling",
         context_length=262144,
         capabilities=["chat", "code", "reasoning", "tool_use", "multilingual"],
         license="Commercial",
+        url="https://openrouter.ai/models/qwen/qwen3-max",
+        identifiers={"openrouter": "qwen/qwen3-max"},
+        inputs=_PROMPT,
+        outputs=_TEXT,
       ),
-      "qwen3-coder": definition(
+
+      "qwen3-coder": ModelDefinition(
         title="Qwen3 Coder 480B A35B",
-        identifiers={"openrouter": "qwen/qwen3-coder"},
-        company="Alibaba Cloud",
         aliases=["qwen-coder"],
-        description="Open-weight MoE coding model for agentic coding, tool use, and repository-scale context.",
+        company="Alibaba Cloud",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="Open-weight MoE coding model for agentic coding, tool use, and repository-scale context",
         context_length=262144,
         capabilities=["chat", "code", "reasoning", "tool_use", "agentic"],
         license="Open Weights",
+        url="https://openrouter.ai/models/qwen/qwen3-coder",
+        identifiers={"openrouter": "qwen/qwen3-coder"},
+        inputs=_PROMPT,
+        outputs=_TEXT,
       ),
-      "qwen3-coder-next": definition(
+
+      "qwen3-coder-next": ModelDefinition(
         title="Qwen3 Coder Next",
-        identifiers={"openrouter": "qwen/qwen3-coder-next"},
-        company="Alibaba Cloud",
         aliases=["qwen-coder-next"],
-        description="Efficient open-weight coding MoE for coding agents and local development workflows.",
+        company="Alibaba Cloud",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="Efficient open-weight coding MoE for coding agents and local development workflows",
         context_length=262144,
         capabilities=["chat", "code", "tool_use", "agentic"],
         license="Open Weights",
+        url="https://openrouter.ai/models/qwen/qwen3-coder-next",
+        identifiers={"openrouter": "qwen/qwen3-coder-next"},
+        inputs=_PROMPT,
+        outputs=_TEXT,
       ),
     }

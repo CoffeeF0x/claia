@@ -1,11 +1,16 @@
-"""MiniMax model definitions (OpenRouter)."""
+"""MiniMax model definitions."""
 
 from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from ._openrouter import definition
+from ..data.chunks import TextChunk
 from ..decorators import definitions
+from ..enums.data import ArtifactType
+from ..data.models.conversation.message_sequence import MessageSequence
+
+_PROMPT = [ArtifactType.TEXT, MessageSequence]
+_TEXT = [TextChunk]
 
 
 @definitions
@@ -16,43 +21,69 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
   """MiniMax model definitions."""
 
   def get_definitions(self) -> Dict[str, ModelDefinition]:
+    """Get MiniMax model definitions."""
     return {
-      "minimax-m2.7": definition(
+      "minimax-m2.7": ModelDefinition(
         title="MiniMax M2.7",
-        identifiers={"openrouter": "minimax/minimax-m2.7"},
-        company="MiniMax",
         aliases=["minimax"],
-        description="Next-generation productivity and autonomous-agent model for multi-agent collaboration.",
+        company="MiniMax",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="Next-generation productivity and autonomous-agent model for multi-agent collaboration",
         context_length=204800,
         capabilities=["chat", "code", "reasoning", "tool_use", "agentic"],
         license="Open Weights",
+        url="https://openrouter.ai/models/minimax/minimax-m2.7",
+        identifiers={"openrouter": "minimax/minimax-m2.7"},
+        inputs=_PROMPT,
+        outputs=_TEXT,
       ),
-      "minimax-m2.5": definition(
+
+      "minimax-m2.5": ModelDefinition(
         title="MiniMax M2.5",
-        identifiers={"openrouter": "minimax/minimax-m2.5"},
-        company="MiniMax",
         aliases=["minimax-m2-5"],
-        description="Productivity-focused model for real-world office and agent workflows.",
+        company="MiniMax",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="Productivity-focused model for real-world office and agent workflows",
         context_length=196608,
         capabilities=["chat", "code", "reasoning", "tool_use", "agentic"],
         license="Open Weights",
+        url="https://openrouter.ai/models/minimax/minimax-m2.5",
+        identifiers={"openrouter": "minimax/minimax-m2.5"},
+        inputs=_PROMPT,
+        outputs=_TEXT,
       ),
-      "minimax-m2": definition(
+
+      "minimax-m2": ModelDefinition(
         title="MiniMax M2",
-        identifiers={"openrouter": "minimax/minimax-m2"},
+        aliases=None,
         company="MiniMax",
-        description="MoE model optimized for coding and agentic workflows.",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="MoE model optimized for coding and agentic workflows",
         context_length=196608,
         capabilities=["chat", "code", "reasoning", "tool_use", "agentic"],
         license="Open Weights",
+        url="https://openrouter.ai/models/minimax/minimax-m2",
+        identifiers={"openrouter": "minimax/minimax-m2"},
+        inputs=_PROMPT,
+        outputs=_TEXT,
       ),
-      "minimax-m1": definition(
+
+      "minimax-m1": ModelDefinition(
         title="MiniMax M1",
-        identifiers={"openrouter": "minimax/minimax-m1"},
+        aliases=None,
         company="MiniMax",
-        description="Large-scale MoE reasoning model with a 1M-token context window.",
+        deployments=["api"],
+        architectures=["openrouter"],
+        description="Large-scale MoE reasoning model with a 1M-token context window",
         context_length=1000000,
         capabilities=["chat", "code", "reasoning", "tool_use"],
         license="Open Weights",
+        url="https://openrouter.ai/models/minimax/minimax-m1",
+        identifiers={"openrouter": "minimax/minimax-m1"},
+        inputs=_PROMPT,
+        outputs=_TEXT,
       ),
     }

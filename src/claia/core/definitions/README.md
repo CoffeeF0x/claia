@@ -6,8 +6,6 @@ Model metadata and configuration objects used by deployments and architectures.
 
 - One module per company: `openai.py`, `anthropic.py`, `moonshot.py`,
   `deepseek.py`, `minimax.py`, `zai.py`, `qwen.py`, `meta.py`.
-- `_openrouter.py` — shared builder for companies that only advertise
-  the `openrouter` architecture.
 - `legacy.py` — helpers/mappings for older model naming schemes.
 - `model_definition.py` — `ModelDefinition` and `merge_model_definitions`.
 
