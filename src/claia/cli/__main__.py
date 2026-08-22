@@ -71,7 +71,6 @@ from ..core.results import Result
 from ..core.enums.task import TaskEvent
 from ..core.enums.model import SourcePreference
 from ..core.enums.conversation import MessageRole
-from ..core.data import Conversation
 from .storage import JsonStore
 from .settings import Settings
 from .commands import Commands
@@ -79,7 +78,7 @@ from .defaults import initialize_defaults
 from .logger import initialize_logging
 from .agents import register_cli_agents
 from .renderer import PacedRenderer
-from .utils import active_system
+from .utils import active_system, ensure_active_conversation
 from ..framework.registry import Registry
 
 
@@ -255,17 +254,6 @@ def print_header(settings: Settings) -> None:
 
 
 ########################################################################
-#                          CONVERSATION SETUP                          #
-########################################################################
-def setup_conversation(settings: Settings, registry: Registry) -> None:
-  """Setup or configure the active conversation."""
-  if not settings.active_conversation:
-    # Create a new conversation (pure data model)
-    settings.active_conversation = Conversation()
-
-
-
-########################################################################
 #                                 MAIN                                 #
 ########################################################################
 def main() -> None:
@@ -347,10 +335,6 @@ def main() -> None:
     if settings.extra_args:
       # Process command line arguments using Commands processor
       logger.info(f"Processing command line arguments: {' '.join(settings.extra_args)}")
-      # Ensure there's an active conversation for command execution context
-      setup_conversation(settings, registry)
-
-      # Execute the command using the Commands processor
       cmd_result = commands.run(settings.extra_args, settings.active_conversation, is_interactive=False)
 
       if cmd_result.is_success():
@@ -389,7 +373,6 @@ def main() -> None:
         if not tokens:
           tokens = ["help"]
 
-        setup_conversation(settings, registry)
         cmd_result = commands.run(tokens, settings.active_conversation, is_interactive=True)
 
         if cmd_result.is_success():
@@ -404,12 +387,12 @@ def main() -> None:
       elif not user_input.strip():
         pass  # Blank / whitespace-only line — behave like a normal shell newline
       else:
-        setup_conversation(settings, registry)
+        conversation = ensure_active_conversation(settings)
 
         if not settings.active_agent:
           settings.active_agent = settings.default_agent or DEFAULT_AGENT
 
-        settings.active_conversation.add_message(MessageRole.USER, user_input)
+        conversation.add_message(MessageRole.USER, user_input)
 
         done_event = threading.Event()
 
@@ -424,7 +407,7 @@ def main() -> None:
 
         task = Task(
           agent_type=settings.active_agent,
-          conversation=settings.active_conversation,
+          conversation=conversation,
           parameters=parameters
         )
 

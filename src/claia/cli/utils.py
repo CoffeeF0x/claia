@@ -7,6 +7,7 @@ import logging
 from typing import Optional
 
 from ..framework.task import Task
+from ..core.data.models import Conversation
 from ..core.enums.task import TaskEvent
 from .storage import JsonStore
 
@@ -21,6 +22,15 @@ def active_system(settings) -> Optional[str]:
   if isinstance(content, str) and content.strip():
     return content.strip()
   return None
+
+
+def ensure_active_conversation(settings) -> Conversation:
+  """Return the active conversation, creating one only when needed."""
+  conversation = getattr(settings, "active_conversation", None)
+  if conversation is None:
+    conversation = Conversation()
+    settings.active_conversation = conversation
+  return conversation
 
 
 def wait_for_task(

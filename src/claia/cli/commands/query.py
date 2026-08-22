@@ -7,14 +7,13 @@ import threading
 from typing import List, Optional, Any
 
 from ...core.results import Result
-from ...core.data.models import Conversation
 from ...core.enums.conversation import MessageRole
 from ...core.enums.model import SourcePreference
 from ...framework.task import Task
 from ...core.enums.task import TaskEvent
 from ..renderer import PacedRenderer
 from ..storage import JsonStore
-from ..utils import active_system
+from ..utils import active_system, ensure_active_conversation
 from .base import BaseCommand
 
 
@@ -33,13 +32,12 @@ class QueryCommand(BaseCommand):
     query_text = ' '.join(args)
 
     try:
-      if not self.settings.active_conversation:
-        self.settings.active_conversation = Conversation()
+      conversation = ensure_active_conversation(self.settings)
 
       if not self.settings.active_agent:
         self.settings.active_agent = self.settings.default_agent or DEFAULT_AGENT
 
-      self.settings.active_conversation.add_message(MessageRole.USER, query_text)
+      conversation.add_message(MessageRole.USER, query_text)
       user_kwargs = self.settings.get_user_kwargs()
 
       done_event = threading.Event()
@@ -56,7 +54,7 @@ class QueryCommand(BaseCommand):
 
       task = Task(
         agent_type=self.settings.active_agent,
-        conversation=self.settings.active_conversation,
+        conversation=conversation,
         parameters=parameters
       )
 

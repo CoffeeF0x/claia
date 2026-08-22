@@ -68,7 +68,7 @@ class ConversationCommand(BaseCommand):
       f"  {prefix}conversation print             - Print the entire active conversation",
       f"  {prefix}conversation details           - Show metadata/technical info",
       f"  {prefix}conversation load <id|title>   - Load a specific conversation",
-      f"  {prefix}conversation clear/new         - Clear active and start new conversation",
+      f"  {prefix}conversation clear/new         - Drop the active conversation (next query starts a new one)",
       f"  {prefix}conversation title <title>     - Set title of active conversation",
       f"  {prefix}conversation delete <id|title> - Delete a saved conversation",
     ])
@@ -87,13 +87,16 @@ class ConversationCommand(BaseCommand):
     return self.registry.run_command('cli.conversation_details', self._get_tool_params(), None)
   
   def _clear_conversation(self) -> Result:
-    """Clear the active conversation and start new."""
+    """Drop the active conversation. The next query creates a new one."""
     old_title = self.settings.active_conversation.title if self.settings.active_conversation else None
     self.settings.active_conversation = None
-    
+
     if old_title:
-      return Result(success=True, data=f"Cleared conversation: {old_title}\nStarting a new conversation.")
-    return Result(success=True, data="Starting a new conversation.")
+      return Result(
+        success=True,
+        data=f"Cleared conversation: {old_title}. The next query starts a new one.",
+      )
+    return Result(success=True, data="No active conversation.")
   
   def _load_conversation(self, args: List[str]) -> Result:
     """Load a specific conversation by ID or title."""
