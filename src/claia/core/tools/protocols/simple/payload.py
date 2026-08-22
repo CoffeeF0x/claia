@@ -15,7 +15,7 @@ Two payload shapes are accepted:
   surfaced as ``name_hint`` for callers that want to cross-check it.
 
 The dispatch target is always the ``qualified_name`` argument supplied
-by the registry; ``name_hint`` is informational only. See plan §6.2.
+by the registry; ``name_hint`` is informational only.
 """
 
 from __future__ import annotations

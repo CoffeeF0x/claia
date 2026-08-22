@@ -1,5 +1,5 @@
 """
-Tests for the streaming tag parser (Phase 1 of the tools overhaul).
+Tests for the streaming tag parser.
 
 Covers:
 - Text-only streams

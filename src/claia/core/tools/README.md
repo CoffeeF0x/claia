@@ -23,7 +23,7 @@ backends that own execution). The agent loop drives a streaming
    `bind_tool_modules` (currently only the simple protocol).
 3. `Registry` builds a unified `qualified_name -> ToolReference` index
    by walking `protocol.get_tool_references()` across every loaded
-   protocol (plan §7.1).
+   protocol.
 4. The agent loop (see `framework/agents/simple.py`) constructs a
    `TagParser` per turn, parses streamed model output, and emits a
    utility message for each closed tag. Tool tags are dispatched

@@ -7,8 +7,7 @@ that swaps the default ``TagSpec`` for one or more ``TagType`` values.
 in a form ready to feed into ``TagParser``.
 
 Per-tag-type replacement: if a model overrides ``TagType.TOOL`` it
-provides a complete ``TagSpec``; there is no field-level merging
-(see plan §3.7).
+provides a complete ``TagSpec``; there is no field-level merging.
 
 The lookup of ``tag_overrides`` uses ``getattr`` with a ``None``
 default so this helper accepts any duck-typed object — concrete

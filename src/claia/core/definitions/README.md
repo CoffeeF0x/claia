@@ -6,7 +6,7 @@ Model metadata and configuration objects used by deployments and architectures.
 
 - One module per company: `openai.py`, `anthropic.py`, `moonshot.py`,
   `deepseek.py`, `minimax.py`, `zai.py`, `qwen.py`, `meta.py`.
-- `legacy.py` — helpers/mappings for older model naming schemes.
+- `local.py` — in-process catalog (Gemma, SD, TTS, dummy, …).
 - `model_definition.py` — `ModelDefinition` and `merge_model_definitions`.
 
 Definition providers carry a class-level `info: DefinitionsInfo` (name,

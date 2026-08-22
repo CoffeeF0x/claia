@@ -20,9 +20,6 @@ streaming `TagParser` produces a `TagEvent` of type `TOOL`.
     — dispatch sink. The protocol decodes `raw_payload` according to
     its own conventions (JSON for the simple protocol, MCP envelopes
     for MCP) and runs the underlying tool.
-- `_legacy.py` — previous `BaseProtocol` ABC retained behind a
-  `DeprecationWarning` for downstream extensions that haven't
-  migrated yet.
 
 ## How protocols fit in
 

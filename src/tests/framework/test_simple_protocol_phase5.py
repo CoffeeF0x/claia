@@ -1,5 +1,5 @@
 """
-Phase 5 — Simple protocol rewrite tests.
+Simple protocol and registry tool-index tests.
 
 Exercises the plumbing that lives in
 ``claia.core.tools.protocols.simple`` and the tool-index surface on
@@ -18,10 +18,10 @@ Exercises the plumbing that lives in
   ``iter_protocol_instances`` accessor for the registry.
 - ``Registry`` builds a unified ``_tool_index`` /
   ``_protocols_by_name`` view from the protocol inventory, exposes
-  ``list_tools`` / ``get_tool`` / ``execute_tool``, applies the
-  first-in-list-wins collision rule (plan §2.8), invalidates the
-  index on ``refresh_tools``, and routes ``run_command`` through the
-  shared dispatcher helpers.
+  ``list_tools`` / ``get_tool`` / ``execute_tool``, applies
+  first-in-list-wins on collisions, invalidates the index on
+  ``refresh_tools``, and routes ``run_command`` through the shared
+  dispatcher helpers.
 """
 
 from __future__ import annotations
@@ -794,7 +794,7 @@ class TestRegistryRunCommandThroughDispatcher:
 # Cleanup verification
 # ---------------------------------------------------------------------------
 class TestRegistryNoLongerOwnsKwargPrep:
-  """Plan §7.4: the registry stops knowing about ``ArgumentDefinition``."""
+  """The registry does not own ``ArgumentDefinition`` or kwarg prep."""
 
   def test_registry_lacks_prepare_command_kwargs(self):
     from claia.framework.registry import Registry

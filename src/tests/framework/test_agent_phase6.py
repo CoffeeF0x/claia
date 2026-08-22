@@ -1,23 +1,22 @@
 """
-Phase 6 — Agent loop migration tests.
+Agent loop tests.
 
-Plan §11 Phase 6 requires end-to-end coverage of the new agent loop
-that owns the per-turn ``TagParser`` and dispatches tool calls inline
-through ``Registry.execute_tool``. The scenarios required by the plan
-are:
+End-to-end coverage of the agent loop that owns the per-turn
+``TagParser`` and dispatches tool calls inline through
+``Registry.execute_tool``:
 
 - Streaming text-only response (no tags).
 - Streaming with one tool call.
 - Streaming with multiple tool calls.
 - Streaming with thinking + tool call mixed.
 
-This module also exercises the surrounding plumbing:
+Also exercises the surrounding plumbing:
 
 - ``Registry.resolve_qualified_name`` for bare → qualified name
-  resolution (plan §2.9).
+  resolution.
 - Parser-event handling for ``ParseError`` / ``TextEvent``.
 - Tag content split across chunk boundaries still yields a single
-  ``TagEvent`` (sanity check that the parser-as-driver works).
+  ``TagEvent``.
 - Bound utility messages mirror each closed tag.
 - Tool dispatch failures surface as inline ``[TOOL_ERROR]`` text and
   still fire a utility message for the call itself.
@@ -211,8 +210,8 @@ class TestStreamOneToolCall:
     convo = Conversation(title="t")
     proc = _process(convo)
     # Envelope payload — ``decode_payload`` only surfaces ``name`` when
-    # a sibling ``parameters`` key is present (per the phase 5 payload
-    # contract, see ``test_simple_protocol_phase5.py``).
+    # a sibling ``parameters`` key is present (see
+    # ``test_simple_protocol_phase5.py``).
     reg = _FakeToolRegistry(
       _stream('[TOOL_CALL]{"name": "missing", "parameters": {}}[/TOOL_CALL]'),
       tools={},
@@ -447,8 +446,7 @@ class TestRegistryResolveQualifiedName:
 # Verify the legacy surface is gone
 # ---------------------------------------------------------------------------
 class TestLegacySurfaceRemoved:
-  """Plan §11 Phase 6: ``process_content`` and ``execute_legacy``
-  retire at the end of phase 6."""
+  """``process_content`` and ``execute_legacy`` are gone."""
 
   def test_registry_no_longer_has_process_content(self):
     from claia.framework.registry import Registry

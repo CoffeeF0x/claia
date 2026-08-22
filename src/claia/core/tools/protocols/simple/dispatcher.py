@@ -2,7 +2,7 @@
 Native-tool dispatch helpers for the simple protocol.
 
 Three concerns are split out here so the ``BaseProtocol`` impl in
-``protocol.py`` and the legacy CLI direct-execution path on
+``protocol.py`` and the CLI direct-execution path on
 ``Registry.run_command`` can share the same callable resolution and
 kwarg preparation:
 
@@ -16,10 +16,8 @@ kwarg preparation:
   ``Result``. ``Result`` passes through, ``str`` becomes
   ``Result.ok``, anything else fails with a typed diagnostic.
 
-Pre-overhaul, the kwarg-prep + type coercion lived on
-``Registry`` (``_prepare_command_kwargs`` / ``_convert_type``);
-plan §7.4 moves them down here so the registry no longer needs to
-know about ``ArgumentDefinition``.
+Kwarg-prep and type coercion live here so the registry does not
+need to know about ``ArgumentDefinition``.
 """
 
 from __future__ import annotations

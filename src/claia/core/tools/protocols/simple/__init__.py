@@ -3,7 +3,7 @@ SimpleProtocol package — bridges native ``BaseToolModule``
 plugins into the post-overhaul ``BaseProtocol`` contract.
 
 Public surface is :class:`SimpleProtocol`. Internals are split
-across three modules per plan §8:
+across three modules:
 
 - ``protocol.py``   — the ``BaseProtocol`` implementation.
 - ``dispatcher.py`` — kwargs preparation, type coercion, callable

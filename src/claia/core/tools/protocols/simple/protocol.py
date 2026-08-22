@@ -10,7 +10,7 @@ there the registry rebuilds its unified tool index by asking every
 protocol — including this one — for its
 :class:`~claia.core.plugins.base.ToolReference` list.
 
-Internals split per plan §8:
+Internals:
 
 - :func:`~claia.core.tools.protocols.simple.dispatcher.find_tool`
   resolves qualified or bare names against the bound modules.
@@ -84,8 +84,8 @@ class SimpleProtocol(BaseProtocol):
     ``parameter_schema`` field carries the original
     ``Dict[str, ArgumentDefinition]`` map so simple-protocol-aware
     consumers (UIs, native CLI rendering) keep their introspection
-    surface. The registry treats ``parameter_schema`` as opaque per
-    plan §6.1 — only protocol-aware code unwraps it.
+    surface. The registry treats ``parameter_schema`` as opaque —
+    only protocol-aware code unwraps it.
     """
     refs: List[ToolReference] = []
     for module in self._modules:

@@ -1,7 +1,8 @@
 """
-Legacy model definitions.
+Local model definitions.
 
-Provides comprehensive model definitions for legacy models including GPT, Claude, and various open-source models.
+Catalog for in-process models: Gemma, MiniCPM, Qwen, Phi, Llama,
+Stable Diffusion, TTS, and the dummy model.
 """
 
 import logging
@@ -26,14 +27,14 @@ DEFAULT_SETTINGS = {
 
 
 @definitions
-@definitions.name("legacy")
-@definitions.title("Legacy Definitions")
-@definitions.description("Provides comprehensive model definitions for legacy models including GPT, Claude, and various open-source models.")
-class LegacyDefinitions(BaseDefinitionProvider):
-  """Legacy model definitions containing comprehensive model metadata."""
+@definitions.name("local")
+@definitions.title("Local Definitions")
+@definitions.description("Definitions for locally-run models (transformers, diffusers, TTS, dummy).")
+class LocalDefinitions(BaseDefinitionProvider):
+  """Local model definitions."""
 
   def get_definitions(self) -> Dict[str, ModelDefinition]:
-    """Get legacy model definitions."""
+    """Get local model definitions."""
     definitions = {
       "gemma-3-1b": ModelDefinition(
         title="Gemma 3 1B",

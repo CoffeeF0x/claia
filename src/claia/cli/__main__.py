@@ -447,10 +447,9 @@ def main() -> None:
           for artifact in saved_artifacts:
             print(f"[Saved attachment: {artifact.name}]")
           # Persist only if domain events indicate conversation mutations.
-          # Tool calls (when present in the streamed response) are
-          # dispatched inline by the agent loop per plan §9, so by the
-          # time we reach here the conversation already reflects every
-          # tool result and utility message.
+          # Tool calls are dispatched inline by the agent loop, so by
+          # the time we reach here the conversation already reflects
+          # every tool result and utility message.
           pending_events = process.conversation.pull_events()
           if file_repo and pending_events:
             if not file_repo.save(process.conversation):

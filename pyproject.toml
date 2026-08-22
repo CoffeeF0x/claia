@@ -137,7 +137,7 @@ minimax = "claia.core.definitions.minimax:MiniMaxDefinitions"
 zai = "claia.core.definitions.zai:ZaiDefinitions"
 qwen = "claia.core.definitions.qwen:QwenDefinitions"
 meta = "claia.core.definitions.meta:MetaDefinitions"
-legacy = "claia.core.definitions.legacy:LegacyDefinitions"
+local = "claia.core.definitions.local:LocalDefinitions"
 
 [project.entry-points."claia.agents"]
 simple = "claia.framework.agents.simple:SimpleAgent"

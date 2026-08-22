@@ -25,7 +25,6 @@ using emitted domain events and/or direct serialization.
 
 from typing import Dict, Any, Optional, List, Union, Callable
 import logging
-import json
 import time
 import uuid
 
@@ -273,30 +272,6 @@ class Conversation:
             name=data.get("name"),
             metadata=data.get("metadata", {}),
         )
-
-    @property
-    def content(self) -> str:
-        return json.dumps(self.to_dict(), indent=2)
-
-    def set_content(self, content: str) -> None:
-        data = json.loads(content)
-
-        self.title = data.get("title", self.title)
-        self.prompt = self._format_prompt(data.get("prompt", self.prompt))
-
-        self.messages = []
-        for m in data.get("messages", []):
-            self.messages.append(m if isinstance(m, Message) else Message.from_dict(m))
-
-        self.active_head_id = data.get("active_head_id")
-        if not self.active_head_id and self.messages:
-            self.active_head_id = self.messages[-1].message_id
-
-        self.events = []
-        for e in data.get("events", []):
-            self.events.append(e if isinstance(e, DomainEvent) else DomainEvent.from_dict(e))
-
-        self.updated_at = time.time()
 
     # ---------------------------------------------------------------------- #
     # Model-ready sequence                                                     #

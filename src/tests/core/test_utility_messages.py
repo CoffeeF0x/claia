@@ -1,5 +1,5 @@
 """
-Tests for Phase 3 of the tools overhaul: utility messages.
+Tests for utility messages.
 
 Covers:
 - ``MessageRole.UTILITY`` is a recognised role.
@@ -355,27 +355,6 @@ class TestConversationRoundTrip:
     assert rest_util.end_index == orig_util.end_index
     assert rest_util.attributes == orig_util.attributes
     assert rest_util.content == orig_util.content
-
-  def test_set_content_round_trip_with_utility(self):
-    """Conversation.set_content (the JSON re-hydration path) handles
-    utility-bearing payloads identically to ``from_dict``."""
-    conv = Conversation(title="round-trip-content")
-    assistant = conv.add_message(MessageRole.ASSISTANT, "answer")
-    conv.append_utility(
-      tag_type=TagType.REFERENCE,
-      content="cited body",
-      source_message_id=assistant.message_id,
-      attributes={"guid": "abc"},
-    )
-
-    raw = conv.content  # JSON dump
-    restored = Conversation(title="empty")
-    restored.set_content(raw)
-
-    util = next(m for m in restored.messages if m.speaker == MessageRole.UTILITY)
-    assert util.tag_type == TagType.REFERENCE
-    assert util.attributes == {"guid": "abc"}
-    assert util.content == "cited body"
 
   def test_plain_conversation_round_trip(self):
     """A conversation with no utility messages round-trips without

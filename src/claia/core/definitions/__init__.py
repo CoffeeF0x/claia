@@ -6,7 +6,7 @@ This package provides model definitions organized by company.
 
 from .anthropic import AnthropicDefinitions
 from .deepseek import DeepSeekDefinitions
-from .legacy import LegacyDefinitions
+from .local import LocalDefinitions
 from .meta import MetaDefinitions
 from .minimax import MiniMaxDefinitions
 from .moonshot import MoonshotDefinitions
@@ -17,7 +17,7 @@ from .zai import ZaiDefinitions
 __all__ = [
   "AnthropicDefinitions",
   "DeepSeekDefinitions",
-  "LegacyDefinitions",
+  "LocalDefinitions",
   "MetaDefinitions",
   "MiniMaxDefinitions",
   "MoonshotDefinitions",

@@ -14,12 +14,10 @@ Exercises the protocol contract described in the ExoFox docs repo
   protocols and swallow per-plugin errors.
 - ``Registry.refresh_tools`` / ``Registry.shutdown`` surface the
   lifecycle entry points without tripping over unloaded plugins.
-- Deprecation banner on the legacy ABC import.
 """
 
 from __future__ import annotations
 
-import warnings
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
@@ -129,51 +127,6 @@ class TestBaseProtocolContract:
     inst = Minimal()
     assert inst.info is Minimal.info
     assert inst.info.name == "m"
-
-
-# ---------------------------------------------------------------------------
-# Legacy ABC deprecation banner
-# ---------------------------------------------------------------------------
-class TestLegacyProtocolDeprecation:
-  """The pre-overhaul contract is kept importable with a deprecation."""
-
-  def test_importing_legacy_module_warns(self):
-    import importlib
-    import sys
-
-    sys.modules.pop("claia.core.tools.protocols._legacy", None)
-    with warnings.catch_warnings(record=True) as caught:
-      warnings.simplefilter("always")
-      importlib.import_module("claia.core.tools.protocols._legacy")
-
-    banner = [
-      w for w in caught
-      if issubclass(w.category, DeprecationWarning)
-      and "LegacyBaseProtocol" in str(w.message)
-    ]
-    assert banner, f"expected LegacyBaseProtocol deprecation warning, got {caught}"
-
-  def test_subclassing_legacy_emits_warning(self):
-    from claia.core.tools.protocols._legacy import LegacyBaseProtocol
-
-    with warnings.catch_warnings(record=True) as caught:
-      warnings.simplefilter("always")
-
-      class _Dummy(LegacyBaseProtocol):
-        info = ProtocolInfo(name="dummy", title="Dummy", description="")
-
-        def execute(self, tool_name, parameters, conversation, commands, **kwargs):
-          return Result.ok("dummy")
-
-      # Silence Ruff about unused class — we just want the warning.
-      assert _Dummy is not None
-
-    triggered = [
-      w for w in caught
-      if issubclass(w.category, DeprecationWarning)
-      and "_Dummy" in str(w.message)
-    ]
-    assert triggered, "subclass creation must trigger DeprecationWarning"
 
 
 # ---------------------------------------------------------------------------

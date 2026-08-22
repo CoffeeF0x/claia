@@ -8,9 +8,8 @@ holds no callables of its own; it assembles a unified index of
 ``ToolReference`` objects across all loaded protocols and routes
 ``execute_tool`` calls back to the owning protocol.
 
-See the ExoFox docs repo ``claia/overview.md`` Decisions for the rationale, and
-``_legacy.py`` in this package for the deprecated pre-overhaul
-contract.
+See the ExoFox docs repo ``claia/overview.md`` Decisions for the
+rationale.
 """
 
 from __future__ import annotations
@@ -63,9 +62,8 @@ class BaseProtocol(ABC):
     """Return the tool inventory this protocol owns.
 
     Called by the registry to assemble its unified tool index.
-    Qualified names should follow the namespacing rules documented in
-    plan §2.9 (e.g. ``"module.tool"`` for native tools,
-    ``"mcp.<server>.<tool>"`` for MCP-sourced tools).
+    Qualified names are namespaced (e.g. ``"module.tool"`` for
+    native tools, ``"mcp.<server>.<tool>"`` for MCP-sourced tools).
     """
 
   @abstractmethod

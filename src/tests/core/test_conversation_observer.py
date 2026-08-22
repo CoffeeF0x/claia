@@ -1,5 +1,5 @@
 """
-Tests for the Conversation observer + streaming API introduced in Phase 2.
+Tests for the Conversation observer and streaming API.
 """
 
 import pytest
