@@ -15,7 +15,7 @@ Covers:
 - ``Conversation.get_thread`` filters utility messages by default and
   returns them when ``include_utility=True``.
 - ``Conversation.get_messages`` honours ``include_utility`` and
-  surfaces utility messages when the speaker filter explicitly asks
+  surfaces utility messages when the role filter explicitly asks
   for them.
 - Conversation round-trip preserves utility messages and their
   fields end-to-end.
@@ -47,7 +47,7 @@ class TestUtilityRole:
 ########################################################################
 class TestMessageUtilityFields:
   def test_default_message_has_empty_utility_fields(self):
-    msg = Message(speaker=MessageRole.USER, content="hello")
+    msg = Message(role=MessageRole.USER, content="hello")
     assert msg.tag_type is None
     assert msg.source_message_id is None
     assert msg.start_index is None
@@ -57,7 +57,7 @@ class TestMessageUtilityFields:
 
   def test_utility_message_carries_fields(self):
     msg = Message(
-      speaker=MessageRole.UTILITY,
+      role=MessageRole.UTILITY,
       content='{"name":"echo"}',
       tag_type=TagType.TOOL,
       source_message_id="src-1",
@@ -75,7 +75,7 @@ class TestMessageUtilityFields:
   def test_tag_type_string_value_coerced_to_enum(self):
     """``Message`` accepts the serialized string form for ``tag_type``."""
     msg = Message(
-      speaker=MessageRole.UTILITY,
+      role=MessageRole.UTILITY,
       content="thinking aloud",
       tag_type="thinking",
       source_message_id="src-1",
@@ -84,7 +84,7 @@ class TestMessageUtilityFields:
 
   def test_attributes_copied_not_aliased(self):
     src = {"k": "v"}
-    msg = Message(speaker=MessageRole.UTILITY, content="x", attributes=src)
+    msg = Message(role=MessageRole.UTILITY, content="x", attributes=src)
     src["k"] = "mutated"
     assert msg.attributes == {"k": "v"}
 
@@ -95,7 +95,7 @@ class TestMessageUtilityFields:
 class TestMessageSerialization:
   def test_utility_message_round_trip(self):
     original = Message(
-      speaker=MessageRole.UTILITY,
+      role=MessageRole.UTILITY,
       content='{"name":"echo"}',
       tag_type=TagType.TOOL,
       source_message_id="src-1",
@@ -105,7 +105,7 @@ class TestMessageSerialization:
     )
     data = original.to_dict()
     restored = Message.from_dict(data)
-    assert restored.speaker == MessageRole.UTILITY
+    assert restored.role == MessageRole.UTILITY
     assert restored.tag_type == TagType.TOOL
     assert restored.source_message_id == "src-1"
     assert restored.start_index == 10
@@ -116,7 +116,7 @@ class TestMessageSerialization:
 
   def test_to_dict_omits_unset_utility_fields(self):
     """Non-utility messages serialize without the new optional fields."""
-    msg = Message(speaker=MessageRole.USER, content="hello")
+    msg = Message(role=MessageRole.USER, content="hello")
     data = msg.to_dict()
     for key in (
       "tag_type",
@@ -129,7 +129,7 @@ class TestMessageSerialization:
 
   def test_to_dict_serializes_tag_type_value(self):
     msg = Message(
-      speaker=MessageRole.UTILITY,
+      role=MessageRole.UTILITY,
       content="x",
       tag_type=TagType.REFERENCE,
     )
@@ -138,7 +138,7 @@ class TestMessageSerialization:
 
   def test_to_dict_omits_empty_attributes(self):
     msg = Message(
-      speaker=MessageRole.UTILITY,
+      role=MessageRole.UTILITY,
       content="x",
       tag_type=TagType.TOOL,
       attributes={},
@@ -152,7 +152,7 @@ class TestMessageSerialization:
     payload = {
       "message_id": "msg-1",
       "parent_id": None,
-      "speaker": "user",
+      "role": "user",
       "content": "hello",
       "created_at": 1.0,
       "updated_at": 1.0,
@@ -166,13 +166,23 @@ class TestMessageSerialization:
     assert msg.content == "hello"
     data = msg.to_dict()
     assert data["message_id"] == "msg-1"
-    assert data["speaker"] == "user"
+    assert data["role"] == "user"
     assert "content" not in data
     assert "file_ids" not in data
     assert "tag_type" not in data
     assert "artifacts" in data
     assert len(data["artifacts"]) == 1
     assert data["artifacts"][0]["content"] == "hello"
+
+  def test_from_dict_accepts_leftover_speaker_key(self):
+    msg = Message.from_dict({
+      "message_id": "msg-1",
+      "parent_id": None,
+      "speaker": "assistant",
+      "content": "hi",
+    })
+    assert msg.role == MessageRole.ASSISTANT
+    assert "speaker" not in msg.to_dict()
 
 
 ########################################################################
@@ -189,7 +199,7 @@ class TestConversationAppendUtility:
       start_index=0,
       end_index=20,
     )
-    assert utility.speaker == MessageRole.UTILITY
+    assert utility.role == MessageRole.UTILITY
     assert utility.tag_type == TagType.TOOL
     assert utility.source_message_id == assistant.message_id
     # Stored inline and is now the active head; chained as a child of
@@ -303,11 +313,11 @@ class TestConversationLinearization:
     visible = conv.get_messages(include_utility=True)
     assert utility in visible
 
-  def test_get_messages_explicit_utility_speaker_returns_utility(self):
+  def test_get_messages_explicit_utility_role_returns_utility(self):
     """Asking for ``MessageRole.UTILITY`` explicitly returns utility
     messages even when ``include_utility`` defaults to False."""
     conv, _, _, utility, _ = self._seed()
-    only_utility = conv.get_messages(speaker=MessageRole.UTILITY)
+    only_utility = conv.get_messages(role=MessageRole.UTILITY)
     assert only_utility == [utility]
 
   def test_messages_list_preserves_utility(self):
@@ -341,7 +351,7 @@ class TestConversationRoundTrip:
     util_pairs = [
       (orig, rest)
       for orig, rest in zip(conv.messages, restored.messages)
-      if orig.speaker == MessageRole.UTILITY
+      if orig.role == MessageRole.UTILITY
     ]
     assert len(util_pairs) == 1
     orig_util, rest_util = util_pairs[0]
@@ -368,7 +378,7 @@ class TestConversationRoundTrip:
       assert "file_ids" not in m
       assert "artifacts" in m
     restored = Conversation.from_dict(data)
-    assert [m.speaker for m in restored.messages] == [
+    assert [m.role for m in restored.messages] == [
       MessageRole.USER,
       MessageRole.ASSISTANT,
     ]

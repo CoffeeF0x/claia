@@ -247,11 +247,11 @@ class GenericTransformerModel(LocalModel):
     """Convert a MessageSequence to a text prompt."""
     parts = []
     for message in sequence.messages:
-      if message.speaker == MessageRole.SYSTEM:
+      if message.role == MessageRole.SYSTEM:
         parts.append(f"System: {message.content}")
-      elif message.speaker == MessageRole.USER:
+      elif message.role == MessageRole.USER:
         parts.append(f"User: {message.content}")
-      elif message.speaker == MessageRole.ASSISTANT:
+      elif message.role == MessageRole.ASSISTANT:
         parts.append(f"Assistant: {message.content}")
     parts.append("Assistant:")
     return "\n".join(parts)

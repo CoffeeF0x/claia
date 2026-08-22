@@ -58,7 +58,7 @@ class Message:
 
   def __init__(
     self,
-    speaker: MessageRole,
+    role: MessageRole,
     content: str = "",
     message_id: Optional[str] = None,
     parent_id: Optional[str] = None,
@@ -75,7 +75,7 @@ class Message:
 
     self.message_id = message_id or str(uuid.uuid4())
     self.parent_id = parent_id
-    self.speaker = speaker if isinstance(speaker, MessageRole) else MessageRole(speaker)
+    self.role = role if isinstance(role, MessageRole) else MessageRole(role)
     self.created_at = created_at or time.time()
     self.updated_at = updated_at or self.created_at
 
@@ -149,13 +149,13 @@ class Message:
 
   def is_utility(self) -> bool:
     """Return ``True`` if this message is a parsed-tag sibling."""
-    return self.speaker == MessageRole.UTILITY
+    return self.role == MessageRole.UTILITY
 
   def to_dict(self) -> Dict[str, Any]:
     data: Dict[str, Any] = {
       "message_id": self.message_id,
       "parent_id": self.parent_id,
-      "speaker": self.speaker.value,
+      "role": self.role.value,
       "artifacts": [a.to_dict() for a in self.artifacts],
       "created_at": self.created_at,
       "updated_at": self.updated_at,
@@ -180,7 +180,7 @@ class Message:
       # API convenience when only a text string is present.
       content = data.get("content", "")
     return cls(
-      speaker=data.get("speaker", MessageRole.USER.value),
+      role=data.get("role") or data.get("speaker") or MessageRole.USER.value,
       content=content,
       message_id=data.get("message_id"),
       parent_id=data.get("parent_id"),

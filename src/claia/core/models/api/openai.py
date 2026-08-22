@@ -111,11 +111,11 @@ class OpenAIModel(APIModel):
     instructions = sequence.system
     input_messages: List[Dict[str, str]] = []
     for message in sequence.messages:
-      if message.speaker not in (MessageRole.USER, MessageRole.ASSISTANT):
+      if message.role not in (MessageRole.USER, MessageRole.ASSISTANT):
         continue
       if not message.content:
         continue
-      role = "user" if message.speaker == MessageRole.USER else "assistant"
+      role = "user" if message.role == MessageRole.USER else "assistant"
       input_messages.append({"role": role, "content": message.content})
     return instructions, input_messages
 

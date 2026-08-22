@@ -48,7 +48,7 @@ def _utilities(convo) -> List[Any]:
   ``if m.is_utility`` truthy-check passes for every message. Wrap the
   filter once here so each test reads cleanly.
   """
-  return [m for m in convo.messages if m.speaker == MessageRole.UTILITY]
+  return [m for m in convo.messages if m.role == MessageRole.UTILITY]
 
 
 def _assistant_message(convo):
@@ -60,7 +60,7 @@ def _assistant_message(convo):
   to filter explicitly.
   """
   for msg in reversed(convo.messages):
-    if msg.speaker == MessageRole.ASSISTANT:
+    if msg.role == MessageRole.ASSISTANT:
       return msg
   return None
 

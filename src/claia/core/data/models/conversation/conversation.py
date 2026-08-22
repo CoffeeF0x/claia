@@ -260,7 +260,7 @@ class Conversation:
         )
 
     # ---------------------------------------------------------------------- #
-    # Model-ready sequence                                                     #
+    # Model-ready sequence                                                   #
     # ---------------------------------------------------------------------- #
 
     def export_thread(self, include_utility: bool = False) -> List[Message]:
@@ -384,7 +384,7 @@ class Conversation:
 
         chain.reverse()
         if not include_utility:
-            chain = [m for m in chain if m.speaker != MessageRole.UTILITY]
+            chain = [m for m in chain if m.role != MessageRole.UTILITY]
         return chain
 
     def get_siblings(self, message_id: str) -> List[Message]:
@@ -429,7 +429,7 @@ class Conversation:
     # ---------------------------------------------------------------------- #
 
     def add_message(self,
-                    speaker: Union[MessageRole, str],
+                    role: Union[MessageRole, str],
                     content: str = "",
                     artifacts: Optional[List[Any]] = None,
                     parent_id: Optional[str] = None) -> Message:
@@ -437,7 +437,7 @@ class Conversation:
         effective_parent_id = parent_id if parent_id is not None else self.active_head_id
 
         message = Message(
-            speaker=speaker,
+            role=role,
             content=content,
             artifacts=artifacts,
             parent_id=effective_parent_id,
@@ -450,7 +450,7 @@ class Conversation:
         meta = {
             "message_id": message.message_id,
             "parent_id": message.parent_id,
-            "speaker": message.speaker.value,
+            "role": message.role.value,
             "content_preview": message.content[:50] + ("..." if len(message.content) > 50 else ""),
         }
 
@@ -510,7 +510,7 @@ class Conversation:
         effective_parent_id = parent_id if parent_id is not None else self.active_head_id
 
         message = Message(
-            speaker=MessageRole.UTILITY,
+            role=MessageRole.UTILITY,
             content=content,
             parent_id=effective_parent_id,
             tag_type=tag_type,
@@ -527,7 +527,7 @@ class Conversation:
         meta: Dict[str, Any] = {
             "message_id": message.message_id,
             "parent_id": message.parent_id,
-            "speaker": message.speaker.value,
+            "role": message.role.value,
             "tag_type": tag_type.value,
             "source_message_id": source_message_id,
         }
@@ -578,7 +578,7 @@ class Conversation:
 
                 self._record(EventType.MESSAGE_DELETED, deleted, {
                     "message_id": message_id,
-                    "speaker": deleted.speaker.value,
+                    "role": deleted.role.value,
                 }, entity_id=message_id, parent_id=deleted.parent_id)
                 return True
 
@@ -600,32 +600,30 @@ class Conversation:
         return thread[-1] if thread else None
 
     def get_messages(self,
-                     speaker: Optional[Union[MessageRole, List[MessageRole]]] = None,
+                     role: Optional[Union[MessageRole, List[MessageRole]]] = None,
                      include_utility: bool = False) -> List[Message]:
-        """Return active-thread messages, optionally filtered by speaker.
+        """Return active-thread messages, optionally filtered by role.
 
         ``include_utility`` mirrors :meth:`get_thread`: utility messages
-        are excluded by default. Explicitly requesting a speaker that
+        are excluded by default. Explicitly requesting a role that
         includes ``MessageRole.UTILITY`` also returns utility messages
         regardless of ``include_utility``, since the caller has asked
         for that role specifically.
         """
-        speakers: Optional[List[MessageRole]] = None
-        if speaker is not None:
-            raw = [speaker] if not isinstance(speaker, list) else speaker
-            speakers = [s if isinstance(s, MessageRole) else MessageRole(s) for s in raw]
+        roles: Optional[List[MessageRole]] = None
+        if role is not None:
+            raw = [role] if not isinstance(role, list) else role
+            roles = [r if isinstance(r, MessageRole) else MessageRole(r) for r in raw]
 
-        # If the caller explicitly asks for utility messages by speaker,
-        # surface them even when ``include_utility`` is False.
-        wants_utility = bool(speakers and MessageRole.UTILITY in speakers)
+        wants_utility = bool(roles and MessageRole.UTILITY in roles)
         thread = self.get_thread(include_utility=include_utility or wants_utility)
 
-        if speakers is None:
+        if roles is None:
             return thread
-        return [m for m in thread if m.speaker in speakers]
+        return [m for m in thread if m.role in roles]
 
     def start_streaming_message(self,
-                                speaker: Union[MessageRole, str],
+                                role: Union[MessageRole, str],
                                 parent_id: Optional[str] = None) -> Message:
         """
         Create an empty message that subsequent ``append_stream_chunk`` calls
@@ -639,7 +637,7 @@ class Conversation:
         effective_parent_id = parent_id if parent_id is not None else self.active_head_id
 
         message = Message(
-            speaker=speaker,
+            role=role,
             content="",
             parent_id=effective_parent_id,
         )
@@ -650,7 +648,7 @@ class Conversation:
 
         self._record(EventType.MESSAGE_STREAM_START, message, {
             "message_id": message.message_id,
-            "speaker": message.speaker.value,
+            "role": message.role.value,
             "parent_id": message.parent_id,
         }, entity_id=message.message_id, parent_id=message.parent_id)
 
@@ -689,7 +687,7 @@ class Conversation:
                 self.updated_at = time.time()
                 meta: Dict[str, Any] = {
                     "message_id": message_id,
-                    "speaker": message.speaker.value,
+                    "role": message.role.value,
                     "content_preview": message.content[:50] + ("..." if len(message.content) > 50 else ""),
                 }
                 if error is not None:

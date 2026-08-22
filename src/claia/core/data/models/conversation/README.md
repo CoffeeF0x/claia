@@ -30,7 +30,7 @@ conversation.add_message(MessageRole.USER, "Hello!")
 conversation.add_message(MessageRole.ASSISTANT, "Hi there!")
 
 for message in conversation.get_thread():
-    print(message.speaker.value, message.content)
+    print(message.role.value, message.content)
 
 payload = conversation.to_dict()
 loaded = Conversation.from_dict(payload)

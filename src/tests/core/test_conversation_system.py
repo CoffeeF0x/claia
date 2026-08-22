@@ -34,7 +34,7 @@ def test_to_message_sequence_takes_system():
     system="  Be brief  ",
   )
   assert sequence.system == "Be brief"
-  assert sequence.messages[0].speaker == MessageRole.SYSTEM
+  assert sequence.messages[0].role == MessageRole.SYSTEM
   assert sequence.messages[0].content == "Be brief"
   assert conv.to_dict().get("prompt") is None
 
@@ -55,7 +55,7 @@ def test_to_model_inputs_forwards_system():
   )
   assert isinstance(sequence, MessageSequence)
   assert sequence.system == "Stay terse"
-  assert sequence.messages[0].speaker == MessageRole.SYSTEM
+  assert sequence.messages[0].role == MessageRole.SYSTEM
 
 
 def test_unknown_event_type_is_skipped():
@@ -85,15 +85,15 @@ def test_sequence_system_is_a_turn_not_a_sidecar():
   from claia.core.data.models.conversation.message_sequence import MessageSequence
 
   sequence = MessageSequence(
-    messages=[Message(speaker=MessageRole.USER, content="hi")],
+    messages=[Message(role=MessageRole.USER, content="hi")],
     system="Be brief",
   )
-  assert sequence.messages[0].speaker == MessageRole.SYSTEM
+  assert sequence.messages[0].role == MessageRole.SYSTEM
   assert sequence.messages[0].content == "Be brief"
   assert sequence.system == "Be brief"
   data = sequence.to_dict()
   assert "system" not in data
-  assert data["messages"][0]["speaker"] == MessageRole.SYSTEM.value
+  assert data["messages"][0]["role"] == MessageRole.SYSTEM.value
 
 
 def test_sequence_system_is_derived_from_turns():
@@ -101,9 +101,9 @@ def test_sequence_system_is_derived_from_turns():
   from claia.core.data.models.conversation.message_sequence import MessageSequence
 
   sequence = MessageSequence(messages=[
-    Message(speaker=MessageRole.SYSTEM, content="A"),
-    Message(speaker=MessageRole.SYSTEM, content="B"),
-    Message(speaker=MessageRole.USER, content="hi"),
+    Message(role=MessageRole.SYSTEM, content="A"),
+    Message(role=MessageRole.SYSTEM, content="B"),
+    Message(role=MessageRole.USER, content="hi"),
   ])
   assert sequence.system == "A\n\nB"
 
@@ -113,10 +113,10 @@ def test_sequence_from_dict_accepts_leftover_system_key():
   from claia.core.data.models.conversation.message_sequence import MessageSequence
 
   sequence = MessageSequence.from_dict({
-    "messages": [Message(speaker=MessageRole.USER, content="hi").to_dict()],
+    "messages": [Message(role=MessageRole.USER, content="hi").to_dict()],
     "system": "Old sidecar",
   })
-  assert sequence.messages[0].speaker == MessageRole.SYSTEM
+  assert sequence.messages[0].role == MessageRole.SYSTEM
   assert sequence.messages[0].content == "Old sidecar"
   assert sequence.system == "Old sidecar"
 
@@ -129,15 +129,15 @@ def test_ordered_sequence_keeps_system_at_front():
 
   sequence = MessageSequenceOrdered(
     messages=[
-      Message(speaker=MessageRole.ASSISTANT, content="dropped"),
-      Message(speaker=MessageRole.USER, content="one"),
-      Message(speaker=MessageRole.USER, content="two"),
+      Message(role=MessageRole.ASSISTANT, content="dropped"),
+      Message(role=MessageRole.USER, content="one"),
+      Message(role=MessageRole.USER, content="two"),
     ],
     system="Stay terse",
   )
-  assert sequence.messages[0].speaker == MessageRole.SYSTEM
+  assert sequence.messages[0].role == MessageRole.SYSTEM
   assert sequence.messages[0].content == "Stay terse"
-  assert sequence.messages[1].speaker == MessageRole.USER
+  assert sequence.messages[1].role == MessageRole.USER
   assert sequence.messages[1].content == "one\ntwo"
   assert sequence.system == "Stay terse"
 

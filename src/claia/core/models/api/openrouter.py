@@ -94,12 +94,12 @@ class OpenRouterModel(APIModel):
     if sequence.system:
       messages.append({"role": "system", "content": sequence.system})
     for message in sequence.messages:
-      if message.speaker not in (MessageRole.USER, MessageRole.ASSISTANT):
+      if message.role not in (MessageRole.USER, MessageRole.ASSISTANT):
         continue
       if not message.content:
         continue
       messages.append({
-        "role": message.speaker.value,
+        "role": message.role.value,
         "content": message.content,
       })
     logger.debug(f"Sending {len(messages)} messages to OpenRouter API")

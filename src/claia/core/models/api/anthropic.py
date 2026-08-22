@@ -140,9 +140,9 @@ class AnthropicModel(APIModel):
     """Convert a MessageSequence to Anthropic messages format."""
     messages = []
     for message in sequence.messages:
-      if message.speaker == MessageRole.USER and message.content:
+      if message.role == MessageRole.USER and message.content:
         messages.append({"role": "user", "content": message.content})
-      elif message.speaker == MessageRole.ASSISTANT and message.content:
+      elif message.role == MessageRole.ASSISTANT and message.content:
         messages.append({"role": "assistant", "content": message.content})
     return sequence.system or "", messages
 

@@ -695,7 +695,7 @@ class CLIToolModule(BaseToolModule):
       output_lines.append("(No messages in conversation)")
     else:
       for i, msg in enumerate(messages):
-        role = self._prettify_role(msg.speaker)
+        role = self._prettify_role(msg.role)
         output_lines.append(f"[{role}]")
         output_lines.append("-" * 70)
 
@@ -759,7 +759,7 @@ class CLIToolModule(BaseToolModule):
     if messages:
       role_counts = {}
       for msg in messages:
-        role_name = self._prettify_role(msg.speaker)
+        role_name = self._prettify_role(msg.role)
         role_counts[role_name] = role_counts.get(role_name, 0) + 1
 
       output_lines.append(f"\n  Message Breakdown:")

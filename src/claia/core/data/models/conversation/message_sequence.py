@@ -16,10 +16,10 @@ from ....enums.data import TextFormat
 
 
 def _role(message) -> Optional[MessageRole]:
-  speaker = getattr(message, "speaker", None) or getattr(message, "role", None)
-  if speaker is None:
+  role = getattr(message, "role", None)
+  if role is None:
     return None
-  return speaker if isinstance(speaker, MessageRole) else MessageRole(speaker)
+  return role if isinstance(role, MessageRole) else MessageRole(role)
 
 
 def _prepend_system(messages: List[Any], system: Optional[str]) -> List[Any]:
@@ -29,7 +29,7 @@ def _prepend_system(messages: List[Any], system: Optional[str]) -> List[Any]:
   if not text:
     return messages
   from .message import Message
-  return [Message(speaker=MessageRole.SYSTEM, content=text), *messages]
+  return [Message(role=MessageRole.SYSTEM, content=text), *messages]
 
 
 class MessageSequence:
