@@ -14,6 +14,7 @@ from ...framework.process import Process
 from ...core.enums.process import ProcessEvent
 from ..renderer import PacedRenderer
 from ..storage import JsonStore
+from ..utils import active_system
 from .base import BaseCommand
 
 
@@ -44,14 +45,19 @@ class QueryCommand(BaseCommand):
       done_event = threading.Event()
       error_holder = [None]
 
+      parameters = {
+        "source_preference": SourcePreference.ANY,
+        "model_id": self.settings.active_model,
+        **user_kwargs
+      }
+      system = active_system(self.settings)
+      if system:
+        parameters["system"] = system
+
       process = Process(
         agent_type=self.settings.active_agent,
         conversation=self.settings.active_conversation,
-        parameters={
-          "source_preference": SourcePreference.ANY,
-          "model_id": self.settings.active_model,
-          **user_kwargs
-        }
+        parameters=parameters
       )
 
       renderer = PacedRenderer()

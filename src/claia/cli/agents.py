@@ -64,9 +64,9 @@ class WriterAgent(BaseAgent):
   """
   A specialized agent for writing tasks with enhanced literary capabilities.
 
-  This agent applies a writer-focused system prompt to help with various
-  writing tasks including creative writing, technical documentation,
-  business communications, and more.
+  This agent passes a writer-focused system prompt on each generate
+  call. Writing tasks include creative writing, technical
+  documentation, business communications, and more.
   """
 
   @classmethod
@@ -78,15 +78,17 @@ class WriterAgent(BaseAgent):
       if not model_id:
         raise ValueError("No model_id provided in process parameters")
 
-      current_prompt = process.conversation.prompt.get("system", "")
-      if current_prompt != WRITER_SYSTEM_PROMPT:
-        logger.debug(f"Applying writer system prompt to process {process.id}")
-        process.conversation.change_prompt(WRITER_SYSTEM_PROMPT)
-
+      kwargs.pop("system", None)
       logger.debug(f"Running model {model_id} for writing task {process.id}")
       full_response = ""
 
-      for chunk in registry.run(model_id, process.conversation, streaming=True, **kwargs):
+      for chunk in registry.run(
+        model_id,
+        process.conversation,
+        streaming=True,
+        system=WRITER_SYSTEM_PROMPT,
+        **kwargs
+      ):
         if not isinstance(chunk, TextChunk):
           process.emit(ProcessEvent.CHUNK, chunk)
           continue

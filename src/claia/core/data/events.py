@@ -26,7 +26,6 @@ class EventType(Enum):
     ATTACHMENT_ADDED       = auto()
     ATTACHMENT_REMOVED     = auto()
     TITLE_CHANGED          = auto()
-    PROMPT_CHANGED         = auto()
 
 
 @dataclass
@@ -55,10 +54,7 @@ class DomainEvent:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'DomainEvent':
         raw_type = data.get("event_type", "CONVERSATION_CREATED")
-        try:
-            event_type = EventType[raw_type]
-        except KeyError:
-            event_type = EventType.CONVERSATION_CREATED
+        event_type = EventType[raw_type]
 
         return cls(
             event_type=event_type,

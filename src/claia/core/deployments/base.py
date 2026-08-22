@@ -73,6 +73,7 @@ class BaseDeployment(ABC):
     self,
     conversation: Conversation,
     definition: Optional[ModelDefinition] = None,
+    system: Optional[str] = None,
     **kwargs,
   ) -> ModelInputs:
     """Translate a conversation into model inputs.
@@ -81,6 +82,10 @@ class BaseDeployment(ABC):
       build that sequence (artifacts filtered to declared ArtifactTypes).
     - Otherwise take supported artifacts from the latest thread message
       (possibly empty).
+
+    ``system`` is an optional generate-time inclusion. It is prepended
+    onto a message sequence for this call only and is not written to
+    the conversation.
     """
     del kwargs
     definition = definition or ModelDefinition()
@@ -91,6 +96,7 @@ class BaseDeployment(ABC):
       return conversation.to_message_sequence(
         supported_artifact_types=artifact_types,
         sequence_cls=sequence_cls,
+        system=system,
       )
 
     thread = conversation.export_thread()
@@ -164,12 +170,13 @@ class BaseDeployment(ABC):
     init_kwargs: Dict[str, Any],
     runtime_kwargs: Dict[str, Any],
     definition: Optional[ModelDefinition] = None,
+    system: Optional[str] = None,
   ) -> Iterator[BaseChunk]:
     """Deploy (if needed), translate the conversation, and run inference."""
     model_instance = self.resolve_model(
       model_name, model_class, cache, init_kwargs
     )
-    inputs = self.translate(conversation, definition)
+    inputs = self.translate(conversation, definition, system=system)
     if isinstance(inputs, MessageSequence):
       label = f"{len(inputs)} turns ({type(inputs).__name__})"
     else:

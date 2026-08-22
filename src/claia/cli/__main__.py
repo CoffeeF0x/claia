@@ -7,8 +7,6 @@
 # - run commands from cli with optional --flags processing instead of arg=value style, for example: claia transcribe --file <audio-file>
 # - create new prompts or update existing (need to move prompts to json files)
 # - update system command to allow settings updates (and save to .env file?)
-# - prompt doesn't apply to the active conversation (if there's an active conversation, it should apply to it)
-
 # - have ai name conversations automatically?
 # - Need to clean input from user and models (set gpt-4 to temperature 2 causing issues)
 # - Add multi-gpu support for transformer models
@@ -38,8 +36,6 @@
 #   to attach the file. If a file id is passed, then validate and identify the type
 
 # - Add an end value to message object to indicate the end of the message (for streaming)
-# - Swap prompt inside of conversation to the actual prompt object (should be a reference?)
-# - Add dictionary support to the prompt object
 # - Clean up onboarding
 
 # - BASEFILE:
@@ -83,6 +79,7 @@ from .defaults import initialize_defaults
 from .logger import initialize_logging
 from .agents import register_cli_agents
 from .renderer import PacedRenderer
+from .utils import active_system
 from ..framework.registry import Registry
 
 
@@ -416,14 +413,19 @@ def main() -> None:
 
         done_event = threading.Event()
 
+        parameters = {
+          "source_preference": SourcePreference.ANY,
+          "model_id": settings.active_model,
+          **user_kwargs
+        }
+        system = active_system(settings)
+        if system:
+          parameters["system"] = system
+
         process = Process(
           agent_type=settings.active_agent,
           conversation=settings.active_conversation,
-          parameters={
-            "source_preference": SourcePreference.ANY,
-            "model_id": settings.active_model,
-            **user_kwargs
-          }
+          parameters=parameters
         )
 
         # Stream tokens through a paced renderer so bursty deltas

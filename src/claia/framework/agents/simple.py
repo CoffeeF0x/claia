@@ -76,6 +76,9 @@ class SimpleAgent(BaseAgent):
 
     try:
       model_id = process.parameters["model_id"]
+      system = kwargs.pop("system", None)
+      if system is None:
+        system = process.parameters.get("system")
       full_response = ""
 
       streaming_message = conversation.start_streaming_message(MessageRole.ASSISTANT)
@@ -84,7 +87,9 @@ class SimpleAgent(BaseAgent):
       parser = TagParser(tag_specs)
 
       cancelled = False
-      for chunk in registry.run(model_id, conversation, streaming=True, **kwargs):
+      for chunk in registry.run(
+        model_id, conversation, streaming=True, system=system, **kwargs
+      ):
         if process.cancel_requested:
           cancelled = True
           break

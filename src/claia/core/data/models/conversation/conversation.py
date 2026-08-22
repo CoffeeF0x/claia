@@ -2,8 +2,7 @@
 Conversation data model.
 
 A pure data model representing a conversation between users and AI
-assistants, with support for messages, a prompt, and an event-based
-audit trail.
+assistants, with support for messages and an event-based audit trail.
 
 Messages are stored as a directed tree: each Message has a parent_id
 that points to the preceding message. Multiple messages may share the
@@ -72,7 +71,6 @@ class Conversation:
       ATTACHMENT_REMOVED     the message the attachment was removed from
       CONVERSATION_CREATED   None (conversation-level)
       TITLE_CHANGED          None
-      PROMPT_CHANGED         None
       ====================== ==========================================
 
     Streaming mutations -- :meth:`append_stream_chunk` -- intentionally do not
@@ -99,21 +97,9 @@ class Conversation:
         from active_head_id.
     """
 
-    @staticmethod
-    def _format_prompt(prompt: Optional[Union[str, Dict[str, str]]]) -> Dict[str, str]:
-        if prompt is None:
-            return {"system": ""}
-        elif isinstance(prompt, str):
-            return {"system": prompt}
-        elif isinstance(prompt, dict):
-            return prompt
-        else:
-            return {"system": str(prompt)}
-
     def __init__(self,
                  id: Optional[str] = None,
                  title: str = DEFAULT_CONVERSATION_TITLE,
-                 prompt: Optional[Union[str, Dict[str, str]]] = None,
                  messages: Optional[List[Union[Message, Dict[str, Any]]]] = None,
                  events: Optional[List[Union[DomainEvent, Dict[str, Any]]]] = None,
                  active_head_id: Optional[str] = None,
@@ -127,7 +113,6 @@ class Conversation:
         self.id = id or str(uuid.uuid4())
         self.name = name or f"conversation-{self.id}"
         self.title = title
-        self.prompt = self._format_prompt(prompt)
         self.metadata: Dict[str, Any] = metadata or {}
         self.created_at = created_at or time.time()
         self.updated_at = updated_at or self.created_at
@@ -148,7 +133,13 @@ class Conversation:
         self.events: List[DomainEvent] = []
         if events:
             for e in events:
-                self.events.append(e if isinstance(e, DomainEvent) else DomainEvent.from_dict(e))
+                if isinstance(e, DomainEvent):
+                    self.events.append(e)
+                    continue
+                try:
+                    self.events.append(DomainEvent.from_dict(e))
+                except KeyError:
+                    continue
 
         # Transient runtime queue (not serialized) + single observer.
         self._pending_events: List[DomainEvent] = []
@@ -158,10 +149,7 @@ class Conversation:
             self._record(
                 EventType.CONVERSATION_CREATED,
                 None,
-                {
-                    "title": self.title,
-                    "system_prompt": self.prompt.get("system", ""),
-                },
+                {"title": self.title},
             )
 
     # ---------------------------------------------------------------------- #
@@ -249,7 +237,6 @@ class Conversation:
             "id": self.id,
             "name": self.name,
             "title": self.title,
-            "prompt": self.prompt,
             "messages": [m.to_dict() for m in self.messages],
             "active_head_id": self.active_head_id,
             "events": [e.to_dict() for e in self.events],
@@ -263,7 +250,6 @@ class Conversation:
         return cls(
             id=data.get("id"),
             title=data.get("title", DEFAULT_CONVERSATION_TITLE),
-            prompt=data.get("prompt"),
             messages=data.get("messages", []),
             events=data.get("events", []),
             active_head_id=data.get("active_head_id"),
@@ -286,6 +272,7 @@ class Conversation:
         supported_artifact_types,
         sequence_cls=None,
         include_utility: bool = False,
+        system: Optional[str] = None,
     ):
         """Build a filtered message sequence for a model.
 
@@ -311,7 +298,8 @@ class Conversation:
                 continue
             copies.append(message.copy_with_artifacts(filtered))
 
-        system = self.get_system_prompt()
+        if system is not None:
+            system = system.strip() or None
         return sequence_cls(messages=copies, system=system)
 
     # ---------------------------------------------------------------------- #
@@ -718,24 +706,8 @@ class Conversation:
         return True
 
     # ---------------------------------------------------------------------- #
-    # Prompt management                                                        #
+    # Title                                                                    #
     # ---------------------------------------------------------------------- #
-
-    def get_system_prompt(self, **kwargs) -> Optional[str]:
-        system_prompt = self.prompt.get("system", "")
-        if not system_prompt or not system_prompt.strip():
-            return None
-        return self.apply_substitutions(system_prompt, **kwargs)
-
-    def apply_substitutions(self, text: str, **kwargs) -> str:
-        if kwargs and any(f"{{{key}}}" in text for key in kwargs):
-            try:
-                text = text.format(**kwargs)
-            except KeyError as e:
-                logger.warning(f"Missing key in text substitution: {e}")
-            except Exception as e:
-                logger.error(f"Error during text substitution: {e}")
-        return text
 
     def change_title(self, new_title: str) -> None:
         old_title = self.title
@@ -743,15 +715,6 @@ class Conversation:
         self.updated_at = time.time()
         self._record(EventType.TITLE_CHANGED, None,
                      {"old_title": old_title, "new_title": new_title})
-
-    def change_prompt(self, new_prompt: Union[str, Dict[str, str]]) -> None:
-        old_prompt = self.prompt.get("system", "")
-        self.prompt = self._format_prompt(new_prompt)
-        self.updated_at = time.time()
-        self._record(EventType.PROMPT_CHANGED, None, {
-            "old_prompt": old_prompt,
-            "new_prompt": self.prompt.get("system", ""),
-        })
 
     # ---------------------------------------------------------------------- #
     # Artifact helpers                                                         #

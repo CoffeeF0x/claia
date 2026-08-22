@@ -18,7 +18,7 @@ class MessageSequence:
   """Ordered thread messages with artifacts filtered for a model.
 
   ``messages`` are conversation ``Message`` copies. ``system`` is
-  optional top-level instructions (from ``conversation.prompt``).
+  optional top-level instructions for this generate call only.
   """
 
   def __init__(

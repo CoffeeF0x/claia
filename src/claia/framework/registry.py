@@ -441,6 +441,7 @@ class Registry:
     model_name: str,
     conversation: Conversation,
     deployment_method: Optional[str] = None,
+    system: Optional[str] = None,
     **kwargs
   ) -> Iterator[BaseChunk]:
     """
@@ -449,6 +450,13 @@ class Registry:
     failure.
     """
     logger.debug(f"Running model {model_name}")
+
+    if system is None:
+      system = kwargs.pop("system", None)
+    else:
+      kwargs.pop("system", None)
+    if isinstance(system, str):
+      system = system.strip() or None
 
     combined_kwargs = {**self._user_kwargs, **kwargs}
 
@@ -524,6 +532,7 @@ class Registry:
       init_kwargs=init_kwargs,
       runtime_kwargs=runtime_kwargs,
       definition=model_def,
+      system=system,
     )
 
   def run(
@@ -531,6 +540,7 @@ class Registry:
     model_name: str,
     conversation: Conversation,
     streaming: bool = False,
+    system: Optional[str] = None,
     **kwargs
   ) -> Union[Result, Iterator[BaseChunk]]:
     """
@@ -543,6 +553,8 @@ class Registry:
         streaming: If True, returns an ``Iterator[BaseChunk]``.
                    If False (default), consumes the chunk stream and
                    returns a ``Result`` with the concatenated text.
+        system: Optional generate-time system message. Prepended for
+          this call only; not stored on the conversation.
         **kwargs: Forwarded to deployment/architecture (``deployment_method``
           selects an explicit deployment when provided)
 
@@ -551,11 +563,11 @@ class Registry:
         ``Iterator[BaseChunk]`` (streaming=True).
     """
     if streaming:
-      return self._run_stream(model_name, conversation, **kwargs)
+      return self._run_stream(model_name, conversation, system=system, **kwargs)
 
     try:
       full_response = ""
-      for chunk in self._run_stream(model_name, conversation, **kwargs):
+      for chunk in self._run_stream(model_name, conversation, system=system, **kwargs):
         if isinstance(chunk, TextChunk) and isinstance(chunk.data, str):
           full_response += chunk.data
       return Result.ok(full_response)
@@ -567,6 +579,7 @@ class Registry:
     self,
     model_name: str,
     conversation: Conversation,
+    system: Optional[str] = None,
     **kwargs
   ) -> Iterator[str]:
     """
@@ -575,7 +588,9 @@ class Registry:
     Wraps :meth:`run` with ``streaming=True`` and yields the string
     data of each ``TextChunk``, skipping non-text chunks.
     """
-    for chunk in self._run_stream(model_name, conversation, **kwargs):
+    for chunk in self._run_stream(
+      model_name, conversation, system=system, **kwargs
+    ):
       if isinstance(chunk, TextChunk):
         yield chunk.data if isinstance(chunk.data, str) else str(chunk.data)
 
@@ -588,6 +603,7 @@ class Registry:
     on_error: Optional[callable] = None,
     agent_type: str = "simple",
     conversation: Optional[Conversation] = None,
+    system: Optional[str] = None,
     **kwargs
   ) -> Result:
     """
@@ -605,6 +621,7 @@ class Registry:
         on_error: Optional callback fired with error message on failure
         agent_type: Agent type to use (default "simple")
         conversation: Optional existing Conversation to continue
+        system: Optional generate-time system message
         **kwargs: Extra parameters forwarded to the agent/model
 
     Returns:
@@ -620,10 +637,18 @@ class Registry:
     done_event = threading.Event()
     result_holder = [None]
 
+    if system is None:
+      system = kwargs.pop("system", None)
+    else:
+      kwargs.pop("system", None)
+    parameters = {"model_id": model_name, **kwargs}
+    if isinstance(system, str) and system.strip():
+      parameters["system"] = system.strip()
+
     process = Process(
       agent_type=agent_type,
       conversation=conversation,
-      parameters={"model_id": model_name, **kwargs}
+      parameters=parameters
     )
 
     if on_token:

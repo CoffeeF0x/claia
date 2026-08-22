@@ -39,7 +39,7 @@ class RecordingOpenRouterModel(OpenRouterModel):
     return self.response
 
 
-def _sequence(conversation):
+def _sequence(conversation, system=None):
   from claia.core.deployments.dummy import DummyDeployment
   from claia.core.definitions.model_definition import ModelDefinition
   from claia.core.data.models.conversation.message_sequence import MessageSequence
@@ -47,12 +47,13 @@ def _sequence(conversation):
   return DummyDeployment().translate(
     conversation,
     ModelDefinition(inputs=[ArtifactType.TEXT, MessageSequence]),
+    system=system,
   )
 
 
 
 def _conversation():
-  conversation = Conversation(title="T", prompt={"system": "Be brief"})
+  conversation = Conversation(title="T")
   conversation.add_message(MessageRole.USER, "Hello")
   return conversation
 
@@ -68,7 +69,7 @@ def test_openrouter_model_builds_non_streaming_request():
   )
 
   chunks = list(model.generate(
-    _sequence(_conversation()),
+    _sequence(_conversation(), system="Be brief"),
     stream=False,
     max_tokens=25,
     temperature=0,
@@ -99,7 +100,7 @@ def test_openrouter_model_streams_deltas():
   model = RecordingOpenRouterModel("anthropic/claude-sonnet-4.5", response=response)
 
   chunks = list(model.generate(
-    _sequence(_conversation()),
+    _sequence(_conversation(), system="Be brief"),
     stream=True,
     max_tokens=25,
   ))

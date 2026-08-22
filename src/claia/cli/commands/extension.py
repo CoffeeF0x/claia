@@ -738,13 +738,6 @@ class CLIToolModule(BaseToolModule):
       updated_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(updated_at))
       output_lines.append(f"  Updated: {updated_str}")
 
-    prompt = getattr(conversation, 'prompt', None)
-    if prompt and isinstance(prompt, dict) and prompt.get('system'):
-      prompt_preview = prompt['system'][:100]
-      if len(prompt['system']) > 100:
-        prompt_preview += "..."
-      output_lines.append(f"\n  System Prompt: {prompt_preview}")
-
     settings = getattr(conversation, 'settings', None)
     if settings:
       output_lines.append(f"\n  Settings:")

@@ -14,6 +14,15 @@ from .storage import JsonStore
 logger = logging.getLogger(__name__)
 
 
+def active_system(settings) -> Optional[str]:
+  """Return the CLI's active prompt text, or None if none is set."""
+  prompt = getattr(settings, "active_prompt", None)
+  content = getattr(prompt, "content", None) if prompt else None
+  if isinstance(content, str) and content.strip():
+    return content.strip()
+  return None
+
+
 def wait_for_process(
     process: Process,
     store: Optional[JsonStore] = None,
