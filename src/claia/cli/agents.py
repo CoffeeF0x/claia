@@ -20,26 +20,14 @@ The writer agent is automatically registered when the CLI starts up via
 the register_cli_agents() function called in __main__.py.
 """
 
-# External dependencies
 import logging
 
-# Internal dependencies
 from ..framework.agents.base import BaseAgent
-from ..core.data.chunks import TextChunk
-from ..core.enums.conversation import MessageRole
-from ..core.enums.task import TaskEvent
 
 
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
 logger = logging.getLogger(__name__)
 
 
-########################################################################
-#                          WRITER AGENT CLASS                          #
-########################################################################
-# Writer-specific system prompt
 WRITER_SYSTEM_PROMPT = """You are a professional writer and editor with expertise in various writing styles and formats.
 
 Your capabilities include:
@@ -61,68 +49,18 @@ You prioritize clarity, engagement, and effective communication while respecting
 
 
 class WriterAgent(BaseAgent):
-  """
-  A specialized agent for writing tasks with enhanced literary capabilities.
+  """A specialized agent for writing tasks with enhanced literary capabilities.
 
-  This agent passes a writer-focused system prompt on each generate
-  call. Writing tasks include creative writing, technical
-  documentation, business communications, and more.
+  Pins ``SYSTEM_PROMPT`` and uses the shared generate / tool loop.
   """
 
-  @classmethod
-  def execute(cls, task, registry, **kwargs) -> object:
-    """Execute a writing request with specialized writing capabilities."""
-    try:
-      model_id = task.parameters.get("model_id")
-
-      if not model_id:
-        raise ValueError("No model_id provided in task parameters")
-
-      kwargs.pop("system", None)
-      logger.debug(f"Running model {model_id} for writing task {task.id}")
-      full_response = ""
-
-      for chunk in registry.run(
-        model_id,
-        task.conversation,
-        streaming=True,
-        system=WRITER_SYSTEM_PROMPT,
-        **kwargs
-      ):
-        if not isinstance(chunk, TextChunk):
-          task.emit(TaskEvent.CHUNK, chunk)
-          continue
-        token = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
-        full_response += token
-        task.emit(TaskEvent.TOKEN, token)
-
-      task.conversation.add_message(MessageRole.ASSISTANT, full_response)
-      task.mark_completed(full_response)
-      logger.info(f"Writer agent successfully completed task {task.id}")
-
-    except Exception as e:
-      logger.exception(f"Error in WriterAgent for {task.id}: {str(e)}")
-      task.mark_failed(str(e))
-
-    return task
+  SYSTEM_PROMPT = WRITER_SYSTEM_PROMPT
 
 
-########################################################################
-#                        AGENT REGISTRATION                            #
-########################################################################
 def register_cli_agents(registry) -> None:
-  """
-  Register all CLI-specific agents with the provided registry.
-
-  This demonstrates the programmatic agent registration approach using
-  Registry.register() instead of an entry-point plugin.
-
-  Args:
-      registry: The Registry instance to register agents with
-  """
+  """Register CLI-specific agents with the provided registry."""
   logger.info("Registering CLI-specific agents")
 
-  # Register the Writer agent
   registry.register(
     agent_class=WriterAgent,
     name="writer",
@@ -131,4 +69,3 @@ def register_cli_agents(registry) -> None:
   )
 
   logger.debug("Successfully registered writer agent")
-

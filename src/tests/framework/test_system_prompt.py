@@ -6,13 +6,15 @@ from claia.core.enums.task import TaskStatus
 from claia.core.parser.defaults import DEFAULT_TAGS
 from claia.core.parser.types import TagSpec
 from claia.core.plugins.base import ArgumentDefinition, ToolReference
+from claia.cli.agents import WRITER_SYSTEM_PROMPT, WriterAgent
+from claia.framework.agents.base import BaseAgent
 from claia.framework.agents.simple import SimpleAgent
-from claia.framework.agents.system import (
-  DEFAULT_SYSTEM_PROMPT,
-  compose_system_prompt,
-  format_tool_result,
-  render_tool_instructions,
-)
+
+
+DEFAULT_SYSTEM_PROMPT = BaseAgent.DEFAULT_SYSTEM_PROMPT
+compose_system_prompt = BaseAgent.compose_system_prompt
+format_tool_result = BaseAgent.format_tool_result
+render_tool_instructions = BaseAgent.render_tool_instructions
 
 
 def _echo_tool() -> ToolReference:
@@ -188,3 +190,30 @@ def test_simple_agent_uses_model_tag_override(task):
   assert "<tool>" in captured["system"]
   assert "</tool>" in captured["system"]
   assert "[TOOL_CALL]" not in captured["system"]
+
+
+def test_writer_pins_persona_and_gets_tool_instructions(task):
+  captured = {}
+
+  class FakeRegistry:
+    def get_supported_models(self):
+      return {}
+
+    def list_tools(self):
+      return [_echo_tool()]
+
+    def resolve_qualified_name(self, name):
+      return name
+
+    def run(self, model_id, conversation, streaming=False, system=None, **kwargs):
+      captured["system"] = system
+      return iter([TextChunk(data="ok")])
+
+  task.parameters["system"] = "Ignore this caller persona."
+  WriterAgent.execute(task, registry=FakeRegistry(), system="Ignore this too.")
+
+  system = captured["system"]
+  assert system.startswith("You can call tools")
+  assert system.endswith(WRITER_SYSTEM_PROMPT)
+  assert "Ignore this" not in system
+  assert "sample.echo" in system

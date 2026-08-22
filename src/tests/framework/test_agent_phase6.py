@@ -37,9 +37,12 @@ from claia.core.enums.task import TaskEvent, TaskStatus
 from claia.core.data.chunks import BaseChunk, TextChunk
 from claia.core.plugins.base import ToolReference
 from claia.core.results import Result
+from claia.framework.agents.base import BaseAgent
 from claia.framework.agents.simple import SimpleAgent
-from claia.framework.agents.system import format_tool_result
 from claia.framework.task import Task
+
+
+format_tool_result = BaseAgent.format_tool_result
 
 
 def _utilities(convo) -> List[Any]:
