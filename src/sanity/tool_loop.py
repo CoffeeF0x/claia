@@ -11,7 +11,7 @@ from claia.core.data import Conversation
 from claia.core.data.chunks import TextChunk
 from claia.core.definitions.model_definition import ModelDefinition
 from claia.core.enums.conversation import MessageRole
-from claia.framework.agents.base import BaseAgent
+from claia.framework.agents.simple import SimpleAgent
 from claia.framework.registry import Registry
 from claia.framework.task import Task
 
@@ -92,7 +92,7 @@ def run_loop():
     conversation=convo,
     parameters={"model_id": "dummy-model", "system": PERSONA},
   )
-  BaseAgent.execute(task, registry=registry)
+  SimpleAgent.execute(task, registry=registry)
 
   print("======== SYSTEM (every generate) ========")
   print(registry.last_system)

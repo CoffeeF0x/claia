@@ -1,9 +1,9 @@
 """
 Base agent class for CLAIA.
 
-Owns the generate loop, MANUAL-mode system composition, and tool
-dispatch. Concrete agents pin a persona via ``SYSTEM_PROMPT`` or
-override ``execute`` for a different flow.
+Shared utilities: system-prompt composition, one-turn streaming
+(parse / tool dispatch / message bookkeeping). Concrete agents
+implement ``execute`` — they read the task and own the generate loop.
 """
 
 import json
@@ -48,17 +48,10 @@ _INJECTABLE_ARGS = frozenset({
 #                          BASE AGENT CLASS                            #
 ########################################################################
 class BaseAgent:
-  """
-  Shared agent loop: stream, parse tags, dispatch tools, generate again.
-
-  ``SYSTEM_PROMPT`` pins a persona (Writer, Bob). When it is ``None``,
-  the caller ``system`` / task parameter / default is used. Tool
-  instructions are prepended in either case.
-  """
+  """Utilities for agents. ``execute`` is implemented by each agent."""
 
   DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
   MAX_TOOL_ROUNDS = 8
-  SYSTEM_PROMPT: Optional[str] = None
 
   @classmethod
   def run(cls, task: Task, registry, **kwargs) -> object:
@@ -82,102 +75,91 @@ class BaseAgent:
 
   @classmethod
   def execute(cls, task: Task, registry, **kwargs) -> object:
-    """Stream model turns, dispatch tools, and generate until done.
+    """Implemented by each agent: read the task, then call utilities."""
+    logger.error(f"execute not implemented for {cls.__name__}")
+    raise NotImplementedError(
+      f"Agent implementation {cls.__name__} must override execute"
+    )
 
-    Each generate mutates the conversation through the streaming
-    helpers (one ``STREAM_START`` / ``STREAM_END`` per turn). Closed
-    tags become utilities; tool results become a user message and
-    trigger another generate.
+  @classmethod
+  def stream_turn(
+    cls,
+    task: Task,
+    registry,
+    *,
+    model_id: str,
+    system: str,
+    tag_specs,
+    **kwargs,
+  ) -> Tuple[str, List[Tuple[str, str]], bool]:
+    """One assistant stream: tokens, parse, tool dispatch.
+
+    Returns ``(text, tool_results, cancelled)``. The caller posts
+    results and decides whether to generate again.
     """
     conversation = task.conversation
-    streaming_message = None
+    streaming_message = conversation.start_streaming_message(MessageRole.ASSISTANT)
+    parser = TagParser(tag_specs)
+    cancelled = False
+    round_text = ""
+    tool_results: List[Tuple[str, str]] = []
 
     try:
-      model_id = task.parameters["model_id"]
-      tag_specs = cls.resolve_tag_specs(registry, model_id)
-      system = cls.compose_system_prompt(
-        cls.persona(task, **kwargs),
-        tools=registry.list_tools(),
-        tag_specs=tag_specs,
-      )
-      kwargs.pop("system", None)
+      for chunk in registry.run(
+        model_id, conversation, streaming=True, system=system, **kwargs
+      ):
+        if task.cancel_requested:
+          cancelled = True
+          break
 
-      last_response = ""
-      for _round in range(cls.MAX_TOOL_ROUNDS):
-        streaming_message = conversation.start_streaming_message(MessageRole.ASSISTANT)
-        parser = TagParser(tag_specs)
-        cancelled = False
-        round_text = ""
-        tool_results: List[Tuple[str, str]] = []
+        if not isinstance(chunk, TextChunk):
+          if isinstance(chunk, ImageChunk):
+            cls._attach_image_chunk(task, streaming_message.message_id, chunk)
+          elif isinstance(chunk, AudioChunk):
+            cls._attach_audio_chunk(task, streaming_message.message_id, chunk)
+          task.emit(TaskEvent.CHUNK, chunk)
+          continue
 
-        for chunk in registry.run(
-          model_id, conversation, streaming=True, system=system, **kwargs
-        ):
-          if task.cancel_requested:
-            cancelled = True
-            break
+        token = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
+        round_text += token
+        conversation.append_stream_chunk(streaming_message.message_id, token)
+        task.emit(TaskEvent.TOKEN, token)
 
-          if not isinstance(chunk, TextChunk):
-            if isinstance(chunk, ImageChunk):
-              cls._attach_image_chunk(task, streaming_message.message_id, chunk)
-            elif isinstance(chunk, AudioChunk):
-              cls._attach_audio_chunk(task, streaming_message.message_id, chunk)
-            task.emit(TaskEvent.CHUNK, chunk)
-            continue
+        tool_results.extend(cls._consume_parse_events(
+          parser.feed(token),
+          registry=registry,
+          conversation=conversation,
+          streaming_message_id=streaming_message.message_id,
+          tool_kwargs=kwargs,
+        ))
 
-          token = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
-          round_text += token
-          conversation.append_stream_chunk(streaming_message.message_id, token)
-          task.emit(TaskEvent.TOKEN, token)
+      if not cancelled:
+        tool_results.extend(cls._consume_parse_events(
+          parser.flush(),
+          registry=registry,
+          conversation=conversation,
+          streaming_message_id=streaming_message.message_id,
+          tool_kwargs=kwargs,
+        ))
 
-          tool_results.extend(cls._consume_parse_events(
-            parser.feed(token),
-            registry=registry,
-            conversation=conversation,
-            streaming_message_id=streaming_message.message_id,
-            tool_kwargs=kwargs,
-          ))
+      if cancelled:
+        conversation.end_streaming_message(
+          streaming_message.message_id, error="cancelled"
+        )
+      else:
+        conversation.end_streaming_message(streaming_message.message_id)
+    except Exception:
+      try:
+        conversation.end_streaming_message(
+          streaming_message.message_id, error="stream failed"
+        )
+      except Exception:
+        logger.exception(
+          f"Failed to mark streaming message ended: {streaming_message.message_id}"
+        )
+      raise
 
-        if not cancelled:
-          tool_results.extend(cls._consume_parse_events(
-            parser.flush(),
-            registry=registry,
-            conversation=conversation,
-            streaming_message_id=streaming_message.message_id,
-            tool_kwargs=kwargs,
-          ))
-
-        if cancelled:
-          conversation.end_streaming_message(
-            streaming_message.message_id, error="cancelled"
-          )
-        else:
-          conversation.end_streaming_message(streaming_message.message_id)
-
-        last_response = round_text
-        cls._post_tool_results(task, conversation, tool_results)
-
-        if cancelled:
-          task.mark_cancelled(last_response)
-          return task
-        if not tool_results:
-          task.mark_completed(last_response)
-          return task
-
-      task.mark_completed(last_response)
-
-    except Exception as e:
-      logger.exception(f"Error in {cls.__name__} for {task.id}: {str(e)}")
-      if streaming_message is not None:
-        try:
-          conversation.end_streaming_message(streaming_message.message_id, error=str(e))
-        except Exception:
-          logger.exception(
-            f"Failed to mark streaming message ended after error: {streaming_message.message_id}"
-          )
-      task.mark_failed(str(e))
-
-    return task
+    return round_text, tool_results, cancelled
 
   @classmethod
   def validate_task(cls, task: Task, registry) -> None:
@@ -206,16 +188,6 @@ class BaseAgent:
   # ------------------------------------------------------------------
   # System prompt
   # ------------------------------------------------------------------
-  @classmethod
-  def persona(cls, task: Task, **kwargs) -> Optional[str]:
-    """Return the persona string for this task (no tool instructions)."""
-    if cls.SYSTEM_PROMPT is not None:
-      return cls.SYSTEM_PROMPT
-    system = kwargs.get("system")
-    if system is None:
-      system = task.parameters.get("system")
-    return system
-
   @classmethod
   def compose_system_prompt(
     cls,
