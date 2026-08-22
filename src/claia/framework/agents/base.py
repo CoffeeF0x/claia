@@ -34,7 +34,7 @@ class BaseAgent:
   """
 
   @classmethod
-  def process(cls, process: Process, registry=None, **kwargs) -> object:
+  def process(cls, process: Process, registry, **kwargs) -> object:
     """
     Process a request and update the process with the result.
 
@@ -66,7 +66,7 @@ class BaseAgent:
       return process
 
   @classmethod
-  def process_request(cls, process: Process, registry=None, **kwargs) -> object:
+  def process_request(cls, process: Process, registry, **kwargs) -> object:
     """
     Implement the actual processing logic for this agent type.
     This method should be overridden by specific agent implementations.
@@ -83,7 +83,7 @@ class BaseAgent:
     raise NotImplementedError(f"Agent implementation {cls.__name__} must override process_request")
 
   @classmethod
-  def validate_process_requirements(cls, process: Process, registry=None) -> None:
+  def validate_process_requirements(cls, process: Process, registry) -> None:
     """
     Validate that the process has all the common requirements needed for processing.
 

@@ -727,7 +727,7 @@ class Registry:
             '''My custom agent implementation.'''
 
             @classmethod
-            def process_request(cls, process, registry=None, **kwargs):
+            def process_request(cls, process, registry, **kwargs):
                 process.mark_completed(result="Done!")
                 return process
 

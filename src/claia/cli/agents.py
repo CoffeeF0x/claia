@@ -69,7 +69,7 @@ class WriterAgent(BaseAgent):
   """
 
   @classmethod
-  def process_request(cls, process, registry=None, **kwargs) -> object:
+  def process_request(cls, process, registry, **kwargs) -> object:
     """Process a writing request with specialized writing capabilities."""
     try:
       model_id = process.parameters.get("model_id")

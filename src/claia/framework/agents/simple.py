@@ -60,7 +60,7 @@ class SimpleAgent(BaseAgent):
   """
 
   @classmethod
-  def process_request(cls, process, registry=None, **kwargs) -> object:
+  def process_request(cls, process, registry, **kwargs) -> object:
     """Stream a model turn, parse tags inline, and dispatch tool calls.
 
     The conversation is mutated through the streaming-message
@@ -157,15 +157,9 @@ class SimpleAgent(BaseAgent):
     """Resolve the ``TagSpec`` list active for ``model_id``.
 
     Falls back to ``DEFAULT_TAGS`` (via ``resolve_tag_specs(None)``)
-    when the registry isn't able to surface a definition — the
-    fixtures used by older tests pass a deliberately minimal
-    registry stand-in, and the parser is happy to run with the
-    defaults.
+    when the registry has no definition for ``model_id``.
     """
-    try:
-      definitions = registry.get_supported_models()
-    except Exception:
-      definitions = None
+    definitions = registry.get_supported_models()
     model_def = None
     if isinstance(definitions, dict) and model_id in definitions:
       model_def = definitions[model_id]
@@ -232,19 +226,14 @@ class SimpleAgent(BaseAgent):
     appended to the streaming message so the agent can keep
     ``full_response`` accurate.
     """
-    appender = getattr(conversation, "append_utility", None)
-    if callable(appender):
-      try:
-        appender(
-          tag_type=ev.tag_type,
-          content=ev.content,
-          source_message_id=streaming_message_id,
-          start_index=ev.start_index,
-          end_index=ev.end_index,
-          attributes=dict(ev.attributes) if ev.attributes else None,
-        )
-      except Exception:
-        logger.exception("Failed to append utility message for tag %r", ev.tag_type)
+    conversation.append_utility(
+      tag_type=ev.tag_type,
+      content=ev.content,
+      source_message_id=streaming_message_id,
+      start_index=ev.start_index,
+      end_index=ev.end_index,
+      attributes=dict(ev.attributes) if ev.attributes else None,
+    )
 
     if ev.tag_type is not TagType.TOOL:
       return ""
@@ -286,12 +275,7 @@ class SimpleAgent(BaseAgent):
         streaming_message_id=streaming_message_id,
       )
 
-    qualified = name
-    resolver = getattr(registry, "resolve_qualified_name", None)
-    if callable(resolver):
-      resolved = resolver(name)
-      if resolved is not None:
-        qualified = resolved
+    qualified = registry.resolve_qualified_name(name) or name
 
     try:
       result = registry.execute_tool(

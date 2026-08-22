@@ -37,6 +37,12 @@ def fake_model_registry_ok():
       if streaming:
         return iter([TextChunk(data=f'{{"echo_model": "{model_id}"}}')])
       return Result.ok(f'{{"echo_model": "{model_id}"}}')
+
+    def get_supported_models(self):
+      return {}
+
+    def resolve_qualified_name(self, name):
+      return name
   return FakeRegistry()
 
 
@@ -48,6 +54,12 @@ def fake_model_registry_error():
       if streaming:
         raise DeploymentError("model error")
       return Result.fail("model error")
+
+    def get_supported_models(self):
+      return {}
+
+    def resolve_qualified_name(self, name):
+      return name
   return FakeRegistry()
 
 
