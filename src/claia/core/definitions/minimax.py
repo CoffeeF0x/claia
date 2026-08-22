@@ -19,7 +19,7 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
     return {
       "minimax-m2.7": definition(
         title="MiniMax M2.7",
-        provider_id="minimax/minimax-m2.7",
+        identifiers={"openrouter": "minimax/minimax-m2.7"},
         company="MiniMax",
         aliases=["minimax"],
         description="Next-generation productivity and autonomous-agent model for multi-agent collaboration.",
@@ -29,7 +29,7 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
       ),
       "minimax-m2.5": definition(
         title="MiniMax M2.5",
-        provider_id="minimax/minimax-m2.5",
+        identifiers={"openrouter": "minimax/minimax-m2.5"},
         company="MiniMax",
         aliases=["minimax-m2-5"],
         description="Productivity-focused model for real-world office and agent workflows.",
@@ -39,7 +39,7 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
       ),
       "minimax-m2": definition(
         title="MiniMax M2",
-        provider_id="minimax/minimax-m2",
+        identifiers={"openrouter": "minimax/minimax-m2"},
         company="MiniMax",
         description="MoE model optimized for coding and agentic workflows.",
         context_length=196608,
@@ -48,7 +48,7 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
       ),
       "minimax-m1": definition(
         title="MiniMax M1",
-        provider_id="minimax/minimax-m1",
+        identifiers={"openrouter": "minimax/minimax-m1"},
         company="MiniMax",
         description="Large-scale MoE reasoning model with a 1M-token context window.",
         context_length=1000000,

@@ -19,7 +19,7 @@ class ZaiDefinitions(BaseDefinitionProvider):
     return {
       "glm-5.3": definition(
         title="GLM 5.3",
-        provider_id="z-ai/glm-5.3",
+        identifiers={"openrouter": "z-ai/glm-5.3"},
         company="Z.ai",
         aliases=["glm", "z-ai-glm"],
         description="Large-scale reasoning model for complex software engineering and long-horizon agent tasks.",
@@ -29,7 +29,7 @@ class ZaiDefinitions(BaseDefinitionProvider):
       ),
       "glm-5.2": definition(
         title="GLM 5.2",
-        provider_id="z-ai/glm-5.2",
+        identifiers={"openrouter": "z-ai/glm-5.2"},
         company="Z.ai",
         aliases=["glm-5-2"],
         description="Long-horizon agent model for project-level software engineering and multi-step automation.",
@@ -39,7 +39,7 @@ class ZaiDefinitions(BaseDefinitionProvider):
       ),
       "glm-5.1": definition(
         title="GLM 5.1",
-        provider_id="z-ai/glm-5.1",
+        identifiers={"openrouter": "z-ai/glm-5.1"},
         company="Z.ai",
         aliases=["glm-5-1"],
         description="Long-horizon agent model for autonomous planning, execution, and iterative improvement.",
@@ -49,7 +49,7 @@ class ZaiDefinitions(BaseDefinitionProvider):
       ),
       "glm-5": definition(
         title="GLM 5",
-        provider_id="z-ai/glm-5",
+        identifiers={"openrouter": "z-ai/glm-5"},
         company="Z.ai",
         description="Flagship open-source model for complex systems design and long-horizon agent workflows.",
         context_length=202752,
@@ -58,7 +58,7 @@ class ZaiDefinitions(BaseDefinitionProvider):
       ),
       "glm-4.5": definition(
         title="GLM 4.5",
-        provider_id="z-ai/glm-4.5",
+        identifiers={"openrouter": "z-ai/glm-4.5"},
         company="Z.ai",
         aliases=["glm-4-5"],
         description="MoE foundation model for agent-based applications with thinking and non-thinking modes.",

@@ -19,7 +19,7 @@ class DeepSeekDefinitions(BaseDefinitionProvider):
     return {
       "deepseek-v4-pro": definition(
         title="DeepSeek V4 Pro",
-        provider_id="deepseek/deepseek-v4-pro",
+        identifiers={"openrouter": "deepseek/deepseek-v4-pro"},
         company="DeepSeek",
         aliases=["deepseek-pro", "deepseek-v4"],
         description="Large DeepSeek V4 MoE reasoning and coding model with a 1M-token context window.",
@@ -29,7 +29,7 @@ class DeepSeekDefinitions(BaseDefinitionProvider):
       ),
       "deepseek-v4-flash": definition(
         title="DeepSeek V4 Flash",
-        provider_id="deepseek/deepseek-v4-flash",
+        identifiers={"openrouter": "deepseek/deepseek-v4-flash"},
         company="DeepSeek",
         aliases=["deepseek-flash"],
         description="Efficiency-optimized DeepSeek V4 MoE model for fast, high-throughput reasoning and coding.",
@@ -39,7 +39,7 @@ class DeepSeekDefinitions(BaseDefinitionProvider):
       ),
       "deepseek-r1-0528": definition(
         title="DeepSeek R1 0528",
-        provider_id="deepseek/deepseek-r1-0528",
+        identifiers={"openrouter": "deepseek/deepseek-r1-0528"},
         company="DeepSeek",
         aliases=["deepseek-r1", "r1"],
         description="Open reasoning model update with strong math, coding, and tool-use performance.",

@@ -19,7 +19,7 @@ class MoonshotDefinitions(BaseDefinitionProvider):
     return {
       "kimi-k3": definition(
         title="Kimi K3",
-        provider_id="moonshotai/kimi-k3",
+        identifiers={"openrouter": "moonshotai/kimi-k3"},
         company="Moonshot AI",
         aliases=["kimi", "kimi-k3"],
         description="Open-weight multimodal reasoning model for long-horizon coding and knowledge work.",
@@ -30,7 +30,7 @@ class MoonshotDefinitions(BaseDefinitionProvider):
       ),
       "kimi-k2.7-code": definition(
         title="Kimi K2.7 Code",
-        provider_id="moonshotai/kimi-k2.7-code",
+        identifiers={"openrouter": "moonshotai/kimi-k2.7-code"},
         company="Moonshot AI",
         aliases=["kimi-k2.7", "kimi-code"],
         description="Coding-focused multimodal MoE for long-horizon programming and agentic decomposition.",
@@ -41,7 +41,7 @@ class MoonshotDefinitions(BaseDefinitionProvider):
       ),
       "kimi-k2.6": definition(
         title="Kimi K2.6",
-        provider_id="moonshotai/kimi-k2.6",
+        identifiers={"openrouter": "moonshotai/kimi-k2.6"},
         company="Moonshot AI",
         aliases=["kimi-k2", "kimi-k2-6"],
         description="Multimodal model for long-horizon coding and multi-agent orchestration.",
@@ -52,7 +52,7 @@ class MoonshotDefinitions(BaseDefinitionProvider):
       ),
       "kimi-k2.5": definition(
         title="Kimi K2.5",
-        provider_id="moonshotai/kimi-k2.5",
+        identifiers={"openrouter": "moonshotai/kimi-k2.5"},
         company="Moonshot AI",
         aliases=["kimi-k2-5"],
         description="Multimodal Kimi K2 continuation with strong visual coding and agentic performance.",
@@ -63,7 +63,7 @@ class MoonshotDefinitions(BaseDefinitionProvider):
       ),
       "kimi-k2-thinking": definition(
         title="Kimi K2 Thinking",
-        provider_id="moonshotai/kimi-k2-thinking",
+        identifiers={"openrouter": "moonshotai/kimi-k2-thinking"},
         company="Moonshot AI",
         aliases=["kimi-thinking"],
         description="Open reasoning MoE model optimized for step-by-step reasoning, tool use, and long workflows.",

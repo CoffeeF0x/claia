@@ -19,7 +19,7 @@ class MetaDefinitions(BaseDefinitionProvider):
     return {
       "llama-4-maverick": definition(
         title="Llama 4 Maverick",
-        provider_id="meta-llama/llama-4-maverick",
+        identifiers={"openrouter": "meta-llama/llama-4-maverick"},
         company="Meta",
         aliases=["llama-maverick", "llama-4", "llama"],
         description="Large multimodal MoE model with broad multilingual text and code capabilities.",
@@ -30,7 +30,7 @@ class MetaDefinitions(BaseDefinitionProvider):
       ),
       "llama-4-scout": definition(
         title="Llama 4 Scout",
-        provider_id="meta-llama/llama-4-scout",
+        identifiers={"openrouter": "meta-llama/llama-4-scout"},
         company="Meta",
         aliases=["llama-scout"],
         description="Multimodal MoE model with an extremely long context window.",

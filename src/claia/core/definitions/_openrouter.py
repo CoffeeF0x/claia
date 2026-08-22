@@ -1,6 +1,6 @@
 """Shared builder for OpenRouter-only company definition modules."""
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from .model_definition import ModelDefinition
 from ..data.chunks import TextChunk
@@ -15,11 +15,11 @@ TEXT_OUT = [TextChunk]
 
 def definition(
   title: str,
-  provider_id: str,
   company: str,
   description: str,
   context_length: int,
   capabilities: List[str],
+  identifiers: Dict[str, str],
   aliases: Optional[List[str]] = None,
   inputs: Optional[List] = None,
   license: str = "Commercial",
@@ -36,8 +36,8 @@ def definition(
     context_length=context_length,
     capabilities=capabilities,
     license=license,
-    url=url or f"https://openrouter.ai/models/{provider_id}",
-    identifiers={"openrouter": provider_id},
+    url=url or f"https://openrouter.ai/models/{identifiers['openrouter']}",
+    identifiers=identifiers,
     inputs=inputs or TEXT,
     outputs=TEXT_OUT,
   )
