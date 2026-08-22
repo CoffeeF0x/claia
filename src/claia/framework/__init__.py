@@ -61,7 +61,7 @@ from ..core.plugins.base import (
 )
 from ..core.definitions.model_definition import ModelDefinition
 from ..core.enums.events import EventType
-from ..core.enums.plugins import ParamScope, SettingCategory
+from ..core.enums.plugins import ParamScope, ParamCategory
 from ..core.enums.task import TaskEvent, TaskStatus
 from ..core.enums.task_queue import TaskQueueHook
 from ..core.enums.data import (
@@ -104,7 +104,7 @@ __all__ = [
   "ArchitectureInfo", "DeploymentInfo", "NodeInfo",
   "ProtocolInfo", "ToolModuleInfo",
   "ToolDefinition", "ArgumentDefinition", "ToolReference", "ServingPlan",
-  "ParamSpec", "ParamScope", "SettingCategory",
+  "ParamSpec", "ParamScope", "ParamCategory",
   "ModelDefinition",
   # Media enums
   "MediaType", "TextFormat", "ImageFormat", "AudioFormat",

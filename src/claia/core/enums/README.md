@@ -4,7 +4,6 @@ Typed enumerations used across the runtime.
 
 ## What lives here
 
-- `command.py` — CLI command execution priority.
 - `conversation.py` — message roles.
 - `data/` — media types, format subtypes, artifact contracts.
 - `events.py` — conversation domain event types.
@@ -12,8 +11,11 @@ Typed enumerations used across the runtime.
 - `logging.py` — log levels and formats.
 - `model.py` — model capabilities, IO types, source preference.
 - `parser.py` — categorical tag kinds (`TagType`).
-- `plugins.py` — parameter scope and settings categories.
+- `plugins.py` — parameter scope and optional param categories.
 - `task.py` — task status and task callback events.
 - `task_queue.py` — task-queue lifecycle hooks.
+
+CLI-only enumerations (`CommandPriority`) live in `claia.cli.enums`,
+not here.
 
 Enums keep cross-package contracts explicit and avoid stringly-typed code.

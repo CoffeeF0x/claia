@@ -20,7 +20,7 @@ below. Settings will pick it up automatically — there is no separate
 from typing import List
 
 # Internal dependencies
-from ..core.enums.plugins import ParamScope, SettingCategory
+from ..core.enums.plugins import ParamScope, ParamCategory
 from ..core.plugins.base import ParamSpec
 
 
@@ -33,31 +33,31 @@ APP_PARAMS: List[ParamSpec] = [
   ParamSpec(
     name="local_llm_api_token",
     type=str, scope=ParamScope.INIT, default="",
-    secret=True, category=SettingCategory.API,
+    secret=True, category=ParamCategory.API,
     description="LocalLLM API Token",
   ),
   ParamSpec(
     name="runpod_api_token",
     type=str, scope=ParamScope.INIT, default="",
-    secret=True, category=SettingCategory.API,
+    secret=True, category=ParamCategory.API,
     description="RunPod API Token",
   ),
   ParamSpec(
     name="massed_compute_api_token",
     type=str, scope=ParamScope.INIT, default="",
-    secret=True, category=SettingCategory.API,
+    secret=True, category=ParamCategory.API,
     description="Massed Compute API Token",
   ),
   ParamSpec(
     name="openrouter_api_token",
     type=str, scope=ParamScope.INIT, default="",
-    secret=True, category=SettingCategory.API,
+    secret=True, category=ParamCategory.API,
     description="OpenRouter API Token",
   ),
   ParamSpec(
     name="cloudflare_api_token",
     type=str, scope=ParamScope.INIT, default="",
-    secret=True, category=SettingCategory.API,
+    secret=True, category=ParamCategory.API,
     description="Cloudflare API Token",
   ),
 
@@ -67,7 +67,7 @@ APP_PARAMS: List[ParamSpec] = [
   ParamSpec(
     name="local_llm_base_url",
     type=str, scope=ParamScope.INIT, default="",
-    category=SettingCategory.ENDPOINT,
+    category=ParamCategory.ENDPOINT,
     description="LocalLLM Base URL",
   ),
 
@@ -77,13 +77,13 @@ APP_PARAMS: List[ParamSpec] = [
   ParamSpec(
     name="files_directory",
     type=str, scope=ParamScope.INIT, default="storage",
-    category=SettingCategory.DIRECTORY,
+    category=ParamCategory.DIRECTORY,
     description="Directory for generated, converted, or imported files",
   ),
   ParamSpec(
     name="models_directory",
     type=str, scope=ParamScope.INIT, default="models",
-    category=SettingCategory.DIRECTORY,
+    category=ParamCategory.DIRECTORY,
     description="Directory for model files",
   ),
 
@@ -93,19 +93,19 @@ APP_PARAMS: List[ParamSpec] = [
   ParamSpec(
     name="default_model",
     type=str, scope=ParamScope.INIT, default="",
-    category=SettingCategory.MODEL,
+    category=ParamCategory.MODEL,
     description="Default model name",
   ),
   ParamSpec(
     name="default_model_source",
     type=str, scope=ParamScope.INIT, default="",
-    category=SettingCategory.MODEL,
+    category=ParamCategory.MODEL,
     description="Default model source",
   ),
   ParamSpec(
     name="deployment_preference",
     type=str, scope=ParamScope.INIT, default="any",
-    category=SettingCategory.MODEL,
+    category=ParamCategory.MODEL,
     description="Serving placement filter: local-only, remote, or any",
   ),
 
@@ -115,7 +115,7 @@ APP_PARAMS: List[ParamSpec] = [
   ParamSpec(
     name="default_prompt",
     type=str, scope=ParamScope.INIT, default="",
-    category=SettingCategory.PROMPT,
+    category=ParamCategory.PROMPT,
     description="Default prompt name to use",
   ),
 
@@ -125,7 +125,7 @@ APP_PARAMS: List[ParamSpec] = [
   ParamSpec(
     name="default_agent",
     type=str, scope=ParamScope.INIT, default="",
-    category=SettingCategory.AGENT,
+    category=ParamCategory.AGENT,
     description="Default agent type",
   ),
 
@@ -135,31 +135,31 @@ APP_PARAMS: List[ParamSpec] = [
   ParamSpec(
     name="vllm_zone",
     type=str, scope=ParamScope.INIT, default="",
-    category=SettingCategory.VLLM,
+    category=ParamCategory.VLLM,
     description="VLLM Zone",
   ),
   ParamSpec(
     name="vllm_email",
     type=str, scope=ParamScope.INIT, default="",
-    category=SettingCategory.VLLM,
+    category=ParamCategory.VLLM,
     description="VLLM Email",
   ),
   ParamSpec(
     name="vllm_subdomain",
     type=str, scope=ParamScope.INIT, default="",
-    category=SettingCategory.VLLM,
+    category=ParamCategory.VLLM,
     description="VLLM Subdomain",
   ),
   ParamSpec(
     name="vllm_eab_kid",
     type=str, scope=ParamScope.INIT, default="",
-    category=SettingCategory.VLLM,
+    category=ParamCategory.VLLM,
     description="VLLM EAB Kid",
   ),
   ParamSpec(
     name="vllm_eab_hmac_encoded",
     type=str, scope=ParamScope.INIT, default="",
-    secret=True, category=SettingCategory.VLLM,
+    secret=True, category=ParamCategory.VLLM,
     description="VLLM EAB HMAC Encoded",
   ),
 
@@ -169,31 +169,31 @@ APP_PARAMS: List[ParamSpec] = [
   ParamSpec(
     name="log_level",
     type=str, scope=ParamScope.INIT, default="",
-    category=SettingCategory.APPLICATION,
+    category=ParamCategory.APPLICATION,
     description="Logging level",
   ),
   ParamSpec(
     name="log_format",
     type=str, scope=ParamScope.INIT, default="",
-    category=SettingCategory.APPLICATION,
+    category=ParamCategory.APPLICATION,
     description="Logging format (simple, standard, detailed)",
   ),
   ParamSpec(
     name="log_file",
     type=str, scope=ParamScope.INIT, default="claia.log",
-    category=SettingCategory.APPLICATION,
+    category=ParamCategory.APPLICATION,
     description="Log file path (empty for console only)",
   ),
   ParamSpec(
     name="env_file",
     type=str, scope=ParamScope.INIT, default="",
-    category=SettingCategory.APPLICATION,
+    category=ParamCategory.APPLICATION,
     description="Path to .env file for configuration",
   ),
   ParamSpec(
     name="suppress_setup_notice",
     type=bool, scope=ParamScope.INIT, default=False,
-    category=SettingCategory.APPLICATION,
+    category=ParamCategory.APPLICATION,
     description="Suppress API key setup notice on startup",
   ),
 ]

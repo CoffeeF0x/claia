@@ -6,7 +6,7 @@ Defines command specs mapping aliases to command names with metadata.
 
 from typing import List, Tuple
 
-from ...core.enums.command import CommandPriority
+from ..enums import CommandPriority
 
 
 # Format: (aliases, command_name, help_text, needs_args, needs_conversation, priority)

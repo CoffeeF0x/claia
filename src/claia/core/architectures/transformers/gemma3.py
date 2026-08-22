@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...decorators import architecture
 from ...enums.conversation import MessageRole
-from ...enums.plugins import ParamScope, SettingCategory
+from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import ParamSpec
 from .generic import GenericTransformerArchitecture
 
@@ -35,21 +35,21 @@ logger = logging.getLogger(__name__)
   type=str,
   scope=ParamScope.INIT,
   secret=True,
-  category=SettingCategory.API,
+  category=ParamCategory.API,
   description="Hugging Face API Token (required for gated Gemma3 checkpoints)",
 ))
 @architecture.param(
   ParamSpec(name="max_tokens", type=int, scope=ParamScope.RUNTIME, default=2048,
-            category=SettingCategory.GENERATION,
+            category=ParamCategory.GENERATION,
             description="Maximum number of tokens to generate."),
   ParamSpec(name="temperature", type=float, scope=ParamScope.RUNTIME, default=0.8,
-            category=SettingCategory.GENERATION,
+            category=ParamCategory.GENERATION,
             description="Sampling temperature."),
   ParamSpec(name="top_p", type=float, scope=ParamScope.RUNTIME, default=0.95,
-            category=SettingCategory.GENERATION,
+            category=ParamCategory.GENERATION,
             description="Nucleus sampling probability mass."),
   ParamSpec(name="top_k", type=int, scope=ParamScope.RUNTIME, default=40,
-            category=SettingCategory.GENERATION,
+            category=ParamCategory.GENERATION,
             description="Restrict sampling to the top-k tokens."),
 )
 class Gemma3Architecture(GenericTransformerArchitecture):

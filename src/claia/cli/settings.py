@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 
 # Internal dependencies
 from ..core.enums.logging import LogLevel, LogFormat
-from ..core.enums.plugins import ParamScope, SettingCategory
+from ..core.enums.plugins import ParamScope, ParamCategory
 from ..core.plugins.base import ParamSpec
 from .params import APP_PARAMS
 from ..framework.manager import Manager
@@ -429,7 +429,7 @@ class Settings:
     """Return (name, help_text) for every API-category setting that is empty."""
     unset_keys = []
     for spec in self.config_specs.values():
-      if spec.category != SettingCategory.API or not spec.externally_settable:
+      if spec.category != ParamCategory.API or not spec.externally_settable:
         continue
       value = getattr(self, spec.name, self._spec_default(spec))
       help_text = spec.description or self._generate_help_text(spec.name)
@@ -438,7 +438,7 @@ class Settings:
     return unset_keys
 
 
-  def get_setting_info(self, setting_name: str) -> Tuple[Any, Any, str, SettingCategory]:
+  def get_setting_info(self, setting_name: str) -> Tuple[Any, Any, str, ParamCategory]:
     """
     Get information about a specific setting.
 
@@ -452,11 +452,11 @@ class Settings:
       return (None, None, "", None)
     current_value = getattr(self, spec.name, self._spec_default(spec))
     help_text = spec.description or self._generate_help_text(spec.name)
-    category = spec.category if spec.category is not None else SettingCategory.MISC
+    category = spec.category if spec.category is not None else ParamCategory.MISC
     return (current_value, self._spec_default(spec), help_text, category)
 
 
-  def get_all_settings_info(self) -> Dict[SettingCategory, List[Tuple[str, Any, str]]]:
+  def get_all_settings_info(self) -> Dict[ParamCategory, List[Tuple[str, Any, str]]]:
     """
     Get all externally settable settings grouped by category.
 
@@ -464,13 +464,13 @@ class Settings:
       Dictionary mapping category to list of (name, display_value, help_text) tuples.
       RUNTIME specs are decorated with "(default)" when at the sentinel.
     """
-    categorized: Dict[SettingCategory, List[Tuple[str, Any, str]]] = defaultdict(list)
+    categorized: Dict[ParamCategory, List[Tuple[str, Any, str]]] = defaultdict(list)
     for spec in self.config_specs.values():
       if not spec.externally_settable:
         continue
       value = getattr(self, spec.name, self._spec_default(spec))
       help_text = spec.description or self._generate_help_text(spec.name)
-      category = spec.category if spec.category is not None else SettingCategory.MISC
+      category = spec.category if spec.category is not None else ParamCategory.MISC
 
       if spec.scope == ParamScope.RUNTIME and self._is_unset(spec, value):
         display_value = "(plugin default)"

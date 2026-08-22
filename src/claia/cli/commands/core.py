@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional, Tuple, Type
 
 from ...core.results import Result
 from ...framework.registry import Registry
-from ...core.enums.command import CommandPriority
+from ..enums import CommandPriority
 from .specs import COMMAND_SPECS, generate_cli_alias
 from .base import BaseCommand
 from .system import QuitCommand, HelpCommand, VersionCommand

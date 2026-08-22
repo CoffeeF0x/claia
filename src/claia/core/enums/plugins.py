@@ -1,8 +1,13 @@
 from enum import Enum
 
 
-class SettingCategory(Enum):
-  """Categories for grouping parameters in CLI / settings UIs."""
+class ParamCategory(Enum):
+  """Optional grouping hint on a ``ParamSpec``.
+
+  Hosts that present parameters (the CLI settings UI, help, setup)
+  use this to cluster related specs. Core and the framework do not
+  interpret it.
+  """
   API = "API Credentials"
   ENDPOINT = "Endpoints & URLs"
   DIRECTORY = "Directories"

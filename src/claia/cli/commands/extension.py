@@ -16,7 +16,7 @@ from collections import defaultdict
 from ...core.decorators import tool
 from ...core.tools.modules.base import BaseToolModule
 from ...core.plugins.base import ToolDefinition, ArgumentDefinition
-from ...core.enums.plugins import SettingCategory
+from ...core.enums.plugins import ParamCategory
 from ...core.results import Result
 from ...core.data.models import Conversation, Prompt
 from ..storage import JsonStore
@@ -805,7 +805,7 @@ class CLIToolModule(BaseToolModule):
 
         categorized = settings.get_all_settings_info()
 
-        for category in SettingCategory:
+        for category in ParamCategory:
           if category in categorized:
             output_lines.append(f"{category.value}:")
             output_lines.append("-" * 70)

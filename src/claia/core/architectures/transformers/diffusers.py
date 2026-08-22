@@ -18,7 +18,7 @@ from ...data.chunks import BaseChunk, ImageChunk, TextChunk
 from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.data import ImageFormat
-from ...enums.plugins import ParamScope, SettingCategory
+from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import ParamSpec
 from ..base import LocalArchitecture
 from ..base.base import ModelInputs
@@ -54,7 +54,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   type=str,
   scope=ParamScope.INIT,
   secret=True,
-  category=SettingCategory.API,
+  category=ParamCategory.API,
   description="Hugging Face API Token (required for gated image models).",
 ))
 @architecture.param(ParamSpec(
@@ -62,7 +62,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   type=str,
   scope=ParamScope.INIT,
   default=None,
-  category=SettingCategory.DIRECTORY,
+  category=ParamCategory.DIRECTORY,
   description="Optional local path for loading a downloaded Diffusers pipeline.",
 ))
 @architecture.param(ParamSpec(
@@ -70,7 +70,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   type=str,
   scope=ParamScope.INIT,
   default="cpu",
-  category=SettingCategory.MODEL,
+  category=ParamCategory.MODEL,
   description="Device used to run the pipeline, such as cpu, cuda, or mps.",
 ))
 @architecture.param(ParamSpec(
@@ -78,7 +78,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   type=bool,
   scope=ParamScope.INIT,
   default=False,
-  category=SettingCategory.MODEL,
+  category=ParamCategory.MODEL,
   description="Defer pipeline loading until the first generation call.",
 ))
 @architecture.param(ParamSpec(
@@ -86,7 +86,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   type=str,
   scope=ParamScope.INIT,
   default=None,
-  category=SettingCategory.MODEL,
+  category=ParamCategory.MODEL,
   description="Optional pipeline profile for model-family-specific parameter handling.",
 ))
 @architecture.param(ParamSpec(
@@ -94,7 +94,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   type=str,
   scope=ParamScope.RUNTIME,
   default=None,
-  category=SettingCategory.PROMPT,
+  category=ParamCategory.PROMPT,
   description="Optional prompt override. Defaults to the latest user message.",
 ))
 @architecture.param(ParamSpec(
@@ -102,7 +102,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   type=str,
   scope=ParamScope.RUNTIME,
   default=None,
-  category=SettingCategory.PROMPT,
+  category=ParamCategory.PROMPT,
   description="Text describing what the image should avoid.",
 ))
 @architecture.param(ParamSpec(
@@ -110,7 +110,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   type=int,
   scope=ParamScope.RUNTIME,
   default=512,
-  category=SettingCategory.GENERATION,
+  category=ParamCategory.GENERATION,
   description="Generated image height in pixels.",
 ))
 @architecture.param(ParamSpec(
@@ -118,7 +118,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   type=int,
   scope=ParamScope.RUNTIME,
   default=512,
-  category=SettingCategory.GENERATION,
+  category=ParamCategory.GENERATION,
   description="Generated image width in pixels.",
 ))
 @architecture.param(ParamSpec(
@@ -126,7 +126,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   type=int,
   scope=ParamScope.RUNTIME,
   default=30,
-  category=SettingCategory.GENERATION,
+  category=ParamCategory.GENERATION,
   description="Number of denoising steps.",
 ))
 @architecture.param(ParamSpec(
@@ -134,7 +134,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   type=float,
   scope=ParamScope.RUNTIME,
   default=7.5,
-  category=SettingCategory.GENERATION,
+  category=ParamCategory.GENERATION,
   description="Classifier-free guidance scale.",
 ))
 @architecture.param(ParamSpec(
@@ -142,7 +142,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   type=int,
   scope=ParamScope.RUNTIME,
   default=None,
-  category=SettingCategory.GENERATION,
+  category=ParamCategory.GENERATION,
   description="Optional deterministic generation seed.",
 ))
 @architecture.param(ParamSpec(
@@ -150,7 +150,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   type=int,
   scope=ParamScope.RUNTIME,
   default=1,
-  category=SettingCategory.GENERATION,
+  category=ParamCategory.GENERATION,
   description="Number of images to generate for the prompt.",
 ))
 @architecture.param(ParamSpec(
@@ -159,7 +159,7 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   scope=ParamScope.RUNTIME,
   default="png",
   choices=["png", "jpg", "jpeg", "webp"],
-  category=SettingCategory.GENERATION,
+  category=ParamCategory.GENERATION,
   description="Encoded output image format.",
 ))
 class DiffusersArchitecture(LocalArchitecture):

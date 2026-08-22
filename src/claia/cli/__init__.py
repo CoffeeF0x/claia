@@ -38,7 +38,7 @@ from ..core import (
     ServingPlan,
     ParamSpec,
     ParamScope,
-    SettingCategory,
+    ParamCategory,
     ModelDefinition,
 )
 from ..framework import (
@@ -62,6 +62,6 @@ __all__ = [
     "ArchitectureInfo", "DeploymentInfo", "NodeInfo",
     "ProtocolInfo", "ToolModuleInfo",
     "ToolDefinition", "ArgumentDefinition", "ToolReference", "ServingPlan",
-    "ParamSpec", "ParamScope", "SettingCategory",
+    "ParamSpec", "ParamScope", "ParamCategory",
     "ModelDefinition",
 ]

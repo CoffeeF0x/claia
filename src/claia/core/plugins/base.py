@@ -24,7 +24,7 @@ interactive configuration.
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from ..enums.plugins import ParamScope, SettingCategory
+from ..enums.plugins import ParamScope, ParamCategory
 
 
 ########################################################################
@@ -55,7 +55,8 @@ class ParamSpec:
     - ``externally_settable``: False for in-code-only parameters that
       should not be exposed via CLI flags, env vars, or settings.json.
       Defaults to True (most params are user-configurable).
-    - ``category``: grouping hint for settings UIs. Unset => MISC.
+    - ``category``: optional ``ParamCategory`` grouping hint for
+      hosts that present params. Unset => MISC.
   """
   name: str
   type: type = str
@@ -66,7 +67,7 @@ class ParamSpec:
   choices: Optional[List[Any]] = None
   secret: bool = False
   externally_settable: bool = True
-  category: Optional[SettingCategory] = None
+  category: Optional[ParamCategory] = None
 
 
 ########################################################################
@@ -82,25 +83,25 @@ class ParamSpec:
 # inherited unchanged.
 COMMON_TEXT_RUNTIME_PARAMS: List[ParamSpec] = [
   ParamSpec(name="max_tokens", type=int, scope=ParamScope.RUNTIME, default=1000,
-            category=SettingCategory.GENERATION,
+            category=ParamCategory.GENERATION,
             description="Maximum number of tokens to generate."),
   ParamSpec(name="temperature", type=float, scope=ParamScope.RUNTIME, default=0.7,
-            category=SettingCategory.GENERATION,
+            category=ParamCategory.GENERATION,
             description="Sampling temperature; higher values produce more varied output."),
   ParamSpec(name="top_p", type=float, scope=ParamScope.RUNTIME, default=1.0,
-            category=SettingCategory.GENERATION,
+            category=ParamCategory.GENERATION,
             description="Nucleus sampling probability mass."),
   ParamSpec(name="top_k", type=int, scope=ParamScope.RUNTIME, default=None,
-            category=SettingCategory.GENERATION,
+            category=ParamCategory.GENERATION,
             description="Restrict sampling to the top-k tokens."),
   ParamSpec(name="n", type=int, scope=ParamScope.RUNTIME, default=1,
-            category=SettingCategory.GENERATION,
+            category=ParamCategory.GENERATION,
             description="Number of completions to request per call."),
   ParamSpec(name="stop", type=list, scope=ParamScope.RUNTIME, default=None,
-            category=SettingCategory.GENERATION,
+            category=ParamCategory.GENERATION,
             description="Sequence(s) at which generation should stop."),
   ParamSpec(name="stream", type=bool, scope=ParamScope.RUNTIME, default=True,
-            category=SettingCategory.GENERATION,
+            category=ParamCategory.GENERATION,
             description="Whether the model should stream partial output."),
 ]
 

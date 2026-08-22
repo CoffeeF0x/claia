@@ -19,7 +19,7 @@ from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.conversation import MessageRole
-from ...enums.plugins import ParamScope, SettingCategory
+from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import (
   COMMON_TEXT_RUNTIME_PARAMS,
   ParamSpec,
@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
   type=str,
   scope=ParamScope.INIT,
   secret=True,
-  category=SettingCategory.API,
+  category=ParamCategory.API,
   description="Hugging Face API Token (required for gated models)",
 ))
 @architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)

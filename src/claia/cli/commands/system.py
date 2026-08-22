@@ -7,7 +7,7 @@ from typing import List, Optional, Any
 from collections import defaultdict
 
 from ...core.results import Result
-from ...core.enums.plugins import SettingCategory
+from ...core.enums.plugins import ParamCategory
 from .base import BaseCommand
 
 
@@ -103,10 +103,10 @@ class HelpCommand(BaseCommand):
       else:
         cli_name = spec.name.replace('_', '-')
         setting_line = f"    --{cli_name:30s} {help_desc}"
-      category = spec.category if spec.category is not None else SettingCategory.MISC
+      category = spec.category if spec.category is not None else ParamCategory.MISC
       categorized[category].append(setting_line)
 
-    for category in SettingCategory:
+    for category in ParamCategory:
       if category in categorized:
         lines.append(f"  {category.value}:")
         lines.extend(categorized[category])

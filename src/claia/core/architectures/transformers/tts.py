@@ -16,7 +16,7 @@ from ...data.chunks import AudioChunk, BaseChunk, TextChunk
 from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.data import AudioFormat
-from ...enums.plugins import ParamScope, SettingCategory
+from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import ParamSpec
 from ..base import LocalArchitecture
 from ..base.base import ModelInputs
@@ -38,7 +38,7 @@ MEDIA_TYPES = {
   type=str,
   scope=ParamScope.INIT,
   secret=True,
-  category=SettingCategory.API,
+  category=ParamCategory.API,
   description="Hugging Face API Token (required for gated audio models).",
 ))
 @architecture.param(ParamSpec(
@@ -46,7 +46,7 @@ MEDIA_TYPES = {
   type=str,
   scope=ParamScope.INIT,
   default=None,
-  category=SettingCategory.DIRECTORY,
+  category=ParamCategory.DIRECTORY,
   description="Optional local path for loading a downloaded TTS model.",
 ))
 @architecture.param(ParamSpec(
@@ -54,7 +54,7 @@ MEDIA_TYPES = {
   type=str,
   scope=ParamScope.INIT,
   default="cpu",
-  category=SettingCategory.MODEL,
+  category=ParamCategory.MODEL,
   description="Device used to run the model, such as cpu, cuda, or cuda:0.",
 ))
 @architecture.param(ParamSpec(
@@ -62,7 +62,7 @@ MEDIA_TYPES = {
   type=bool,
   scope=ParamScope.INIT,
   default=False,
-  category=SettingCategory.MODEL,
+  category=ParamCategory.MODEL,
   description="Defer model loading until the first generation call.",
 ))
 @architecture.param(ParamSpec(
@@ -71,7 +71,7 @@ MEDIA_TYPES = {
   scope=ParamScope.INIT,
   default="auto",
   choices=["auto", "float32", "float16", "bfloat16"],
-  category=SettingCategory.MODEL,
+  category=ParamCategory.MODEL,
   description="Model dtype for local inference.",
 ))
 @architecture.param(ParamSpec(
@@ -80,7 +80,7 @@ MEDIA_TYPES = {
   scope=ParamScope.INIT,
   default="qwen3_tts",
   choices=["qwen3_tts"],
-  category=SettingCategory.MODEL,
+  category=ParamCategory.MODEL,
   description="Local TTS backend adapter.",
 ))
 @architecture.param(ParamSpec(
@@ -88,7 +88,7 @@ MEDIA_TYPES = {
   type=str,
   scope=ParamScope.RUNTIME,
   default=None,
-  category=SettingCategory.PROMPT,
+  category=ParamCategory.PROMPT,
   description="Optional text override. Defaults to the latest user message.",
 ))
 @architecture.param(ParamSpec(
@@ -96,7 +96,7 @@ MEDIA_TYPES = {
   type=str,
   scope=ParamScope.RUNTIME,
   default="English",
-  category=SettingCategory.GENERATION,
+  category=ParamCategory.GENERATION,
   description="Language label passed to the TTS backend.",
 ))
 @architecture.param(ParamSpec(
@@ -104,7 +104,7 @@ MEDIA_TYPES = {
   type=str,
   scope=ParamScope.RUNTIME,
   default=None,
-  category=SettingCategory.GENERATION,
+  category=ParamCategory.GENERATION,
   description="Optional voice or voice preset when supported by a backend.",
 ))
 @architecture.param(ParamSpec(
@@ -112,7 +112,7 @@ MEDIA_TYPES = {
   type=str,
   scope=ParamScope.RUNTIME,
   default=None,
-  category=SettingCategory.GENERATION,
+  category=ParamCategory.GENERATION,
   description="Reference audio path for voice cloning. Required by Qwen3-TTS Base.",
 ))
 @architecture.param(ParamSpec(
@@ -121,7 +121,7 @@ MEDIA_TYPES = {
   scope=ParamScope.RUNTIME,
   default="wav",
   choices=["wav"],
-  category=SettingCategory.GENERATION,
+  category=ParamCategory.GENERATION,
   description="Encoded audio output format.",
 ))
 @architecture.param(ParamSpec(
@@ -129,7 +129,7 @@ MEDIA_TYPES = {
   type=int,
   scope=ParamScope.RUNTIME,
   default=None,
-  category=SettingCategory.GENERATION,
+  category=ParamCategory.GENERATION,
   description="Optional requested output sample rate.",
 ))
 class TTSArchitecture(LocalArchitecture):

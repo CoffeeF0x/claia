@@ -13,7 +13,7 @@ from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.conversation import MessageRole
-from ...enums.plugins import ParamScope, SettingCategory
+from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import (
   COMMON_TEXT_RUNTIME_PARAMS,
   ParamSpec,
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
   scope=ParamScope.INIT,
   required=True,
   secret=True,
-  category=SettingCategory.API,
+  category=ParamCategory.API,
   description="Anthropic API Token",
 ))
 @architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)

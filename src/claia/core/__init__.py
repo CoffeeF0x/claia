@@ -51,7 +51,7 @@ from .plugins.base import (
 )
 from .definitions.model_definition import ModelDefinition
 from .enums.events import EventType
-from .enums.plugins import ParamScope, SettingCategory
+from .enums.plugins import ParamScope, ParamCategory
 from .enums.data import (
   MediaType,
   TextFormat,
@@ -77,7 +77,7 @@ __all__ = [
   "ArchitectureInfo", "DeploymentInfo", "NodeInfo",
   "ProtocolInfo", "ToolModuleInfo", "DefinitionsInfo",
   "ToolDefinition", "ArgumentDefinition", "ToolReference", "ServingPlan",
-  "ParamSpec", "ParamScope", "SettingCategory",
+  "ParamSpec", "ParamScope", "ParamCategory",
   "ModelDefinition",
   # Media enums
   "MediaType", "TextFormat", "ImageFormat", "AudioFormat",

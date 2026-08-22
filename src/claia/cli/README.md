@@ -7,6 +7,7 @@ Command-line interface and runtime configuration for CLAIA.
 - `__main__.py` — entrypoint for `python -m claia.cli` / `claia`.
 - `agents.py` — CLI helpers for creating/running agents and registries.
 - `commands/` — subcommands and interactive flows.
+- `enums.py` — CLI-only enumerations (`CommandPriority`).
 - `defaults.py` — default prompt/settings presets.
 - `logger.py` — CLI logging setup.
 - `renderer.py` — terminal output formatting.
