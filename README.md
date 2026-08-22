@@ -91,7 +91,7 @@ conversation = Conversation()
 conversation.add_message(MessageRole.USER, "Write a haiku about the moon.")
 
 # Use a canonical model id (definitions map provider-specific identifiers)
-result = registry.run("gpt-5.5", conversation)
+result = registry.run("gpt-5.6-sol", conversation)
 
 if result.is_success():
     print(result.get_data())

@@ -131,7 +131,12 @@ dummy = "claia.core.deployments.dummy:DummyDeployment"
 [project.entry-points."claia.definitions"]
 openai = "claia.core.definitions.openai:OpenAIDefinitions"
 anthropic = "claia.core.definitions.anthropic:AnthropicDefinitions"
-openrouter = "claia.core.definitions.openrouter:OpenRouterDefinitions"
+moonshot = "claia.core.definitions.moonshot:MoonshotDefinitions"
+deepseek = "claia.core.definitions.deepseek:DeepSeekDefinitions"
+minimax = "claia.core.definitions.minimax:MiniMaxDefinitions"
+zai = "claia.core.definitions.zai:ZaiDefinitions"
+qwen = "claia.core.definitions.qwen:QwenDefinitions"
+meta = "claia.core.definitions.meta:MetaDefinitions"
 legacy = "claia.core.definitions.legacy:LegacyDefinitions"
 
 [project.entry-points."claia.agents"]

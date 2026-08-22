@@ -1,17 +1,27 @@
 """
 Model definition providers.
 
-This package provides comprehensive model definitions organized by provider/type.
+This package provides model definitions organized by company.
 """
 
-from .legacy import LegacyDefinitions
-from .openai import OpenAIDefinitions
 from .anthropic import AnthropicDefinitions
-from .openrouter import OpenRouterDefinitions
+from .deepseek import DeepSeekDefinitions
+from .legacy import LegacyDefinitions
+from .meta import MetaDefinitions
+from .minimax import MiniMaxDefinitions
+from .moonshot import MoonshotDefinitions
+from .openai import OpenAIDefinitions
+from .qwen import QwenDefinitions
+from .zai import ZaiDefinitions
 
 __all__ = [
-  "LegacyDefinitions",
-  "OpenAIDefinitions",
   "AnthropicDefinitions",
-  "OpenRouterDefinitions"
+  "DeepSeekDefinitions",
+  "LegacyDefinitions",
+  "MetaDefinitions",
+  "MiniMaxDefinitions",
+  "MoonshotDefinitions",
+  "OpenAIDefinitions",
+  "QwenDefinitions",
+  "ZaiDefinitions",
 ]

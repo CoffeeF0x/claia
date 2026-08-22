@@ -4,8 +4,12 @@ Tests for the OpenRouter API architecture and definitions.
 
 from claia.core.data import Conversation
 from claia.core.definitions.anthropic import AnthropicDefinitions
+from claia.core.definitions.deepseek import DeepSeekDefinitions
+from claia.core.definitions.meta import MetaDefinitions
+from claia.core.definitions.moonshot import MoonshotDefinitions
 from claia.core.definitions.openai import OpenAIDefinitions
-from claia.core.definitions.openrouter import OpenRouterDefinitions
+from claia.core.definitions.qwen import QwenDefinitions
+from claia.core.definitions.zai import ZaiDefinitions
 from claia.core.enums.conversation import MessageRole
 from claia.core.data.chunks import TextChunk
 from claia.core.enums.data import ArtifactType
@@ -127,34 +131,34 @@ def test_openrouter_architecture_exposes_model_and_params():
 
 
 def test_native_provider_definitions_include_openrouter_endpoint():
-  gpt = OpenAIDefinitions().get_definitions()["gpt-5.5"]
+  gpt = OpenAIDefinitions().get_definitions()["gpt-5.6-sol"]
   openai = OpenAIDefinitions().get_definitions()["gpt-4o-mini"]
-  anthropic = AnthropicDefinitions().get_definitions()["claude-sonnet-4-6"]
+  anthropic = AnthropicDefinitions().get_definitions()["claude-sonnet-5"]
 
-  assert gpt.aliases == ["gpt"]
-  assert gpt.identifiers == {"openai": "gpt-5.5", "openrouter": "openai/gpt-5.5"}
+  assert gpt.aliases == ["gpt", "gpt-5.6"]
+  assert gpt.identifiers == {"openai": "gpt-5.6-sol", "openrouter": "openai/gpt-5.6-sol"}
   assert openai.architectures == ["openai", "openrouter"]
   assert openai.identifiers["openrouter"] == "openai/gpt-4o-mini"
   assert anthropic.architectures == ["anthropic", "openrouter"]
-  assert anthropic.identifiers["openrouter"] == "anthropic/claude-sonnet-4.6"
+  assert anthropic.identifiers["openrouter"] == "anthropic/claude-sonnet-5"
 
 
-def test_openrouter_definitions_are_large_open_models():
-  definitions = OpenRouterDefinitions().get_definitions()
-  kimi = definitions["kimi-k2.6"]
-  deepseek = definitions["deepseek-v4-pro"]
-  glm = definitions["glm-5.1"]
-  qwen36 = definitions["qwen3.6-plus"]
-  qwen35 = definitions["qwen3.5-397b-a17b"]
-  llama = definitions["llama-4-maverick"]
+def test_openrouter_company_definitions_are_large_open_models():
+  kimi = MoonshotDefinitions().get_definitions()["kimi-k3"]
+  deepseek = DeepSeekDefinitions().get_definitions()["deepseek-v4-pro"]
+  glm = ZaiDefinitions().get_definitions()["glm-5.3"]
+  qwen36 = QwenDefinitions().get_definitions()["qwen3.6-plus"]
+  qwen35 = QwenDefinitions().get_definitions()["qwen3.5-397b-a17b"]
+  llama = MetaDefinitions().get_definitions()["llama-4-maverick"]
 
-  assert "openrouter-gpt-4o-mini" not in definitions
+  assert "openrouter-gpt-4o-mini" not in MoonshotDefinitions().get_definitions()
   assert kimi.architectures == ["openrouter"]
   assert kimi.deployments == ["api"]
-  assert kimi.identifiers == {"openrouter": "moonshotai/kimi-k2.6"}
+  assert kimi.identifiers == {"openrouter": "moonshotai/kimi-k3"}
   assert deepseek.identifiers == {"openrouter": "deepseek/deepseek-v4-pro"}
-  assert glm.identifiers == {"openrouter": "z-ai/glm-5.1"}
+  assert glm.identifiers == {"openrouter": "z-ai/glm-5.3"}
   assert qwen36.context_length == 1000000
+  assert ArtifactType.IMAGE in qwen36.inputs
   assert qwen35.identifiers == {"openrouter": "qwen/qwen3.5-397b-a17b"}
   assert llama.context_length == 1000000
   assert ArtifactType.IMAGE in kimi.inputs

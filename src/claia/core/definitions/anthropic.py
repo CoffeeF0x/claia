@@ -1,12 +1,10 @@
 """
 Anthropic model definitions.
 
-Provides definitions for Anthropic Claude models.
-
 Alias convention (Docker-style rolling tags):
-  Model keys use all-dashes:  claude-opus-4-7   (canonical key, pinned)
+  Model keys use all-dashes:  claude-opus-5   (canonical key, pinned)
   Aliases use model-version.patch with a dot:
-    claude-opus-4.7  / opus-4.7   →  exact pinned aliases
+    claude-opus-4.8  / opus-4.8   →  exact pinned aliases
     claude-opus-4    / opus-4     →  latest 4.x (minor omitted)
     claude-opus      / opus       →  latest of tier (version omitted)
 
@@ -14,12 +12,12 @@ Only the newest model in a series carries the shorter rolling aliases.
 Older releases carry only their exact versioned aliases.
 
 API identifier notes:
-  Some models use a clean name as the API ID (claude-opus-4-7, claude-sonnet-4-6,
-  claude-opus-4-6). Others use a date-stamped snapshot ID. Always check the
-  identifiers field — it holds the value sent to the Anthropic API.
+  Claude 4.6+ IDs are dateless pinned snapshots (claude-opus-5,
+  claude-sonnet-4-6). Earlier models use a date-stamped snapshot ID.
+  Always check the identifiers field — it holds the value sent to
+  the Anthropic API.
 """
 
-import logging
 from typing import Dict
 
 from .base import BaseDefinitionProvider
@@ -33,9 +31,6 @@ _CHAT = [ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered]
 _TEXT = [TextChunk]
 
 
-logger = logging.getLogger(__name__)
-
-
 @definitions
 @definitions.name("anthropic")
 @definitions.title("Anthropic Definitions")
@@ -47,21 +42,72 @@ class AnthropicDefinitions(BaseDefinitionProvider):
     """Get Anthropic model definitions."""
     return {
       # ----------------------------------------------------------------
-      # Claude Opus  (newest → carries all rolling aliases)
+      # Claude Fable
       # ----------------------------------------------------------------
-      "claude-opus-4-7": ModelDefinition(
-        title="Claude Opus 4.7",
-        aliases=["opus-4.7", "claude-opus-4.7",   # exact pinned
-                 "claude-opus-4", "opus-4",         # latest 4.x
-                 "claude-opus", "opus"],             # latest tier
+      "claude-fable-5": ModelDefinition(
+        title="Claude Fable 5",
+        aliases=["fable-5", "claude-fable", "fable"],
         company="Anthropic",
         deployments=["api"],
         architectures=["anthropic", "openrouter"],
-        description="Most capable model for complex reasoning and agentic coding",
+        description="Most capable widely released model for long-running agents",
+        context_length=1000000,
+        capabilities=["chat", "reasoning", "analysis", "vision", "adaptive_thinking"],
+        license="Commercial",
+        url="https://platform.claude.com/docs/en/about-claude/models/overview",
+        identifiers={"anthropic": "claude-fable-5", "openrouter": "anthropic/claude-fable-5"},
+        inputs=_CHAT,
+        outputs=_TEXT,
+      ),
+
+      # ----------------------------------------------------------------
+      # Claude Opus  (newest → carries all rolling aliases)
+      # ----------------------------------------------------------------
+      "claude-opus-5": ModelDefinition(
+        title="Claude Opus 5",
+        aliases=["opus-5", "claude-opus-5",
+                 "claude-opus", "opus"],
+        company="Anthropic",
+        deployments=["api"],
+        architectures=["anthropic", "openrouter"],
+        description="Most capable model for complex agentic coding and enterprise work",
+        context_length=1000000,
+        capabilities=["chat", "reasoning", "analysis", "vision", "adaptive_thinking"],
+        license="Commercial",
+        url="https://platform.claude.com/docs/en/about-claude/models/overview",
+        identifiers={"anthropic": "claude-opus-5", "openrouter": "anthropic/claude-opus-5"},
+        inputs=_CHAT,
+        outputs=_TEXT,
+      ),
+
+      "claude-opus-4-8": ModelDefinition(
+        title="Claude Opus 4.8",
+        aliases=["opus-4.8", "claude-opus-4.8",
+                 "claude-opus-4", "opus-4"],
+        company="Anthropic",
+        deployments=["api"],
+        architectures=["anthropic", "openrouter"],
+        description="Previous Opus generation for complex reasoning and agentic coding",
+        context_length=1000000,
+        capabilities=["chat", "reasoning", "analysis", "vision", "adaptive_thinking"],
+        license="Commercial",
+        url="https://platform.claude.com/docs/en/about-claude/models/overview",
+        identifiers={"anthropic": "claude-opus-4-8", "openrouter": "anthropic/claude-opus-4.8"},
+        inputs=_CHAT,
+        outputs=_TEXT,
+      ),
+
+      "claude-opus-4-7": ModelDefinition(
+        title="Claude Opus 4.7",
+        aliases=["opus-4.7", "claude-opus-4.7"],
+        company="Anthropic",
+        deployments=["api"],
+        architectures=["anthropic", "openrouter"],
+        description="Capable model for complex reasoning and agentic coding",
         context_length=1000000,
         capabilities=["chat", "reasoning", "analysis", "vision", "adaptive_thinking", "computer_use"],
         license="Commercial",
-        url="https://www.anthropic.com/claude",
+        url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-opus-4-7", "openrouter": "anthropic/claude-opus-4.7"},
         inputs=_CHAT,
         outputs=_TEXT,
@@ -75,9 +121,9 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         architectures=["anthropic", "openrouter"],
         description="Highly capable model for complex agentic tasks and long-horizon work",
         context_length=1000000,
-        capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking", "computer_use"],
+        capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking", "adaptive_thinking", "computer_use"],
         license="Commercial",
-        url="https://www.anthropic.com/claude",
+        url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-opus-4-6", "openrouter": "anthropic/claude-opus-4.6"},
         inputs=_CHAT,
         outputs=_TEXT,
@@ -93,7 +139,7 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         context_length=200000,
         capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking", "computer_use"],
         license="Commercial",
-        url="https://www.anthropic.com/claude",
+        url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-opus-4-5-20251101", "openrouter": "anthropic/claude-opus-4.5"},
         inputs=_CHAT,
         outputs=_TEXT,
@@ -109,24 +155,8 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         context_length=200000,
         capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking"],
         license="Commercial",
-        url="https://www.anthropic.com/claude",
+        url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-opus-4-1-20250805", "openrouter": "anthropic/claude-opus-4.1"},
-        inputs=_CHAT,
-        outputs=_TEXT,
-      ),
-
-      "claude-opus-4-0": ModelDefinition(
-        title="Claude Opus 4.0",
-        aliases=["opus-4.0", "claude-opus-4.0"],
-        company="Anthropic",
-        deployments=["api"],
-        architectures=["anthropic", "openrouter"],
-        description="[Deprecated] Original Claude Opus 4 — retiring June 15, 2026",
-        context_length=200000,
-        capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking"],
-        license="Commercial",
-        url="https://www.anthropic.com/claude",
-        identifiers={"anthropic": "claude-opus-4-20250514", "openrouter": "anthropic/claude-opus-4"},
         inputs=_CHAT,
         outputs=_TEXT,
       ),
@@ -134,19 +164,35 @@ class AnthropicDefinitions(BaseDefinitionProvider):
       # ----------------------------------------------------------------
       # Claude Sonnet  (newest → carries all rolling aliases)
       # ----------------------------------------------------------------
-      "claude-sonnet-4-6": ModelDefinition(
-        title="Claude Sonnet 4.6",
-        aliases=["sonnet-4.6", "claude-sonnet-4.6",   # exact pinned
-                 "claude-sonnet-4", "sonnet-4",         # latest 4.x
-                 "claude-sonnet", "sonnet"],             # latest tier
+      "claude-sonnet-5": ModelDefinition(
+        title="Claude Sonnet 5",
+        aliases=["sonnet-5", "claude-sonnet-5",
+                 "claude-sonnet", "sonnet"],
         company="Anthropic",
         deployments=["api"],
         architectures=["anthropic", "openrouter"],
         description="Best balance of speed and intelligence for everyday and production use",
         context_length=1000000,
+        capabilities=["chat", "reasoning", "analysis", "vision", "adaptive_thinking"],
+        license="Commercial",
+        url="https://platform.claude.com/docs/en/about-claude/models/overview",
+        identifiers={"anthropic": "claude-sonnet-5", "openrouter": "anthropic/claude-sonnet-5"},
+        inputs=_CHAT,
+        outputs=_TEXT,
+      ),
+
+      "claude-sonnet-4-6": ModelDefinition(
+        title="Claude Sonnet 4.6",
+        aliases=["sonnet-4.6", "claude-sonnet-4.6",
+                 "claude-sonnet-4", "sonnet-4"],
+        company="Anthropic",
+        deployments=["api"],
+        architectures=["anthropic", "openrouter"],
+        description="Previous Sonnet generation for everyday and production use",
+        context_length=1000000,
         capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking", "adaptive_thinking"],
         license="Commercial",
-        url="https://www.anthropic.com/claude",
+        url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-sonnet-4-6", "openrouter": "anthropic/claude-sonnet-4.6"},
         inputs=_CHAT,
         outputs=_TEXT,
@@ -162,24 +208,8 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         context_length=200000,
         capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking"],
         license="Commercial",
-        url="https://www.anthropic.com/claude",
+        url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-sonnet-4-5-20250929", "openrouter": "anthropic/claude-sonnet-4.5"},
-        inputs=_CHAT,
-        outputs=_TEXT,
-      ),
-
-      "claude-sonnet-4-0": ModelDefinition(
-        title="Claude Sonnet 4.0",
-        aliases=["sonnet-4.0", "claude-sonnet-4.0"],
-        company="Anthropic",
-        deployments=["api"],
-        architectures=["anthropic", "openrouter"],
-        description="[Deprecated] Original Claude Sonnet 4 — retiring June 15, 2026",
-        context_length=200000,
-        capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking"],
-        license="Commercial",
-        url="https://www.anthropic.com/claude",
-        identifiers={"anthropic": "claude-sonnet-4-20250514", "openrouter": "anthropic/claude-sonnet-4"},
         inputs=_CHAT,
         outputs=_TEXT,
       ),
@@ -189,9 +219,9 @@ class AnthropicDefinitions(BaseDefinitionProvider):
       # ----------------------------------------------------------------
       "claude-haiku-4-5": ModelDefinition(
         title="Claude Haiku 4.5",
-        aliases=["haiku-4.5", "claude-haiku-4.5",   # exact pinned
-                 "claude-haiku-4", "haiku-4",         # latest 4.x
-                 "claude-haiku", "haiku"],             # latest tier
+        aliases=["haiku-4.5", "claude-haiku-4.5",
+                 "claude-haiku-4", "haiku-4",
+                 "claude-haiku", "haiku"],
         company="Anthropic",
         deployments=["api"],
         architectures=["anthropic", "openrouter"],
@@ -199,7 +229,7 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         context_length=200000,
         capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking"],
         license="Commercial",
-        url="https://www.anthropic.com/claude",
+        url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-haiku-4-5-20251001", "openrouter": "anthropic/claude-haiku-4.5"},
         inputs=_CHAT,
         outputs=_TEXT,
