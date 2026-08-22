@@ -9,7 +9,7 @@ throughput.
 Usage:
     renderer = PacedRenderer()
     renderer.start()
-    process.on("token", renderer.feed)
+    process.on(ProcessEvent.TOKEN, renderer.feed)
     # ...later...
     renderer.finish(drain=True)
 """

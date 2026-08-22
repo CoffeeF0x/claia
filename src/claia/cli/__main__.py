@@ -72,6 +72,7 @@ import pyfiglet
 # Internal dependencies
 from ..framework.process import Process
 from ..core.results import Result
+from ..core.enums.process import ProcessEvent
 from ..core.enums.model import SourcePreference
 from ..core.enums.conversation import MessageRole
 from ..core.data import Conversation
@@ -430,7 +431,7 @@ def main() -> None:
         # as smooth typing rather than chunky bursts.
         renderer = PacedRenderer()
         renderer.start()
-        process.on("token", renderer.feed)
+        process.on(ProcessEvent.TOKEN, renderer.feed)
         saved_artifacts = []
 
         def on_artifact(artifact, message_id):
@@ -469,10 +470,10 @@ def main() -> None:
               logger.error("Failed to save conversation")
           done_event.set()
 
-        process.on("complete", on_complete)
-        process.on("error", on_error)
-        process.on("cancelled", on_cancelled)
-        process.on("artifact", on_artifact)
+        process.on(ProcessEvent.COMPLETE, on_complete)
+        process.on(ProcessEvent.ERROR, on_error)
+        process.on(ProcessEvent.CANCELLED, on_cancelled)
+        process.on(ProcessEvent.ARTIFACT, on_artifact)
 
         process_id = registry.add_process(process)
         logger.debug(f"Process added with ID: {process_id}")

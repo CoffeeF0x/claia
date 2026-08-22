@@ -61,6 +61,7 @@ from ..core.plugins.base import (
   SettingCategory,
 )
 from ..core.definitions.model_definition import ModelDefinition
+from ..core.enums.process import ProcessEvent, ProcessStatus
 from ..core.enums.process_queue import ProcessQueueHook
 from ..core.enums.data import (
   MediaType,
@@ -83,6 +84,7 @@ from .decorators import agent
 __all__ = [
   # Framework primitives
   "Registry", "Manager", "Process", "ProcessQueue", "ProcessQueueHook",
+  "ProcessEvent", "ProcessStatus",
   "BaseAgent",
   # Plugin decorators
   "tool", "protocol", "architecture", "deployment", "definitions", "agent",

@@ -8,6 +8,6 @@ Typed enumerations used across the runtime.
 - `file.py` — file and MIME types.
 - `logging.py` — log levels/categories.
 - `model.py` — model/provider/types.
-- `process.py` — process and task states.
+- `process.py` — process status and process callback events.
 
 Enums are used to keep cross-package contracts explicit and avoid stringly-typed code.

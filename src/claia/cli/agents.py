@@ -27,6 +27,7 @@ import logging
 from ..framework.agents.base import BaseAgent
 from ..core.data.chunks import TextChunk
 from ..core.enums.conversation import MessageRole
+from ..core.enums.process import ProcessEvent
 
 
 ########################################################################
@@ -87,11 +88,11 @@ class WriterAgent(BaseAgent):
 
       for chunk in registry.run(model_id, process.conversation, streaming=True, **kwargs):
         if not isinstance(chunk, TextChunk):
-          process.emit("chunk", chunk)
+          process.emit(ProcessEvent.CHUNK, chunk)
           continue
         token = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
         full_response += token
-        process.emit("token", token)
+        process.emit(ProcessEvent.TOKEN, token)
 
       process.conversation.add_message(MessageRole.ASSISTANT, full_response)
       process.mark_completed(full_response)

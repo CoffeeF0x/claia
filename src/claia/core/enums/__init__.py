@@ -9,7 +9,7 @@ from .conversation import MessageRole
 from .file import FileSubdirectory, FileStatus, FileMimeType
 from .logging import LogLevel, LogFormat
 from .model import ModelCapability, IOType, SourcePreference
-from .process import ProcessStatus
+from .process import ProcessStatus, ProcessEvent
 from .process_queue import ProcessQueueHook
 from .data import (
   MediaType,
@@ -26,7 +26,7 @@ __all__ = [
   "FileSubdirectory", "FileStatus", "FileMimeType",
   "LogLevel", "LogFormat",
   "ModelCapability", "IOType", "SourcePreference",
-  "ProcessStatus",
+  "ProcessStatus", "ProcessEvent",
   "ProcessQueueHook",
   "MediaType", "TextFormat", "ImageFormat", "AudioFormat",
   "VideoFormat", "ApplicationFormat",

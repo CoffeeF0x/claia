@@ -8,7 +8,7 @@ import uuid, time, logging, threading
 from typing import Optional, Dict, Any, Callable, List
 
 # Internal dependencies
-from ..core.enums.process import ProcessStatus
+from ..core.enums.process import ProcessEvent, ProcessStatus
 from ..core.data import Conversation
 
 
@@ -29,9 +29,9 @@ class Process:
 
   Supports an event callback system via on() and emit(). Consumers
   register callbacks before submitting the process to the queue.
-  Agents emit events ("start", "token", "complete", "error",
-  "cancelled") as they execute. Callbacks are fired from the worker
-  thread — thread safety is the consumer's responsibility.
+  Agents emit ``ProcessEvent`` values as they execute. Callbacks are
+  fired from the worker thread — thread safety is the consumer's
+  responsibility.
   """
   def __init__(
     self,
@@ -52,7 +52,7 @@ class Process:
     self.created_at = time.time()
     self.started_at = None
     self.completed_at = None
-    self._callbacks: Dict[str, List[Callable]] = {}
+    self._callbacks: Dict[ProcessEvent, List[Callable]] = {}
     # Cooperative cancellation. Hosts running an agent on a worker thread
     # can call request_cancel() to ask the agent to stop at the next
     # safe point. Long-running agents should poll cancel_requested
@@ -63,18 +63,22 @@ class Process:
 
   # ── Callback API ──────────────────────────────────────────────────
 
-  def on(self, event: str, callback: Callable) -> 'Process':
+  def on(self, event: ProcessEvent, callback: Callable) -> 'Process':
     """Register a callback for an event. Returns self for chaining."""
+    if not isinstance(event, ProcessEvent):
+      raise TypeError(f"event must be ProcessEvent, got {type(event).__name__}")
     self._callbacks.setdefault(event, []).append(callback)
     return self
 
-  def emit(self, event: str, *args, **kwargs) -> None:
+  def emit(self, event: ProcessEvent, *args, **kwargs) -> None:
     """Fire all callbacks registered for *event*. Exceptions are logged, not raised."""
+    if not isinstance(event, ProcessEvent):
+      raise TypeError(f"event must be ProcessEvent, got {type(event).__name__}")
     for cb in self._callbacks.get(event, []):
       try:
         cb(*args, **kwargs)
       except Exception as e:
-        logger.error(f"Callback error on '{event}' for process {self.id}: {e}")
+        logger.error(f"Callback error on '{event.value}' for process {self.id}: {e}")
 
   # ── State transitions ─────────────────────────────────────────────
 
@@ -82,28 +86,28 @@ class Process:
     """Mark the process as started."""
     self.status = ProcessStatus.PROCESSING
     self.started_at = time.time()
-    self.emit("start")
+    self.emit(ProcessEvent.START)
 
   def mark_completed(self, result: Any = None):
     """Mark the process as completed with an optional result."""
     self.status = ProcessStatus.COMPLETED
     self.result = result
     self.completed_at = time.time()
-    self.emit("complete", result)
+    self.emit(ProcessEvent.COMPLETE, result)
 
   def mark_failed(self, error: str):
     """Mark the process as failed with an error message."""
     self.status = ProcessStatus.FAILED
     self.error = error
     self.completed_at = time.time()
-    self.emit("error", error)
+    self.emit(ProcessEvent.ERROR, error)
 
   def mark_cancelled(self, result: Any = None):
     """Mark the process as cancelled and emit ``cancelled``."""
     self.status = ProcessStatus.CANCELLED
     self.result = result
     self.completed_at = time.time()
-    self.emit("cancelled", result)
+    self.emit(ProcessEvent.CANCELLED, result)
 
   # ── Cancellation ──────────────────────────────────────────────────
 

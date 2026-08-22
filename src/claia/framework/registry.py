@@ -11,7 +11,7 @@ from .manager import Manager
 from ..core.results import Result, DeploymentError
 from .process import Process
 from .queue import ProcessQueue
-from ..core.enums.process import ProcessStatus
+from ..core.enums.process import ProcessEvent, ProcessStatus
 from ..core.data import Conversation
 from ..core.data.chunks import BaseChunk, TextChunk
 from ..core.plugins.base import DeploymentParams, ParamScope, ParamSpec, ToolReference
@@ -627,7 +627,7 @@ class Registry:
     )
 
     if on_token:
-      process.on("token", on_token)
+      process.on(ProcessEvent.TOKEN, on_token)
 
     def _on_complete(full_response):
       result_holder[0] = Result.ok(full_response)
@@ -645,9 +645,9 @@ class Registry:
       result_holder[0] = Result.fail("cancelled")
       done_event.set()
 
-    process.on("complete", _on_complete)
-    process.on("error", _on_error)
-    process.on("cancelled", _on_cancelled)
+    process.on(ProcessEvent.COMPLETE, _on_complete)
+    process.on(ProcessEvent.ERROR, _on_error)
+    process.on(ProcessEvent.CANCELLED, _on_cancelled)
 
     self.add_process(process)
     done_event.wait()

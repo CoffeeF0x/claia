@@ -11,6 +11,7 @@ from ...core.data.models import Conversation
 from ...core.enums.conversation import MessageRole
 from ...core.enums.model import SourcePreference
 from ...framework.process import Process
+from ...core.enums.process import ProcessEvent
 from ..renderer import PacedRenderer
 from ..storage import JsonStore
 from .base import BaseCommand
@@ -55,7 +56,7 @@ class QueryCommand(BaseCommand):
 
       renderer = PacedRenderer()
       renderer.start()
-      process.on("token", renderer.feed)
+      process.on(ProcessEvent.TOKEN, renderer.feed)
       file_repo = JsonStore(self.settings.files_directory)
       saved_artifacts = []
 
@@ -88,10 +89,10 @@ class QueryCommand(BaseCommand):
           file_repo.save(self.settings.active_conversation)
         done_event.set()
 
-      process.on("complete", on_complete)
-      process.on("error", on_error)
-      process.on("cancelled", on_cancelled)
-      process.on("artifact", on_artifact)
+      process.on(ProcessEvent.COMPLETE, on_complete)
+      process.on(ProcessEvent.ERROR, on_error)
+      process.on(ProcessEvent.CANCELLED, on_cancelled)
+      process.on(ProcessEvent.ARTIFACT, on_artifact)
 
       self.registry.add_process(process)
       done_event.wait()

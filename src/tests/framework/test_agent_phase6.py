@@ -32,7 +32,7 @@ import pytest
 
 from claia.core.data import Conversation
 from claia.core.enums.conversation import MessageRole
-from claia.core.enums.process import ProcessStatus
+from claia.core.enums.process import ProcessEvent, ProcessStatus
 from claia.core.data.chunks import BaseChunk, TextChunk
 from claia.core.parser import TagType
 from claia.core.plugins.base import ToolReference
@@ -132,7 +132,7 @@ class TestStreamTextOnly:
     convo = Conversation(title="t")
     proc = _process(convo)
     tokens: List[str] = []
-    proc.on("token", lambda t: tokens.append(t))
+    proc.on(ProcessEvent.TOKEN, lambda t: tokens.append(t))
 
     reg = _FakeToolRegistry(_stream("Hello, ", "world!"))
     SimpleAgent.process_request(proc, registry=reg)
@@ -161,7 +161,7 @@ class TestStreamOneToolCall:
     convo = Conversation(title="t")
     proc = _process(convo)
     tokens: List[str] = []
-    proc.on("token", lambda t: tokens.append(t))
+    proc.on(ProcessEvent.TOKEN, lambda t: tokens.append(t))
 
     chunks = _stream(
       'Calling tool now: ',

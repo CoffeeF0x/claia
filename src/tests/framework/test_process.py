@@ -8,7 +8,7 @@ import re
 
 # Internal dependencies
 from claia.framework.process import Process
-from claia.core.enums.process import ProcessStatus
+from claia.core.enums.process import ProcessEvent, ProcessStatus
 
 
 def test_process_initialization_defaults(conversation):
@@ -64,7 +64,16 @@ def test_mark_cancelled_sets_status_and_timestamp(process):
 
 def test_mark_cancelled_emits_cancelled(process):
   seen = []
-  process.on("cancelled", lambda result: seen.append(result))
+  process.on(ProcessEvent.CANCELLED, lambda result: seen.append(result))
   process.mark_cancelled("partial")
   assert process.result == "partial"
   assert seen == ["partial"]
+
+
+def test_on_rejects_string_event_name(process):
+  try:
+    process.on("cancelled", lambda result: None)
+  except TypeError as exc:
+    assert "ProcessEvent" in str(exc)
+  else:
+    raise AssertionError("expected TypeError")

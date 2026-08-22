@@ -5,7 +5,7 @@ Owns the per-turn ``TagParser``. As deployment chunks arrive the agent
 feeds them through the parser, appends utility messages for any closed
 tags, and dispatches ``TagType.TOOL`` events through
 ``Registry.execute_tool`` inline — the result text is appended to the
-streaming assistant message and emitted as a ``"token"`` event so
+streaming assistant message and emitted as a ``ProcessEvent.TOKEN`` so
 terminal renderers see the call → response flow without a separate
 post-stream pass.
 """
@@ -20,6 +20,7 @@ from ...core.data.chunks import AudioChunk, BaseChunk, ImageChunk, TextChunk
 from ...core.data.models import AudioArtifact, ImageArtifact
 from ...core.enums.conversation import MessageRole
 from ...core.enums.data import AudioFormat, ImageFormat
+from ...core.enums.process import ProcessEvent
 from ...core.parser import (
   ParseError,
   ParseEvent,
@@ -48,7 +49,7 @@ class SimpleAgent(BaseAgent):
   A simple agent that directly calls a model for inference.
 
   Streams ``BaseChunk`` items from ``registry.run`` and forwards
-  visible text through the ``"token"`` event. Each text chunk is
+  visible text through ``ProcessEvent.TOKEN``. Each text chunk is
   also fed to a ``TagParser`` configured from the model definition's
   ``tag_overrides``; closed tags become utility messages on the
   conversation, and tool tags are dispatched through
@@ -68,7 +69,7 @@ class SimpleAgent(BaseAgent):
     ``STREAM_END`` per turn, with utility messages for parsed
     tags interleaved between them. Per-token appends are silent;
     consumers wanting real-time progress listen on the process's
-    ``"token"`` callback.
+    ``ProcessEvent.TOKEN`` callback.
     """
     conversation = process.conversation
     streaming_message = None
@@ -78,7 +79,6 @@ class SimpleAgent(BaseAgent):
       full_response = ""
 
       streaming_message = conversation.start_streaming_message(MessageRole.ASSISTANT)
-      process.emit("stream_start", streaming_message.message_id)
 
       tag_specs = cls._resolve_tag_specs(registry, model_id)
       parser = TagParser(tag_specs)
@@ -94,13 +94,13 @@ class SimpleAgent(BaseAgent):
             cls._attach_image_chunk(process, streaming_message.message_id, chunk)
           elif isinstance(chunk, AudioChunk):
             cls._attach_audio_chunk(process, streaming_message.message_id, chunk)
-          process.emit("chunk", chunk)
+          process.emit(ProcessEvent.CHUNK, chunk)
           continue
 
         token = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
         full_response += token
         conversation.append_stream_chunk(streaming_message.message_id, token)
-        process.emit("token", token)
+        process.emit(ProcessEvent.TOKEN, token)
 
         appended = cls._consume_parse_events(
           parser.feed(token),
@@ -128,11 +128,9 @@ class SimpleAgent(BaseAgent):
 
       if cancelled:
         conversation.end_streaming_message(streaming_message.message_id, error="cancelled")
-        process.emit("stream_end", streaming_message.message_id)
         process.mark_cancelled(full_response)
       else:
         conversation.end_streaming_message(streaming_message.message_id)
-        process.emit("stream_end", streaming_message.message_id)
         process.mark_completed(full_response)
 
     except Exception as e:
@@ -140,7 +138,6 @@ class SimpleAgent(BaseAgent):
       if streaming_message is not None:
         try:
           conversation.end_streaming_message(streaming_message.message_id, error=str(e))
-          process.emit("stream_end", streaming_message.message_id)
         except Exception:
           logging.exception(
             f"Failed to mark streaming message ended after error: {streaming_message.message_id}"
@@ -362,7 +359,7 @@ class SimpleAgent(BaseAgent):
 
     out = f"{prefix}{text}"
     conversation.append_stream_chunk(streaming_message_id, out)
-    process.emit("token", out)
+    process.emit(ProcessEvent.TOKEN, out)
     return out
 
   # ------------------------------------------------------------------
@@ -398,7 +395,7 @@ class SimpleAgent(BaseAgent):
         metadata=metadata,
       )
       process.conversation.attach_artifact(message_id, artifact)
-      process.emit("artifact", artifact, message_id)
+      process.emit(ProcessEvent.ARTIFACT, artifact, message_id)
     except Exception as e:
       logging.exception(f"Failed to attach generated image artifact: {e}")
 
@@ -431,6 +428,6 @@ class SimpleAgent(BaseAgent):
         metadata=metadata,
       )
       process.conversation.attach_artifact(message_id, artifact)
-      process.emit("artifact", artifact, message_id)
+      process.emit(ProcessEvent.ARTIFACT, artifact, message_id)
     except Exception as e:
       logging.exception(f"Failed to attach generated audio artifact: {e}")

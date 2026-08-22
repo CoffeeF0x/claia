@@ -9,7 +9,7 @@ import pytest
 from claia.framework.agents.simple import SimpleAgent
 from claia.core.data.chunks import AudioChunk, ImageChunk, TextChunk
 from claia.core.enums.data import AudioFormat, ImageFormat
-from claia.core.enums.process import ProcessStatus
+from claia.core.enums.process import ProcessEvent, ProcessStatus
 
 
 PNG_BYTES = base64.b64decode(
@@ -27,7 +27,7 @@ def test_simple_agent_success(process, fake_model_registry_ok):
 
 def test_simple_agent_emits_token_callbacks(process, fake_model_registry_ok):
   tokens = []
-  process.on("token", lambda t: tokens.append(t))
+  process.on(ProcessEvent.TOKEN, lambda t: tokens.append(t))
   updated = SimpleAgent.process_request(process, registry=fake_model_registry_ok)
   assert updated.status == ProcessStatus.COMPLETED
   assert len(tokens) > 0
@@ -66,7 +66,7 @@ def test_simple_agent_attaches_image_artifacts(process):
       ])
 
   artifacts = []
-  process.on("artifact", lambda artifact, message_id: artifacts.append((artifact, message_id)))
+  process.on(ProcessEvent.ARTIFACT, lambda artifact, message_id: artifacts.append((artifact, message_id)))
 
   updated = SimpleAgent.process_request(process, registry=FakeRegistry())
 
@@ -105,7 +105,7 @@ def test_simple_agent_attaches_audio_artifacts(process):
       ])
 
   artifacts = []
-  process.on("artifact", lambda artifact, message_id: artifacts.append((artifact, message_id)))
+  process.on(ProcessEvent.ARTIFACT, lambda artifact, message_id: artifacts.append((artifact, message_id)))
 
   updated = SimpleAgent.process_request(process, registry=FakeRegistry())
 
