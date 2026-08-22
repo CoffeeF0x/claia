@@ -10,6 +10,7 @@ from claia.framework.agents.simple import SimpleAgent
 from claia.framework.agents.system import (
   DEFAULT_SYSTEM_PROMPT,
   compose_system_prompt,
+  format_tool_result,
   render_tool_instructions,
 )
 
@@ -57,6 +58,7 @@ def test_compose_prepends_tool_instructions_to_persona():
   assert composed.endswith("You write poetry.")
   assert "[TOOL_CALL]" in composed
   assert "[/TOOL_CALL]" in composed
+  assert "[TOOL_RESULT]" in composed
   assert "sample.echo" in composed
   assert "message (str, required): Message to echo back" in composed
   assert "registry" not in composed.split("Available tools:")[1]
@@ -68,6 +70,19 @@ def test_compose_with_tools_and_no_persona_uses_default():
     tag_specs=list(DEFAULT_TAGS.values()),
   )
   assert composed.endswith(DEFAULT_SYSTEM_PROMPT)
+
+
+def test_format_tool_result_wraps_name_and_body():
+  assert format_tool_result("demo.echo", "echoed:hi") == (
+    '[TOOL_RESULT name="demo.echo"]\n'
+    'echoed:hi\n'
+    '[/TOOL_RESULT]'
+  )
+  assert format_tool_result("  ", "x") == (
+    '[TOOL_RESULT name="unknown"]\n'
+    'x\n'
+    '[/TOOL_RESULT]'
+  )
 
 
 def test_render_skips_when_no_tool_tag_spec():

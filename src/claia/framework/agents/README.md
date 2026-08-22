@@ -10,6 +10,8 @@ Agent implementations that orchestrate tasks, models, and tools.
     caller persona, or a default helpful-assistant prompt)
   - calls `registry.run(...)` to execute a model
   - parses streaming tags and dispatches tool calls
+  - posts tool results as a user `[TOOL_RESULT]` turn and generates
+    again until the assistant replies without a tool call
   - marks the task as completed or failed.
 - `system.py` — shared prompt composer other agents can reuse.
 

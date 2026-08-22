@@ -74,14 +74,21 @@ def render_tool_instructions(
     '{"name": "<qualified tool name>", "parameters": { ... }}',
     spec.close_token,
     "",
-    "Call one tool at a time. After the tool runs, its result is",
-    "appended below the tag; continue from there. Do not invent tools.",
+    "Call one tool at a time. The next user message is the tool result",
+    "in a [TOOL_RESULT] tag — not a new human request. Continue: call",
+    "another tool the same way, or answer the user. Do not invent tools.",
     "",
     "Available tools:",
   ]
   for tool in tools:
     lines.extend(_format_tool(tool))
   return "\n".join(lines)
+
+
+def format_tool_result(name: str, body: str) -> str:
+  """Render a tool result as a user-turn ``[TOOL_RESULT]`` block."""
+  label = (name or "").strip() or "unknown"
+  return f'[TOOL_RESULT name="{label}"]\n{body}\n[/TOOL_RESULT]'
 
 
 ########################################################################

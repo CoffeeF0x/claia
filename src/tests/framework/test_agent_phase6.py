@@ -2,12 +2,12 @@
 Agent loop tests.
 
 End-to-end coverage of the agent loop that owns the per-turn
-``TagParser`` and dispatches tool calls inline through
-``Registry.execute_tool``:
+``TagParser``, dispatches tool calls through ``Registry.execute_tool``,
+posts results as user ``[TOOL_RESULT]`` turns, and generates again:
 
 - Streaming text-only response (no tags).
-- Streaming with one tool call.
-- Streaming with multiple tool calls.
+- Streaming with one tool call, then a follow-up generate.
+- Streaming with multiple tool calls in one turn.
 - Streaming with thinking + tool call mixed.
 
 Also exercises the surrounding plumbing:
@@ -18,8 +18,8 @@ Also exercises the surrounding plumbing:
 - Tag content split across chunk boundaries still yields a single
   ``TagEvent``.
 - Bound utility messages mirror each closed tag.
-- Tool dispatch failures surface as inline ``[TOOL_ERROR]`` text and
-  still fire a utility message for the call itself.
+- Tool dispatch failures surface as ``[TOOL_ERROR]`` inside the
+  user-turn result and still fire a utility for the call itself.
 - The final ``parser.flush()`` pass dispatches a tool call that
   closed on the very last chunk.
 """
@@ -38,6 +38,7 @@ from claia.core.data.chunks import BaseChunk, TextChunk
 from claia.core.plugins.base import ToolReference
 from claia.core.results import Result
 from claia.framework.agents.simple import SimpleAgent
+from claia.framework.agents.system import format_tool_result
 from claia.framework.task import Task
 
 
@@ -51,18 +52,17 @@ def _utilities(convo) -> List[Any]:
   return [m for m in convo.messages if m.role == MessageRole.UTILITY]
 
 
-def _assistant_message(convo):
-  """Return the most recent assistant message.
+def _assistants(convo):
+  return [m for m in convo.messages if m.role == MessageRole.ASSISTANT]
 
-  ``Conversation.get_latest_message`` returns the active head, which
-  becomes a ``UTILITY`` message after each ``append_utility`` call.
-  Tests that want the streaming assistant message specifically need
-  to filter explicitly.
-  """
-  for msg in reversed(convo.messages):
-    if msg.role == MessageRole.ASSISTANT:
-      return msg
-  return None
+
+def _users(convo):
+  return [m for m in convo.messages if m.role == MessageRole.USER]
+
+
+def _visible_roles(convo):
+  """Roles the next generate sees: the thread with utilities stripped."""
+  return [m.role for m in convo.get_thread()]
 
 
 # ---------------------------------------------------------------------------
@@ -71,22 +71,33 @@ def _assistant_message(convo):
 class _FakeToolRegistry:
   """Minimal registry surface the agent reaches for during a turn.
 
-  Only the methods the agent loop actually calls are implemented:
-  ``run`` (the deployment stream), ``get_supported_models`` (for
-  tag-spec resolution — returning ``{}`` falls back to defaults),
-  ``list_tools`` (system-prompt inventory), ``execute_tool`` (the
-  dispatch sink), and ``resolve_qualified_name`` (bare-name fallback).
+  ``run`` consumes a queue of streams: the first argument is the
+  opening generate, ``follow_ups`` are later generates, and leftover
+  rounds yield an empty stream so the loop can stop.
   """
 
-  def __init__(self, chunks: List[BaseChunk], tools: Optional[Dict[str, Any]] = None):
-    self._chunks = chunks
+  def __init__(
+    self,
+    chunks: List[BaseChunk],
+    tools: Optional[Dict[str, Any]] = None,
+    follow_ups: Optional[List[List[BaseChunk]]] = None,
+  ):
+    self._runs: List[List[BaseChunk]] = [list(chunks)]
+    if follow_ups:
+      self._runs.extend(list(run) for run in follow_ups)
     # ``tools`` maps qualified_name -> callable(payload, conversation, **kw) -> Result
     self._tools: Dict[str, Any] = tools or {}
     self.execute_calls: List[Dict[str, Any]] = []
+    self.run_calls = 0
 
   def run(self, model_id, conversation, streaming=False, **kwargs):
     assert streaming is True
-    return iter(self._chunks)
+    self.run_calls += 1
+    if self._runs:
+      chunks = self._runs.pop(0)
+    else:
+      chunks = []
+    return iter(chunks)
 
   def get_supported_models(self):
     # Empty mapping -> resolve_tag_specs falls back to DEFAULT_TAGS
@@ -183,12 +194,13 @@ class TestStreamOneToolCall:
     assert call["qualified_name"] == "demo.echo"
     assert call["raw_payload"] == '{"name": "demo.echo", "parameters": {"message": "hi"}}'
 
-    # The streaming message contains the model output AND the inline result.
-    assistant_msg = _assistant_message(convo)
+    # The assistant keeps the call; the result is a later user turn.
+    assistant_msg = _assistants(convo)[0]
     assert "[TOOL_CALL]" in assistant_msg.content
-    assert "echoed:hi" in assistant_msg.content
+    assert "echoed:hi" not in assistant_msg.content
 
-    # The ``token`` events include the result text (post-newline-prefix).
+    result_msg = _users(convo)[-1]
+    assert result_msg.content == format_tool_result("demo.echo", "echoed:hi")
     assert "echoed:hi" in "".join(tokens)
 
     utilities = _utilities(convo)
@@ -207,7 +219,8 @@ class TestStreamOneToolCall:
     assert task.status == TaskStatus.COMPLETED
     # Bare ``echo`` resolved to ``demo.echo``.
     assert reg.execute_calls[0]["qualified_name"] == "demo.echo"
-    assert "echoed:yo" in _assistant_message(convo).content
+    assert "echoed:yo" not in _assistants(convo)[0].content
+    assert format_tool_result("demo.echo", "echoed:yo") == _users(convo)[-1].content
 
   def test_tool_failure_surfaces_inline_error_text(self):
     convo = Conversation(title="t")
@@ -222,9 +235,10 @@ class TestStreamOneToolCall:
 
     SimpleAgent.execute(task, registry=reg)
     assert task.status == TaskStatus.COMPLETED
-    content = _assistant_message(convo).content
-    assert "[TOOL_ERROR]" in content
-    assert "Tool not found" in content
+    assert "[TOOL_ERROR]" not in _assistants(convo)[0].content
+    result = _users(convo)[-1].content
+    assert "[TOOL_ERROR]" in result
+    assert "Tool not found" in result
     utilities = _utilities(convo)
     assert len(utilities) == 1
     assert utilities[0].tag_type is TagType.TOOL
@@ -240,9 +254,10 @@ class TestStreamOneToolCall:
     assert task.status == TaskStatus.COMPLETED
     # No dispatch happened.
     assert reg.execute_calls == []
-    content = _assistant_message(convo).content
-    assert "[TOOL_ERROR]" in content
-    assert "missing 'name'" in content
+    assert "[TOOL_ERROR]" not in _assistants(convo)[0].content
+    result = _users(convo)[-1].content
+    assert "[TOOL_ERROR]" in result
+    assert "missing 'name'" in result
 
 
 # ---------------------------------------------------------------------------
@@ -278,12 +293,16 @@ class TestStreamMultipleToolCalls:
     SimpleAgent.execute(task, registry=reg)
     assert task.status == TaskStatus.COMPLETED
 
-    # Both calls fired in order.
+    # Both calls fired in order; one user message holds both results.
     assert [c["qualified_name"] for c in reg.execute_calls] == ["math.add", "demo.shout"]
 
-    content = _assistant_message(convo).content
-    assert "5" in content
-    assert "HI" in content
+    assistant = _assistants(convo)[0]
+    assert "5" not in assistant.content
+    assert "HI" not in assistant.content
+
+    result = _users(convo)[-1].content
+    assert format_tool_result("math.add", "5") in result
+    assert format_tool_result("demo.shout", "HI") in result
 
     utilities = _utilities(convo)
     assert len(utilities) == 2
@@ -323,6 +342,71 @@ class TestStreamThinkingPlusTool:
 
 
 # ---------------------------------------------------------------------------
+# Generate-again after a tool result
+# ---------------------------------------------------------------------------
+class TestToolRoundTrip:
+  def test_follow_up_generate_sees_user_result(self):
+    convo = Conversation(title="t")
+    convo.add_message(MessageRole.USER, "please echo hi")
+    task = _task(convo)
+
+    def _echo(raw_payload, conversation, **kwargs):
+      return Result.ok("echoed:hi")
+
+    reg = _FakeToolRegistry(
+      _stream('[TOOL_CALL]{"name": "demo.echo", "parameters": {"message": "hi"}}[/TOOL_CALL]'),
+      tools={"demo.echo": _echo},
+      follow_ups=[_stream("The tool said hi.")],
+    )
+
+    SimpleAgent.execute(task, registry=reg)
+    assert task.status == TaskStatus.COMPLETED
+    assert task.result == "The tool said hi."
+    assert reg.run_calls == 2
+
+    assistants = _assistants(convo)
+    assert len(assistants) == 2
+    assert "[TOOL_CALL]" in assistants[0].content
+    assert "echoed:hi" not in assistants[0].content
+    assert assistants[1].content == "The tool said hi."
+
+    users = _users(convo)
+    assert users[0].content == "please echo hi"
+    assert users[1].content == format_tool_result("demo.echo", "echoed:hi")
+
+    assert _visible_roles(convo) == [
+      MessageRole.USER,
+      MessageRole.ASSISTANT,
+      MessageRole.USER,
+      MessageRole.ASSISTANT,
+    ]
+
+  def test_max_tool_rounds_stops_without_another_generate(self, monkeypatch):
+    monkeypatch.setattr(SimpleAgent, "MAX_TOOL_ROUNDS", 2)
+    convo = Conversation(title="t")
+    task = _task(convo)
+
+    def _echo(raw_payload, conversation, **kwargs):
+      return Result.ok("echoed:x")
+
+    class _AlwaysTool(_FakeToolRegistry):
+      def run(self, model_id, conversation, streaming=False, **kwargs):
+        assert streaming is True
+        self.run_calls += 1
+        return iter(_stream(
+          '[TOOL_CALL]{"name": "demo.echo", "parameters": {"message": "x"}}[/TOOL_CALL]',
+        ))
+
+    reg = _AlwaysTool([], tools={"demo.echo": _echo})
+    SimpleAgent.execute(task, registry=reg)
+
+    assert task.status == TaskStatus.COMPLETED
+    assert reg.run_calls == 2
+    assert len(_assistants(convo)) == 2
+    assert len(_users(convo)) == 2
+
+
+# ---------------------------------------------------------------------------
 # Tag content split across chunk boundaries
 # ---------------------------------------------------------------------------
 class TestStreamingChunkBoundaries:
@@ -349,7 +433,8 @@ class TestStreamingChunkBoundaries:
     SimpleAgent.execute(task, registry=reg)
     assert task.status == TaskStatus.COMPLETED
     assert reg.execute_calls[0]["qualified_name"] == "demo.ping"
-    assert "pong" in _assistant_message(convo).content
+    assert "pong" not in _assistants(convo)[0].content
+    assert format_tool_result("demo.ping", "pong") == _users(convo)[-1].content
 
 
 # ---------------------------------------------------------------------------
