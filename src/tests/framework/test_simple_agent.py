@@ -46,6 +46,9 @@ def test_simple_agent_attaches_image_artifacts(task):
     def get_supported_models(self):
       return {}
 
+    def list_tools(self):
+      return []
+
     def resolve_qualified_name(self, name):
       return name
 
@@ -84,6 +87,9 @@ def test_simple_agent_attaches_audio_artifacts(task):
   class FakeRegistry:
     def get_supported_models(self):
       return {}
+
+    def list_tools(self):
+      return []
 
     def resolve_qualified_name(self, name):
       return name

@@ -529,7 +529,7 @@ class CLIToolModule(BaseToolModule):
       return "Error: Registry not available"
 
     try:
-      agents_info = registry.manager.get_agents()
+      agents_info = registry.get_agents()
 
       if not agents_info:
         return "No agents available."
@@ -871,7 +871,7 @@ class CLIToolModule(BaseToolModule):
     output_lines.append("-" * 70)
 
     if registry:
-      catalog = registry.manager.get_all_commands()
+      catalog = registry.get_all_commands()
       if catalog:
         total_tools = 0
         for mod_name, mod in catalog.items():

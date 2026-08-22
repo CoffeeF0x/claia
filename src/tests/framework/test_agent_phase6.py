@@ -74,8 +74,8 @@ class _FakeToolRegistry:
   Only the methods the agent loop actually calls are implemented:
   ``run`` (the deployment stream), ``get_supported_models`` (for
   tag-spec resolution — returning ``{}`` falls back to defaults),
-  ``execute_tool`` (the dispatch sink), and
-  ``resolve_qualified_name`` (bare-name fallback).
+  ``list_tools`` (system-prompt inventory), ``execute_tool`` (the
+  dispatch sink), and ``resolve_qualified_name`` (bare-name fallback).
   """
 
   def __init__(self, chunks: List[BaseChunk], tools: Optional[Dict[str, Any]] = None):
@@ -91,6 +91,9 @@ class _FakeToolRegistry:
   def get_supported_models(self):
     # Empty mapping -> resolve_tag_specs falls back to DEFAULT_TAGS
     return {}
+
+  def list_tools(self):
+    return []
 
   def resolve_qualified_name(self, name: str) -> Optional[str]:
     if name in self._tools:

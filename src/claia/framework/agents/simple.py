@@ -15,6 +15,7 @@ import logging
 from typing import Iterable, Optional
 
 from .base import BaseAgent
+from .system import compose_system_prompt
 from ..decorators import agent
 from ...core.data.chunks import AudioChunk, BaseChunk, ImageChunk, TextChunk
 from ...core.data.models import AudioArtifact, ImageArtifact
@@ -57,6 +58,11 @@ class SimpleAgent(BaseAgent):
   the user via the same ``"token"`` channel and appended to the
   active assistant message so it shows up inline in the transcript.
 
+  The generate-time ``system`` string is composed on each turn:
+  tool-calling instructions (from ``registry.list_tools()`` and the
+  model's tag specs) prepended to the caller-supplied persona, or a
+  default helpful-assistant prompt when none is given.
+
   Non-text chunks (image / audio) follow the artifact attachment path.
   """
 
@@ -85,6 +91,11 @@ class SimpleAgent(BaseAgent):
 
       tag_specs = cls._resolve_tag_specs(registry, model_id)
       parser = TagParser(tag_specs)
+      system = compose_system_prompt(
+        system,
+        tools=registry.list_tools(),
+        tag_specs=tag_specs,
+      )
 
       cancelled = False
       for chunk in registry.run(

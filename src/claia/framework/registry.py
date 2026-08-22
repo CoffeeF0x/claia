@@ -34,6 +34,9 @@ class Registry:
   """
   Unified registry coordinating tools, models, and agents.
 
+  Hosts talk to Registry. Manager is discovery, loading, and param
+  coercion — not the catalog surface.
+
   - Tools API: command catalog, tool-call processing, command execution.
   - Models API: run() orchestration (solve -> Node -> Deployment ->
     Architecture). Instance lifecycle lives behind the nodes.
@@ -82,10 +85,10 @@ class Registry:
     """
     The underlying ``Manager`` instance.
 
-    Exposed as a read-only property so downstream layers (Settings,
-    CLI commands, service endpoints) can reach the manager's
-    parameter-introspection and coercion helpers without the Registry
-    having to re-export each one.
+    Catalog lookups (models, tools, agents, architectures) go through
+    Registry methods. This property is for Manager-owned helpers that
+    are not catalog: param coercion, kwarg filtering, and discovery
+    internals (Settings uses ``coerce_value`` here).
     """
     return self._manager
 
@@ -693,15 +696,32 @@ class Registry:
 
   def get_supported_models(self) -> Dict[str, Any]:
     """Get all models supported by registered plugins."""
+    self._ensure_loaded()
     return self.manager.get_supported_models()
+
+  def get_available_architectures(self) -> Dict[str, Any]:
+    """Get all available architectures and their info keyed by name."""
+    self._ensure_loaded()
+    return self.manager.get_available_architectures()
 
   def get_available_deployments(self) -> Dict[str, Any]:
     """Get all available deployments."""
+    self._ensure_loaded()
     return self.manager.get_available_deployments()
 
   def get_available_nodes(self) -> Dict[str, Any]:
     """Get all available nodes."""
+    self._ensure_loaded()
     return self.manager.get_available_nodes()
+
+  def get_all_commands(self) -> Dict[str, Dict]:
+    """Get native tool modules in hierarchical form (module → tools).
+
+    The protocol-agnostic index is :meth:`list_tools`. This catalog is
+    the module-grouped view the CLI uses to list native commands.
+    """
+    self._ensure_loaded()
+    return self.manager.get_all_commands()
 
   # Instance lifecycle lives on the nodes; these facades aggregate
   # across them so hosts keep a single entry point.
@@ -815,8 +835,7 @@ class Registry:
     try:
       logger.debug(f"Dispatching {task.id} with agent type '{task.agent_type}'")
 
-      # Get the agent class for this agent type
-      agent_class = self.manager.get_agent_class(task.agent_type)
+      agent_class = self.get_agent_class(task.agent_type)
 
       if not agent_class:
         error_msg = f"No agent found for type '{task.agent_type}'"
@@ -851,11 +870,18 @@ class Registry:
 
   def get_agent_class(self, agent_name: str):
     """Get the agent class for a specific agent name."""
+    self._ensure_loaded()
     return self.manager.get_agent_class(agent_name)
 
   def get_agent_info_by_name(self, agent_name: str):
     """Get agent info for a specific agent name."""
+    self._ensure_loaded()
     return self.manager.get_agent_info_by_name(agent_name)
+
+  def get_agents(self):
+    """Get all available agents (programmatic first, then entry-point)."""
+    self._ensure_loaded()
+    return self.manager.get_agents()
 
   def add_task(self, task: Task) -> str:
     """Add a task to the queue for execution."""

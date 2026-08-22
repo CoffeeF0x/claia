@@ -6,9 +6,12 @@ Agent implementations that orchestrate tasks, models, and tools.
 
 - `simple.py` — `SimpleAgent`, a minimal agent that:
   - reads a `Task` (including `task.parameters["model_id"]` and `task.conversation`)
+  - composes `system` (tool-calling instructions prepended to the
+    caller persona, or a default helpful-assistant prompt)
   - calls `registry.run(...)` to execute a model
   - parses streaming tags and dispatches tool calls
   - marks the task as completed or failed.
+- `system.py` — shared prompt composer other agents can reuse.
 
 ## How agents fit in
 

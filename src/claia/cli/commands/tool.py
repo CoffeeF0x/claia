@@ -31,7 +31,7 @@ class ToolCommand(BaseCommand):
   
   def _list_modules(self) -> Result:
     """List all available modules."""
-    catalog = self.registry.manager.get_all_commands()
+    catalog = self.registry.get_all_commands()
     if not catalog:
       return Result(success=True, data="No modules available.")
     
@@ -60,7 +60,7 @@ class ToolCommand(BaseCommand):
   
   def _list_module_tools(self, module_name: str) -> Result:
     """List all tools in a specific module."""
-    catalog = self.registry.manager.get_all_commands()
+    catalog = self.registry.get_all_commands()
     mod = catalog.get(module_name)
     
     if not mod:

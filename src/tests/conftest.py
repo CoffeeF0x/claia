@@ -44,6 +44,9 @@ def fake_model_registry_ok():
     def get_supported_models(self):
       return {}
 
+    def list_tools(self):
+      return []
+
     def resolve_qualified_name(self, name):
       return name
   return FakeRegistry()
@@ -60,6 +63,9 @@ def fake_model_registry_error():
 
     def get_supported_models(self):
       return {}
+
+    def list_tools(self):
+      return []
 
     def resolve_qualified_name(self, name):
       return name
