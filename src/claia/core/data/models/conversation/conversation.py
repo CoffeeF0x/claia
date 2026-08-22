@@ -48,12 +48,9 @@ class Conversation:
     """
     Pure data model for conversations.
 
-    Not an artifact — conversation-domain type that may reference artifacts.
-    Persistence is host-owned (CLI JsonStore, Slate DB, …).
-
-    Extends TextArtifact to store conversation data as JSON text.
-    Persistence is handled externally by host runtimes (CLI, API) via
-    domain events and/or direct serialization.
+    Conversation-domain type that may reference artifacts; it is not
+    an artifact itself. Persistence is host-owned (CLI JsonStore,
+    Slate DB, …) via domain events and/or direct serialization.
 
     Domain events serve two purposes:
       1. Audit trail — every mutation is recorded in self.events and serialized.
@@ -133,7 +130,6 @@ class Conversation:
         self.title = title
         self.prompt = self._format_prompt(prompt)
         self.metadata: Dict[str, Any] = metadata or {}
-        self.metadata["title"] = title
         self.created_at = created_at or time.time()
         self.updated_at = updated_at or self.created_at
 
@@ -756,14 +752,6 @@ class Conversation:
                      entity_id=message_id, parent_id=message.parent_id)
         return True
 
-    def attach_file(self, message_id: str, artifact) -> bool:
-        """Alias for :meth:`attach_artifact`."""
-        return self.attach_artifact(message_id, artifact)
-
-    def detach_file(self, message_id: str, artifact_id: str) -> bool:
-        """Alias for :meth:`detach_artifact`."""
-        return self.detach_artifact(message_id, artifact_id)
-
     # ---------------------------------------------------------------------- #
     # Prompt management                                                        #
     # ---------------------------------------------------------------------- #
@@ -787,7 +775,6 @@ class Conversation:
     def change_title(self, new_title: str) -> None:
         old_title = self.title
         self.title = new_title
-        self.metadata['title'] = new_title
         self.updated_at = time.time()
         self._record(EventType.TITLE_CHANGED, None,
                      {"old_title": old_title, "new_title": new_title})

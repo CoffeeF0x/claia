@@ -141,8 +141,7 @@ class ConversationCommand(BaseCommand):
     old_title = self.settings.active_conversation.title
     
     try:
-      self.settings.active_conversation.title = new_title
-      self.settings.active_conversation.metadata['title'] = new_title
+      self.settings.active_conversation.change_title(new_title)
       
       file_repo = JsonStore(self.settings.files_directory)
       file_repo.save(self.settings.active_conversation)
