@@ -10,22 +10,10 @@ They serve a dual purpose:
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
-from enum import Enum, auto
 import time
 import uuid
 
-
-class EventType(Enum):
-    """All recognised domain event types."""
-    CONVERSATION_CREATED   = auto()
-    MESSAGE_CREATED        = auto()
-    MESSAGE_UPDATED        = auto()
-    MESSAGE_DELETED        = auto()
-    MESSAGE_STREAM_START   = auto()
-    MESSAGE_STREAM_END     = auto()
-    ATTACHMENT_ADDED       = auto()
-    ATTACHMENT_REMOVED     = auto()
-    TITLE_CHANGED          = auto()
+from ..enums.events import EventType
 
 
 @dataclass

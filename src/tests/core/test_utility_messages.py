@@ -25,9 +25,10 @@ Covers:
 import pytest
 
 # Internal dependencies
-from claia.core.data import Conversation, EventType, Message
+from claia.core.data import Conversation, Message
 from claia.core.enums.conversation import MessageRole
-from claia.core.parser.types import TagType
+from claia.core.enums.events import EventType
+from claia.core.enums.parser import TagType
 
 
 ########################################################################

@@ -15,7 +15,7 @@ import threading
 
 from ....enums.conversation import MessageRole
 from ....enums.data import TextFormat
-from ....parser.types import TagType
+from ....enums.parser import TagType
 
 
 def _artifact_from_dict(data: Dict[str, Any]):

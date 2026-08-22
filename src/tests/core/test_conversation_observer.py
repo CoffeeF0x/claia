@@ -4,8 +4,9 @@ Tests for the Conversation observer and streaming API.
 
 import pytest
 
-from claia.core.data import Conversation, EventType
+from claia.core.data import Conversation
 from claia.core.enums.conversation import MessageRole
+from claia.core.enums.events import EventType
 
 
 def _capture_observer():

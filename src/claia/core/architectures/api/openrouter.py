@@ -16,11 +16,10 @@ from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.conversation import MessageRole
+from ...enums.plugins import ParamScope, SettingCategory
 from ...plugins.base import (
   COMMON_TEXT_RUNTIME_PARAMS,
-  ParamScope,
   ParamSpec,
-  SettingCategory,
 )
 from ...results import DeploymentError
 from ..base import APIArchitecture

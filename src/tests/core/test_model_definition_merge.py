@@ -10,7 +10,8 @@ from claia.core.definitions.model_definition import (
   merge_model_definitions,
 )
 from claia.core.enums.data import ArtifactType
-from claia.core.parser import TagSpec, TagType
+from claia.core.enums.parser import TagType
+from claia.core.parser import TagSpec
 
 
 def test_ordered_union_lists_dedupe_and_keep_first_seen_order():

@@ -15,7 +15,8 @@ from ..core.enums.task import TaskEvent, TaskStatus
 from ..core.data import Conversation
 from ..core.data.chunks import BaseChunk, TextChunk
 from ..core.data.response import GenerateStream
-from ..core.plugins.base import ParamScope, ParamSpec, ServingPlan, ToolReference
+from ..core.enums.plugins import ParamScope
+from ..core.plugins.base import ParamSpec, ServingPlan, ToolReference
 
 
 

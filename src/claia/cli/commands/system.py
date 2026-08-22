@@ -7,7 +7,7 @@ from typing import List, Optional, Any
 from collections import defaultdict
 
 from ...core.results import Result
-from ...core.plugins.base import SettingCategory
+from ...core.enums.plugins import SettingCategory
 from .base import BaseCommand
 
 

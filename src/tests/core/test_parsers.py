@@ -28,10 +28,10 @@ from claia.core.parser import (
   TagEvent,
   TagParser,
   TagSpec,
-  TagType,
   TextEvent,
   resolve_tag_specs,
 )
+from claia.core.enums.parser import TagType
 
 
 ########################################################################

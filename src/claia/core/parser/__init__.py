@@ -28,9 +28,9 @@ from .types import (
   ParseEvent,
   TagEvent,
   TagSpec,
-  TagType,
   TextEvent,
 )
+from ..enums.parser import TagType
 
 __all__ = [
   "DEFAULT_TAGS",

@@ -1,10 +1,11 @@
 """System message is a generate-time argument, not conversation state."""
 
-from claia.core.data import Conversation, EventType
+from claia.core.data import Conversation
 from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.definitions.model_definition import ModelDefinition
 from claia.core.enums.conversation import MessageRole
 from claia.core.enums.data import ArtifactType
+from claia.core.enums.events import EventType
 
 
 def test_to_dict_omits_prompt():

@@ -34,7 +34,8 @@ why this is acceptable for v1.
 
 from typing import Dict, Iterable, Iterator, List, Tuple
 
-from .types import ParseError, ParseEvent, TagEvent, TagSpec, TagType, TextEvent
+from ..enums.parser import TagType
+from .types import ParseError, ParseEvent, TagEvent, TagSpec, TextEvent
 from .utils import OpenTag, is_proper_prefix, parse_attribute_region
 
 

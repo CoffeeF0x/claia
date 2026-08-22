@@ -22,7 +22,8 @@ from dotenv import load_dotenv
 
 # Internal dependencies
 from ..core.enums.logging import LogLevel, LogFormat
-from ..core.plugins.base import ParamScope, ParamSpec, SettingCategory
+from ..core.enums.plugins import ParamScope, SettingCategory
+from ..core.plugins.base import ParamSpec
 from .params import APP_PARAMS
 from ..framework.manager import Manager
 from ..framework.registry import Registry

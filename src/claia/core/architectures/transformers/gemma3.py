@@ -12,7 +12,8 @@ from typing import Any, Dict, Optional
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...decorators import architecture
 from ...enums.conversation import MessageRole
-from ...plugins.base import ParamScope, ParamSpec, SettingCategory
+from ...enums.plugins import ParamScope, SettingCategory
+from ...plugins.base import ParamSpec
 from .generic import GenericTransformerArchitecture
 
 

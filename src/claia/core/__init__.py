@@ -34,7 +34,6 @@ from .data import (
   Conversation,
   Message,
   DomainEvent,
-  EventType,
 )
 from .plugins.base import (
   ExtensionInfo,
@@ -49,10 +48,10 @@ from .plugins.base import (
   ToolReference,
   ServingPlan,
   ParamSpec,
-  ParamScope,
-  SettingCategory,
 )
 from .definitions.model_definition import ModelDefinition
+from .enums.events import EventType
+from .enums.plugins import ParamScope, SettingCategory
 from .enums.data import (
   MediaType,
   TextFormat,

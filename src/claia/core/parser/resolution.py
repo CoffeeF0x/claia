@@ -17,8 +17,9 @@ default so this helper accepts any duck-typed object — concrete
 
 from typing import Any, Dict, List, Optional
 
+from ..enums.parser import TagType
 from .defaults import DEFAULT_TAGS
-from .types import TagSpec, TagType
+from .types import TagSpec
 
 
 ########################################################################

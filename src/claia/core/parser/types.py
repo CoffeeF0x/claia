@@ -17,24 +17,9 @@ does not need to inspect the delimiter strings.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Dict, Optional, Union
 
-
-########################################################################
-#                              TAG TYPE                                #
-########################################################################
-class TagType(Enum):
-  """Categorical kind of a parsed tag span.
-
-  The set is intentionally small at the start; new categories are
-  added as new tag-shaped artifacts are introduced (e.g., a future
-  ``CODE`` for opaque code blocks). The string value is stable and
-  used for serialization / persistence of utility messages.
-  """
-  TOOL = "tool"
-  THINKING = "thinking"
-  REFERENCE = "reference"
+from ..enums.parser import TagType
 
 
 ########################################################################

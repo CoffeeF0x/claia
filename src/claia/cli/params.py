@@ -20,7 +20,8 @@ below. Settings will pick it up automatically — there is no separate
 from typing import List
 
 # Internal dependencies
-from ..core.plugins.base import ParamScope, ParamSpec, SettingCategory
+from ..core.enums.plugins import ParamScope, SettingCategory
+from ..core.plugins.base import ParamSpec
 
 
 APP_PARAMS: List[ParamSpec] = [

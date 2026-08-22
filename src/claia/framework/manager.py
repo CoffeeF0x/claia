@@ -26,7 +26,8 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
 from ..core.architectures.base import BaseArchitecture
 from ..core.decorators import PENDING_ATTR, iter_decorated_plugins
 from ..core.definitions.model_definition import ModelDefinition, merge_model_definitions
-from ..core.plugins.base import ArchitectureInfo, DeploymentInfo, NodeInfo, ParamScope, ParamSpec
+from ..core.enums.plugins import ParamScope
+from ..core.plugins.base import ArchitectureInfo, DeploymentInfo, NodeInfo, ParamSpec
 from .agents.base import AgentInfo, BaseAgent
 
 

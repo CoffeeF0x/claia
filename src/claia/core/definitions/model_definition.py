@@ -31,7 +31,8 @@ from typing import Any, Dict, List, Optional, Type
 
 from ..data.chunks import BaseChunk, TextChunk
 from ..enums.data import ArtifactType
-from ..parser.types import TagSpec, TagType
+from ..enums.parser import TagType
+from ..parser.types import TagSpec
 
 
 def default_inputs() -> List[Any]:

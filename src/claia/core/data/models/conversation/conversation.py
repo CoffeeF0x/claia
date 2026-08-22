@@ -27,10 +27,11 @@ import logging
 import time
 import uuid
 
-from ...events import DomainEvent, EventType
+from ...events import DomainEvent
 from .message import Message
 from ....enums.conversation import MessageRole
-from ....parser.types import TagType
+from ....enums.events import EventType
+from ....enums.parser import TagType
 
 
 DEFAULT_CONVERSATION_TITLE = "New Conversation"

@@ -31,7 +31,7 @@ from .models import (
   MessageSequence,
   MessageSequenceOrdered,
 )
-from .events import DomainEvent, EventType
+from .events import DomainEvent
 from . import utils
 
 __all__ = [
@@ -57,6 +57,5 @@ __all__ = [
   "MessageSequence",
   "MessageSequenceOrdered",
   "DomainEvent",
-  "EventType",
   "utils",
 ]

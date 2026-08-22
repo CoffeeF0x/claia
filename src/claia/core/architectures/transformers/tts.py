@@ -16,7 +16,8 @@ from ...data.chunks import AudioChunk, BaseChunk, TextChunk
 from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.data import AudioFormat
-from ...plugins.base import ParamScope, ParamSpec, SettingCategory
+from ...enums.plugins import ParamScope, SettingCategory
+from ...plugins.base import ParamSpec
 from ..base import LocalArchitecture
 from ..base.base import ModelInputs
 

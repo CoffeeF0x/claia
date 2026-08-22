@@ -16,6 +16,7 @@ from collections import defaultdict
 from ...core.decorators import tool
 from ...core.tools.modules.base import BaseToolModule
 from ...core.plugins.base import ToolDefinition, ArgumentDefinition
+from ...core.enums.plugins import SettingCategory
 from ...core.results import Result
 from ...core.data.models import Conversation, Prompt
 from ..storage import JsonStore
@@ -797,8 +798,6 @@ class CLIToolModule(BaseToolModule):
         return output
       else:
         # Get all settings grouped by category
-        from ..settings import SettingCategory
-
         output_lines = []
         output_lines.append("\n" + "=" * 70)
         output_lines.append("                         CURRENT SETTINGS                           ")

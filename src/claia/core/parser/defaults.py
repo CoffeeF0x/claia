@@ -9,7 +9,8 @@ spec of a given ``TagType`` active in a parser instance.
 
 from typing import Dict
 
-from .types import TagSpec, TagType
+from ..enums.parser import TagType
+from .types import TagSpec
 
 
 ########################################################################

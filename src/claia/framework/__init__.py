@@ -45,7 +45,6 @@ from ..core.data import (
   ModelResponse,
   GenerateStream,
   DomainEvent,
-  EventType,
 )
 from ..core.plugins.base import (
   ExtensionInfo,
@@ -59,10 +58,10 @@ from ..core.plugins.base import (
   ToolReference,
   ServingPlan,
   ParamSpec,
-  ParamScope,
-  SettingCategory,
 )
 from ..core.definitions.model_definition import ModelDefinition
+from ..core.enums.events import EventType
+from ..core.enums.plugins import ParamScope, SettingCategory
 from ..core.enums.task import TaskEvent, TaskStatus
 from ..core.enums.task_queue import TaskQueueHook
 from ..core.enums.data import (

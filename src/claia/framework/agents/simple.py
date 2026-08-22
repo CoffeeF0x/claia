@@ -20,13 +20,13 @@ from ...core.data.chunks import AudioChunk, BaseChunk, ImageChunk, TextChunk
 from ...core.data.models import AudioArtifact, ImageArtifact
 from ...core.enums.conversation import MessageRole
 from ...core.enums.data import AudioFormat, ImageFormat
+from ...core.enums.parser import TagType
 from ...core.enums.task import TaskEvent
 from ...core.parser import (
   ParseError,
   ParseEvent,
   TagEvent,
   TagParser,
-  TagType,
   TextEvent,
   resolve_tag_specs,
 )

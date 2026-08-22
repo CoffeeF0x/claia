@@ -32,9 +32,9 @@ import pytest
 
 from claia.core.data import Conversation
 from claia.core.enums.conversation import MessageRole
+from claia.core.enums.parser import TagType
 from claia.core.enums.task import TaskEvent, TaskStatus
 from claia.core.data.chunks import BaseChunk, TextChunk
-from claia.core.parser import TagType
 from claia.core.plugins.base import ToolReference
 from claia.core.results import Result
 from claia.framework.agents.simple import SimpleAgent
