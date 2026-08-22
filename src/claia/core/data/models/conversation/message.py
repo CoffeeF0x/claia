@@ -9,29 +9,13 @@ streaming convenience.
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
-import logging
-import json
 import time
 import uuid
-import re
 import threading
 
 from ....enums.conversation import MessageRole
 from ....enums.data import TextFormat
 from ....parser.types import TagType
-
-
-########################################################################
-#                              CONSTANTS                               #
-########################################################################
-LEFT_ARG_WRAPPER = "{"
-RIGHT_ARG_WRAPPER = "}"
-
-
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
-logger = logging.getLogger(__name__)
 
 
 def _artifact_from_dict(data: Dict[str, Any]):
@@ -81,7 +65,6 @@ class Message:
     artifacts: Optional[List[Any]] = None,
     created_at: Optional[float] = None,
     updated_at: Optional[float] = None,
-    inline_args: Optional[Dict[str, Any]] = None,
     tag_type: Optional[TagType] = None,
     source_message_id: Optional[str] = None,
     start_index: Optional[int] = None,
@@ -95,7 +78,6 @@ class Message:
     self.speaker = speaker if isinstance(speaker, MessageRole) else MessageRole(speaker)
     self.created_at = created_at or time.time()
     self.updated_at = updated_at or self.created_at
-    self.inline_args = inline_args or {}
 
     if tag_type is not None and not isinstance(tag_type, TagType):
       tag_type = TagType(tag_type)
@@ -177,7 +159,6 @@ class Message:
       "artifacts": [a.to_dict() for a in self.artifacts],
       "created_at": self.created_at,
       "updated_at": self.updated_at,
-      "inline_args": self.inline_args,
     }
     if self.tag_type is not None:
       data["tag_type"] = self.tag_type.value
@@ -206,7 +187,6 @@ class Message:
       artifacts=artifacts,
       created_at=data.get("created_at"),
       updated_at=data.get("updated_at"),
-      inline_args=data.get("inline_args", {}) or data.get("query_args", {}),
       tag_type=data.get("tag_type"),
       source_message_id=data.get("source_message_id"),
       start_index=data.get("start_index"),
@@ -233,70 +213,3 @@ class Message:
   def safe_get_content(self) -> str:
     with self._content_lock:
       return self.content
-
-  def extract_inline_args(
-    self,
-    left_wrapper: str = LEFT_ARG_WRAPPER,
-    right_wrapper: str = RIGHT_ARG_WRAPPER,
-  ) -> str:
-    updated_content = self.content
-    arg_pattern = re.compile(
-      f"\\{left_wrapper}([^{left_wrapper}{right_wrapper}]+?)\\{right_wrapper}"
-    )
-    matches = arg_pattern.finditer(self.content)
-
-    for match in matches:
-      arg_text = match.group(1)
-      full_match = match.group(0)
-      try:
-        if "=" in arg_text:
-          key, value = arg_text.split("=", 1)
-          self.inline_args[key.strip()] = self._convert_value_type(value.strip())
-        elif ":" in arg_text:
-          key, value = arg_text.split(":", 1)
-          self.inline_args[key.strip()] = self._convert_value_type(value.strip())
-        elif arg_text.startswith("--") and " " in arg_text:
-          parts = arg_text.split(" ", 1)
-          key = parts[0][2:].strip()
-          value = parts[1].strip()
-          if key and value:
-            self.inline_args[key] = self._convert_value_type(value)
-        elif arg_text.startswith("--"):
-          key = arg_text[2:].strip()
-          if key:
-            self.inline_args[key] = True
-        else:
-          key = arg_text.strip()
-          if key:
-            self.inline_args[key] = True
-        updated_content = updated_content.replace(full_match, "", 1)
-      except Exception as e:
-        logger.warning(f"Failed to parse argument '{arg_text}': {e}")
-
-    self.content = updated_content.strip()
-    return self.content
-
-  def _convert_value_type(self, value: str) -> Any:
-    if value.lower() == "true":
-      return True
-    if value.lower() == "false":
-      return False
-    if value.isdigit():
-      return int(value)
-    if re.match(r"^-?\d+(\.\d+)?$", value):
-      return float(value)
-    if (
-      (value.startswith("[") and value.endswith("]"))
-      or (value.startswith("{") and value.endswith("}"))
-    ):
-      try:
-        return json.loads(value)
-      except json.JSONDecodeError:
-        pass
-    return value
-
-  def get_inline_args(self) -> Dict[str, Any]:
-    return self.inline_args.copy()
-
-  def has_inline_args(self) -> bool:
-    return bool(self.inline_args)

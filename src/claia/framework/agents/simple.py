@@ -129,8 +129,7 @@ class SimpleAgent(BaseAgent):
       if cancelled:
         conversation.end_streaming_message(streaming_message.message_id, error="cancelled")
         process.emit("stream_end", streaming_message.message_id)
-        process.emit("cancelled", full_response)
-        process.mark_cancelled()
+        process.mark_cancelled(full_response)
       else:
         conversation.end_streaming_message(streaming_message.message_id)
         process.emit("stream_end", streaming_message.message_id)

@@ -418,7 +418,6 @@ class Conversation:
             artifacts=artifacts,
             parent_id=effective_parent_id,
         )
-        message.extract_inline_args()
 
         self.messages.append(message)
         self.active_head_id = message.message_id
@@ -430,8 +429,6 @@ class Conversation:
             "speaker": message.speaker.value,
             "content_preview": message.content[:50] + ("..." if len(message.content) > 50 else ""),
         }
-        if message.has_inline_args():
-            meta["inline_args_count"] = len(message.inline_args)
 
         self._record(EventType.MESSAGE_CREATED, message, meta,
                      entity_id=message.message_id, parent_id=message.parent_id)
@@ -447,10 +444,10 @@ class Conversation:
                        parent_id: Optional[str] = None) -> Message:
         """Append a ``UTILITY``-role sibling message derived from a tag.
 
-        The plan's §2.4 / §4 design treats parsed tag spans (tool
-        calls, thinking blocks, references, …) as their own first-class
-        messages that reference a source assistant message by id. This
-        helper is the data-model entry point for creating one.
+        Parsed tag spans (tool calls, thinking blocks, references, …)
+        become their own first-class messages that reference a source
+        assistant message by id. This helper is the data-model entry
+        point for creating one.
 
         Behaviour:
 
@@ -471,9 +468,6 @@ class Conversation:
         - The standard ``MESSAGE_CREATED`` domain event is emitted,
           carrying ``tag_type`` / ``source_message_id`` in the
           event metadata for persistence/observer consumers.
-        - Inline-arg extraction is intentionally skipped: utility
-          content is the verbatim parsed tag body (e.g., a JSON
-          tool-call payload) and must round-trip unmodified.
 
         Args:
             tag_type: Categorical kind of the parsed tag.
@@ -531,8 +525,6 @@ class Conversation:
             if message.message_id == message_id:
                 if content is not None:
                     message.content = content
-                    message.inline_args = {}
-                    message.extract_inline_args()
                 if artifacts is not None:
                     message.artifacts = list(artifacts)
 
@@ -543,8 +535,6 @@ class Conversation:
                     "message_id": message_id,
                     "content_preview": message.content[:50] + ("..." if len(message.content) > 50 else ""),
                 }
-                if message.has_inline_args():
-                    meta["inline_args_count"] = len(message.inline_args)
 
                 self._record(EventType.MESSAGE_UPDATED, message, meta,
                              entity_id=message.message_id, parent_id=message.parent_id)

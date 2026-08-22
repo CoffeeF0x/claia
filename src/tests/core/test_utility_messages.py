@@ -156,7 +156,6 @@ class TestMessageSerialization:
       "content": "hello",
       "created_at": 1.0,
       "updated_at": 1.0,
-      "inline_args": {},
     }
     msg = Message.from_dict(payload)
     assert msg.tag_type is None
@@ -247,9 +246,7 @@ class TestConversationAppendUtility:
     # ``source_message_id`` is independent of ``parent_id``.
     assert utility.source_message_id == assistant.message_id
 
-  def test_append_utility_does_not_extract_inline_args(self):
-    """Utility content is verbatim — JSON-shaped payloads must not be
-    consumed by the ``add_message`` inline-arg extractor."""
+  def test_append_utility_preserves_json_content(self):
     conv = Conversation(title="t")
     assistant = conv.add_message(MessageRole.ASSISTANT, "running tool")
     utility = conv.append_utility(
@@ -258,7 +255,6 @@ class TestConversationAppendUtility:
       source_message_id=assistant.message_id,
     )
     assert utility.content == '{"name":"echo","parameters":{"x":1}}'
-    assert utility.inline_args == {}
 
 
 ########################################################################

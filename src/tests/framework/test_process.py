@@ -60,3 +60,11 @@ def test_mark_cancelled_sets_status_and_timestamp(process):
   process.mark_cancelled()
   assert process.status == ProcessStatus.CANCELLED
   assert process.completed_at is not None
+
+
+def test_mark_cancelled_emits_cancelled(process):
+  seen = []
+  process.on("cancelled", lambda result: seen.append(result))
+  process.mark_cancelled("partial")
+  assert process.result == "partial"
+  assert seen == ["partial"]

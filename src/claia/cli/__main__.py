@@ -461,8 +461,17 @@ def main() -> None:
           print(f"\nError: {error_msg}")
           done_event.set()
 
+        def on_cancelled(_full_response=None):
+          renderer.finish(drain=True)
+          pending_events = process.conversation.pull_events()
+          if file_repo and pending_events:
+            if not file_repo.save(process.conversation):
+              logger.error("Failed to save conversation")
+          done_event.set()
+
         process.on("complete", on_complete)
         process.on("error", on_error)
+        process.on("cancelled", on_cancelled)
         process.on("artifact", on_artifact)
 
         process_id = registry.add_process(process)

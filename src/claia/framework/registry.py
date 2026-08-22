@@ -641,8 +641,13 @@ class Registry:
         on_error(error_msg)
       done_event.set()
 
+    def _on_cancelled(_full_response=None):
+      result_holder[0] = Result.fail("cancelled")
+      done_event.set()
+
     process.on("complete", _on_complete)
     process.on("error", _on_error)
+    process.on("cancelled", _on_cancelled)
 
     self.add_process(process)
     done_event.wait()

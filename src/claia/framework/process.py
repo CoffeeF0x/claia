@@ -29,9 +29,9 @@ class Process:
 
   Supports an event callback system via on() and emit(). Consumers
   register callbacks before submitting the process to the queue.
-  Agents emit events ("start", "token", "complete", "error") as they
-  execute. Callbacks are fired from the worker thread — thread safety
-  is the consumer's responsibility.
+  Agents emit events ("start", "token", "complete", "error",
+  "cancelled") as they execute. Callbacks are fired from the worker
+  thread — thread safety is the consumer's responsibility.
   """
   def __init__(
     self,
@@ -98,10 +98,12 @@ class Process:
     self.completed_at = time.time()
     self.emit("error", error)
 
-  def mark_cancelled(self):
-    """Mark the process as cancelled."""
+  def mark_cancelled(self, result: Any = None):
+    """Mark the process as cancelled and emit ``cancelled``."""
     self.status = ProcessStatus.CANCELLED
+    self.result = result
     self.completed_at = time.time()
+    self.emit("cancelled", result)
 
   # ── Cancellation ──────────────────────────────────────────────────
 

@@ -89,3 +89,9 @@ def test_delete_message_provides_pre_deletion_snapshot():
   evt_type, observed_msg = captured[0]
   assert evt_type == EventType.MESSAGE_DELETED
   assert observed_msg.message_id == msg.message_id
+
+
+def test_add_message_keeps_brace_spans():
+  conv = Conversation(title="t")
+  msg = conv.add_message(MessageRole.USER, 'hello {"key": "value"}')
+  assert msg.content == 'hello {"key": "value"}'

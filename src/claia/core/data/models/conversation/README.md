@@ -5,7 +5,7 @@ Conversation models represent chat state as a pure Python message tree with an e
 ## What Lives Here
 
 - `conversation.py` — `Conversation`, including title/prompt metadata, messages, active branch tracking, serialization, and event emission.
-- `message.py` — `Message`, including role, content, attachments, inline args, parent links, and thread-safe content updates.
+- `message.py` — `Message`, including role, content, attachments, parent links, and thread-safe content updates.
 - `tool_definition.py` — compatibility re-export for tool definition dataclasses.
 
 All primary types are available from `claia.core.data`; `Conversation` and `Message` are also re-exported from `claia.framework`.

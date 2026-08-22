@@ -82,8 +82,15 @@ class QueryCommand(BaseCommand):
         print(f"\nError: {error_msg}")
         done_event.set()
 
+      def on_cancelled(_full_response=None):
+        renderer.finish(drain=True)
+        if self.settings.active_conversation.pull_events():
+          file_repo.save(self.settings.active_conversation)
+        done_event.set()
+
       process.on("complete", on_complete)
       process.on("error", on_error)
+      process.on("cancelled", on_cancelled)
       process.on("artifact", on_artifact)
 
       self.registry.add_process(process)

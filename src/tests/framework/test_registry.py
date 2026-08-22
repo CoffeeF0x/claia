@@ -46,6 +46,19 @@ def test_model_registry_unknown_model(registry_with_unknown_model, tmp_path):
   assert "not found" in res.get_message()
 
 
+def test_query_unblocks_on_cancel(registry_with_fake_manager):
+  reg: Registry = registry_with_fake_manager
+
+  def cancel_immediately(process):
+    process.mark_cancelled()
+    return process.id
+
+  reg.add_process = cancel_immediately
+  result = reg.query("dummy", "hello")
+  assert result.is_error()
+  assert result.get_message() == "cancelled"
+
+
 def test_model_registry_unknown_model_streaming_raises(registry_with_unknown_model, tmp_path):
   conv = Conversation(title="T")
   reg: Registry = registry_with_unknown_model
