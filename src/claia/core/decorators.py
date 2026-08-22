@@ -28,6 +28,7 @@ from .plugins.base import (
   ArchitectureInfo,
   DefinitionsInfo,
   DeploymentInfo,
+  NodeInfo,
   ParamSpec,
   ProtocolInfo,
   ToolDefinition,
@@ -492,6 +493,7 @@ tool = PluginDecorator(
 protocol = PluginDecorator(ProtocolInfo, "claia.tool_protocols", label="protocol")
 architecture = PluginDecorator(ArchitectureInfo, "claia.architectures", label="architecture")
 deployment = PluginDecorator(DeploymentInfo, "claia.deployments", label="deployment")
+node = PluginDecorator(NodeInfo, "claia.nodes", label="node")
 definitions = PluginDecorator(DefinitionsInfo, "claia.definitions", label="definitions")
 
 
@@ -503,6 +505,7 @@ __all__ = [
   "definitions",
   "deployment",
   "iter_decorated_plugins",
+  "node",
   "protocol",
   "record_plugin",
   "tool",

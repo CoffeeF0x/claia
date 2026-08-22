@@ -1,8 +1,10 @@
 """
 API deployment.
 
-This deployment handles API-based models that make remote calls
-to services like OpenAI, Anthropic, etc.
+Serves hosted-API architectures (OpenAI, Anthropic, OpenRouter, …).
+There is nothing to provision — deploying is constructing the
+architecture's configured HTTP session — so this deployment is a
+session factory plus the base metering relay.
 """
 
 from .base import BaseDeployment
@@ -12,6 +14,8 @@ from ..decorators import deployment
 @deployment
 @deployment.name("api")
 @deployment.title("API Deployment")
-@deployment.description("Deploy models via external API services (OpenAI, Anthropic, etc.)")
+@deployment.description("Serve architectures that call hosted third-party APIs")
 class APIDeployment(BaseDeployment):
-  """API deployment for remote API-based models."""
+  """Session factory + metering relay for hosted-API architectures."""
+
+  api = True

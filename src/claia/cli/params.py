@@ -101,6 +101,12 @@ APP_PARAMS: List[ParamSpec] = [
     category=SettingCategory.MODEL,
     description="Default model source",
   ),
+  ParamSpec(
+    name="deployment_preference",
+    type=str, scope=ParamScope.INIT, default="any",
+    category=SettingCategory.MODEL,
+    description="Serving placement filter: local-only, remote, or any",
+  ),
 
   # ====================================================================
   # Prompt defaults

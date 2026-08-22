@@ -5,7 +5,7 @@ import pytest
 
 # Internal dependencies
 from claia.framework.registry import Registry
-from claia.core.results import Result, DeploymentError
+from claia.core.results import Result, ResolveError
 from claia.core.data import Conversation
 
 
@@ -62,19 +62,49 @@ def test_query_unblocks_on_cancel(registry_with_fake_manager):
 def test_model_registry_unknown_model_streaming_raises(registry_with_unknown_model, tmp_path):
   conv = Conversation(title="T")
   reg: Registry = registry_with_unknown_model
-  with pytest.raises(DeploymentError, match="not found"):
+  with pytest.raises(ResolveError, match="not found"):
     for _ in reg.run("dummy", conv, streaming=True):
       pass
 
 
-def test_model_registry_resolves_diffusers_provider_identifier(monkeypatch):
-  """Stable Diffusion resolves from Claia id to provider id before deployment."""
+def _make_identifier_manager(claia_name, architecture_name, provider_name):
+  """Fake manager serving one weight-holding model through the real node path."""
+  from claia.core.data.chunks import TextChunk
+  from claia.core.data.response import ModelResponse
   from claia.core.definitions.model_definition import ModelDefinition
+  from claia.core.deployments.base import BaseDeployment
+  from claia.core.nodes.local import LocalNode
   from claia.core.plugins.base import ArchitectureInfo, DeploymentInfo
   from claia.framework.manager import Manager as RealManager
-  import claia.framework.registry as registry_module
+
+  class EchoArchitecture:
+    deployment = "transformers"
+    info = ArchitectureInfo(
+      name=architecture_name,
+      title=architecture_name,
+      description="Test architecture",
+    )
+
+    def __init__(self, model_name, model_path=None, defer_loading=False, device="cpu"):
+      self.model_name = model_name
+
+    def generate(self, inputs, **kwargs):
+      yield TextChunk(data=self.model_name)
+      return ModelResponse(complete=True)
+
+  class FakeDeployment(BaseDeployment):
+    info = DeploymentInfo(
+      name="transformers",
+      title="Transformers",
+      description="Test deployment",
+    )
+
+  fake_deployment = FakeDeployment()
+  node = LocalNode()
 
   class FakeManager:
+    # Registry reaches for kwarg-shaping statics on the module-level
+    # ``Manager`` symbol; delegate those to the real class.
     coerce_value = staticmethod(RealManager.coerce_value)
     filter_init_kwargs = staticmethod(RealManager.filter_init_kwargs)
     filter_runtime_kwargs = staticmethod(RealManager.filter_runtime_kwargs)
@@ -91,45 +121,34 @@ def test_model_registry_resolves_diffusers_provider_identifier(monkeypatch):
 
     def get_supported_models(self):
       return {
-        "stable-diffusion-v2": ModelDefinition(
-          deployments=["local"],
-          architectures=["diffusers"],
-          identifiers={"diffusers": "sd2-community/stable-diffusion-2"},
+        claia_name: ModelDefinition(
+          architectures=[architecture_name],
+          identifiers={architecture_name: provider_name},
         )
       }
 
     def get_available_deployments(self):
-      return {"local": object()}
+      return {"transformers": fake_deployment.info}
 
-    def get_model_class(self, architecture_name):
-      class DummyModel:
-        pass
-      return DummyModel
+    def get_architecture_class(self, name):
+      return EchoArchitecture if name == architecture_name else None
 
-    def get_deployment_plugin(self, deployment_name):
-      class Deployment:
-        info = DeploymentInfo(
-          name="local",
-          title="Local",
-          description="Local test deployment",
-        )
+    def get_deployment_plugin(self, name):
+      return fake_deployment if name == "transformers" else None
 
-        def run(self, model_name, model_class, inputs, cache, init_kwargs, runtime_kwargs):
-          from claia.core.data.chunks import TextChunk
-          yield TextChunk(data=model_name)
+    def iter_node_instances(self):
+      yield node
 
-      return Deployment()
+  return FakeManager
 
-    def get_available_architectures(self):
-      return {
-        "diffusers": ArchitectureInfo(
-          name="diffusers",
-          title="Diffusers",
-          description="Diffusers test architecture",
-        )
-      }
 
-  monkeypatch.setattr(registry_module, "Manager", FakeManager)
+def test_model_registry_resolves_diffusers_provider_identifier(monkeypatch):
+  """Stable Diffusion resolves from Claia id to provider id before serving."""
+  import claia.framework.registry as registry_module
+
+  monkeypatch.setattr(registry_module, "Manager", _make_identifier_manager(
+    "stable-diffusion-v2", "diffusers", "sd2-community/stable-diffusion-2",
+  ))
 
   reg = Registry()
   result = reg.run("stable-diffusion-v2", Conversation(title="T"))
@@ -139,68 +158,12 @@ def test_model_registry_resolves_diffusers_provider_identifier(monkeypatch):
 
 
 def test_model_registry_resolves_tts_provider_identifier(monkeypatch):
-  """Qwen TTS resolves from Claia id to provider id before deployment."""
-  from claia.core.definitions.model_definition import ModelDefinition
-  from claia.core.plugins.base import ArchitectureInfo, DeploymentInfo
-  from claia.framework.manager import Manager as RealManager
+  """Qwen TTS resolves from Claia id to provider id before serving."""
   import claia.framework.registry as registry_module
 
-  class FakeManager:
-    coerce_value = staticmethod(RealManager.coerce_value)
-    filter_init_kwargs = staticmethod(RealManager.filter_init_kwargs)
-    filter_runtime_kwargs = staticmethod(RealManager.filter_runtime_kwargs)
-    resolve_runtime_kwargs = staticmethod(RealManager.resolve_runtime_kwargs)
-    validate_required_init_kwargs = staticmethod(RealManager.validate_required_init_kwargs)
-    _COERCE_FAIL = RealManager._COERCE_FAIL
-    _mask_for_log = staticmethod(RealManager._mask_for_log)
-
-    def discover_plugins(self):
-      return None
-
-    def load_all_plugins(self, **kwargs):
-      return None
-
-    def get_supported_models(self):
-      return {
-        "qwen3-tts-0.6b": ModelDefinition(
-          deployments=["local"],
-          architectures=["tts"],
-          identifiers={"tts": "Qwen/Qwen3-TTS-12Hz-0.6B-Base"},
-        )
-      }
-
-    def get_available_deployments(self):
-      return {"local": object()}
-
-    def get_model_class(self, architecture_name):
-      class DummyModel:
-        pass
-      return DummyModel
-
-    def get_deployment_plugin(self, deployment_name):
-      class Deployment:
-        info = DeploymentInfo(
-          name="local",
-          title="Local",
-          description="Local test deployment",
-        )
-
-        def run(self, model_name, model_class, inputs, cache, init_kwargs, runtime_kwargs):
-          from claia.core.data.chunks import TextChunk
-          yield TextChunk(data=model_name)
-
-      return Deployment()
-
-    def get_available_architectures(self):
-      return {
-        "tts": ArchitectureInfo(
-          name="tts",
-          title="TTS",
-          description="TTS test architecture",
-        )
-      }
-
-  monkeypatch.setattr(registry_module, "Manager", FakeManager)
+  monkeypatch.setattr(registry_module, "Manager", _make_identifier_manager(
+    "qwen3-tts-0.6b", "tts", "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+  ))
 
   reg = Registry()
   result = reg.run("qwen3-tts-0.6b", Conversation(title="T"))

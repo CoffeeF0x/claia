@@ -19,7 +19,7 @@ from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.data import ImageFormat
 from ...plugins.base import ParamScope, ParamSpec, SettingCategory
-from ..base import LocalModel
+from ..base import LocalArchitecture
 from ..base.base import ModelInputs
 
 
@@ -161,8 +161,8 @@ PIPELINE_PROFILES: Dict[str, Dict[str, Any]] = {
   category=SettingCategory.GENERATION,
   description="Encoded output image format.",
 ))
-class DiffusersModel(LocalModel):
-  """Generic local image model backed by a Diffusers pipeline."""
+class DiffusersArchitecture(LocalArchitecture):
+  """Generic local image architecture backed by a Diffusers pipeline."""
 
   def __init__(
     self,
@@ -223,65 +223,54 @@ class DiffusersModel(LocalModel):
     if not self.loaded:
       self.load()
 
+    prompt = self._resolve_prompt(inputs, kwargs.get("prompt"))
+    pipeline_kwargs = self._build_pipeline_kwargs(prompt, kwargs)
+
+    output = self.pipeline(**pipeline_kwargs)
+    images = list(getattr(output, "images", []) or [])
+    if not images:
+      raise ValueError("No images were returned by the diffusers pipeline.")
+
+    summary = TextChunk(
+      data=f"Generated {len(images)} image{'s' if len(images) != 1 else ''}."
+    )
+    chunks.append(summary)
+    yield summary
+
+    output_format = self._normalize_output_format(kwargs.get("output_format"))
+    media_type = SUPPORTED_OUTPUT_FORMATS[output_format]
     try:
-      prompt = self._resolve_prompt(inputs, kwargs.get("prompt"))
-      pipeline_kwargs = self._build_pipeline_kwargs(prompt, kwargs)
-
-      output = self.pipeline(**pipeline_kwargs)
-      images = list(getattr(output, "images", []) or [])
-      if not images:
-        message = TextChunk(data="No images were returned by the diffusers pipeline.")
-        chunks.append(message)
-        yield message
-        return ModelResponse(chunks=chunks, complete=False, error=message.data)
-
-      summary = TextChunk(
-        data=f"Generated {len(images)} image{'s' if len(images) != 1 else ''}."
+      image_fmt = ImageFormat(output_format.lower())
+    except ValueError:
+      image_fmt = ImageFormat.PNG
+    for index, image in enumerate(images):
+      image_bytes = self._image_to_bytes(image, output_format)
+      image_chunk = ImageChunk(
+        data=image_bytes,
+        format=image_fmt,
+        metadata={
+          "media_type": media_type,
+          "format": output_format,
+          "index": index,
+          "model": self.model_name,
+          "prompt": prompt,
+          "seed": kwargs.get("seed"),
+          "width": getattr(image, "width", None),
+          "height": getattr(image, "height", None),
+        },
       )
-      chunks.append(summary)
-      yield summary
+      chunks.append(image_chunk)
+      yield image_chunk
 
-      output_format = self._normalize_output_format(kwargs.get("output_format"))
-      media_type = SUPPORTED_OUTPUT_FORMATS[output_format]
-      try:
-        image_fmt = ImageFormat(output_format.lower())
-      except ValueError:
-        image_fmt = ImageFormat.PNG
-      for index, image in enumerate(images):
-        image_bytes = self._image_to_bytes(image, output_format)
-        image_chunk = ImageChunk(
-          data=image_bytes,
-          format=image_fmt,
-          metadata={
-            "media_type": media_type,
-            "format": output_format,
-            "index": index,
-            "model": self.model_name,
-            "prompt": prompt,
-            "seed": kwargs.get("seed"),
-            "width": getattr(image, "width", None),
-            "height": getattr(image, "height", None),
-          },
-        )
-        chunks.append(image_chunk)
-        yield image_chunk
-
-      return ModelResponse(chunks=chunks, complete=True, metadata={"text": summary.data})
-
-    except Exception as e:
-      logger.error(f"Error generating image with diffusers model {self.model_name}: {e}")
-      chunk = TextChunk(data=f"Error: {str(e)}")
-      chunks.append(chunk)
-      yield chunk
-      return ModelResponse(chunks=chunks, complete=False, error=str(e))
+    return ModelResponse(chunks=chunks, complete=True)
 
   def tokenize(self, text: str) -> List[int]:
     """Tokenization is not exposed for image pipelines."""
-    raise NotImplementedError("DiffusersModel does not expose tokenization.")
+    raise NotImplementedError("DiffusersArchitecture does not expose tokenization.")
 
   def detokenize(self, tokens: List[int]) -> str:
     """Detokenization is not exposed for image pipelines."""
-    raise NotImplementedError("DiffusersModel does not expose detokenization.")
+    raise NotImplementedError("DiffusersArchitecture does not expose detokenization.")
 
   def download(self, model_path: str) -> None:
     """Download and save the pipeline to ``model_path``."""
@@ -320,7 +309,7 @@ class DiffusersModel(LocalModel):
       return [inputs]
     if isinstance(inputs, (list, tuple)):
       return list(inputs)
-    raise TypeError("DiffusersModel expects an artifact list input")
+    raise TypeError("DiffusersArchitecture expects an artifact list input")
 
   def _build_pipeline_kwargs(self, prompt: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Translate Claia runtime kwargs into Diffusers pipeline kwargs."""

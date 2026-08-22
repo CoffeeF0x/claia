@@ -92,13 +92,13 @@ def _import_generic_module(monkeypatch):
   )
   monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
   monkeypatch.setitem(sys.modules, "torch", fake_torch)
-  monkeypatch.delitem(sys.modules, "claia.core.models.transformers.generic", raising=False)
-  return importlib.import_module("claia.core.models.transformers.generic")
+  monkeypatch.delitem(sys.modules, "claia.core.architectures.transformers.generic", raising=False)
+  return importlib.import_module("claia.core.architectures.transformers.generic")
 
 
 def _model(monkeypatch):
   generic = _import_generic_module(monkeypatch)
-  model = generic.GenericTransformerModel("fake-model", None, defer_loading=True)
+  model = generic.GenericTransformerArchitecture("fake-model", None, defer_loading=True)
   model.loaded = True
   model.tokenizer = FakeTokenizer()
   model.model = FakeModel()

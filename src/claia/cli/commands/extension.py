@@ -489,11 +489,8 @@ class CLIToolModule(BaseToolModule):
     if getattr(model_def, 'aliases', None):
       output_lines.append(f"\nAliases: {', '.join(model_def.aliases)}")
 
-    if getattr(model_def, 'deployments', None):
-      output_lines.append(f"\nSupported Deployments: {', '.join(model_def.deployments)}")
-
     if getattr(model_def, 'architectures', None):
-      output_lines.append(f"Architectures: {', '.join(model_def.architectures)}")
+      output_lines.append(f"\nArchitectures: {', '.join(model_def.architectures)}")
 
     if getattr(model_def, 'license', None):
       output_lines.append(f"\nLicense: {model_def.license}")

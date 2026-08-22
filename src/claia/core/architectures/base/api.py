@@ -1,7 +1,9 @@
 """
-API model base class.
+API architecture base class.
 
-This module defines the APIModel base class for all API-based model implementations.
+Base for architectures that speak to hosted provider APIs over HTTP.
+The instance is a configured ``requests.Session`` plus the provider's
+base URL — cheap to construct, served by the ``api`` deployment.
 """
 
 import requests
@@ -9,7 +11,7 @@ import logging
 from typing import Optional, Dict
 
 # Internal dependencies
-from .base import BaseModel
+from .base import BaseArchitecture
 
 
 ########################################################################
@@ -21,8 +23,10 @@ logger = logging.getLogger(__name__)
 ########################################################################
 #                               CLASSES                                #
 ########################################################################
-class APIModel(BaseModel):
-  """Base class for API-based model implementations."""
+class APIArchitecture(BaseArchitecture):
+  """Base class for hosted-API architecture implementations."""
+
+  deployment = "api"
 
   def __init__(self, model_name: str, base_url: str):
     super().__init__(model_name)

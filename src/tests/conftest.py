@@ -9,7 +9,11 @@ import pytest
 from claia.core.results import Result, DeploymentError
 from claia.core.data import Conversation
 from claia.core.data.chunks import TextChunk
+from claia.core.data.response import ModelResponse
 from claia.core.definitions.model_definition import ModelDefinition
+from claia.core.deployments.base import BaseDeployment
+from claia.core.nodes.local import LocalNode
+from claia.core.plugins.base import ArchitectureInfo, DeploymentInfo
 from claia.framework.task import Task
 
 
@@ -67,7 +71,38 @@ def fake_model_registry_error():
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def fake_manager():
-  """Provide a fake ModuleManager with just enough surface for ModelRegistry.run()."""
+  """Provide a fake Manager with just enough surface for Registry.run().
+
+  Uses the real ``LocalNode`` and ``BaseDeployment`` relay so tests
+  exercise the actual serving path: solve -> node -> deployment ->
+  architecture.
+  """
+  class FakeArchitecture:
+    deployment = "api"
+    info = ArchitectureInfo(
+      name="dummy_arch",
+      title="Dummy Architecture",
+      description="Test architecture",
+    )
+
+    def __init__(self, model_name):
+      self.model_name = model_name
+
+    def generate(self, inputs, **kwargs):
+      yield TextChunk(data=f"deployed {self.model_name} via api")
+      return ModelResponse(complete=True)
+
+  class FakeDeployment(BaseDeployment):
+    info = DeploymentInfo(
+      name="api",
+      title="API",
+      description="Test deployment",
+    )
+    api = True
+
+  fake_deployment = FakeDeployment()
+  node = LocalNode()
+
   class FakeManager:
     def discover_plugins(self):
       return None
@@ -79,34 +114,21 @@ def fake_manager():
       return {
         "dummy": ModelDefinition(
           aliases=["alias1"],
-          deployments=["api"],
           architectures=["dummy_arch"],
         )
       }
 
     def get_available_deployments(self):
-      return {"api": object()}
+      return {"api": fake_deployment.info}
 
-    def get_model_class(self, architecture_name):
-      class DummyModel:
-        pass
-      return DummyModel
+    def get_architecture_class(self, architecture_name):
+      return FakeArchitecture if architecture_name == "dummy_arch" else None
 
     def get_deployment_plugin(self, deployment_name):
-      class Deployment:
-        class Info:
-          name = "api"
-          params = []
-        info = Info()
+      return fake_deployment if deployment_name == "api" else None
 
-        def run(self, model_name, model_class, inputs, cache, **kwargs):
-          yield TextChunk(data=f"deployed {model_name} via {deployment_name}")
-      return Deployment()
-
-    def get_available_architectures(self):
-      class ArchInfo:
-        params = []
-      return {"dummy_arch": ArchInfo()}
+    def iter_node_instances(self):
+      yield node
 
   return FakeManager()
 
@@ -123,6 +145,8 @@ def fake_manager_unknown_model():
       return {}
     def get_available_deployments(self):
       return {}
+    def iter_node_instances(self):
+      return iter(())
   return FM()
 
 

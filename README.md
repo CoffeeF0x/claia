@@ -13,7 +13,7 @@ CLAIA is a project I've been working on to abstract away the model loading. Star
   - Models: resolve, deploy, and run across providers and runtimes
   - Tools: declarative tool modules and protocols
   - Agents: process orchestration and worker lifecycle
-- Supports models from both API sources as well as local deployments (with plans for remote deployment functionality)
+- Supports models from both API sources as well as local, in-process serving (with plans for remote nodes)
 - Robust conversation object with a builtin changelog/audit system
 - A layered namespace package:
   - `claia.core` contains pure models, plugin contracts, model implementations, definitions, deployments, and tools.
@@ -122,7 +122,7 @@ These values are passed to plugins through the `Registry` and filtered by each p
 - Registry: A single facade coordinating models, tools, and agents.
   Key APIs:
   - `load_plugins(**kwargs)` — discover and initialize registered extensions
-  - `run(model_name, conversation, **kwargs)` — model inference via resolve, deployment, then architecture
+  - `run(model_name, conversation, **kwargs)` — model inference via solve, node, deployment, then architecture
   - `query(model_name, prompt, **kwargs)` — one-shot text prompt helper
   - `run_command(command_name, parameters, conversation, **kwargs)` — invoke a tool by name
   - Agent processing and worker lifecycle for queued tasks
@@ -131,8 +131,9 @@ These values are passed to plugins through the `Registry` and filtered by each p
     - `add_task(task: Task)` — add a task to the registry's queue
 
 - Plugin System: Extensions are discovered via Python entry points. Built-in groups include:
-  - `claia.architectures` — model classes that implement a provider architecture
-  - `claia.deployments` — runtime backends (e.g., API, local)
+  - `claia.architectures` — classes that implement a model family's inference protocol
+  - `claia.deployments` — serving tools (e.g., api, transformers)
+  - `claia.nodes` — places compute lives (e.g., local)
   - `claia.definitions` — model metadata and canonical IDs
   - `claia.agents` — model orchestration strategies
   - `claia.tool_modules` — concrete tool command modules

@@ -17,7 +17,7 @@ from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.data import AudioFormat
 from ...plugins.base import ParamScope, ParamSpec, SettingCategory
-from ..base import LocalModel
+from ..base import LocalArchitecture
 from ..base.base import ModelInputs
 
 
@@ -131,8 +131,8 @@ MEDIA_TYPES = {
   category=SettingCategory.GENERATION,
   description="Optional requested output sample rate.",
 ))
-class LocalTTSModel(LocalModel):
-  """Generic local TTS model that delegates to a backend adapter."""
+class TTSArchitecture(LocalArchitecture):
+  """Generic local TTS architecture that delegates to a backend adapter."""
 
   def __init__(
     self,
@@ -181,54 +181,46 @@ class LocalTTSModel(LocalModel):
     if not self.loaded:
       self.load()
 
-    try:
-      text = self._resolve_text(inputs, kwargs.get("prompt") or kwargs.get("input"))
-      response_format = self._normalize_response_format(kwargs.get("response_format"))
-      backend_kwargs = dict(kwargs)
-      backend_kwargs.pop("response_format", None)
-      audio_bytes, metadata = self.backend.synthesize(
-        text=text,
-        response_format=response_format,
-        **backend_kwargs,
-      )
+    text = self._resolve_text(inputs, kwargs.get("prompt") or kwargs.get("input"))
+    response_format = self._normalize_response_format(kwargs.get("response_format"))
+    backend_kwargs = dict(kwargs)
+    backend_kwargs.pop("response_format", None)
+    audio_bytes, metadata = self.backend.synthesize(
+      text=text,
+      response_format=response_format,
+      **backend_kwargs,
+    )
 
-      summary = TextChunk(data="Generated audio.")
-      chunks.append(summary)
-      yield summary
-      audio_fmt = AudioFormat.WAV if response_format == "wav" else AudioFormat.MPEG
-      audio = AudioChunk(
-        data=audio_bytes,
-        format=audio_fmt,
-        metadata={
-          "media_type": MEDIA_TYPES.get(response_format, f"audio/{response_format}"),
-          "format": response_format.upper(),
-          "model": self.model_name,
-          "prompt": text,
-          **metadata,
-        },
-      )
-      chunks.append(audio)
-      yield audio
-      return ModelResponse(chunks=chunks, complete=True, metadata={"text": summary.data})
-
-    except Exception as e:
-      logger.error(f"Error generating speech with local TTS model {self.model_name}: {e}")
-      chunk = TextChunk(data=f"Error: {str(e)}")
-      chunks.append(chunk)
-      yield chunk
-      return ModelResponse(chunks=chunks, complete=False, error=str(e))
+    summary = TextChunk(data="Generated audio.")
+    chunks.append(summary)
+    yield summary
+    audio_fmt = AudioFormat.WAV if response_format == "wav" else AudioFormat.MPEG
+    audio = AudioChunk(
+      data=audio_bytes,
+      format=audio_fmt,
+      metadata={
+        "media_type": MEDIA_TYPES.get(response_format, f"audio/{response_format}"),
+        "format": response_format.upper(),
+        "model": self.model_name,
+        "prompt": text,
+        **metadata,
+      },
+    )
+    chunks.append(audio)
+    yield audio
+    return ModelResponse(chunks=chunks, complete=True)
 
   def tokenize(self, text: str) -> List[int]:
     """Tokenization is not exposed for TTS backends."""
-    raise NotImplementedError("LocalTTSModel does not expose tokenization.")
+    raise NotImplementedError("TTSArchitecture does not expose tokenization.")
 
   def detokenize(self, tokens: List[int]) -> str:
     """Detokenization is not exposed for TTS backends."""
-    raise NotImplementedError("LocalTTSModel does not expose detokenization.")
+    raise NotImplementedError("TTSArchitecture does not expose detokenization.")
 
   def download(self, model_path: str) -> None:
     """Download support is delegated to backend packages."""
-    raise NotImplementedError("LocalTTSModel does not implement standalone downloads.")
+    raise NotImplementedError("TTSArchitecture does not implement standalone downloads.")
 
   def _create_backend(self, backend_name: str):
     if backend_name == "qwen3_tts":
@@ -259,7 +251,7 @@ class LocalTTSModel(LocalModel):
       return [inputs]
     if isinstance(inputs, (list, tuple)):
       return list(inputs)
-    raise TypeError("LocalTTSModel expects an artifact list input")
+    raise TypeError("TTSArchitecture expects an artifact list input")
 
   def _normalize_response_format(self, response_format: Optional[str]) -> str:
     """Normalize response format for audio metadata and encoding."""

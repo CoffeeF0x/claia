@@ -2,6 +2,8 @@
 Tests for the OpenRouter API architecture and definitions.
 """
 
+import pytest
+
 from claia.core.data import Conversation
 from claia.core.definitions.anthropic import AnthropicDefinitions
 from claia.core.definitions.deepseek import DeepSeekDefinitions
@@ -13,7 +15,8 @@ from claia.core.definitions.zai import ZaiDefinitions
 from claia.core.enums.conversation import MessageRole
 from claia.core.data.chunks import TextChunk
 from claia.core.enums.data import ArtifactType
-from claia.core.models.api.openrouter import OpenRouterModel
+from claia.core.architectures.api.openrouter import OpenRouterArchitecture
+from claia.core.results import DeploymentError
 
 
 class FakeResponse:
@@ -28,7 +31,7 @@ class FakeResponse:
     return iter(self._lines)
 
 
-class RecordingOpenRouterModel(OpenRouterModel):
+class RecordingOpenRouterArchitecture(OpenRouterArchitecture):
   def __init__(self, *args, response, **kwargs):
     super().__init__(*args, **kwargs)
     self.response = response
@@ -60,7 +63,7 @@ def test_openrouter_model_builds_non_streaming_request():
   response = FakeResponse({
     "choices": [{"message": {"content": "Hi there"}}],
   })
-  model = RecordingOpenRouterModel(
+  model = RecordingOpenRouterArchitecture(
     "openai/gpt-4o-mini",
     openrouter_api_token="secret",
     response=response,
@@ -95,7 +98,7 @@ def test_openrouter_model_streams_deltas():
     b'data: {"choices":[{"delta":{"content":"world"}}]}',
     b"data: [DONE]",
   ])
-  model = RecordingOpenRouterModel("anthropic/claude-sonnet-4.5", response=response)
+  model = RecordingOpenRouterArchitecture("anthropic/claude-sonnet-4.5", response=response)
 
   chunks = list(model.generate(
     _sequence(_conversation(), system="Be brief"),
@@ -110,19 +113,18 @@ def test_openrouter_model_streams_deltas():
   assert request_kwargs == {"stream": True}
 
 
-def test_openrouter_model_surfaces_api_errors():
+def test_openrouter_model_raises_on_api_errors():
   response = FakeResponse({
     "error": {"code": "invalid_model", "message": "Unknown model"},
   })
-  model = RecordingOpenRouterModel("bad/model", response=response)
+  model = RecordingOpenRouterArchitecture("bad/model", response=response)
 
-  chunks = list(model.generate(_sequence(_conversation()), stream=False))
-
-  assert [c.data for c in chunks] == ["OpenRouter error (invalid_model): Unknown model"]
+  with pytest.raises(DeploymentError, match=r"OpenRouter error \(invalid_model\): Unknown model"):
+    list(model.generate(_sequence(_conversation()), stream=False))
 
 
 def test_openrouter_architecture_exposes_model_and_params():
-  info = OpenRouterModel.info
+  info = OpenRouterArchitecture.info
 
   assert info.name == "openrouter"
   assert info.param("openrouter_api_token") is not None
@@ -152,7 +154,6 @@ def test_openrouter_company_definitions_are_large_open_models():
 
   assert "openrouter-gpt-4o-mini" not in MoonshotDefinitions().get_definitions()
   assert kimi.architectures == ["openrouter"]
-  assert kimi.deployments == ["api"]
   assert kimi.identifiers == {"openrouter": "moonshotai/kimi-k3"}
   assert deepseek.identifiers == {"openrouter": "deepseek/deepseek-v4-pro"}
   assert glm.identifiers == {"openrouter": "z-ai/glm-5.3"}

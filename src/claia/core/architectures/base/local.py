@@ -1,21 +1,25 @@
 """
-Local model base class.
+Local architecture base class.
 
-This module defines the LocalModel base class for all locally-deployed model implementations.
+Base for architectures whose instance holds in-process model weights.
+Served by the ``transformers`` deployment, which owns instantiation
+(and therefore when loading happens) and teardown.
 """
 
 from abc import abstractmethod
 from typing import List
 
 # Internal dependencies
-from .base import BaseModel
+from .base import BaseArchitecture
 
 
 ########################################################################
 #                               CLASSES                                #
 ########################################################################
-class LocalModel(BaseModel):
-  """Base class for locally-deployed model implementations."""
+class LocalArchitecture(BaseArchitecture):
+  """Base class for in-process, weight-holding architecture implementations."""
+
+  deployment = "transformers"
 
   model = None
 

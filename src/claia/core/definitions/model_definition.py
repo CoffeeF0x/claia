@@ -2,9 +2,11 @@
 ModelDefinition dataclass.
 
 A ``ModelDefinition`` is pure metadata about a model — its display title,
-aliases, supported deployments and architectures, capabilities, and
-input/output contracts. It does not implement model behaviour; that
-lives in the corresponding architecture (the model class).
+aliases, supported architectures, capabilities, and input/output
+contracts. It does not implement model behaviour; that lives in the
+corresponding architecture. Serving is derived, not declared: each
+architecture links to its deployment, so the solver walks
+``architectures`` to build the full pairing.
 
 Definition plugins return a dict of ``{model_name: ModelDefinition}``
 which the framework merges across all installed providers.
@@ -56,7 +58,6 @@ class ModelDefinition:
   title: Optional[str] = None
   aliases: Optional[List[str]] = None
   company: Optional[str] = None
-  deployments: Optional[List[str]] = None
   architectures: Optional[List[str]] = None
   description: Optional[str] = None
   parameters: Optional[str] = None
@@ -102,7 +103,6 @@ class ModelDefinition:
 ########################################################################
 _ORDERED_UNION_FIELDS = frozenset({
   "aliases",
-  "deployments",
   "architectures",
   "capabilities",
   "inputs",
@@ -146,9 +146,9 @@ def merge_model_definitions(
   Walks ``dataclasses.fields(ModelDefinition)`` so new fields pick up
   a sane default instead of being dropped. Per-field rules:
 
-  - Ordered-union lists (``aliases``, ``deployments``, ``architectures``,
-    ``capabilities``, ``inputs``, ``outputs``): concatenate, dedupe, keep
-    first-seen order.
+  - Ordered-union lists (``aliases``, ``architectures``,
+    ``capabilities``, ``inputs``, ``outputs``): concatenate, dedupe,
+    keep first-seen order.
   - Overlay dicts (``identifiers``, ``tag_overrides``): incoming wins
     per key. Tag overrides replace per ``TagType``; no deep-merge of
     individual ``TagSpec`` fields.

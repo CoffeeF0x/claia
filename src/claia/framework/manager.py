@@ -2,8 +2,9 @@
 Manager for the CLAIA system.
 
 This module handles loading and coordinating all plugin types:
-- Model architectures (implement specific AI models)
-- Model deployments (handle deployment methods)
+- Architectures (inference protocol for a model family)
+- Deployments (serve an architecture; relay + meter the stream)
+- Nodes (places compute lives; host deployments)
 - Model definitions (provide model metadata)
 - Tool protocols (handle tool execution)
 - Tool modules (provide tool implementations)
@@ -22,10 +23,10 @@ import importlib.metadata as metadata
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
 
+from ..core.architectures.base import BaseArchitecture
 from ..core.decorators import PENDING_ATTR, iter_decorated_plugins
 from ..core.definitions.model_definition import ModelDefinition, merge_model_definitions
-from ..core.models.base import BaseModel
-from ..core.plugins.base import ArchitectureInfo, DeploymentInfo, ParamScope, ParamSpec
+from ..core.plugins.base import ArchitectureInfo, DeploymentInfo, NodeInfo, ParamScope, ParamSpec
 from .agents.base import AgentInfo, BaseAgent
 
 
@@ -45,6 +46,7 @@ from .agents.base import AgentInfo, BaseAgent
 PLUGIN_GROUPS: Tuple[str, ...] = (
   'claia.architectures',
   'claia.deployments',
+  'claia.nodes',
   'claia.definitions',
   'claia.tool_protocols',
   'claia.tool_modules',
@@ -131,8 +133,8 @@ class Manager:
     1. Load the class (unavoidable).
     2. For agents, require a ``BaseAgent`` subclass; skip others with
        a warning. Fill ``info.agent_class`` from the loaded class.
-       For architectures, require a ``BaseModel`` subclass; skip
-       others with a warning. Neither group is instantiated.
+       For architectures, require a ``BaseArchitecture`` subclass;
+       skip others with a warning. Neither group is instantiated.
     3. Read ``cls.info`` (subclass of ``ExtensionInfo``); no instance
        is ever created during discovery. Architectures declare their
        full param contract — both INIT (credentials, endpoints) and
@@ -193,8 +195,8 @@ class Manager:
 
     Shared by the per-plugin entry-point loop and the manifest
     collection walk. Covers class-only validation (``BaseAgent`` /
-    ``BaseModel`` subclass checks and ``info.agent_class`` fill),
-    metadata population, name keying, first-in-wins collision
+    ``BaseArchitecture`` subclass checks and ``info.agent_class``
+    fill), metadata population, name keying, first-in-wins collision
     handling, and discovery logging.
 
     Returns the stored :class:`PluginEntry`, or ``None`` when the
@@ -212,9 +214,9 @@ class Manager:
         )
         return None
     elif group == 'claia.architectures':
-      if not (isinstance(cls, type) and issubclass(cls, BaseModel)):
+      if not (isinstance(cls, type) and issubclass(cls, BaseArchitecture)):
         logger.warning(
-          f"Skipping {name} from {group}: expected a BaseModel subclass, got {cls!r}"
+          f"Skipping {name} from {group}: expected a BaseArchitecture subclass, got {cls!r}"
         )
         return None
 
@@ -283,7 +285,7 @@ class Manager:
     Plugins expose metadata through a class-level ``info`` attribute.
     Architectures declare their full param contract — both INIT
     (credentials, endpoints) and RUNTIME (generation knobs) — on the
-    ``ArchitectureInfo`` itself; the model class *is* the plugin.
+    ``ArchitectureInfo`` itself; the architecture class *is* the plugin.
     """
     cls = entry.plugin_class
     class_info = getattr(cls, 'info', None)
@@ -414,8 +416,9 @@ class Manager:
       self._load_plugins(group='claia.agents', label='agent', allow_empty=True)
       self._load_plugins(group='claia.architectures', label='architecture', allow_empty=False)
 
-      # Load deployment plugins (required)
+      # Load deployment and node plugins (required)
       self._load_plugins(group='claia.deployments', label='deployment', allow_empty=False)
+      self._load_plugins(group='claia.nodes', label='node', allow_empty=False)
 
       self._plugins_loaded = True
       logger.info("All plugins loaded")
@@ -836,19 +839,19 @@ class Manager:
     logger.debug(f"Collected {len(all_arch)} architectures")
     return all_arch
 
-  def get_model_class(self, architecture_name: str) -> Optional[Type[BaseModel]]:
-    """Get the model class for a specific architecture by name.
+  def get_architecture_class(self, architecture_name: str) -> Optional[Type[BaseArchitecture]]:
+    """Get the class for a specific architecture by name.
 
-    The architecture entry *is* the model class; this is a direct
-    lookup of ``entry.plugin_class``.
+    The architecture entry *is* the class; this is a direct lookup of
+    ``entry.plugin_class``.
     """
     self.load_all_plugins()
     entry = self._lazy_plugins.get('claia.architectures', {}).get(architecture_name)
     if entry and entry.plugin_class:
-      logger.debug(f"Found model class for architecture {architecture_name}")
+      logger.debug(f"Found class for architecture {architecture_name}")
       return entry.plugin_class
 
-    logger.debug(f"No model class found for architecture {architecture_name}")
+    logger.debug(f"No class found for architecture {architecture_name}")
     return None
 
   def get_supported_models(self) -> Dict[str, ModelDefinition]:
@@ -876,10 +879,10 @@ class Manager:
     return all_definitions
 
   def get_available_deployments(self) -> Dict[str, DeploymentInfo]:
-    """Get all available deployment methods."""
+    """Get all available deployments."""
     self.load_all_plugins()
     all_deployments = self._collect_info_dict('claia.deployments')
-    logger.debug(f"Collected {len(all_deployments)} deployment methods")
+    logger.debug(f"Collected {len(all_deployments)} deployments")
     return all_deployments
 
   def get_deployment_plugin(self, deployment_name: str):
@@ -887,6 +890,26 @@ class Manager:
     self.load_all_plugins()
     plugin, _ = self._find_plugin_by_name('claia.deployments', deployment_name)
     return plugin
+
+
+  # NODES
+  def get_available_nodes(self) -> Dict[str, NodeInfo]:
+    """Get all available nodes."""
+    self.load_all_plugins()
+    all_nodes = self._collect_info_dict('claia.nodes')
+    logger.debug(f"Collected {len(all_nodes)} nodes")
+    return all_nodes
+
+  def get_node(self, node_name: str):
+    """Get a specific node instance by name."""
+    self.load_all_plugins()
+    instance, _ = self._find_plugin_by_name('claia.nodes', node_name)
+    return instance
+
+  def iter_node_instances(self):
+    """Yield loaded node instances in discovery order."""
+    self.load_all_plugins()
+    yield from self._iter_instances('claia.nodes')
 
 
   # TOOLS

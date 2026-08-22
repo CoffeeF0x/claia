@@ -9,7 +9,7 @@ import types
 from claia.core.data import Conversation
 from claia.core.data.chunks import ImageChunk, TextChunk
 from claia.core.data.response import ModelResponse
-from claia.core.deployments.local import LocalDeployment
+from claia.core.deployments.transformers import TransformersDeployment
 from claia.core.enums.conversation import MessageRole
 from claia.core.enums.data import ImageFormat
 
@@ -78,9 +78,9 @@ def _import_diffusers_module(monkeypatch):
   monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
   monkeypatch.setitem(sys.modules, "torch", fake_torch)
   monkeypatch.setitem(sys.modules, "diffusers", fake_diffusers)
-  monkeypatch.delitem(sys.modules, "claia.core.models.transformers.diffusers", raising=False)
+  monkeypatch.delitem(sys.modules, "claia.core.architectures.transformers.diffusers", raising=False)
   FakePipeline.loaded = []
-  return importlib.import_module("claia.core.models.transformers.diffusers")
+  return importlib.import_module("claia.core.architectures.transformers.diffusers")
 
 
 def _artifacts(conversation):
@@ -100,7 +100,7 @@ def _conversation():
 
 def test_diffusers_model_yields_text_and_image_chunks(monkeypatch):
   diffusers = _import_diffusers_module(monkeypatch)
-  model = diffusers.DiffusersModel(
+  model = diffusers.DiffusersArchitecture(
     "sd2-community/stable-diffusion-2",
     defer_loading=True,
     huggingface_api_token="hf_test",
@@ -143,7 +143,7 @@ def test_diffusers_model_yields_text_and_image_chunks(monkeypatch):
 
 def test_diffusers_model_allows_prompt_override(monkeypatch):
   diffusers = _import_diffusers_module(monkeypatch)
-  model = diffusers.DiffusersModel("example/image-model", defer_loading=True)
+  model = diffusers.DiffusersArchitecture("example/image-model", defer_loading=True)
 
   chunks = list(model.generate(
     _artifacts(_conversation()),
@@ -154,30 +154,24 @@ def test_diffusers_model_allows_prompt_override(monkeypatch):
   assert FakePipeline.loaded[0].calls[0]["prompt"] == "Override prompt"
 
 
-def test_local_deployment_passes_image_chunks_through():
+def test_transformers_deployment_passes_image_chunks_through():
   image_chunk = ImageChunk(
     data=b"image",
     format=ImageFormat.PNG,
     metadata={"media_type": "image/png"},
   )
 
-  class ImageModel:
+  class ImageArchitecture:
     def __init__(self, model_name, model_path=None, defer_loading=False, device="cpu"):
       self.model_name = model_name
 
-    def generate(self, sequence, **kwargs):
+    def generate(self, inputs, **kwargs):
       yield image_chunk
       return ModelResponse(chunks=[image_chunk], complete=True)
 
-  deployment = LocalDeployment()
-  chunks = list(deployment.run(
-    model_name="fake-image-model",
-    model_class=ImageModel,
-    inputs=_artifacts(_conversation()),
-    cache={},
-    init_kwargs={},
-    runtime_kwargs={},
-  ))
+  deployment = TransformersDeployment()
+  instance = deployment.deploy(ImageArchitecture, "fake-image-model", {})
+  chunks = list(deployment.run(instance, _artifacts(_conversation()), {}))
 
   assert len(chunks) == 1
   assert isinstance(chunks[0], ImageChunk)

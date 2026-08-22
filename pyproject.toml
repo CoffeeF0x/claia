@@ -113,20 +113,22 @@ claia = "claia.cli.__main__:main"
 # migration so external plugins that already register against them keep
 # working.
 [project.entry-points."claia.architectures"]
-openai = "claia.core.models.api.openai:OpenAIModel"
-anthropic = "claia.core.models.api.anthropic:AnthropicModel"
-openrouter = "claia.core.models.api.openrouter:OpenRouterModel"
-transformers_generic = "claia.core.models.transformers.generic:GenericTransformerModel"
-transformers_gemma3 = "claia.core.models.transformers.gemma3:Gemma3Model"
-diffusers = "claia.core.models.transformers.diffusers:DiffusersModel"
-tts = "claia.core.models.transformers.tts:LocalTTSModel"
-dummy = "claia.core.models.dummy.dummy:DummyModel"
+openai = "claia.core.architectures.api.openai:OpenAIArchitecture"
+anthropic = "claia.core.architectures.api.anthropic:AnthropicArchitecture"
+openrouter = "claia.core.architectures.api.openrouter:OpenRouterArchitecture"
+transformers_generic = "claia.core.architectures.transformers.generic:GenericTransformerArchitecture"
+transformers_gemma3 = "claia.core.architectures.transformers.gemma3:Gemma3Architecture"
+diffusers = "claia.core.architectures.transformers.diffusers:DiffusersArchitecture"
+tts = "claia.core.architectures.transformers.tts:TTSArchitecture"
+dummy = "claia.core.architectures.dummy.dummy:DummyArchitecture"
 
 [project.entry-points."claia.deployments"]
 api = "claia.core.deployments.api:APIDeployment"
-local = "claia.core.deployments.local:LocalDeployment"
-remote = "claia.core.deployments.remote:RemoteDeployment"
+transformers = "claia.core.deployments.transformers:TransformersDeployment"
 dummy = "claia.core.deployments.dummy:DummyDeployment"
+
+[project.entry-points."claia.nodes"]
+local = "claia.core.nodes.local:LocalNode"
 
 [project.entry-points."claia.definitions"]
 openai = "claia.core.definitions.openai:OpenAIDefinitions"

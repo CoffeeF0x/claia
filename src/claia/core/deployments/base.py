@@ -1,16 +1,20 @@
 """
 Abstract base class for deployments.
 
-A deployment owns model-instance lifecycle and runs ``model.generate``
-on already-translated inputs (a ``MessageSequence`` or artifact list).
-Completion and errors live on ``ModelResponse``.
+A deployment serves an architecture: ``deploy`` turns an architecture
+class into a servable instance (configure an API client, load weights;
+later: start a llama.cpp/vllm server), and ``run`` relays the generate
+stream between that instance and the hosting node — metering it
+(timings, chunk counts) into the terminal ``ModelResponse`` as it
+passes. Completion and errors live on ``ModelResponse``.
 """
 
 from __future__ import annotations
 
 import logging
+import time
 from abc import ABC
-from typing import Any, ClassVar, Dict, Generator, Iterator, List, Type, Union
+from typing import Any, ClassVar, Dict, Generator, List, Optional, Type, Union
 
 from ..data.artifacts import BaseArtifact
 from ..data.chunks import BaseChunk, RawChunk, TextChunk
@@ -25,41 +29,27 @@ ModelInputs = Union[MessageSequence, List[BaseArtifact]]
 
 
 class BaseDeployment(ABC):
-  """Contract and shared run path for deployments."""
+  """Contract and shared relay/metering path for deployments."""
 
   info: ClassVar[DeploymentInfo]
 
-  def cache_key(self, model_name: str) -> str:
-    """Cache key for a deployed model instance under this deployment."""
-    return f"{model_name}:{self.info.name}"
+  #: True when inference happens on a hosted third-party API — request
+  #: data leaves the machine regardless of which node runs the client.
+  #: The solver's ``deployment_preference`` filter reads this.
+  api: ClassVar[bool] = False
 
-  def create_model(
+  def deploy(
     self,
+    architecture_class: Type,
     model_name: str,
-    model_class: Type,
     init_kwargs: Dict[str, Any],
   ) -> Any:
-    """Construct a fresh model instance."""
-    return model_class(model_name=model_name, **init_kwargs)
+    """Construct a servable architecture instance."""
+    return architecture_class(model_name=model_name, **init_kwargs)
 
-  def resolve_model(
-    self,
-    model_name: str,
-    model_class: Type,
-    cache: Dict[str, Any],
-    init_kwargs: Dict[str, Any],
-  ) -> Any:
-    """Return a cached model instance, creating one if needed."""
-    key = self.cache_key(model_name)
-    if key in cache:
-      logger.debug(f"Using cached model instance for {key}")
-      return cache[key]
-
-    logger.debug(f"Deploying model: {model_name} via {self.info.name}")
-    instance = self.create_model(model_name, model_class, init_kwargs)
-    cache[key] = instance
-    logger.debug(f"Successfully deployed and cached model: {model_name}")
-    return instance
+  def teardown(self, instance: Any) -> None:
+    """Release whatever ``deploy`` acquired. Default: nothing."""
+    pass
 
   @staticmethod
   def normalize_chunk(item: Any) -> BaseChunk:
@@ -72,62 +62,85 @@ class BaseDeployment(ABC):
       return RawChunk(data=item)
     return TextChunk(data=str(item))
 
-  def stream_generate(
+  def run(
     self,
-    model: Any,
+    instance: Any,
     inputs: ModelInputs,
     runtime_kwargs: Dict[str, Any],
   ) -> Generator[BaseChunk, None, ModelResponse]:
-    """Call ``model.generate``, yield chunks, return a ``ModelResponse``."""
-    result = model.generate(inputs, **runtime_kwargs)
+    """Run generate on a deployed instance, relaying and metering the stream.
 
-    if isinstance(result, ModelResponse):
-      for chunk in result.chunks:
-        yield chunk
-      return result
+    Yields the architecture's chunks unchanged and returns the terminal
+    ``ModelResponse`` with metering merged into ``metadata['usage']``
+    (never clobbering provider-reported fields).
 
-    if not hasattr(result, "__iter__") or isinstance(result, (str, bytes)):
-      chunk = self.normalize_chunk(result)
-      response = ModelResponse(chunks=[chunk], complete=True)
-      yield chunk
-      return response
+    Failure rule: exceptions raised before any content streamed
+    propagate (setup failure); exceptions after the first chunk are
+    converted into an errored wrapper (``complete=False``).
+    """
+    started = time.monotonic()
+    first_chunk_at: Optional[float] = None
+    chunks: List[BaseChunk] = []
 
-    chunks = []
+    def relay(chunk: BaseChunk) -> BaseChunk:
+      nonlocal first_chunk_at
+      if first_chunk_at is None:
+        first_chunk_at = time.monotonic()
+      chunks.append(chunk)
+      return chunk
+
     try:
-      iterator: Iterator = iter(result)
-      while True:
-        item = next(iterator)
-        chunk = self.normalize_chunk(item)
-        chunks.append(chunk)
-        yield chunk
-    except StopIteration as stop:
-      value = stop.value
-      if isinstance(value, ModelResponse):
-        if not value.chunks:
-          value.chunks = list(chunks)
-        return value
-      return ModelResponse(
-        chunks=list(chunks),
-        complete=True,
-        metadata={"return": value} if value is not None else {},
-      )
+      result = instance.generate(inputs, **runtime_kwargs)
 
-  def run(
-    self,
-    model_name: str,
-    model_class: Type,
-    inputs: ModelInputs,
-    cache: Dict[str, Any],
-    init_kwargs: Dict[str, Any],
-    runtime_kwargs: Dict[str, Any],
-  ) -> Iterator[BaseChunk]:
-    """Deploy (if needed) and run inference on translated inputs."""
-    model_instance = self.resolve_model(
-      model_name, model_class, cache, init_kwargs
+      if isinstance(result, ModelResponse):
+        for chunk in result.chunks:
+          yield relay(chunk)
+        response = result
+      elif not hasattr(result, "__iter__") or isinstance(result, (str, bytes)):
+        yield relay(self.normalize_chunk(result))
+        response = ModelResponse(chunks=list(chunks), complete=True)
+      else:
+        iterator = iter(result)
+        while True:
+          try:
+            item = next(iterator)
+          except StopIteration as stop:
+            response = self._coerce_response(stop.value, chunks)
+            break
+          yield relay(self.normalize_chunk(item))
+    except Exception as e:
+      if not chunks:
+        raise
+      logger.exception(f"Generation failed mid-stream after {len(chunks)} chunk(s)")
+      response = ModelResponse(chunks=list(chunks), complete=False, error=str(e))
+
+    return self._meter(response, started, first_chunk_at)
+
+  @staticmethod
+  def _coerce_response(value: Any, chunks: List[BaseChunk]) -> ModelResponse:
+    """Shape a generator's return value into a ``ModelResponse``."""
+    if isinstance(value, ModelResponse):
+      if not value.chunks:
+        value.chunks = list(chunks)
+      return value
+    return ModelResponse(
+      chunks=list(chunks),
+      complete=True,
+      metadata={"return": value} if value is not None else {},
     )
-    if isinstance(inputs, MessageSequence):
-      label = f"{len(inputs)} turns ({type(inputs).__name__})"
-    else:
-      label = f"{len(inputs)} artifacts"
-    logger.debug(f"Running model inference: {model_name} ({label})")
-    yield from self.stream_generate(model_instance, inputs, runtime_kwargs)
+
+  @staticmethod
+  def _meter(
+    response: ModelResponse,
+    started: float,
+    first_chunk_at: Optional[float],
+  ) -> ModelResponse:
+    """Merge stream metering into ``response.metadata['usage']``."""
+    usage = response.metadata.setdefault("usage", {})
+    if isinstance(usage, dict):
+      now = time.monotonic()
+      usage.setdefault("chunks", len(response.chunks))
+      usage.setdefault("duration", round(now - started, 4))
+      if first_chunk_at is not None:
+        usage.setdefault("time_to_first_chunk", round(first_chunk_at - started, 4))
+    return response

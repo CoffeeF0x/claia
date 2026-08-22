@@ -1,25 +1,27 @@
-# Transformer Models
+# Transformer Architectures
 
-Local transformer model wrappers.
+Local weight-holding architectures.
 
 ## What lives here
 
-- `generic.py` — generic Hugging Face-style wrapper.
-- `gemma3.py` — example specialized adapter.
+- `generic.py` — generic Hugging Face-style causal-LM architecture.
+- `gemma3.py` — example specialized architecture.
 - `diffusers.py` — generic Diffusers-backed image generation pipeline.
-- `tts.py` — generic local text-to-speech wrapper with backend adapters.
+- `tts.py` — generic local text-to-speech architecture with backend adapters.
 
 These classes are the architecture plugins: they wrap a local transformer
-or Diffusers/TTS backend, implement `claia.core.models.base`, and declare
-their `ArchitectureInfo` via `@architecture` / `@architecture.param`.
-`Gemma3Model` subclasses `GenericTransformerModel` and declares only the
-overrides (name, title, description, and generation defaults). The
-`claia.architectures` entry points target these classes directly.
+or Diffusers/TTS backend, inherit `LocalArchitecture` (see
+`claia.core.architectures.base`, which sets `deployment = "transformers"`),
+and declare their `ArchitectureInfo` via `@architecture` /
+`@architecture.param`. `Gemma3Architecture` subclasses
+`GenericTransformerArchitecture` and declares only the overrides (name,
+title, description, and generation defaults). The `claia.architectures`
+entry points target these classes directly.
 
 ## Stable Diffusion 2 Smoke Test
 
 Stable Diffusion 2 is wired through the `diffusers` architecture and the
-`local` deployment. It requires the local model extras:
+`transformers` deployment. It requires the local model extras:
 
 ```bash
 pip install -e '.[local]'
@@ -57,8 +59,8 @@ Use `device="cpu"` for compatibility, though generation will be slow.
 
 ## Qwen3 TTS Smoke Test
 
-Qwen3-TTS 0.6B is wired through the `tts` architecture and the `local`
-deployment. It requires the audio model extras:
+Qwen3-TTS 0.6B is wired through the `tts` architecture and the
+`transformers` deployment. It requires the audio model extras:
 
 ```bash
 pip install -e '.[audio]'

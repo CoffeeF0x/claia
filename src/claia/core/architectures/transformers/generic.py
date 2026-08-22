@@ -1,8 +1,9 @@
 """
-Generic transformer model implementation.
+Generic transformers architecture.
 
-This module provides a generic implementation for standard transformer models
-using the Hugging Face transformers library.
+Generic implementation for standard causal-LM transformer models using
+the Hugging Face transformers library. Served in-process by the
+``transformers`` deployment.
 """
 
 import logging
@@ -24,7 +25,7 @@ from ...plugins.base import (
   ParamSpec,
   SettingCategory,
 )
-from ..base import LocalModel
+from ..base import LocalArchitecture
 from ..base.base import ModelInputs
 
 
@@ -50,8 +51,8 @@ logger = logging.getLogger(__name__)
   description="Hugging Face API Token (required for gated models)",
 ))
 @architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)
-class GenericTransformerModel(LocalModel):
-  """Generic transformer model implementation using Hugging Face transformers."""
+class GenericTransformerArchitecture(LocalArchitecture):
+  """Generic transformer architecture using Hugging Face transformers."""
 
   def __init__(self, model_name: str, model_path: str, defer_loading: bool = False, device: str = "cpu", huggingface_api_token: Optional[str] = None, **kwargs):
     self.tokenizer = None
@@ -110,39 +111,27 @@ class GenericTransformerModel(LocalModel):
     if not self.loaded:
       self.load()
 
-    try:
-      if not isinstance(inputs, MessageSequence):
-        raise TypeError("GenericTransformerModel expects a MessageSequence input")
-      prompt = self._convert_sequence_to_prompt(inputs)
-      inputs = self._tokenize_prompt(prompt)
+    if not isinstance(inputs, MessageSequence):
+      raise TypeError("GenericTransformerArchitecture expects a MessageSequence input")
+    prompt = self._convert_sequence_to_prompt(inputs)
+    inputs = self._tokenize_prompt(prompt)
 
-      if kwargs.get("stream", False):
-        token_gen = self._generate_streaming(inputs, kwargs)
-        try:
-          while True:
-            token = next(token_gen)
-            chunk = TextChunk(data=token) if isinstance(token, str) else token
-            chunks.append(chunk)
-            yield chunk
-        except StopIteration as stop:
-          return ModelResponse(
-            chunks=chunks,
-            complete=True,
-            metadata={"text": stop.value},
-          )
-      else:
-        response = self._generate_blocking(inputs, kwargs)
-        chunk = TextChunk(data=response)
-        chunks.append(chunk)
-        yield chunk
-        return ModelResponse(chunks=chunks, complete=True, metadata={"text": response})
-
-    except Exception as e:
-      logger.error(f"Error generating response with transformer model {self.model_name}: {e}")
-      chunk = TextChunk(data=f"Error: {str(e)}")
+    if kwargs.get("stream", False):
+      token_gen = self._generate_streaming(inputs, kwargs)
+      try:
+        while True:
+          token = next(token_gen)
+          chunk = TextChunk(data=token) if isinstance(token, str) else token
+          chunks.append(chunk)
+          yield chunk
+      except StopIteration:
+        return ModelResponse(chunks=chunks, complete=True)
+    else:
+      response = self._generate_blocking(inputs, kwargs)
+      chunk = TextChunk(data=response)
       chunks.append(chunk)
       yield chunk
-      return ModelResponse(chunks=chunks, complete=False, error=str(e))
+      return ModelResponse(chunks=chunks, complete=True)
 
   def _tokenize_prompt(self, prompt: str) -> Dict[str, Any]:
     """Tokenize and move a prompt to the configured device."""

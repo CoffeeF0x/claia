@@ -23,7 +23,7 @@ from .chunks import (
   AudioChunk,
   RawChunk,
 )
-from .response import ModelResponse
+from .response import GenerateStream, ModelResponse
 from .models import (
   Prompt,
   Conversation,
@@ -50,6 +50,7 @@ __all__ = [
   "AudioChunk",
   "RawChunk",
   "ModelResponse",
+  "GenerateStream",
   "Prompt",
   "Conversation",
   "Message",

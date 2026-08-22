@@ -1,8 +1,8 @@
 """
-Gemma3 specialized transformer model implementation.
+Gemma3 specialized transformers architecture.
 
-This module provides a specialized implementation for Gemma3 models with
-custom handling for their specific requirements and optimizations.
+Specialized implementation for Gemma3 models with custom handling for
+their prompt format, loading, and generation defaults.
 """
 
 import logging
@@ -13,7 +13,7 @@ from ...data.models.conversation.message_sequence import MessageSequence
 from ...decorators import architecture
 from ...enums.conversation import MessageRole
 from ...plugins.base import ParamScope, ParamSpec, SettingCategory
-from .generic import GenericTransformerModel
+from .generic import GenericTransformerArchitecture
 
 
 ########################################################################
@@ -51,8 +51,8 @@ logger = logging.getLogger(__name__)
             category=SettingCategory.GENERATION,
             description="Restrict sampling to the top-k tokens."),
 )
-class Gemma3Model(GenericTransformerModel):
-  """Specialized Gemma3 transformer model implementation.
+class Gemma3Architecture(GenericTransformerArchitecture):
+  """Specialized Gemma3 transformers architecture.
 
   Generation defaults (``max_tokens``, ``temperature``, ``top_p``,
   ``top_k``) override the inherited generic stack as RUNTIME

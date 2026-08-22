@@ -138,8 +138,8 @@ class ExtensionInfo:
   Base information class for all CLAIA extension plugins.
 
   Provides a consistent interface across all plugin types
-  (Architectures, Deployments, Definitions, Protocols, Tool Modules,
-  Agents):
+  (Architectures, Deployments, Nodes, Definitions, Protocols,
+  Tool Modules, Agents):
 
   - ``name``: unique identifier used for lookups.
   - ``title``: human-readable display name.
@@ -181,7 +181,13 @@ class ArchitectureInfo(ExtensionInfo):
 
 @dataclass
 class DeploymentInfo(ExtensionInfo):
-  """Information about a deployment-method plugin."""
+  """Information about a deployment plugin."""
+  pass
+
+
+@dataclass
+class NodeInfo(ExtensionInfo):
+  """Information about a node plugin."""
   pass
 
 
@@ -268,8 +274,15 @@ class ToolReference:
 
 
 @dataclass
-class DeploymentParams:
-  """Resolved deployment, model, and architecture for a run."""
-  deployment_name: str
+class ServingPlan:
+  """Solver output: the resolved serving pairing for one model call.
+
+  ``provider_model_name`` is the identifier handed to the architecture
+  (from the definition's ``identifiers`` map when present, otherwise
+  the canonical name).
+  """
   model_name: str
+  provider_model_name: str
   architecture_name: str
+  deployment_name: str
+  node_name: str

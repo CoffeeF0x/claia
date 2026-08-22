@@ -1,28 +1,40 @@
 # Deployments
 
-Runtime backends that define **how and where** models run.
+The serving layer: a deployment turns an architecture class into a
+servable instance and manages the stream between that instance and
+the hosting node.
 
 ## What lives here
 
-- `api.py` — API-based execution (e.g., HTTP clients).
-- `local.py` — local runtime (e.g., on-device or server-hosted models).
-- `remote.py` — remote runtime (e.g., worker/service backends).
-- `dummy.py` — no-op/testing backend.
+- `base.py` — `BaseDeployment`: `deploy` / `teardown` / `run` (the
+  relay + metering path) and the `api` class attribute the solver's
+  `deployment_preference` filter reads.
+- `api.py` — session factory + metering relay for hosted-API
+  architectures.
+- `transformers.py` — in-process weight loading and release for
+  local architectures.
+- `dummy.py` — no-op/testing deployment.
 
-Each deployment class exposes a class-level `info: DeploymentInfo` and is
-discovered via the `claia.deployments` entry point.
+Each deployment class exposes a class-level `info: DeploymentInfo`
+and is discovered via the `claia.deployments` entry point.
 
 ## How deployments fit in
 
-- The registry resolve step chooses a `deployment_name` and `architecture_name`, then translates the conversation into a sequence or artifact list.
-- The deployment:
-  - instantiates the architecture or client
-  - runs `model.generate` on those inputs
-  - streams chunks back
+- The solver picks the pairing (architecture → its declared
+  deployment → an allowed node) and the registry translates the
+  conversation into a sequence or artifact list.
+- The node asks the deployment to `deploy(architecture_class,
+  model_name, init_kwargs)` — or reuses a cached instance — then
+  calls `run(instance, inputs, runtime_kwargs)`.
+- `run` relays the architecture's chunks unchanged and meters the
+  stream (chunk counts, timings) into the terminal `ModelResponse`'s
+  `metadata["usage"]`, never clobbering provider-reported fields.
 
 Deployments do not take a `Conversation`.
 
 ## When to add/modify a deployment
 
-- You want to support a new execution environment (e.g., different cluster, queue, or API host).
-- You need different credentials or transport behavior separated from model logic.
+- You want to serve architectures with a new tool (llama.cpp, vllm,
+  a custom runtime).
+- You need different transport or lifecycle behavior separated from
+  inference logic.

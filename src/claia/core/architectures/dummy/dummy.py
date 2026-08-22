@@ -8,7 +8,7 @@ import logging
 import random
 from typing import Generator
 
-from ..base import BaseModel
+from ..base import BaseArchitecture
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.response import ModelResponse
 from ...decorators import architecture
@@ -110,19 +110,21 @@ CHARS_PER_CHUNK = 20
 @architecture.name("dummy")
 @architecture.title("Dummy Architecture")
 @architecture.description("Dummy local model architecture for testing")
-class DummyModel(BaseModel):
+class DummyArchitecture(BaseArchitecture):
   """
-  A dummy model that returns a predefined story.
-  This model simulates streaming by yielding TextChunk items
+  A dummy architecture that returns a predefined story.
+  It simulates streaming by yielding TextChunk items
   at a controlled rate, then returns a ModelResponse.
   """
+
+  deployment = "dummy"
 
   def __init__(self, model_name: str = "dummy-model"):
     super().__init__(model_name)
     self.story = STORY.strip()
     self.characters = list(self.story)
     self.story_length = len(self.characters)
-    logger.debug(f"Initialized DummyModel with {self.story_length} characters")
+    logger.debug(f"Initialized DummyArchitecture with {self.story_length} characters")
 
   def generate(
     self,

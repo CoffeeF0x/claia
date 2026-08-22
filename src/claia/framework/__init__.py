@@ -4,8 +4,8 @@ claia.framework — the CLAIA orchestration runtime.
 Provides the inversion-of-control runtime on top of ``claia.core``:
 
 - ``Manager`` discovers plugins via ``importlib.metadata`` entry points
-  (architectures, deployments, definitions, tool protocols/modules,
-  agents).
+  (architectures, deployments, nodes, definitions, tool
+  protocols/modules, agents).
 - ``Registry`` is the application-facing composition root that
   orchestrates models, tools, and agents.
 - ``Task`` and ``TaskQueue`` model units of work; worker threads
@@ -24,7 +24,7 @@ without having to import from two places.
 """
 
 # Re-exports from claia.core for convenience.
-from ..core.results import Result, DeploymentError
+from ..core.results import Result, DeploymentError, ResolveError
 from ..core.data import (
   Conversation,
   Message,
@@ -43,6 +43,7 @@ from ..core.data import (
   AudioChunk,
   RawChunk,
   ModelResponse,
+  GenerateStream,
   DomainEvent,
   EventType,
 )
@@ -50,12 +51,13 @@ from ..core.plugins.base import (
   ExtensionInfo,
   ArchitectureInfo,
   DeploymentInfo,
+  NodeInfo,
   ProtocolInfo,
   ToolModuleInfo,
   ToolDefinition,
   ArgumentDefinition,
   ToolReference,
-  DeploymentParams,
+  ServingPlan,
   ParamSpec,
   ParamScope,
   SettingCategory,
@@ -78,7 +80,7 @@ from .queue import TaskQueue
 from .registry import Registry
 from .manager import Manager
 from .agents.base import BaseAgent
-from ..core.decorators import tool, protocol, architecture, deployment, definitions
+from ..core.decorators import tool, protocol, architecture, deployment, node, definitions
 from .decorators import agent
 
 __all__ = [
@@ -87,22 +89,22 @@ __all__ = [
   "TaskEvent", "TaskStatus",
   "BaseAgent",
   # Plugin decorators
-  "tool", "protocol", "architecture", "deployment", "definitions", "agent",
+  "tool", "protocol", "architecture", "deployment", "node", "definitions", "agent",
   # Results
-  "Result", "DeploymentError",
+  "Result", "DeploymentError", "ResolveError",
   # Data
   "Conversation", "Message",
   "DataObject",
   "BaseArtifact", "TextArtifact", "ImageArtifact", "AudioArtifact",
   "FileArtifact", "LinkArtifact", "RawArtifact", "Prompt",
   "BaseChunk", "TextChunk", "ImageChunk", "AudioChunk", "RawChunk",
-  "ModelResponse",
+  "ModelResponse", "GenerateStream",
   "DomainEvent", "EventType",
   # Plugin metadata
   "ExtensionInfo",
-  "ArchitectureInfo", "DeploymentInfo",
+  "ArchitectureInfo", "DeploymentInfo", "NodeInfo",
   "ProtocolInfo", "ToolModuleInfo",
-  "ToolDefinition", "ArgumentDefinition", "ToolReference", "DeploymentParams",
+  "ToolDefinition", "ArgumentDefinition", "ToolReference", "ServingPlan",
   "ParamSpec", "ParamScope", "SettingCategory",
   "ModelDefinition",
   # Media enums

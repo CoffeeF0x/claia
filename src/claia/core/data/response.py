@@ -1,14 +1,17 @@
 """
-Model response wrapper.
+Model response wrapper and stream delivery.
 
-Models return a ``ModelResponse`` carrying content chunks plus status
-fields (complete / error). Control signals are not chunks.
+Generation returns a ``ModelResponse`` carrying content chunks plus
+status fields (complete / error) and aggregate metadata (usage,
+timings). Control signals are not chunks. ``GenerateStream`` wraps a
+generate generator so callers never hand-roll terminal-value capture:
+iterate for chunks, read ``.response`` after exhaustion.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Generator, Iterator, List, Optional
 
 from .chunks import BaseChunk, TextChunk
 
@@ -49,3 +52,22 @@ class ModelResponse:
       "error": self.error,
       "metadata": self.metadata,
     }
+
+
+class GenerateStream:
+  """Iterable over a generate stream that captures the terminal wrapper.
+
+  Wraps a ``Generator[BaseChunk, None, ModelResponse]``. Iterating
+  yields the chunks; once the stream is exhausted the generator's
+  returned ``ModelResponse`` is available as ``.response``. Iterating
+  again after exhaustion yields nothing and leaves ``response`` intact.
+  """
+
+  def __init__(self, generator: Generator[BaseChunk, None, "ModelResponse"]):
+    self._generator: Optional[Generator] = generator
+    self.response: Optional[ModelResponse] = None
+
+  def __iter__(self) -> Iterator[BaseChunk]:
+    if self._generator is not None:
+      generator, self._generator = self._generator, None
+      self.response = yield from generator

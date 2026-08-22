@@ -56,9 +56,9 @@ def _import_tts_module(monkeypatch):
   monkeypatch.setitem(sys.modules, "torch", fake_torch)
   monkeypatch.setitem(sys.modules, "qwen_tts", fake_qwen_tts)
   monkeypatch.setitem(sys.modules, "soundfile", fake_soundfile)
-  monkeypatch.delitem(sys.modules, "claia.core.models.transformers.tts", raising=False)
+  monkeypatch.delitem(sys.modules, "claia.core.architectures.transformers.tts", raising=False)
   FakeQwen3TTSModel.loaded = []
-  return importlib.import_module("claia.core.models.transformers.tts")
+  return importlib.import_module("claia.core.architectures.transformers.tts")
 
 
 def _artifacts(conversation):
@@ -78,7 +78,7 @@ def _conversation():
 
 def test_local_tts_model_yields_text_and_audio_chunks(monkeypatch):
   tts = _import_tts_module(monkeypatch)
-  model = tts.LocalTTSModel(
+  model = tts.TTSArchitecture(
     "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
     defer_loading=True,
     device="cuda",
@@ -117,7 +117,7 @@ def test_local_tts_model_yields_text_and_audio_chunks(monkeypatch):
 
 def test_local_tts_model_allows_prompt_override(monkeypatch):
   tts = _import_tts_module(monkeypatch)
-  model = tts.LocalTTSModel("example/tts", defer_loading=True)
+  model = tts.TTSArchitecture("example/tts", defer_loading=True)
 
   chunks = list(model.generate(
     _artifacts(_conversation()),
@@ -130,13 +130,11 @@ def test_local_tts_model_allows_prompt_override(monkeypatch):
   assert FakeQwen3TTSModel.loaded[0].calls[0]["text"] == "Override text."
 
 
-def test_local_tts_model_explains_qwen_reference_audio_requirement(monkeypatch):
+def test_local_tts_model_raises_on_missing_qwen_reference_audio(monkeypatch):
+  import pytest
+
   tts = _import_tts_module(monkeypatch)
-  model = tts.LocalTTSModel("Qwen/Qwen3-TTS-12Hz-0.6B-Base", defer_loading=True)
+  model = tts.TTSArchitecture("Qwen/Qwen3-TTS-12Hz-0.6B-Base", defer_loading=True)
 
-  chunks = list(model.generate(_artifacts(_conversation())))
-
-  assert isinstance(chunks[0], TextChunk)
-  assert "reference_audio_path" in chunks[0].data
-  assert "--reference-audio-path" in chunks[0].data
-  assert "--reference-text" not in chunks[0].data
+  with pytest.raises(ValueError, match="reference_audio_path"):
+    list(model.generate(_artifacts(_conversation())))

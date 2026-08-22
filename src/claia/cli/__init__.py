@@ -16,6 +16,7 @@ common types from a single module if they prefer.
 from ..core import (
     Result,
     DeploymentError,
+    ResolveError,
     Conversation,
     Message,
     DomainEvent,
@@ -28,12 +29,13 @@ from ..core import (
     ExtensionInfo,
     ArchitectureInfo,
     DeploymentInfo,
+    NodeInfo,
     ProtocolInfo,
     ToolModuleInfo,
     ToolDefinition,
     ArgumentDefinition,
     ToolReference,
-    DeploymentParams,
+    ServingPlan,
     ParamSpec,
     ParamScope,
     SettingCategory,
@@ -50,16 +52,16 @@ __all__ = [
     # Framework
     "Registry", "Task", "TaskQueue", "BaseAgent",
     # Library — results & conversation
-    "Result", "DeploymentError",
+    "Result", "DeploymentError", "ResolveError",
     "Conversation", "Message",
     "DomainEvent", "EventType",
     # Library — artifacts
     "BaseArtifact", "TextArtifact", "ImageArtifact", "AudioArtifact", "Prompt",
     # Library — plugin metadata
     "ExtensionInfo",
-    "ArchitectureInfo", "DeploymentInfo",
+    "ArchitectureInfo", "DeploymentInfo", "NodeInfo",
     "ProtocolInfo", "ToolModuleInfo",
-    "ToolDefinition", "ArgumentDefinition", "ToolReference", "DeploymentParams",
+    "ToolDefinition", "ArgumentDefinition", "ToolReference", "ServingPlan",
     "ParamSpec", "ParamScope", "SettingCategory",
     "ModelDefinition",
 ]

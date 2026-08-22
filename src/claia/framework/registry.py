@@ -8,13 +8,14 @@ import threading
 from typing import Any, Dict, Iterator, List, Optional, Union
 
 from .manager import Manager
-from ..core.results import Result, DeploymentError
+from ..core.results import Result, ResolveError
 from .task import Task
 from .queue import TaskQueue
 from ..core.enums.task import TaskEvent, TaskStatus
 from ..core.data import Conversation
 from ..core.data.chunks import BaseChunk, TextChunk
-from ..core.plugins.base import DeploymentParams, ParamScope, ParamSpec, ToolReference
+from ..core.data.response import GenerateStream
+from ..core.plugins.base import ParamScope, ParamSpec, ServingPlan, ToolReference
 
 
 
@@ -33,14 +34,17 @@ class Registry:
   Unified registry coordinating tools, models, and agents.
 
   - Tools API: command catalog, tool-call processing, command execution.
-  - Models API: run() orchestration (resolve -> Deployment -> Architecture).
+  - Models API: run() orchestration (solve -> Node -> Deployment ->
+    Architecture). Instance lifecycle lives behind the nodes.
   - Agents API: task queue + worker lifecycle and agent dispatch.
   """
 
+  #: Allowed values for the ``deployment_preference`` solve-time filter.
+  DEPLOYMENT_PREFERENCES = ("local-only", "remote", "any")
+
   def __init__(self, task_queue: Optional[TaskQueue] = None):
-    # Core manager and caches
+    # Core manager
     self._manager = Manager()
-    self.cache: Dict[str, Any] = {}
 
     # Unified ``qualified_name -> ToolReference`` index assembled from
     # every loaded protocol's ``get_tool_references()``, plus a
@@ -396,58 +400,100 @@ class Registry:
     logger.debug(f"No resolution found for '{model_name}'")
     return None
 
-  @staticmethod
-  def _resolve_deployment(
-    model_name: str,
-    available_models: Dict[str, Any],
-    available_deployments: List[str],
-    deployment_method: Optional[str] = None,
-  ) -> DeploymentParams:
-    """Resolve a model request to a deployment, architecture, and canonical name.
+  def _resolve_serving(self, model_name: str, deployment_preference: str = "any"):
+    """Solve a model request into a serving pairing.
 
-    Resolve aliases against the merged definitions. If
-    ``deployment_method`` is given, it must be in both the available
-    deployments and the definition's list; otherwise take the
-    definition's first deployment and first architecture. Failures
-    raise ``DeploymentError``.
+    Resolution: name/alias -> definition -> first installed
+    architecture -> its linked deployment -> a node allowed by
+    ``deployment_preference``. The preference filters declared facts:
+
+    - ``local-only``: local nodes and non-api deployments only —
+      request data never leaves the machine.
+    - ``remote``: self-hosted compute only (remote nodes allowed,
+      api deployments still excluded).
+    - ``any``: unrestricted.
+
+    Returns ``(plan, definition, architecture_class, deployment, node)``.
+    Failures raise ``ResolveError``.
     """
-    resolved_model_name = Registry._resolve_model_name(model_name, available_models)
-    if not resolved_model_name:
-      raise DeploymentError(f"Model '{model_name}' not found")
-    model_info = available_models[resolved_model_name]
-
-    deployments = getattr(model_info, 'deployments', None) or []
-    if deployment_method and deployment_method not in available_deployments:
-      raise DeploymentError(f"Deployment method '{deployment_method}' is not available.")
-    if deployment_method and deployment_method not in deployments:
-      raise DeploymentError(
-        f"Deployment method '{deployment_method}' is not available for model '{resolved_model_name}'."
+    if deployment_preference not in self.DEPLOYMENT_PREFERENCES:
+      raise ResolveError(
+        f"Unknown deployment_preference '{deployment_preference}' "
+        f"(expected one of {', '.join(self.DEPLOYMENT_PREFERENCES)})"
       )
-    if not deployments:
-      raise DeploymentError(f"No deployment methods available for model '{resolved_model_name}'.")
 
-    architectures = getattr(model_info, 'architectures', None) or []
-    if not architectures:
-      raise DeploymentError(f"No architecture specified for model '{resolved_model_name}'.")
+    definitions = self.manager.get_supported_models()
+    resolved_name = self._resolve_model_name(model_name, definitions)
+    if not resolved_name:
+      raise ResolveError(f"Model '{model_name}' not found")
+    definition = definitions[resolved_name]
 
-    return DeploymentParams(
-      deployment_name=deployment_method or deployments[0],
-      model_name=resolved_model_name,
-      architecture_name=architectures[0],
-    )
+    candidates = getattr(definition, 'architectures', None) or []
+    if not candidates:
+      raise ResolveError(f"No architecture specified for model '{resolved_name}'")
+
+    rejected: List[str] = []
+    for architecture_name in candidates:
+      architecture_class = self.manager.get_architecture_class(architecture_name)
+      if architecture_class is None:
+        rejected.append(f"{architecture_name}: not installed")
+        continue
+
+      deployment_name = getattr(architecture_class, 'deployment', "")
+      deployment = self.manager.get_deployment_plugin(deployment_name) if deployment_name else None
+      if deployment is None:
+        rejected.append(f"{architecture_name}: deployment '{deployment_name}' unavailable")
+        continue
+
+      if deployment.api and deployment_preference != "any":
+        rejected.append(
+          f"{architecture_name}: api deployment excluded by preference '{deployment_preference}'"
+        )
+        continue
+
+      node = self._pick_node(deployment_preference)
+      if node is None:
+        rejected.append(
+          f"{architecture_name}: no node allowed by preference '{deployment_preference}'"
+        )
+        continue
+
+      provider_model_name = resolved_name
+      identifiers = getattr(definition, 'identifiers', None) or {}
+      if architecture_name in identifiers:
+        provider_model_name = identifiers[architecture_name]
+
+      plan = ServingPlan(
+        model_name=resolved_name,
+        provider_model_name=provider_model_name,
+        architecture_name=architecture_name,
+        deployment_name=deployment_name,
+        node_name=node.info.name,
+      )
+      return plan, definition, architecture_class, deployment, node
+
+    detail = "; ".join(rejected)
+    raise ResolveError(f"No serving pairing for model '{resolved_name}': {detail}")
+
+  def _pick_node(self, deployment_preference: str):
+    """Return the first node allowed by the preference, or ``None``."""
+    for node in self.manager.iter_node_instances():
+      if node.remote and deployment_preference == "local-only":
+        continue
+      return node
+    return None
 
   def _run_stream(
     self,
     model_name: str,
     conversation: Conversation,
-    deployment_method: Optional[str] = None,
     system: Optional[str] = None,
     **kwargs
-  ) -> Iterator[BaseChunk]:
+  ) -> GenerateStream:
     """
-    Internal: resolve deployment/architecture and return the
-    deployment's ``BaseChunk`` iterator. Raises DeploymentError on
-    failure.
+    Internal: solve the serving pairing and hand the call to the node.
+    Returns a ``GenerateStream``; raises ``ResolveError`` when no
+    pairing satisfies the request.
     """
     logger.debug(f"Running model {model_name}")
 
@@ -459,77 +505,34 @@ class Registry:
       system = system.strip() or None
 
     combined_kwargs = {**self._user_kwargs, **kwargs}
+    deployment_preference = combined_kwargs.pop("deployment_preference", None) or "any"
 
-    available_models = self.manager.get_supported_models()
-    available_deployments = list(self.manager.get_available_deployments().keys())
-
-    deployment_params = self._resolve_deployment(
-      model_name,
-      available_models,
-      available_deployments,
-      deployment_method=deployment_method,
+    plan, definition, architecture_class, deployment, node = self._resolve_serving(
+      model_name, deployment_preference
     )
     logger.debug(
-      f"Resolve result: deployment={deployment_params.deployment_name} "
-      f"model={deployment_params.model_name} arch={deployment_params.architecture_name}"
+      f"Solve result: model={plan.model_name} arch={plan.architecture_name} "
+      f"deployment={plan.deployment_name} node={plan.node_name}"
     )
 
-    model_class = self.manager.get_model_class(deployment_params.architecture_name)
-    if not model_class:
-      raise DeploymentError(f"No architecture '{deployment_params.architecture_name}' found for model '{deployment_params.model_name}'")
-
-    provider_model_name = deployment_params.model_name
-    model_def = available_models.get(deployment_params.model_name)
-    if model_def and getattr(model_def, 'identifiers', None):
-      arch_key = deployment_params.architecture_name
-      if arch_key in model_def.identifiers:
-        provider_model_name = model_def.identifiers[arch_key]
-        logger.debug(f"Resolved provider model name for arch '{arch_key}': {provider_model_name}")
-
-    selected_deployment = self.manager.get_deployment_plugin(deployment_params.deployment_name)
-    if not selected_deployment:
-      raise DeploymentError(f"Deployment method '{deployment_params.deployment_name}' not available")
-
-    deployment_info = selected_deployment.info
-    deployment_params_specs = getattr(deployment_info, 'params', None)
-    deployment_init_kwargs = Manager.filter_init_kwargs(combined_kwargs, deployment_params_specs)
-
-    available_architectures = self.manager.get_available_architectures()
-    architecture_info = available_architectures.get(deployment_params.architecture_name)
-    if architecture_info:
-      arch_params = getattr(architecture_info, 'params', None)
-      arch_init_kwargs = Manager.filter_init_kwargs(combined_kwargs, arch_params)
-      # Architecture RUNTIME specs are the contract for per-call generation
-      # knobs (temperature, max_tokens, ...); resolve their declared
-      # defaults here so ``model.generate`` receives a complete settings
-      # dict and never has to re-derive defaults from a local spec copy.
-      arch_runtime_kwargs = Manager.resolve_runtime_kwargs(combined_kwargs, arch_params)
-    else:
-      arch_init_kwargs = {}
-      arch_runtime_kwargs = {}
-
-    deployment_runtime_kwargs = Manager.filter_runtime_kwargs(combined_kwargs, deployment_params_specs)
-
     # Split by spec scope so each layer gets only the kwargs it
-    # consumes: INIT specs feed the model constructor (credentials,
-    # endpoints, paths), RUNTIME specs feed ``model.generate``
-    # (temperature, max_tokens, ...). Deployment-scoped RUNTIME
-    # overrides win over architecture defaults on name collisions.
-    init_kwargs = {
-      **arch_init_kwargs,
-      **deployment_init_kwargs,
-    }
-    runtime_kwargs = {
-      **arch_runtime_kwargs,
-      **deployment_runtime_kwargs,
-    }
+    # consumes: the architecture's INIT specs feed its constructor at
+    # deploy time (credentials, endpoints, paths), RUNTIME specs feed
+    # ``generate`` (temperature, max_tokens, ...) with declared
+    # defaults resolved so implementations never re-derive them.
+    arch_params = getattr(getattr(architecture_class, 'info', None), 'params', None)
+    init_kwargs = Manager.filter_init_kwargs(combined_kwargs, arch_params)
+    runtime_kwargs = Manager.resolve_runtime_kwargs(combined_kwargs, arch_params)
+    runtime_kwargs.update(
+      Manager.filter_runtime_kwargs(combined_kwargs, getattr(deployment.info, 'params', None))
+    )
 
-    inputs = conversation.to_model_inputs(model_def, system=system)
-    return selected_deployment.run(
-      model_name=provider_model_name,
-      model_class=model_class,
+    inputs = conversation.to_model_inputs(definition, system=system)
+    return node.run(
+      deployment=deployment,
+      architecture_class=architecture_class,
+      model_name=plan.provider_model_name,
       inputs=inputs,
-      cache=self.cache,
       init_kwargs=init_kwargs,
       runtime_kwargs=runtime_kwargs,
     )
@@ -541,35 +544,43 @@ class Registry:
     streaming: bool = False,
     system: Optional[str] = None,
     **kwargs
-  ) -> Union[Result, Iterator[BaseChunk]]:
+  ) -> Union[Result, GenerateStream]:
     """
-    Orchestrate model execution via resolve -> deployment -> architecture.
+    Orchestrate model execution via solve -> node -> deployment ->
+    architecture.
 
     Args:
         model_name: Model identifier (e.g. "gpt-4")
         conversation: Conversation to process (translated here into
-          a message sequence or artifact list before the deployment)
-        streaming: If True, returns an ``Iterator[BaseChunk]``.
-                   If False (default), consumes the chunk stream and
-                   returns a ``Result`` with the concatenated text.
+          a message sequence or artifact list before the node)
+        streaming: If True, returns a ``GenerateStream`` — iterate it
+          for chunks, read ``.response`` after exhaustion for the
+          terminal ``ModelResponse`` (usage, error, completeness).
+          If False (default), consumes the stream and returns a
+          ``Result`` with the concatenated text.
         system: Optional generate-time system message. Becomes a
           ``SYSTEM`` turn on the sequence for this call only; not
           stored on the conversation.
-        **kwargs: Forwarded to deployment/architecture (``deployment_method``
-          selects an explicit deployment when provided)
+        **kwargs: Forwarded to the serving stack
+          (``deployment_preference`` filters the solve: ``local-only``,
+          ``remote``, or ``any``).
 
     Returns:
-        ``Result`` (streaming=False) or
-        ``Iterator[BaseChunk]`` (streaming=True).
+        ``Result`` (streaming=False) or ``GenerateStream``
+        (streaming=True).
     """
     if streaming:
       return self._run_stream(model_name, conversation, system=system, **kwargs)
 
     try:
+      stream = self._run_stream(model_name, conversation, system=system, **kwargs)
       full_response = ""
-      for chunk in self._run_stream(model_name, conversation, system=system, **kwargs):
+      for chunk in stream:
         if isinstance(chunk, TextChunk) and isinstance(chunk.data, str):
           full_response += chunk.data
+      response = stream.response
+      if response is not None and response.error is not None:
+        return Result.fail(str(response.error))
       return Result.ok(full_response)
     except Exception as e:
       logger.error(f"Error running model {model_name}: {e}")
@@ -684,46 +695,55 @@ class Registry:
     return self.manager.get_supported_models()
 
   def get_available_deployments(self) -> Dict[str, Any]:
-    """Get all available deployment methods."""
+    """Get all available deployments."""
     return self.manager.get_available_deployments()
 
+  def get_available_nodes(self) -> Dict[str, Any]:
+    """Get all available nodes."""
+    return self.manager.get_available_nodes()
+
+  # Instance lifecycle lives on the nodes; these facades aggregate
+  # across them so hosts keep a single entry point.
   def get_loaded_models(self) -> Dict[str, Any]:
-    """Get dictionary of currently loaded models."""
-    return {key: type(model).__name__ for key, model in self.cache.items()}
+    """Get dictionary of instances currently deployed across all nodes."""
+    loaded: Dict[str, Any] = {}
+    for node in self.manager.iter_node_instances():
+      loaded.update(node.loaded())
+    return loaded
 
-  def unload_model(self, model_name: str, deployment_method: str = None) -> Result:
-    """Unload a model from cache."""
+  def unload_model(self, model_name: str, deployment_name: str = None) -> Result:
+    """Unload a model's deployed instances from every node."""
     try:
-      if deployment_method:
-        cache_key = f"{model_name}:{deployment_method}"
-        if cache_key in self.cache:
-          del self.cache[cache_key]
-          logger.debug(f"Unloaded model {cache_key}")
-      else:
-        # Remove all instances of this model
-        keys_to_remove = [key for key in self.cache.keys() if key.startswith(f"{model_name}:")]
-        for key in keys_to_remove:
-          del self.cache[key]
-          logger.debug(f"Unloaded model {key}")
-
+      removed = 0
+      for node in self.manager.iter_node_instances():
+        removed += node.unload(model_name, deployment_name)
+      logger.debug(f"Unloaded {removed} instance(s) of {model_name}")
       return Result(data="Model unloaded successfully")
     except Exception as e:
       return Result.fail(f"Failed to unload model: {str(e)}")
 
   def unload_all_models(self) -> Result:
-    """Unload all models from cache."""
+    """Unload every deployed instance from every node."""
     try:
-      self.cache.clear()
-      logger.debug("Unloaded all models")
+      removed = 0
+      for node in self.manager.iter_node_instances():
+        removed += node.unload()
+      logger.debug(f"Unloaded {removed} instance(s)")
       return Result(data="All models unloaded successfully")
     except Exception as e:
       return Result.fail(f"Failed to unload all models: {str(e)}")
 
   def get_cache_stats(self) -> Dict[str, Any]:
-    """Get statistics about the model cache."""
+    """Get statistics about deployed instances across all nodes."""
+    total = 0
+    cached: List[str] = []
+    for node in self.manager.iter_node_instances():
+      stats = node.stats()
+      total += stats["total_models"]
+      cached.extend(stats["cached_models"])
     return {
-      "total_models": len(self.cache),
-      "cached_models": list(self.cache.keys())
+      "total_models": total,
+      "cached_models": cached,
     }
 
   ######################################################################

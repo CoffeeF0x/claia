@@ -1,18 +1,18 @@
 """
-Internal deployment methods.
+Built-in deployments.
 
-This package contains built-in deployments for different ways to
-run models.
+A deployment serves an architecture on a node: it deploys the
+requested architecture and relays + meters the generate stream.
 """
 
+from .base import BaseDeployment
 from .dummy import DummyDeployment
 from .api import APIDeployment
-from .local import LocalDeployment
-from .remote import RemoteDeployment
+from .transformers import TransformersDeployment
 
 __all__ = [
+  'BaseDeployment',
   'DummyDeployment',
   'APIDeployment',
-  'LocalDeployment',
-  'RemoteDeployment'
+  'TransformersDeployment',
 ]

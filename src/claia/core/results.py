@@ -6,8 +6,13 @@ from typing import Any
 ########################################################################
 #                            EXCEPTIONS                                #
 ########################################################################
+class ResolveError(Exception):
+  """Raised when the solver cannot resolve a model request to a serving pairing."""
+  pass
+
+
 class DeploymentError(Exception):
-  """Raised when model deployment or inference fails."""
+  """Raised when model deployment or inference fails before content streams."""
   pass
 
 

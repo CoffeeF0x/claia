@@ -2,7 +2,7 @@
 claia.core — the CLAIA library.
 
 Pure data models, plugin contracts (ABCs), and concrete implementations of
-model architectures, deployments, definitions, and tools.
+architectures, deployments, nodes, definitions, and tools.
 
 ``claia.core`` can be imported and used directly without starting the
 framework runtime. Applications that want plugin discovery, task
@@ -13,7 +13,7 @@ top-level ``claia/__init__.py``. Each layer (``claia.core``,
 ``claia.framework``, ``claia.cli``) is independently installable.
 """
 
-from .results import Result, DeploymentError
+from .results import Result, DeploymentError, ResolveError
 from .data import (
   DataObject,
   BaseArtifact,
@@ -29,6 +29,7 @@ from .data import (
   AudioChunk,
   RawChunk,
   ModelResponse,
+  GenerateStream,
   Prompt,
   Conversation,
   Message,
@@ -39,13 +40,14 @@ from .plugins.base import (
   ExtensionInfo,
   ArchitectureInfo,
   DeploymentInfo,
+  NodeInfo,
   ProtocolInfo,
   ToolModuleInfo,
   DefinitionsInfo,
   ToolDefinition,
   ArgumentDefinition,
   ToolReference,
-  DeploymentParams,
+  ServingPlan,
   ParamSpec,
   ParamScope,
   SettingCategory,
@@ -62,20 +64,20 @@ from .enums.data import (
 
 __all__ = [
   # Results
-  "Result", "DeploymentError",
+  "Result", "DeploymentError", "ResolveError",
   # Data
   "DataObject",
   "BaseArtifact", "TextArtifact", "ImageArtifact", "AudioArtifact",
   "FileArtifact", "LinkArtifact", "RawArtifact",
   "BaseChunk", "TextChunk", "ImageChunk", "AudioChunk", "RawChunk",
-  "ModelResponse",
+  "ModelResponse", "GenerateStream",
   "Prompt", "Conversation", "Message",
   "DomainEvent", "EventType",
   # Plugin metadata + contracts
   "ExtensionInfo",
-  "ArchitectureInfo", "DeploymentInfo",
+  "ArchitectureInfo", "DeploymentInfo", "NodeInfo",
   "ProtocolInfo", "ToolModuleInfo", "DefinitionsInfo",
-  "ToolDefinition", "ArgumentDefinition", "ToolReference", "DeploymentParams",
+  "ToolDefinition", "ArgumentDefinition", "ToolReference", "ServingPlan",
   "ParamSpec", "ParamScope", "SettingCategory",
   "ModelDefinition",
   # Media enums

@@ -16,7 +16,6 @@ from claia.core.parser import TagSpec, TagType
 def test_ordered_union_lists_dedupe_and_keep_first_seen_order():
   existing = ModelDefinition(
     aliases=["gpt", "chat"],
-    deployments=["api"],
     architectures=["openai"],
     capabilities=["chat"],
     inputs=[ArtifactType.TEXT],
@@ -24,7 +23,6 @@ def test_ordered_union_lists_dedupe_and_keep_first_seen_order():
   )
   incoming = ModelDefinition(
     aliases=["chat", "gpt-4"],
-    deployments=["local", "api"],
     architectures=["openai", "openrouter"],
     capabilities=["vision", "chat"],
     inputs=[ArtifactType.IMAGE, ArtifactType.TEXT],
@@ -34,7 +32,6 @@ def test_ordered_union_lists_dedupe_and_keep_first_seen_order():
   merged = merge_model_definitions(existing, incoming)
 
   assert merged.aliases == ["gpt", "chat", "gpt-4"]
-  assert merged.deployments == ["api", "local"]
   assert merged.architectures == ["openai", "openrouter"]
   assert merged.capabilities == ["chat", "vision"]
   assert merged.inputs == [ArtifactType.TEXT, ArtifactType.IMAGE]
