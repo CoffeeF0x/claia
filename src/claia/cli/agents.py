@@ -22,6 +22,7 @@ the register_cli_agents() function called in __main__.py.
 
 import logging
 
+from ..core.enums.agent import AgentStatus
 from ..framework.agents.base import BaseAgent
 
 
@@ -52,40 +53,9 @@ class WriterAgent(BaseAgent):
   """A specialized agent for writing tasks with enhanced literary capabilities."""
 
   @classmethod
-  def execute(cls, task, registry, **kwargs) -> object:
-    conversation = task.conversation
-    model_id = task.parameters["model_id"]
-    kwargs.pop("system", None)
-    tag_specs = cls.resolve_tag_specs(registry, model_id)
-    system = cls.compose_system_prompt(
-      WRITER_SYSTEM_PROMPT,
-      tools=registry.list_tools(),
-      tag_specs=tag_specs,
-    )
-
-    try:
-      last_response = ""
-      for _round in range(cls.MAX_TOOL_ROUNDS):
-        last_response, results, cancelled = cls.stream_turn(
-          task,
-          registry,
-          model_id=model_id,
-          system=system,
-          tag_specs=tag_specs,
-          **kwargs,
-        )
-        cls._post_tool_results(task, conversation, results)
-        if cancelled:
-          task.mark_cancelled(last_response)
-          return task
-        if not results:
-          task.mark_completed(last_response)
-          return task
-      task.mark_completed(last_response)
-    except Exception as e:
-      logger.exception(f"Error in WriterAgent for {task.id}: {str(e)}")
-      task.mark_failed(str(e))
-    return task
+  def step(cls, task, registry, **kwargs) -> AgentStatus:
+    kwargs.pop("system", None)  # The writer keeps its own persona.
+    return cls.chat_step(task, registry, system=WRITER_SYSTEM_PROMPT, **kwargs)
 
 
 def register_cli_agents(registry) -> None:

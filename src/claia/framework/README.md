@@ -15,7 +15,7 @@ The framework layer is CLAIA's orchestration runtime. It loads plugins, exposes 
 2. `Registry.load_plugins(**kwargs)` asks `Manager` to discover entry points and initialize extensions.
 3. Model calls resolve a deployment and architecture, then run through those plugins.
 4. Tool calls flow through protocol and module plugins.
-5. Agent work is represented as `Task` objects and can be handled directly or by registry workers.
+5. Agent work is represented as `Task` objects, executed one step per worker dispatch (tasks re-enqueue until a step reports a terminal status) or driven to completion directly via `Agent.execute`.
 
 ## Library Entry Point
 

@@ -830,7 +830,7 @@ class Registry:
 
   def dispatch(self, task: Task) -> Task:
     """
-    Dispatch the given task to the appropriate agent implementation.
+    Dispatch one step of the given task to its agent implementation.
     """
     try:
       logger.debug(f"Dispatching {task.id} with agent type '{task.agent_type}'")
@@ -888,16 +888,19 @@ class Registry:
     return self.task_queue.put(task)
 
   def dispatch_next(self, block: bool = False, timeout: Optional[float] = None) -> Optional[Task]:
-    """Get and dispatch the next task from the queue."""
+    """Pop the next runnable task and dispatch one agent step."""
     task = self.task_queue.get(block=block, timeout=timeout)
     if task:
-      # Skip cancelled tasks
-      if task.status == TaskStatus.CANCELLED:
+      # Only PENDING tasks are runnable (skips cancelled/stale entries)
+      if task.status != TaskStatus.PENDING:
         return None
 
-      # Dispatch using this registry
       dispatched = self.dispatch(task)
       self.task_queue.update(dispatched)
+
+      # A non-terminal step goes back in line for its next step
+      if dispatched.status == TaskStatus.PENDING:
+        self.task_queue.put(dispatched)
       return dispatched
     return None
 

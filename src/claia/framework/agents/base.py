@@ -3,7 +3,10 @@ Base agent class for CLAIA.
 
 Shared utilities: system-prompt composition, one-turn streaming
 (parse / tool dispatch / message bookkeeping). Concrete agents
-implement ``execute`` — they read the task and own the generate loop.
+implement ``step`` — one unit of work reported as an ``AgentStatus``.
+The framework drives steps: the queue worker runs one step per
+dispatch and re-enqueues tasks that report ``CONTINUE``; ``execute``
+drives steps to completion synchronously for direct (queue-less) use.
 """
 
 import json
@@ -13,10 +16,11 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Type
 
 from ...core.data.chunks import AudioChunk, BaseChunk, ImageChunk, TextChunk
 from ...core.data.models import AudioArtifact, ImageArtifact
+from ...core.enums.agent import AgentStatus
 from ...core.enums.conversation import MessageRole
 from ...core.enums.data import AudioFormat, ImageFormat
 from ...core.enums.parser import TagType
-from ...core.enums.task import TaskEvent
+from ...core.enums.task import TaskEvent, TaskStatus
 from ...core.parser import (
   ParseError,
   ParseEvent,
@@ -48,38 +52,124 @@ _INJECTABLE_ARGS = frozenset({
 #                          BASE AGENT CLASS                            #
 ########################################################################
 class BaseAgent:
-  """Utilities for agents. ``execute`` is implemented by each agent."""
+  """Utilities for agents. ``step`` is implemented by each agent."""
 
   DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
   MAX_TOOL_ROUNDS = 8
+  # Reserved key in task.parameters holding the chat-loop round counter.
+  ROUND_PARAMETER = "round"
 
   @classmethod
-  def run(cls, task: Task, registry, **kwargs) -> object:
-    """Mark the task started, validate, then call ``execute``."""
-    logger.info(f"Starting task {task.id} with agent {cls.__name__}")
-    task.mark_started()
+  def run(cls, task: Task, registry, **kwargs) -> Task:
+    """Run one step and apply its ``AgentStatus`` to the task.
 
+    Called once per queue dispatch. The first step validates the task
+    and fires the started transition; a ``CONTINUE`` step leaves the
+    task ``PENDING`` so the queue can re-enqueue it.
+    """
     try:
-      logger.debug(f"Validating requirements for task {task.id}")
-      cls.validate_task(task, registry)
+      if task.cancel_requested:
+        task.mark_cancelled(task.result)
+        return task
 
-      logger.debug(f"Calling execute for {task.id} with agent {cls.__name__}")
-      result = cls.execute(task, registry=registry, **kwargs)
+      if task.started_at is None:
+        logger.info(f"Starting task {task.id} with agent {cls.__name__}")
+        task.mark_started()  # Legacy transition: fires once per task.
+        cls.validate_task(task, registry)
+      else:
+        task.status = TaskStatus.PROCESSING
 
-      logger.info(f"Successfully completed task {task.id}")
-      return result
+      status = cls.step(task, registry=registry, **kwargs)
+      cls._apply_agent_status(task, status)
     except Exception as e:
       logger.exception(f"Error running {task.id} with agent {cls.__name__}: {str(e)}")
       task.mark_failed(str(e))
-      return task
+    return task
 
   @classmethod
-  def execute(cls, task: Task, registry, **kwargs) -> object:
-    """Implemented by each agent: read the task, then call utilities."""
-    logger.error(f"execute not implemented for {cls.__name__}")
+  def execute(cls, task: Task, registry, **kwargs) -> Task:
+    """Direct path: drive ``run`` until the task is terminal, no queue."""
+    while True:
+      cls.run(task, registry=registry, **kwargs)
+      if task.status is not TaskStatus.PENDING:
+        return task
+
+  @classmethod
+  def step(cls, task: Task, registry, **kwargs) -> AgentStatus:
+    """Implemented by each agent: one unit of work.
+
+    Loop state belongs in ``task.parameters`` so it survives
+    re-enqueues and stays externally visible. Set ``task.result`` /
+    ``task.error`` before returning a terminal status; the framework
+    owns the actual task state transition.
+    """
+    logger.error(f"step not implemented for {cls.__name__}")
     raise NotImplementedError(
-      f"Agent implementation {cls.__name__} must override execute"
+      f"Agent implementation {cls.__name__} must override step"
     )
+
+  @classmethod
+  def _apply_agent_status(cls, task: Task, status: AgentStatus) -> None:
+    """Convert a step's ``AgentStatus`` into the task state transition."""
+    if status is AgentStatus.CONTINUE:
+      task.status = TaskStatus.PENDING
+    elif status is AgentStatus.COMPLETED:
+      task.mark_completed(task.result)
+    elif status is AgentStatus.CANCELLED:
+      task.mark_cancelled(task.result)
+    elif status is AgentStatus.FAILED:
+      task.mark_failed(task.error or "Agent step failed")
+    else:
+      raise TypeError(
+        f"{cls.__name__}.step must return an AgentStatus, got {status!r}"
+      )
+
+  @classmethod
+  def chat_step(
+    cls,
+    task: Task,
+    registry,
+    *,
+    system: Optional[str] = None,
+    **kwargs,
+  ) -> AgentStatus:
+    """One tool-loop turn: stream, dispatch tools, advance the round.
+
+    The shared chat-agent step. The calling agent picks the persona
+    (``system``); the round counter lives in ``task.parameters``.
+    """
+    # Task-owned keys also arrive via kwargs when dispatched off the
+    # queue (dispatch merges task.parameters into the call kwargs);
+    # drop them so they never reach the model call.
+    kwargs.pop("model_id", None)
+    kwargs.pop(cls.ROUND_PARAMETER, None)
+
+    model_id = task.parameters["model_id"]
+    round_index = int(task.parameters.get(cls.ROUND_PARAMETER, 0))
+    tag_specs = cls.resolve_tag_specs(registry, model_id)
+    composed = cls.compose_system_prompt(
+      system,
+      tools=registry.list_tools(),
+      tag_specs=tag_specs,
+    )
+
+    text, results, cancelled = cls.stream_turn(
+      task,
+      registry,
+      model_id=model_id,
+      system=composed,
+      tag_specs=tag_specs,
+      **kwargs,
+    )
+    cls._post_tool_results(task, task.conversation, results)
+    task.parameters[cls.ROUND_PARAMETER] = round_index + 1
+    task.result = text
+
+    if cancelled:
+      return AgentStatus.CANCELLED
+    if not results or round_index + 1 >= cls.MAX_TOOL_ROUNDS:
+      return AgentStatus.COMPLETED
+    return AgentStatus.CONTINUE
 
   @classmethod
   def stream_turn(

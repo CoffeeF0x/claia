@@ -136,6 +136,9 @@ def fake_manager():
     def iter_node_instances(self):
       yield node
 
+    def iter_protocol_instances(self):
+      return iter(())
+
   return FakeManager()
 
 

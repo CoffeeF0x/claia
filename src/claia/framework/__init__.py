@@ -60,6 +60,7 @@ from ..core.plugins.base import (
   ParamSpec,
 )
 from ..core.definitions.model_definition import ModelDefinition
+from ..core.enums.agent import AgentStatus
 from ..core.enums.events import EventType
 from ..core.enums.plugins import ParamScope, ParamCategory
 from ..core.enums.task import TaskEvent, TaskStatus
@@ -85,7 +86,7 @@ from .decorators import agent
 __all__ = [
   # Framework primitives
   "Registry", "Manager", "Task", "TaskQueue", "TaskQueueHook",
-  "TaskEvent", "TaskStatus",
+  "TaskEvent", "TaskStatus", "AgentStatus",
   "BaseAgent",
   # Plugin decorators
   "tool", "protocol", "architecture", "deployment", "node", "definitions", "agent",
