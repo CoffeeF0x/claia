@@ -32,13 +32,13 @@ import pytest
 
 from claia.core.data import Conversation
 from claia.core.enums.conversation import MessageRole
-from claia.core.enums.process import ProcessEvent, ProcessStatus
+from claia.core.enums.task import TaskEvent, TaskStatus
 from claia.core.data.chunks import BaseChunk, TextChunk
 from claia.core.parser import TagType
 from claia.core.plugins.base import ToolReference
 from claia.core.results import Result
 from claia.framework.agents.simple import SimpleAgent
-from claia.framework.process import Process
+from claia.framework.task import Task
 
 
 def _utilities(convo) -> List[Any]:
@@ -114,8 +114,8 @@ class _FakeToolRegistry:
     return fn(raw_payload, conversation, **kwargs)
 
 
-def _process(conversation, model_id="dummy-model"):
-  return Process(conversation=conversation, parameters={"model_id": model_id})
+def _task(conversation, model_id="dummy-model"):
+  return Task(conversation=conversation, parameters={"model_id": model_id})
 
 
 def _stream(*texts: str, conversation_factory=Conversation):
@@ -130,15 +130,15 @@ def _stream(*texts: str, conversation_factory=Conversation):
 class TestStreamTextOnly:
   def test_no_tags_emits_full_text_and_no_dispatch(self):
     convo = Conversation(title="t")
-    proc = _process(convo)
+    task = _task(convo)
     tokens: List[str] = []
-    proc.on(ProcessEvent.TOKEN, lambda t: tokens.append(t))
+    task.on(TaskEvent.TOKEN, lambda t: tokens.append(t))
 
     reg = _FakeToolRegistry(_stream("Hello, ", "world!"))
-    SimpleAgent.process_request(proc, registry=reg)
+    SimpleAgent.execute(task, registry=reg)
 
-    assert proc.status == ProcessStatus.COMPLETED
-    assert proc.result == "Hello, world!"
+    assert task.status == TaskStatus.COMPLETED
+    assert task.result == "Hello, world!"
     assert "".join(tokens) == "Hello, world!"
     assert reg.execute_calls == []
     assert _utilities(convo) == []
@@ -159,9 +159,9 @@ class TestStreamOneToolCall:
 
   def test_envelope_payload_dispatches_and_streams_result(self):
     convo = Conversation(title="t")
-    proc = _process(convo)
+    task = _task(convo)
     tokens: List[str] = []
-    proc.on(ProcessEvent.TOKEN, lambda t: tokens.append(t))
+    task.on(TaskEvent.TOKEN, lambda t: tokens.append(t))
 
     chunks = _stream(
       'Calling tool now: ',
@@ -170,9 +170,9 @@ class TestStreamOneToolCall:
     )
     reg = self._registry_with_echo(chunks)
 
-    SimpleAgent.process_request(proc, registry=reg)
+    SimpleAgent.execute(task, registry=reg)
 
-    assert proc.status == ProcessStatus.COMPLETED
+    assert task.status == TaskStatus.COMPLETED
 
     # Dispatch happened with the qualified name and the verbatim payload.
     assert len(reg.execute_calls) == 1
@@ -195,20 +195,20 @@ class TestStreamOneToolCall:
 
   def test_bare_name_resolves_via_registry(self):
     convo = Conversation(title="t")
-    proc = _process(convo)
+    task = _task(convo)
     reg = self._registry_with_echo(_stream(
       '[TOOL_CALL]{"name": "echo", "parameters": {"message": "yo"}}[/TOOL_CALL]',
     ))
 
-    SimpleAgent.process_request(proc, registry=reg)
-    assert proc.status == ProcessStatus.COMPLETED
+    SimpleAgent.execute(task, registry=reg)
+    assert task.status == TaskStatus.COMPLETED
     # Bare ``echo`` resolved to ``demo.echo``.
     assert reg.execute_calls[0]["qualified_name"] == "demo.echo"
     assert "echoed:yo" in _assistant_message(convo).content
 
   def test_tool_failure_surfaces_inline_error_text(self):
     convo = Conversation(title="t")
-    proc = _process(convo)
+    task = _task(convo)
     # Envelope payload — ``decode_payload`` only surfaces ``name`` when
     # a sibling ``parameters`` key is present (see
     # ``test_simple_protocol_phase5.py``).
@@ -217,8 +217,8 @@ class TestStreamOneToolCall:
       tools={},
     )
 
-    SimpleAgent.process_request(proc, registry=reg)
-    assert proc.status == ProcessStatus.COMPLETED
+    SimpleAgent.execute(task, registry=reg)
+    assert task.status == TaskStatus.COMPLETED
     content = _assistant_message(convo).content
     assert "[TOOL_ERROR]" in content
     assert "Tool not found" in content
@@ -228,13 +228,13 @@ class TestStreamOneToolCall:
 
   def test_payload_without_name_yields_typed_error(self):
     convo = Conversation(title="t")
-    proc = _process(convo)
+    task = _task(convo)
     reg = self._registry_with_echo(_stream(
       '[TOOL_CALL]{"message": "no name here"}[/TOOL_CALL]',
     ))
 
-    SimpleAgent.process_request(proc, registry=reg)
-    assert proc.status == ProcessStatus.COMPLETED
+    SimpleAgent.execute(task, registry=reg)
+    assert task.status == TaskStatus.COMPLETED
     # No dispatch happened.
     assert reg.execute_calls == []
     content = _assistant_message(convo).content
@@ -248,7 +248,7 @@ class TestStreamOneToolCall:
 class TestStreamMultipleToolCalls:
   def test_two_tool_calls_dispatch_in_order(self):
     convo = Conversation(title="t")
-    proc = _process(convo)
+    task = _task(convo)
 
     def _add(raw_payload, conversation, **kwargs):
       import json as _json
@@ -272,8 +272,8 @@ class TestStreamMultipleToolCalls:
       tools={"math.add": _add, "demo.shout": _shout},
     )
 
-    SimpleAgent.process_request(proc, registry=reg)
-    assert proc.status == ProcessStatus.COMPLETED
+    SimpleAgent.execute(task, registry=reg)
+    assert task.status == TaskStatus.COMPLETED
 
     # Both calls fired in order.
     assert [c["qualified_name"] for c in reg.execute_calls] == ["math.add", "demo.shout"]
@@ -293,7 +293,7 @@ class TestStreamMultipleToolCalls:
 class TestStreamThinkingPlusTool:
   def test_thinking_recorded_as_utility_tool_dispatched(self):
     convo = Conversation(title="t")
-    proc = _process(convo)
+    task = _task(convo)
 
     def _echo(raw_payload, conversation, **kwargs):
       return Result.ok("ok")
@@ -307,8 +307,8 @@ class TestStreamThinkingPlusTool:
       tools={"demo.echo": _echo},
     )
 
-    SimpleAgent.process_request(proc, registry=reg)
-    assert proc.status == ProcessStatus.COMPLETED
+    SimpleAgent.execute(task, registry=reg)
+    assert task.status == TaskStatus.COMPLETED
 
     utilities = _utilities(convo)
     tag_types = sorted(u.tag_type.value for u in utilities)
@@ -328,7 +328,7 @@ class TestStreamingChunkBoundaries:
     chunk boundaries — the agent loop relies on the streaming
     semantics rather than a one-shot find-all pass."""
     convo = Conversation(title="t")
-    proc = _process(convo)
+    task = _task(convo)
 
     def _ping(raw_payload, conversation, **kwargs):
       return Result.ok("pong")
@@ -343,8 +343,8 @@ class TestStreamingChunkBoundaries:
       tools={"demo.ping": _ping},  # qualified; agent resolves bare name
     )
 
-    SimpleAgent.process_request(proc, registry=reg)
-    assert proc.status == ProcessStatus.COMPLETED
+    SimpleAgent.execute(task, registry=reg)
+    assert task.status == TaskStatus.COMPLETED
     assert reg.execute_calls[0]["qualified_name"] == "demo.ping"
     assert "pong" in _assistant_message(convo).content
 
@@ -358,7 +358,7 @@ class TestParserFlush:
     event might not fire until ``parser.flush()`` runs after the
     deployment loop ends."""
     convo = Conversation(title="t")
-    proc = _process(convo)
+    task = _task(convo)
 
     def _ping(raw_payload, conversation, **kwargs):
       return Result.ok("pong")
@@ -370,8 +370,8 @@ class TestParserFlush:
       _stream('[TOOL_CALL]{"name": "ping", "parameters": {}}[/TOOL_CALL]'),
       tools={"demo.ping": _ping},
     )
-    SimpleAgent.process_request(proc, registry=reg)
-    assert proc.status == ProcessStatus.COMPLETED
+    SimpleAgent.execute(task, registry=reg)
+    assert task.status == TaskStatus.COMPLETED
     assert len(reg.execute_calls) == 1
 
 
@@ -381,12 +381,12 @@ class TestParserFlush:
 class TestParseErrorTolerance:
   def test_unclosed_tag_does_not_crash_the_stream(self):
     convo = Conversation(title="t")
-    proc = _process(convo)
+    task = _task(convo)
     reg = _FakeToolRegistry(_stream('hello [TOOL_CALL] never closes'))
-    SimpleAgent.process_request(proc, registry=reg)
-    # Process completes; the un-closed tag does not produce a utility
+    SimpleAgent.execute(task, registry=reg)
+    # Task completes; the un-closed tag does not produce a utility
     # message and does not dispatch a tool call.
-    assert proc.status == ProcessStatus.COMPLETED
+    assert task.status == TaskStatus.COMPLETED
     assert reg.execute_calls == []
 
 

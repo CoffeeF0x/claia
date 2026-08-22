@@ -10,8 +10,8 @@ from ...core.results import Result
 from ...core.data.models import Conversation
 from ...core.enums.conversation import MessageRole
 from ...core.enums.model import SourcePreference
-from ...framework.process import Process
-from ...core.enums.process import ProcessEvent
+from ...framework.task import Task
+from ...core.enums.task import TaskEvent
 from ..renderer import PacedRenderer
 from ..storage import JsonStore
 from ..utils import active_system
@@ -54,7 +54,7 @@ class QueryCommand(BaseCommand):
       if system:
         parameters["system"] = system
 
-      process = Process(
+      task = Task(
         agent_type=self.settings.active_agent,
         conversation=self.settings.active_conversation,
         parameters=parameters
@@ -62,7 +62,7 @@ class QueryCommand(BaseCommand):
 
       renderer = PacedRenderer()
       renderer.start()
-      process.on(ProcessEvent.TOKEN, renderer.feed)
+      task.on(TaskEvent.TOKEN, renderer.feed)
       file_repo = JsonStore(self.settings.files_directory)
       saved_artifacts = []
 
@@ -95,12 +95,12 @@ class QueryCommand(BaseCommand):
           file_repo.save(self.settings.active_conversation)
         done_event.set()
 
-      process.on(ProcessEvent.COMPLETE, on_complete)
-      process.on(ProcessEvent.ERROR, on_error)
-      process.on(ProcessEvent.CANCELLED, on_cancelled)
-      process.on(ProcessEvent.ARTIFACT, on_artifact)
+      task.on(TaskEvent.COMPLETE, on_complete)
+      task.on(TaskEvent.ERROR, on_error)
+      task.on(TaskEvent.CANCELLED, on_cancelled)
+      task.on(TaskEvent.ARTIFACT, on_artifact)
 
-      self.registry.add_process(process)
+      self.registry.add_task(task)
       done_event.wait()
 
       if error_holder[0]:

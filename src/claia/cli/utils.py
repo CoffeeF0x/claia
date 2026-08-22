@@ -6,8 +6,8 @@ import threading
 import logging
 from typing import Optional
 
-from ..framework.process import Process
-from ..core.enums.process import ProcessEvent
+from ..framework.task import Task
+from ..core.enums.task import TaskEvent
 from .storage import JsonStore
 
 
@@ -23,25 +23,25 @@ def active_system(settings) -> Optional[str]:
   return None
 
 
-def wait_for_process(
-    process: Process,
+def wait_for_task(
+    task: Task,
     store: Optional[JsonStore] = None,
     save_conversation: bool = True,
     timeout: Optional[float] = None
 ) -> bool:
   """
-  Block until a process completes, using the callback-based event system.
+  Block until a task completes, using the callback-based event system.
 
   Before calling this, register TOKEN, COMPLETE, and ERROR callbacks
-  on the process. This helper simply waits for the done event to be set
+  on the task. This helper simply waits for the done event to be set
   by one of those callbacks.
   """
   done = threading.Event()
   success_flag = [True]
 
   def on_complete(*args):
-    if save_conversation and store and process.conversation:
-      if not store.save(process.conversation):
+    if save_conversation and store and task.conversation:
+      if not store.save(task.conversation):
         logger.error("Failed to save conversation")
     done.set()
 
@@ -49,8 +49,8 @@ def wait_for_process(
     success_flag[0] = False
     done.set()
 
-  process.on(ProcessEvent.COMPLETE, on_complete)
-  process.on(ProcessEvent.ERROR, on_error)
+  task.on(TaskEvent.COMPLETE, on_complete)
+  task.on(TaskEvent.ERROR, on_error)
 
   done.wait(timeout=timeout)
   return success_flag[0]

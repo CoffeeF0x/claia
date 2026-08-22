@@ -5,7 +5,7 @@ Owns the per-turn ``TagParser``. As deployment chunks arrive the agent
 feeds them through the parser, appends utility messages for any closed
 tags, and dispatches ``TagType.TOOL`` events through
 ``Registry.execute_tool`` inline — the result text is appended to the
-streaming assistant message and emitted as a ``ProcessEvent.TOKEN`` so
+streaming assistant message and emitted as a ``TaskEvent.TOKEN`` so
 terminal renderers see the call → response flow without a separate
 post-stream pass.
 """
@@ -20,7 +20,7 @@ from ...core.data.chunks import AudioChunk, BaseChunk, ImageChunk, TextChunk
 from ...core.data.models import AudioArtifact, ImageArtifact
 from ...core.enums.conversation import MessageRole
 from ...core.enums.data import AudioFormat, ImageFormat
-from ...core.enums.process import ProcessEvent
+from ...core.enums.task import TaskEvent
 from ...core.parser import (
   ParseError,
   ParseEvent,
@@ -49,7 +49,7 @@ class SimpleAgent(BaseAgent):
   A simple agent that directly calls a model for inference.
 
   Streams ``BaseChunk`` items from ``registry.run`` and forwards
-  visible text through ``ProcessEvent.TOKEN``. Each text chunk is
+  visible text through ``TaskEvent.TOKEN``. Each text chunk is
   also fed to a ``TagParser`` configured from the model definition's
   ``tag_overrides``; closed tags become utility messages on the
   conversation, and tool tags are dispatched through
@@ -61,24 +61,24 @@ class SimpleAgent(BaseAgent):
   """
 
   @classmethod
-  def process_request(cls, process, registry, **kwargs) -> object:
+  def execute(cls, task, registry, **kwargs) -> object:
     """Stream a model turn, parse tags inline, and dispatch tool calls.
 
     The conversation is mutated through the streaming-message
     helpers so observers see one ``STREAM_START`` and one
     ``STREAM_END`` per turn, with utility messages for parsed
     tags interleaved between them. Per-token appends are silent;
-    consumers wanting real-time progress listen on the process's
-    ``ProcessEvent.TOKEN`` callback.
+    consumers wanting real-time progress listen on the task's
+    ``TaskEvent.TOKEN`` callback.
     """
-    conversation = process.conversation
+    conversation = task.conversation
     streaming_message = None
 
     try:
-      model_id = process.parameters["model_id"]
+      model_id = task.parameters["model_id"]
       system = kwargs.pop("system", None)
       if system is None:
-        system = process.parameters.get("system")
+        system = task.parameters.get("system")
       full_response = ""
 
       streaming_message = conversation.start_streaming_message(MessageRole.ASSISTANT)
@@ -90,26 +90,26 @@ class SimpleAgent(BaseAgent):
       for chunk in registry.run(
         model_id, conversation, streaming=True, system=system, **kwargs
       ):
-        if process.cancel_requested:
+        if task.cancel_requested:
           cancelled = True
           break
 
         if not isinstance(chunk, TextChunk):
           if isinstance(chunk, ImageChunk):
-            cls._attach_image_chunk(process, streaming_message.message_id, chunk)
+            cls._attach_image_chunk(task, streaming_message.message_id, chunk)
           elif isinstance(chunk, AudioChunk):
-            cls._attach_audio_chunk(process, streaming_message.message_id, chunk)
-          process.emit(ProcessEvent.CHUNK, chunk)
+            cls._attach_audio_chunk(task, streaming_message.message_id, chunk)
+          task.emit(TaskEvent.CHUNK, chunk)
           continue
 
         token = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
         full_response += token
         conversation.append_stream_chunk(streaming_message.message_id, token)
-        process.emit(ProcessEvent.TOKEN, token)
+        task.emit(TaskEvent.TOKEN, token)
 
         appended = cls._consume_parse_events(
           parser.feed(token),
-          process=process,
+          task=task,
           registry=registry,
           conversation=conversation,
           streaming_message_id=streaming_message.message_id,
@@ -123,7 +123,7 @@ class SimpleAgent(BaseAgent):
       if not cancelled:
         appended = cls._consume_parse_events(
           parser.flush(),
-          process=process,
+          task=task,
           registry=registry,
           conversation=conversation,
           streaming_message_id=streaming_message.message_id,
@@ -133,13 +133,13 @@ class SimpleAgent(BaseAgent):
 
       if cancelled:
         conversation.end_streaming_message(streaming_message.message_id, error="cancelled")
-        process.mark_cancelled(full_response)
+        task.mark_cancelled(full_response)
       else:
         conversation.end_streaming_message(streaming_message.message_id)
-        process.mark_completed(full_response)
+        task.mark_completed(full_response)
 
     except Exception as e:
-      logging.exception(f"Error in SimpleAgent for {process.id}: {str(e)}")
+      logging.exception(f"Error in SimpleAgent for {task.id}: {str(e)}")
       if streaming_message is not None:
         try:
           conversation.end_streaming_message(streaming_message.message_id, error=str(e))
@@ -147,9 +147,9 @@ class SimpleAgent(BaseAgent):
           logging.exception(
             f"Failed to mark streaming message ended after error: {streaming_message.message_id}"
           )
-      process.mark_failed(str(e))
+      task.mark_failed(str(e))
 
-    return process
+    return task
 
   # ------------------------------------------------------------------
   # Parser integration
@@ -172,7 +172,7 @@ class SimpleAgent(BaseAgent):
     cls,
     events: Iterable[ParseEvent],
     *,
-    process,
+    task,
     registry,
     conversation,
     streaming_message_id: str,
@@ -198,7 +198,7 @@ class SimpleAgent(BaseAgent):
       if isinstance(ev, TagEvent):
         appended += cls._handle_tag_event(
           ev,
-          process=process,
+          task=task,
           registry=registry,
           conversation=conversation,
           streaming_message_id=streaming_message_id,
@@ -211,7 +211,7 @@ class SimpleAgent(BaseAgent):
     cls,
     ev: TagEvent,
     *,
-    process,
+    task,
     registry,
     conversation,
     streaming_message_id: str,
@@ -242,7 +242,7 @@ class SimpleAgent(BaseAgent):
 
     return cls._dispatch_tool_event(
       ev,
-      process=process,
+      task=task,
       registry=registry,
       conversation=conversation,
       streaming_message_id=streaming_message_id,
@@ -254,7 +254,7 @@ class SimpleAgent(BaseAgent):
     cls,
     ev: TagEvent,
     *,
-    process,
+    task,
     registry,
     conversation,
     streaming_message_id: str,
@@ -272,7 +272,7 @@ class SimpleAgent(BaseAgent):
     if not name:
       return cls._emit_tool_output(
         f"[TOOL_ERROR] Tool call missing 'name' (tag attributes={ev.attributes})",
-        process=process,
+        task=task,
         conversation=conversation,
         streaming_message_id=streaming_message_id,
       )
@@ -290,7 +290,7 @@ class SimpleAgent(BaseAgent):
       logger.exception("Error executing tool %r", qualified)
       return cls._emit_tool_output(
         f"[TOOL_ERROR] {exc}",
-        process=process,
+        task=task,
         conversation=conversation,
         streaming_message_id=streaming_message_id,
       )
@@ -298,7 +298,7 @@ class SimpleAgent(BaseAgent):
     rendered = cls._render_result(result)
     return cls._emit_tool_output(
       rendered,
-      process=process,
+      task=task,
       conversation=conversation,
       streaming_message_id=streaming_message_id,
     )
@@ -338,7 +338,7 @@ class SimpleAgent(BaseAgent):
   def _emit_tool_output(
     text: str,
     *,
-    process,
+    task,
     conversation,
     streaming_message_id: str,
   ) -> str:
@@ -364,14 +364,14 @@ class SimpleAgent(BaseAgent):
 
     out = f"{prefix}{text}"
     conversation.append_stream_chunk(streaming_message_id, out)
-    process.emit(ProcessEvent.TOKEN, out)
+    task.emit(TaskEvent.TOKEN, out)
     return out
 
   # ------------------------------------------------------------------
   # Non-text chunk handling
   # ------------------------------------------------------------------
   @staticmethod
-  def _attach_image_chunk(process, message_id: str, chunk: BaseChunk) -> None:
+  def _attach_image_chunk(task, message_id: str, chunk: BaseChunk) -> None:
     """Convert an image byte chunk into an artifact attached to the message."""
     try:
       metadata = dict(chunk.metadata or {})
@@ -399,13 +399,13 @@ class SimpleAgent(BaseAgent):
         format=image_fmt,
         metadata=metadata,
       )
-      process.conversation.attach_artifact(message_id, artifact)
-      process.emit(ProcessEvent.ARTIFACT, artifact, message_id)
+      task.conversation.attach_artifact(message_id, artifact)
+      task.emit(TaskEvent.ARTIFACT, artifact, message_id)
     except Exception as e:
       logging.exception(f"Failed to attach generated image artifact: {e}")
 
   @staticmethod
-  def _attach_audio_chunk(process, message_id: str, chunk: BaseChunk) -> None:
+  def _attach_audio_chunk(task, message_id: str, chunk: BaseChunk) -> None:
     """Convert an audio byte chunk into an artifact attached to the message."""
     try:
       metadata = dict(chunk.metadata or {})
@@ -432,7 +432,7 @@ class SimpleAgent(BaseAgent):
         sample_rate=metadata.get("sample_rate"),
         metadata=metadata,
       )
-      process.conversation.attach_artifact(message_id, artifact)
-      process.emit(ProcessEvent.ARTIFACT, artifact, message_id)
+      task.conversation.attach_artifact(message_id, artifact)
+      task.emit(TaskEvent.ARTIFACT, artifact, message_id)
     except Exception as e:
       logging.exception(f"Failed to attach generated audio artifact: {e}")

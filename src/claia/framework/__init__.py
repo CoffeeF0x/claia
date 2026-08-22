@@ -8,7 +8,7 @@ Provides the inversion-of-control runtime on top of ``claia.core``:
   agents).
 - ``Registry`` is the application-facing composition root that
   orchestrates models, tools, and agents.
-- ``Process`` and ``ProcessQueue`` model units of work; worker threads
+- ``Task`` and ``TaskQueue`` model units of work; worker threads
   spawned by the registry consume them.
 - ``BaseAgent`` and the built-in ``simple`` agent live under
   ``claia.framework.agents``.
@@ -61,8 +61,8 @@ from ..core.plugins.base import (
   SettingCategory,
 )
 from ..core.definitions.model_definition import ModelDefinition
-from ..core.enums.process import ProcessEvent, ProcessStatus
-from ..core.enums.process_queue import ProcessQueueHook
+from ..core.enums.task import TaskEvent, TaskStatus
+from ..core.enums.task_queue import TaskQueueHook
 from ..core.enums.data import (
   MediaType,
   TextFormat,
@@ -73,8 +73,8 @@ from ..core.enums.data import (
 )
 
 # Framework primitives.
-from .process import Process
-from .queue import ProcessQueue
+from .task import Task
+from .queue import TaskQueue
 from .registry import Registry
 from .manager import Manager
 from .agents.base import BaseAgent
@@ -83,8 +83,8 @@ from .decorators import agent
 
 __all__ = [
   # Framework primitives
-  "Registry", "Manager", "Process", "ProcessQueue", "ProcessQueueHook",
-  "ProcessEvent", "ProcessStatus",
+  "Registry", "Manager", "Task", "TaskQueue", "TaskQueueHook",
+  "TaskEvent", "TaskStatus",
   "BaseAgent",
   # Plugin decorators
   "tool", "protocol", "architecture", "deployment", "definitions", "agent",

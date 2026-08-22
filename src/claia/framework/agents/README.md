@@ -1,14 +1,14 @@
 # Agents
 
-Agent implementations that orchestrate processes, models, and tools.
+Agent implementations that orchestrate tasks, models, and tools.
 
 ## What lives here
 
 - `simple.py` — `SimpleAgent`, a minimal agent that:
-  - reads a `Process` (including `process.parameters["model_id"]` and `process.conversation`)
+  - reads a `Task` (including `task.parameters["model_id"]` and `task.conversation`)
   - calls `registry.run(...)` to execute a model
   - parses streaming tags and dispatches tool calls
-  - marks the process as completed or failed.
+  - marks the task as completed or failed.
 
 ## How agents fit in
 
@@ -23,6 +23,6 @@ Agent implementations that orchestrate processes, models, and tools.
 
 ## Implementing a new agent (TL;DR)
 
-- Subclass `claia.framework.agents.base.BaseAgent` and implement `process_request(process, registry, **kwargs)`.
+- Subclass `claia.framework.agents.base.BaseAgent` and implement `execute(task, registry, **kwargs)`.
 - Declare `info = AgentInfo(name=..., title=..., description=..., params=[...])` on the class. Leave `agent_class` unset — the manager fills it.
 - Register the class via the `claia.agents` entry point, or call `registry.register(...)`.

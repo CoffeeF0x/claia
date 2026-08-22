@@ -41,14 +41,14 @@ from ..core import (
 )
 from ..framework import (
     Registry,
-    Process,
-    ProcessQueue,
+    Task,
+    TaskQueue,
     BaseAgent,
 )
 
 __all__ = [
     # Framework
-    "Registry", "Process", "ProcessQueue", "BaseAgent",
+    "Registry", "Task", "TaskQueue", "BaseAgent",
     # Library — results & conversation
     "Result", "DeploymentError",
     "Conversation", "Message",

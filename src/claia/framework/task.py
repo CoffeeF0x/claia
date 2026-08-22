@@ -1,6 +1,6 @@
 """
-This module contains the Process class for CLAIA agent system.
-A Process represents a unit of work to be executed by an agent.
+This module contains the Task class for CLAIA agent system.
+A Task represents a unit of work to be executed by an agent.
 """
 
 # External dependencies
@@ -8,7 +8,7 @@ import uuid, time, logging, threading
 from typing import Optional, Dict, Any, Callable, List
 
 # Internal dependencies
-from ..core.enums.process import ProcessEvent, ProcessStatus
+from ..core.enums.task import TaskEvent, TaskStatus
 from ..core.data import Conversation
 
 
@@ -17,19 +17,19 @@ logger = logging.getLogger(__name__)
 
 
 ########################################################################
-#                             PROCESS                                  #
+#                               TASK                                   #
 ########################################################################
-class Process:
+class Task:
   """
-  Represents a process to be executed by an agent.
+  Represents a task to be executed by an agent.
 
-  A process is a unit of work that can be executed by an agent.
-  It contains all the information needed to execute the process,
+  A task is a unit of work that can be executed by an agent.
+  It contains all the information needed to execute the task,
   including the conversation context and any additional parameters.
 
   Supports an event callback system via on() and emit(). Consumers
-  register callbacks before submitting the process to the queue.
-  Agents emit ``ProcessEvent`` values as they execute. Callbacks are
+  register callbacks before submitting the task to the queue.
+  Agents emit ``TaskEvent`` values as they execute. Callbacks are
   fired from the worker thread — thread safety is the consumer's
   responsibility.
   """
@@ -43,7 +43,7 @@ class Process:
   ):
     self.id = id or str(uuid.uuid4())
     self.agent_type = agent_type
-    self.status = ProcessStatus.PENDING
+    self.status = TaskStatus.PENDING
     self.parent_id = parent_id
     self.conversation = conversation
     self.parameters = parameters or {}
@@ -52,7 +52,7 @@ class Process:
     self.created_at = time.time()
     self.started_at = None
     self.completed_at = None
-    self._callbacks: Dict[ProcessEvent, List[Callable]] = {}
+    self._callbacks: Dict[TaskEvent, List[Callable]] = {}
     # Cooperative cancellation. Hosts running an agent on a worker thread
     # can call request_cancel() to ask the agent to stop at the next
     # safe point. Long-running agents should poll cancel_requested
@@ -63,51 +63,51 @@ class Process:
 
   # ── Callback API ──────────────────────────────────────────────────
 
-  def on(self, event: ProcessEvent, callback: Callable) -> 'Process':
+  def on(self, event: TaskEvent, callback: Callable) -> 'Task':
     """Register a callback for an event. Returns self for chaining."""
-    if not isinstance(event, ProcessEvent):
-      raise TypeError(f"event must be ProcessEvent, got {type(event).__name__}")
+    if not isinstance(event, TaskEvent):
+      raise TypeError(f"event must be TaskEvent, got {type(event).__name__}")
     self._callbacks.setdefault(event, []).append(callback)
     return self
 
-  def emit(self, event: ProcessEvent, *args, **kwargs) -> None:
+  def emit(self, event: TaskEvent, *args, **kwargs) -> None:
     """Fire all callbacks registered for *event*. Exceptions are logged, not raised."""
-    if not isinstance(event, ProcessEvent):
-      raise TypeError(f"event must be ProcessEvent, got {type(event).__name__}")
+    if not isinstance(event, TaskEvent):
+      raise TypeError(f"event must be TaskEvent, got {type(event).__name__}")
     for cb in self._callbacks.get(event, []):
       try:
         cb(*args, **kwargs)
       except Exception as e:
-        logger.error(f"Callback error on '{event.value}' for process {self.id}: {e}")
+        logger.error(f"Callback error on '{event.value}' for task {self.id}: {e}")
 
   # ── State transitions ─────────────────────────────────────────────
 
   def mark_started(self):
-    """Mark the process as started."""
-    self.status = ProcessStatus.PROCESSING
+    """Mark the task as started."""
+    self.status = TaskStatus.PROCESSING
     self.started_at = time.time()
-    self.emit(ProcessEvent.START)
+    self.emit(TaskEvent.START)
 
   def mark_completed(self, result: Any = None):
-    """Mark the process as completed with an optional result."""
-    self.status = ProcessStatus.COMPLETED
+    """Mark the task as completed with an optional result."""
+    self.status = TaskStatus.COMPLETED
     self.result = result
     self.completed_at = time.time()
-    self.emit(ProcessEvent.COMPLETE, result)
+    self.emit(TaskEvent.COMPLETE, result)
 
   def mark_failed(self, error: str):
-    """Mark the process as failed with an error message."""
-    self.status = ProcessStatus.FAILED
+    """Mark the task as failed with an error message."""
+    self.status = TaskStatus.FAILED
     self.error = error
     self.completed_at = time.time()
-    self.emit(ProcessEvent.ERROR, error)
+    self.emit(TaskEvent.ERROR, error)
 
   def mark_cancelled(self, result: Any = None):
-    """Mark the process as cancelled and emit ``cancelled``."""
-    self.status = ProcessStatus.CANCELLED
+    """Mark the task as cancelled and emit ``cancelled``."""
+    self.status = TaskStatus.CANCELLED
     self.result = result
     self.completed_at = time.time()
-    self.emit(ProcessEvent.CANCELLED, result)
+    self.emit(TaskEvent.CANCELLED, result)
 
   # ── Cancellation ──────────────────────────────────────────────────
 
@@ -129,7 +129,7 @@ class Process:
   def to_dict(self, parameter_value_max_len: int = 160) -> Dict[str, Any]:
     """JSON-friendly summary for monitoring (queue snapshots, admin APIs)."""
     status = self.status
-    status_val = status.value if isinstance(status, ProcessStatus) else str(status)
+    status_val = status.value if isinstance(status, TaskStatus) else str(status)
     params: Dict[str, str] = {}
     for key, val in (self.parameters or {}).items():
       text = repr(val)

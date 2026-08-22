@@ -2,8 +2,8 @@
 from enum import Enum
 
 
-class ProcessQueueHook(str, Enum):
-  """Lifecycle events for :class:`claia.framework.queue.ProcessQueue` native hooks."""
+class TaskQueueHook(str, Enum):
+  """Lifecycle events for :class:`claia.framework.queue.TaskQueue` native hooks."""
 
   ENQUEUE = "enqueue"
   DEQUEUE = "dequeue"

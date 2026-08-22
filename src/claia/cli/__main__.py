@@ -51,7 +51,7 @@
 
 # - add tools/commands for each module type (architecture, definitions, etc)
 # - add update system (with on launch invocation) for debian repo publishing
-# - model_id in process parameters being ignored? Bob's code example doesn't work
+# - model_id in task parameters being ignored? Bob's code example doesn't work
 
 
 # External dependencies
@@ -66,9 +66,9 @@ import importlib.metadata as importlib_metadata
 import pyfiglet
 
 # Internal dependencies
-from ..framework.process import Process
+from ..framework.task import Task
 from ..core.results import Result
-from ..core.enums.process import ProcessEvent
+from ..core.enums.task import TaskEvent
 from ..core.enums.model import SourcePreference
 from ..core.enums.conversation import MessageRole
 from ..core.data import Conversation
@@ -422,7 +422,7 @@ def main() -> None:
         if system:
           parameters["system"] = system
 
-        process = Process(
+        task = Task(
           agent_type=settings.active_agent,
           conversation=settings.active_conversation,
           parameters=parameters
@@ -433,7 +433,7 @@ def main() -> None:
         # as smooth typing rather than chunky bursts.
         renderer = PacedRenderer()
         renderer.start()
-        process.on(ProcessEvent.TOKEN, renderer.feed)
+        task.on(TaskEvent.TOKEN, renderer.feed)
         saved_artifacts = []
 
         def on_artifact(artifact, message_id):
@@ -453,9 +453,9 @@ def main() -> None:
           # Tool calls are dispatched inline by the agent loop, so by
           # the time we reach here the conversation already reflects
           # every tool result and utility message.
-          pending_events = process.conversation.pull_events()
+          pending_events = task.conversation.pull_events()
           if file_repo and pending_events:
-            if not file_repo.save(process.conversation):
+            if not file_repo.save(task.conversation):
               logger.error("Failed to save conversation")
           done_event.set()
 
@@ -466,19 +466,19 @@ def main() -> None:
 
         def on_cancelled(_full_response=None):
           renderer.finish(drain=True)
-          pending_events = process.conversation.pull_events()
+          pending_events = task.conversation.pull_events()
           if file_repo and pending_events:
-            if not file_repo.save(process.conversation):
+            if not file_repo.save(task.conversation):
               logger.error("Failed to save conversation")
           done_event.set()
 
-        process.on(ProcessEvent.COMPLETE, on_complete)
-        process.on(ProcessEvent.ERROR, on_error)
-        process.on(ProcessEvent.CANCELLED, on_cancelled)
-        process.on(ProcessEvent.ARTIFACT, on_artifact)
+        task.on(TaskEvent.COMPLETE, on_complete)
+        task.on(TaskEvent.ERROR, on_error)
+        task.on(TaskEvent.CANCELLED, on_cancelled)
+        task.on(TaskEvent.ARTIFACT, on_artifact)
 
-        process_id = registry.add_process(process)
-        logger.debug(f"Process added with ID: {process_id}")
+        task_id = registry.add_task(task)
+        logger.debug(f"Task added with ID: {task_id}")
 
         # Block until the worker thread signals completion
         done_event.wait()

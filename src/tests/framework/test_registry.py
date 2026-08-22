@@ -49,11 +49,11 @@ def test_model_registry_unknown_model(registry_with_unknown_model, tmp_path):
 def test_query_unblocks_on_cancel(registry_with_fake_manager):
   reg: Registry = registry_with_fake_manager
 
-  def cancel_immediately(process):
-    process.mark_cancelled()
-    return process.id
+  def cancel_immediately(task):
+    task.mark_cancelled()
+    return task.id
 
-  reg.add_process = cancel_immediately
+  reg.add_task = cancel_immediately
   result = reg.query("dummy", "hello")
   assert result.is_error()
   assert result.get_message() == "cancelled"

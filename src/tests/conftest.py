@@ -10,8 +10,7 @@ from claia.core.results import Result, DeploymentError
 from claia.core.data import Conversation
 from claia.core.data.chunks import TextChunk
 from claia.core.definitions.model_definition import ModelDefinition
-from claia.framework.process import Process
-from claia.core.enums.process import ProcessStatus
+from claia.framework.task import Task
 
 
 # ---------------------------------------------------------------------------
@@ -24,9 +23,9 @@ def conversation(tmp_path):
 
 
 @pytest.fixture
-def process(conversation):
-  """Provide a Process with a dummy model_id and the conversation."""
-  return Process(conversation=conversation, parameters={"model_id": "dummy-model"})
+def task(conversation):
+  """Provide a Task with a dummy model_id and the conversation."""
+  return Task(conversation=conversation, parameters={"model_id": "dummy-model"})
 
 
 @pytest.fixture

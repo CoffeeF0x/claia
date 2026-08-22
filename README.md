@@ -125,10 +125,10 @@ These values are passed to plugins through the `Registry` and filtered by each p
   - `run(model_name, conversation, **kwargs)` — model inference via resolve, deployment, then architecture
   - `query(model_name, prompt, **kwargs)` — one-shot text prompt helper
   - `run_command(command_name, parameters, conversation, **kwargs)` — invoke a tool by name
-  - Agent processing and worker lifecycle for queued processes
+  - Agent processing and worker lifecycle for queued tasks
     - `start_workers(num_workers)` — initialize workers to process the queue
     - `stop_workers()` — gracefully terminate all workers
-    - `add_process(process: Process)` — add a process to the registry's queue
+    - `add_task(task: Task)` — add a task to the registry's queue
 
 - Plugin System: Extensions are discovered via Python entry points. Built-in groups include:
   - `claia.architectures` — model classes that implement a provider architecture

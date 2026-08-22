@@ -1,6 +1,6 @@
 """
-This module contains the ProcessQueue class for CLAIA agent system.
-The ProcessQueue manages processes that need to be executed by agents.
+This module contains the TaskQueue class for CLAIA agent system.
+The TaskQueue manages tasks that need to be executed by agents.
 """
 
 # External dependencies
@@ -8,215 +8,215 @@ import queue, time, logging, threading
 from typing import Any, Callable, DefaultDict, Dict, List, Optional
 
 # Internal dependencies
-from .process import Process
-from ..core.enums.process import ProcessStatus
-from ..core.enums.process_queue import ProcessQueueHook
+from .task import Task
+from ..core.enums.task import TaskStatus
+from ..core.enums.task_queue import TaskQueueHook
 
 
 ########################################################################
-#                           PROCESS QUEUE                              #
+#                            TASK QUEUE                                #
 ########################################################################
-class ProcessQueue:
+class TaskQueue:
   """
-  A thread-safe queue for processes.
+  A thread-safe queue for tasks.
 
-  This queue is used to manage processes that need to be executed by agents.
+  This queue is used to manage tasks that need to be executed by agents.
   """
   def __init__(self):
-    """Initialize the ProcessQueue."""
+    """Initialize the TaskQueue."""
     self._queue = queue.Queue()
     self._lock = threading.Lock()
-    self._processes = {}  # id -> Process mapping for quick lookups
+    self._tasks = {}  # id -> Task mapping for quick lookups
     self._logger = logging.getLogger(__name__)
-    self._hooks: DefaultDict[ProcessQueueHook, List[Callable[..., Any]]] = DefaultDict(list)
+    self._hooks: DefaultDict[TaskQueueHook, List[Callable[..., Any]]] = DefaultDict(list)
 
-  def put(self, process: Process):
+  def put(self, task: Task):
     """
-    Add a process to the queue.
+    Add a task to the queue.
 
     Args:
-        process: The process to add to the queue
+        task: The task to add to the queue
 
     Returns:
-        The ID of the process
+        The ID of the task
     """
     with self._lock:
       # Store in our lookup dictionary
-      self._processes[process.id] = process
+      self._tasks[task.id] = task
 
       # Add to queue
-      self._queue.put(process.id)
+      self._queue.put(task.id)
 
-    self._emit_hook(ProcessQueueHook.ENQUEUE, process=process)
-    return process.id
+    self._emit_hook(TaskQueueHook.ENQUEUE, task=task)
+    return task.id
 
-  def get(self, block=True, timeout=None) -> Optional[Process]:
+  def get(self, block=True, timeout=None) -> Optional[Task]:
     """
-    Get the next process from the queue.
+    Get the next task from the queue.
 
     Args:
-        block: Whether to block until a process is available
-        timeout: How long to wait for a process to become available
+        block: Whether to block until a task is available
+        timeout: How long to wait for a task to become available
 
     Returns:
-        The next process from the queue, or None if no process is available
+        The next task from the queue, or None if no task is available
     """
     try:
-      process_id = self._queue.get(block=block, timeout=timeout)
+      task_id = self._queue.get(block=block, timeout=timeout)
       dequeued = None
       with self._lock:
-        process = self._processes.get(process_id)
-        if process:
-          # Only remove from processes dict if status is COMPLETED, FAILED, or CANCELLED
-          if process.status in [ProcessStatus.COMPLETED, ProcessStatus.FAILED, ProcessStatus.CANCELLED]:
-            self._processes.pop(process_id, None)
-          dequeued = process
+        task = self._tasks.get(task_id)
+        if task:
+          # Only remove from tasks dict if status is COMPLETED, FAILED, or CANCELLED
+          if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
+            self._tasks.pop(task_id, None)
+          dequeued = task
       if dequeued is not None:
-        self._emit_hook(ProcessQueueHook.DEQUEUE, process=dequeued)
+        self._emit_hook(TaskQueueHook.DEQUEUE, task=dequeued)
       return dequeued
     except queue.Empty:
       return None
 
-  def get_by_id(self, process_id: str) -> Optional[Process]:
+  def get_by_id(self, task_id: str) -> Optional[Task]:
     """
-    Get a process by its ID without removing it from the queue.
+    Get a task by its ID without removing it from the queue.
 
     Args:
-        process_id: The ID of the process to get
+        task_id: The ID of the task to get
 
     Returns:
-        The process with the given ID, or None if no such process exists
+        The task with the given ID, or None if no such task exists
     """
     with self._lock:
-      return self._processes.get(process_id)
+      return self._tasks.get(task_id)
 
-  def update(self, process: Process):
+  def update(self, task: Task):
     """
-    Update a process in the queue.
+    Update a task in the queue.
 
     Args:
-        process: The process to update
+        task: The task to update
     """
     with self._lock:
-      self._processes[process.id] = process
+      self._tasks[task.id] = task
 
-    self._emit_hook(ProcessQueueHook.UPDATE, process=process)
+    self._emit_hook(TaskQueueHook.UPDATE, task=task)
 
-  def remove(self, process_id: str) -> bool:
+  def remove(self, task_id: str) -> bool:
     """
-    Remove a process from the queue.
+    Remove a task from the queue.
 
     Note: This doesn't remove from the queue directly
     (which is not easily possible), but marks it as cancelled
     so it will be ignored when retrieved.
 
     Args:
-        process_id: The ID of the process to remove
+        task_id: The ID of the task to remove
 
     Returns:
-        True if the process was found and cancelled, False otherwise
+        True if the task was found and cancelled, False otherwise
     """
-    removed_process = None
+    removed_task = None
     with self._lock:
-      process = self._processes.get(process_id)
-      if process:
-        process.mark_cancelled()
-        removed_process = process
-    if removed_process is not None:
-      self._emit_hook(ProcessQueueHook.REMOVE, process=removed_process)
+      task = self._tasks.get(task_id)
+      if task:
+        task.mark_cancelled()
+        removed_task = task
+    if removed_task is not None:
+      self._emit_hook(TaskQueueHook.REMOVE, task=removed_task)
       return True
     return False
 
   def snapshot(self) -> List[Dict[str, Any]]:
     """
-    Return a point-in-time list of tracked processes for observability.
+    Return a point-in-time list of tracked tasks for observability.
 
-    Entries include processes still awaiting work, actively running, and any
+    Entries include tasks still awaiting work, actively running, and any
     terminal records retained in the lookup table.
     """
     with self._lock:
-      rows = [p.to_dict() for p in self._processes.values()]
+      rows = [t.to_dict() for t in self._tasks.values()]
     rows.sort(key=lambda r: (r.get("created_at") or 0, r.get("id") or ""))
     return rows
 
   def size(self) -> int:
     """
-    Get the number of processes in the queue.
+    Get the number of tasks in the queue.
 
     Returns:
-        The number of processes in the queue
+        The number of tasks in the queue
     """
     return self._queue.qsize()
 
-  def wait_for_process(self, process_id: str, timeout: float = None, check_interval: float = 0.1) -> Optional[Process]:
+  def wait_for_task(self, task_id: str, timeout: float = None, check_interval: float = 0.1) -> Optional[Task]:
     """
-    Wait for a specific process to complete.
+    Wait for a specific task to complete.
 
     Args:
-        process_id: The ID of the process to wait for
+        task_id: The ID of the task to wait for
         timeout: Maximum time to wait in seconds (None for no timeout)
-        check_interval: How often to check the process status in seconds
+        check_interval: How often to check the task status in seconds
 
     Returns:
-        The completed Process object or None if timed out or not found
+        The completed Task object or None if timed out or not found
     """
     start_time = time.time()
-    self._logger.debug(f"Waiting for process: {process_id}")
+    self._logger.debug(f"Waiting for task: {task_id}")
 
     while timeout is None or time.time() - start_time < timeout:
-      process = self.get_by_id(process_id)
-      if not process:
-        self._logger.debug(f"Process {process_id} not found in queue")
+      task = self.get_by_id(task_id)
+      if not task:
+        self._logger.debug(f"Task {task_id} not found in queue")
         return None
 
-      if process.status in [ProcessStatus.COMPLETED, ProcessStatus.FAILED, ProcessStatus.CANCELLED]:
-        self._logger.debug(f"Process {process_id} completed with status: {process.status}")
-        return process
+      if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
+        self._logger.debug(f"Task {task_id} completed with status: {task.status}")
+        return task
 
       time.sleep(check_interval)
 
-    self._logger.warning(f"Timed out waiting for process {process_id} after {timeout} seconds")
-    return self.get_by_id(process_id)
+    self._logger.warning(f"Timed out waiting for task {task_id} after {timeout} seconds")
+    return self.get_by_id(task_id)
 
-  def wait_for_all_processes(self, timeout: float = None, check_interval: float = 0.1) -> bool:
+  def wait_for_all_tasks(self, timeout: float = None, check_interval: float = 0.1) -> bool:
     """
-    Wait for all processes in the queue to complete.
+    Wait for all tasks in the queue to complete.
 
     Args:
         timeout: Maximum time to wait in seconds (None for no timeout)
         check_interval: How often to check the queue status in seconds
 
     Returns:
-        True if all processes completed, False if timed out
+        True if all tasks completed, False if timed out
     """
     start_time = time.time()
-    self._logger.debug("Waiting for all processes to complete")
+    self._logger.debug("Waiting for all tasks to complete")
 
     while timeout is None or time.time() - start_time < timeout:
       with self._lock:
-        # Get all process IDs that are still pending
-        pending_processes = [pid for pid, proc in self._processes.items()
-                           if proc.status == ProcessStatus.PENDING]
+        # Get all task IDs that are still pending
+        pending_tasks = [tid for tid, item in self._tasks.items()
+                         if item.status == TaskStatus.PENDING]
 
-      if not pending_processes:
-        self._logger.debug("All processes completed successfully")
+      if not pending_tasks:
+        self._logger.debug("All tasks completed successfully")
         return True
 
-      self._logger.debug(f"Still waiting for {len(pending_processes)} processes")
+      self._logger.debug(f"Still waiting for {len(pending_tasks)} tasks")
       time.sleep(check_interval)
 
-    self._logger.warning(f"Timed out waiting for all processes after {timeout} seconds")
+    self._logger.warning(f"Timed out waiting for all tasks after {timeout} seconds")
     return False
 
   ######################################################################
   #                               HOOKS                                #
   ######################################################################
-  def add_hook(self, hook: ProcessQueueHook, callback: Callable[..., Any]) -> None:
+  def add_hook(self, hook: TaskQueueHook, callback: Callable[..., Any]) -> None:
     """Register a native callback for a queue lifecycle event (thread-safe)."""
     with self._lock:
       self._hooks[hook].append(callback)
 
-  def remove_hook(self, hook: ProcessQueueHook, callback: Callable[..., Any]) -> None:
+  def remove_hook(self, hook: TaskQueueHook, callback: Callable[..., Any]) -> None:
     """Unregister a callback previously passed to :meth:`add_hook`."""
     with self._lock:
       cbs = self._hooks.get(hook)
@@ -227,7 +227,7 @@ class ProcessQueue:
       except ValueError:
         pass
 
-  def _emit_hook(self, hook: ProcessQueueHook, **payload: Any) -> None:
+  def _emit_hook(self, hook: TaskQueueHook, **payload: Any) -> None:
     with self._lock:
       callbacks = list(self._hooks.get(hook, ()))
     for cb in callbacks:

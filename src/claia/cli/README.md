@@ -18,7 +18,7 @@ Command-line interface and runtime configuration for CLAIA.
 
 1. Parse CLI arguments into a config/settings object.
 2. Instantiate a `Registry` with filtered kwargs (API keys, paths, etc.).
-3. Create conversations/processes and dispatch them to agents/models.
+3. Create conversations/tasks and dispatch them to agents/models.
 
 Custom settings passed via CLI propagate to plugins as filtered kwargs, based on each plugin's declared `ParamSpec` list (plugins only receive kwargs matching a spec they've advertised).
 

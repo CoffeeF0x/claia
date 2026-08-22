@@ -37,7 +37,7 @@ streaming `TagParser` produces a `TagEvent` of type `TOOL`.
    `Registry.execute_tool(qualified_name, raw_payload, conversation, **kwargs)`,
    which forwards to the owning protocol's `execute(...)`. The
    result text is appended to the streaming assistant message and
-   emitted as ``ProcessEvent.TOKEN`` so terminal renderers see the call
+   emitted as ``TaskEvent.TOKEN`` so terminal renderers see the call
    → response flow inline.
 
 Swap in a different protocol to change execution behavior — batching,

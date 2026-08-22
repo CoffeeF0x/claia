@@ -27,7 +27,7 @@ import logging
 from ..framework.agents.base import BaseAgent
 from ..core.data.chunks import TextChunk
 from ..core.enums.conversation import MessageRole
-from ..core.enums.process import ProcessEvent
+from ..core.enums.task import TaskEvent
 
 
 ########################################################################
@@ -70,41 +70,41 @@ class WriterAgent(BaseAgent):
   """
 
   @classmethod
-  def process_request(cls, process, registry, **kwargs) -> object:
-    """Process a writing request with specialized writing capabilities."""
+  def execute(cls, task, registry, **kwargs) -> object:
+    """Execute a writing request with specialized writing capabilities."""
     try:
-      model_id = process.parameters.get("model_id")
+      model_id = task.parameters.get("model_id")
 
       if not model_id:
-        raise ValueError("No model_id provided in process parameters")
+        raise ValueError("No model_id provided in task parameters")
 
       kwargs.pop("system", None)
-      logger.debug(f"Running model {model_id} for writing task {process.id}")
+      logger.debug(f"Running model {model_id} for writing task {task.id}")
       full_response = ""
 
       for chunk in registry.run(
         model_id,
-        process.conversation,
+        task.conversation,
         streaming=True,
         system=WRITER_SYSTEM_PROMPT,
         **kwargs
       ):
         if not isinstance(chunk, TextChunk):
-          process.emit(ProcessEvent.CHUNK, chunk)
+          task.emit(TaskEvent.CHUNK, chunk)
           continue
         token = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
         full_response += token
-        process.emit(ProcessEvent.TOKEN, token)
+        task.emit(TaskEvent.TOKEN, token)
 
-      process.conversation.add_message(MessageRole.ASSISTANT, full_response)
-      process.mark_completed(full_response)
-      logger.info(f"Writer agent successfully completed process {process.id}")
+      task.conversation.add_message(MessageRole.ASSISTANT, full_response)
+      task.mark_completed(full_response)
+      logger.info(f"Writer agent successfully completed task {task.id}")
 
     except Exception as e:
-      logger.exception(f"Error in WriterAgent for {process.id}: {str(e)}")
-      process.mark_failed(str(e))
+      logger.exception(f"Error in WriterAgent for {task.id}: {str(e)}")
+      task.mark_failed(str(e))
 
-    return process
+    return task
 
 
 ########################################################################

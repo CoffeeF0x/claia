@@ -15,7 +15,7 @@ Conversation is a pure data carrier. Generation parameters (temperature,
 max_tokens, streaming, etc.) do not live on the Conversation; they are
 declared by architectures/models via ``ParamSpec`` (see
 ``claia.core.plugins.base``) and supplied per-call via
-``Process.parameters`` or ``Registry.run`` kwargs.
+``Task.parameters`` or ``Registry.run`` kwargs.
 
 This is a pure Python object that can exist in memory without file
 operations. Persistence is handled by host runtimes (CLI, API, workers)

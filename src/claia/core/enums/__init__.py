@@ -9,8 +9,8 @@ from .conversation import MessageRole
 from .file import FileSubdirectory, FileStatus, FileMimeType
 from .logging import LogLevel, LogFormat
 from .model import ModelCapability, IOType, SourcePreference
-from .process import ProcessStatus, ProcessEvent
-from .process_queue import ProcessQueueHook
+from .task import TaskStatus, TaskEvent
+from .task_queue import TaskQueueHook
 from .data import (
   MediaType,
   TextFormat,
@@ -26,8 +26,8 @@ __all__ = [
   "FileSubdirectory", "FileStatus", "FileMimeType",
   "LogLevel", "LogFormat",
   "ModelCapability", "IOType", "SourcePreference",
-  "ProcessStatus", "ProcessEvent",
-  "ProcessQueueHook",
+  "TaskStatus", "TaskEvent",
+  "TaskQueueHook",
   "MediaType", "TextFormat", "ImageFormat", "AudioFormat",
   "VideoFormat", "ApplicationFormat",
   "ArtifactType",

@@ -5,8 +5,8 @@ from enum import Enum
 ########################################################################
 #                                ENUMS                                 #
 ########################################################################
-class ProcessStatus(Enum):
-  """Status of a process."""
+class TaskStatus(Enum):
+  """Status of a task."""
   PENDING = "pending"
   PROCESSING = "processing"
   COMPLETED = "completed"
@@ -14,12 +14,12 @@ class ProcessStatus(Enum):
   CANCELLED = "cancelled"
 
 
-class ProcessEvent(Enum):
-  """Callback names on ``Process.on`` / ``Process.emit``.
+class TaskEvent(Enum):
+  """Callback names on ``Task.on`` / ``Task.emit``.
 
   Job lifecycle and live output. Conversation mutations
   (including stream start/end) are ``EventType`` on the
-  conversation, not process events.
+  conversation, not task events.
   """
   START = "start"
   TOKEN = "token"

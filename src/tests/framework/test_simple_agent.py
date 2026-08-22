@@ -9,7 +9,7 @@ import pytest
 from claia.framework.agents.simple import SimpleAgent
 from claia.core.data.chunks import AudioChunk, ImageChunk, TextChunk
 from claia.core.enums.data import AudioFormat, ImageFormat
-from claia.core.enums.process import ProcessEvent, ProcessStatus
+from claia.core.enums.task import TaskEvent, TaskStatus
 
 
 PNG_BYTES = base64.b64decode(
@@ -18,30 +18,30 @@ PNG_BYTES = base64.b64decode(
 AUDIO_BYTES = b"fake wav bytes"
 
 
-def test_simple_agent_success(process, fake_model_registry_ok):
-  updated = SimpleAgent.process_request(process, registry=fake_model_registry_ok)
-  assert updated.status == ProcessStatus.COMPLETED
+def test_simple_agent_success(task, fake_model_registry_ok):
+  updated = SimpleAgent.execute(task, registry=fake_model_registry_ok)
+  assert updated.status == TaskStatus.COMPLETED
   assert isinstance(updated.result, str)
   assert updated.error is None
 
 
-def test_simple_agent_emits_token_callbacks(process, fake_model_registry_ok):
+def test_simple_agent_emits_token_callbacks(task, fake_model_registry_ok):
   tokens = []
-  process.on(ProcessEvent.TOKEN, lambda t: tokens.append(t))
-  updated = SimpleAgent.process_request(process, registry=fake_model_registry_ok)
-  assert updated.status == ProcessStatus.COMPLETED
+  task.on(TaskEvent.TOKEN, lambda t: tokens.append(t))
+  updated = SimpleAgent.execute(task, registry=fake_model_registry_ok)
+  assert updated.status == TaskStatus.COMPLETED
   assert len(tokens) > 0
 
 
-def test_simple_agent_error(process, fake_model_registry_error):
-  updated = SimpleAgent.process_request(process, registry=fake_model_registry_error)
-  assert updated.status == ProcessStatus.FAILED
+def test_simple_agent_error(task, fake_model_registry_error):
+  updated = SimpleAgent.execute(task, registry=fake_model_registry_error)
+  assert updated.status == TaskStatus.FAILED
   assert updated.result is None
   assert isinstance(updated.error, str)
   assert "model error" in updated.error
 
 
-def test_simple_agent_attaches_image_artifacts(process):
+def test_simple_agent_attaches_image_artifacts(task):
   class FakeRegistry:
     def get_supported_models(self):
       return {}
@@ -66,11 +66,11 @@ def test_simple_agent_attaches_image_artifacts(process):
       ])
 
   artifacts = []
-  process.on(ProcessEvent.ARTIFACT, lambda artifact, message_id: artifacts.append((artifact, message_id)))
+  task.on(TaskEvent.ARTIFACT, lambda artifact, message_id: artifacts.append((artifact, message_id)))
 
-  updated = SimpleAgent.process_request(process, registry=FakeRegistry())
+  updated = SimpleAgent.execute(task, registry=FakeRegistry())
 
-  assert updated.status == ProcessStatus.COMPLETED
+  assert updated.status == TaskStatus.COMPLETED
   assistant_message = updated.conversation.get_latest_message()
   assert assistant_message.content == "Generated image."
   assert len(artifacts) == 1
@@ -80,7 +80,7 @@ def test_simple_agent_attaches_image_artifacts(process):
   assert artifact.load_bytes() == PNG_BYTES
 
 
-def test_simple_agent_attaches_audio_artifacts(process):
+def test_simple_agent_attaches_audio_artifacts(task):
   class FakeRegistry:
     def get_supported_models(self):
       return {}
@@ -105,11 +105,11 @@ def test_simple_agent_attaches_audio_artifacts(process):
       ])
 
   artifacts = []
-  process.on(ProcessEvent.ARTIFACT, lambda artifact, message_id: artifacts.append((artifact, message_id)))
+  task.on(TaskEvent.ARTIFACT, lambda artifact, message_id: artifacts.append((artifact, message_id)))
 
-  updated = SimpleAgent.process_request(process, registry=FakeRegistry())
+  updated = SimpleAgent.execute(task, registry=FakeRegistry())
 
-  assert updated.status == ProcessStatus.COMPLETED
+  assert updated.status == TaskStatus.COMPLETED
   assistant_message = updated.conversation.get_latest_message()
   assert assistant_message.content == "Generated audio."
   assert any(a.id == artifacts[0][0].id for a in assistant_message.artifacts)

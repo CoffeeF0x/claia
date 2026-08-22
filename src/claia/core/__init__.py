@@ -5,7 +5,7 @@ Pure data models, plugin contracts (ABCs), and concrete implementations of
 model architectures, deployments, definitions, and tools.
 
 ``claia.core`` can be imported and used directly without starting the
-framework runtime. Applications that want plugin discovery, process
+framework runtime. Applications that want plugin discovery, task
 orchestration, and agent lifecycle should use ``claia.framework`` on top.
 
 ``claia`` itself is an implicit (PEP 420) namespace package — there is no

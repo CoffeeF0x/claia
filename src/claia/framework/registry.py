@@ -9,9 +9,9 @@ from typing import Any, Dict, Iterator, List, Optional, Union
 
 from .manager import Manager
 from ..core.results import Result, DeploymentError
-from .process import Process
-from .queue import ProcessQueue
-from ..core.enums.process import ProcessEvent, ProcessStatus
+from .task import Task
+from .queue import TaskQueue
+from ..core.enums.task import TaskEvent, TaskStatus
 from ..core.data import Conversation
 from ..core.data.chunks import BaseChunk, TextChunk
 from ..core.plugins.base import DeploymentParams, ParamScope, ParamSpec, ToolReference
@@ -34,10 +34,10 @@ class Registry:
 
   - Tools API: command catalog, tool-call processing, command execution.
   - Models API: run() orchestration (resolve -> Deployment -> Architecture).
-  - Agents API: process queue + worker lifecycle and agent dispatch.
+  - Agents API: task queue + worker lifecycle and agent dispatch.
   """
 
-  def __init__(self, process_queue: Optional[ProcessQueue] = None):
+  def __init__(self, task_queue: Optional[TaskQueue] = None):
     # Core manager and caches
     self._manager = Manager()
     self.cache: Dict[str, Any] = {}
@@ -61,7 +61,7 @@ class Registry:
     self._tool_context: Dict[str, Any] = {}
 
     # Agent-related (queue and workers)
-    self.process_queue = process_queue or ProcessQueue()
+    self.task_queue = task_queue or TaskQueue()
     self._workers = []
     self._shutdown = threading.Event()
 
@@ -610,7 +610,7 @@ class Registry:
     High-level convenience method: send a message and get a response.
 
     Creates a Conversation (or reuses the one provided), submits a
-    Process with callbacks, waits for completion, and returns the Result.
+    Task with callbacks, waits for completion, and returns the Result.
     This is the simplest way to use CLAIA as a library.
 
     Args:
@@ -645,14 +645,14 @@ class Registry:
     if isinstance(system, str) and system.strip():
       parameters["system"] = system.strip()
 
-    process = Process(
+    task = Task(
       agent_type=agent_type,
       conversation=conversation,
       parameters=parameters
     )
 
     if on_token:
-      process.on(ProcessEvent.TOKEN, on_token)
+      task.on(TaskEvent.TOKEN, on_token)
 
     def _on_complete(full_response):
       result_holder[0] = Result.ok(full_response)
@@ -670,14 +670,14 @@ class Registry:
       result_holder[0] = Result.fail("cancelled")
       done_event.set()
 
-    process.on(ProcessEvent.COMPLETE, _on_complete)
-    process.on(ProcessEvent.ERROR, _on_error)
-    process.on(ProcessEvent.CANCELLED, _on_cancelled)
+    task.on(TaskEvent.COMPLETE, _on_complete)
+    task.on(TaskEvent.ERROR, _on_error)
+    task.on(TaskEvent.CANCELLED, _on_cancelled)
 
-    self.add_process(process)
+    self.add_task(task)
     done_event.wait()
 
-    return result_holder[0] or Result.fail("Process did not complete")
+    return result_holder[0] or Result.fail("Task did not complete")
 
   def get_supported_models(self) -> Dict[str, Any]:
     """Get all models supported by registered plugins."""
@@ -742,7 +742,7 @@ class Registry:
 
     This allows developers to register agents without an entry-point
     plugin. The agent class must inherit from ``BaseAgent`` and
-    implement the ``process_request`` method.
+    implement the ``execute`` method.
 
     Example:
         from claia.framework.agents.base import BaseAgent
@@ -752,9 +752,9 @@ class Registry:
             '''My custom agent implementation.'''
 
             @classmethod
-            def process_request(cls, process, registry, **kwargs):
-                process.mark_completed(result="Done!")
-                return process
+            def execute(cls, task, registry, **kwargs):
+                task.mark_completed(result="Done!")
+                return task
 
         registry = Registry()
         registry.register(
@@ -763,8 +763,8 @@ class Registry:
             params=[ParamSpec(name="base_url", scope=ParamScope.INIT)],
         )
 
-        process = Process(agent_type="my_agent", ...)
-        registry.process(process)
+        task = Task(agent_type="my_agent", ...)
+        registry.dispatch(task)
 
     Args:
         agent_class: The agent class to register (must inherit from BaseAgent).
@@ -787,25 +787,25 @@ class Registry:
       params=params,
     )
 
-  def process(self, process: Process) -> Process:
+  def dispatch(self, task: Task) -> Task:
     """
-    Dispatch the given process to the appropriate agent implementation.
+    Dispatch the given task to the appropriate agent implementation.
     """
     try:
-      logger.debug(f"Processing {process.id} with agent type '{process.agent_type}'")
+      logger.debug(f"Dispatching {task.id} with agent type '{task.agent_type}'")
 
       # Get the agent class for this agent type
-      agent_class = self.manager.get_agent_class(process.agent_type)
+      agent_class = self.manager.get_agent_class(task.agent_type)
 
       if not agent_class:
-        error_msg = f"No agent found for type '{process.agent_type}'"
+        error_msg = f"No agent found for type '{task.agent_type}'"
         logger.error(error_msg)
-        process.mark_failed(error_msg)
-        return process
+        task.mark_failed(error_msg)
+        return task
 
-      agent_info = self.get_agent_info_by_name(process.agent_type)
+      agent_info = self.get_agent_info_by_name(task.agent_type)
 
-      combined_kwargs = {**self._user_kwargs, **process.parameters}
+      combined_kwargs = {**self._user_kwargs, **task.parameters}
 
       # Filter kwargs against the agent's declared ParamSpecs. If the
       # agent has no declared params, forward the entire combined set
@@ -817,16 +817,16 @@ class Registry:
       else:
         filtered_kwargs = combined_kwargs
 
-      # Process using the agent class, injecting this registry and filtered parameters
-      logger.debug(f"Using agent class {agent_class.__name__} for {process.id}")
-      result = agent_class.process(process, registry=self, **filtered_kwargs)
+      # Run using the agent class, injecting this registry and filtered parameters
+      logger.debug(f"Using agent class {agent_class.__name__} for {task.id}")
+      result = agent_class.run(task, registry=self, **filtered_kwargs)
 
       return result
 
     except Exception as e:
-      logger.error(f"Error processing {process.id}: {str(e)}")
-      process.mark_failed(f"Registry error: {str(e)}")
-      return process
+      logger.error(f"Error dispatching {task.id}: {str(e)}")
+      task.mark_failed(f"Registry error: {str(e)}")
+      return task
 
   def get_agent_class(self, agent_name: str):
     """Get the agent class for a specific agent name."""
@@ -836,39 +836,39 @@ class Registry:
     """Get agent info for a specific agent name."""
     return self.manager.get_agent_info_by_name(agent_name)
 
-  def add_process(self, process: Process) -> str:
-    """Add a process to the queue for execution."""
-    return self.process_queue.put(process)
+  def add_task(self, task: Task) -> str:
+    """Add a task to the queue for execution."""
+    return self.task_queue.put(task)
 
-  def process_next(self, block: bool = False, timeout: Optional[float] = None) -> Optional[Process]:
-    """Get and process the next process from the queue."""
-    process = self.process_queue.get(block=block, timeout=timeout)
-    if process:
-      # Skip cancelled processes
-      if process.status == ProcessStatus.CANCELLED:
+  def dispatch_next(self, block: bool = False, timeout: Optional[float] = None) -> Optional[Task]:
+    """Get and dispatch the next task from the queue."""
+    task = self.task_queue.get(block=block, timeout=timeout)
+    if task:
+      # Skip cancelled tasks
+      if task.status == TaskStatus.CANCELLED:
         return None
 
-      # Process using this registry
-      processed = self.process(process)
-      self.process_queue.update(processed)
-      return processed
+      # Dispatch using this registry
+      dispatched = self.dispatch(task)
+      self.task_queue.update(dispatched)
+      return dispatched
     return None
 
-  def process_by_id(self, process_id: str) -> Optional[Process]:
-    """Process a specific process identified by its ID."""
-    process = self.process_queue.get_by_id(process_id)
-    if process and process.status == ProcessStatus.PENDING:
-      processed = self.process(process)
-      self.process_queue.update(processed)
-      return processed
+  def dispatch_by_id(self, task_id: str) -> Optional[Task]:
+    """Dispatch a specific task identified by its ID."""
+    task = self.task_queue.get_by_id(task_id)
+    if task and task.status == TaskStatus.PENDING:
+      dispatched = self.dispatch(task)
+      self.task_queue.update(dispatched)
+      return dispatched
     return None
 
   def _worker_loop(self):
-    """Worker thread function that processes items from the queue."""
+    """Worker thread function that dispatches items from the queue."""
     while not self._shutdown.is_set():
       try:
-        # Get and process a single item
-        self.process_next(block=True, timeout=1.0)
+        # Get and dispatch a single item
+        self.dispatch_next(block=True, timeout=1.0)
       except Exception as e:
         logger.exception(f"Error in worker thread: {e}")
         # Continue processing even if one item fails
