@@ -9,9 +9,6 @@ from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
 
-_PROMPT = [ArtifactType.TEXT, MessageSequence]
-_TEXT = [TextChunk]
-
 
 @definitions
 @definitions.name("deepseek")
@@ -35,8 +32,8 @@ class DeepSeekDefinitions(BaseDefinitionProvider):
         license="Open Source",
         url="https://openrouter.ai/models/deepseek/deepseek-v4-pro",
         identifiers={"openrouter": "deepseek/deepseek-v4-pro"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "deepseek-v4-flash": ModelDefinition(
@@ -51,8 +48,8 @@ class DeepSeekDefinitions(BaseDefinitionProvider):
         license="Open Source",
         url="https://openrouter.ai/models/deepseek/deepseek-v4-flash",
         identifiers={"openrouter": "deepseek/deepseek-v4-flash"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "deepseek-r1-0528": ModelDefinition(
@@ -67,7 +64,7 @@ class DeepSeekDefinitions(BaseDefinitionProvider):
         license="Open Source",
         url="https://openrouter.ai/models/deepseek/deepseek-r1-0528",
         identifiers={"openrouter": "deepseek/deepseek-r1-0528"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
     }

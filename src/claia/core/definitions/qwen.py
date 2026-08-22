@@ -9,10 +9,6 @@ from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
 
-_CHAT = [ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence]
-_PROMPT = [ArtifactType.TEXT, MessageSequence]
-_TEXT = [TextChunk]
-
 
 @definitions
 @definitions.name("qwen")
@@ -36,8 +32,8 @@ class QwenDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://openrouter.ai/models/qwen/qwen3.6-plus",
         identifiers={"openrouter": "qwen/qwen3.6-plus"},
-        inputs=_CHAT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "qwen3.6-plus-preview": ModelDefinition(
@@ -52,8 +48,8 @@ class QwenDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://openrouter.ai/models/qwen/qwen3.6-plus-preview",
         identifiers={"openrouter": "qwen/qwen3.6-plus-preview"},
-        inputs=_CHAT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "qwen3.5-397b-a17b": ModelDefinition(
@@ -68,8 +64,8 @@ class QwenDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://openrouter.ai/models/qwen/qwen3.5-397b-a17b",
         identifiers={"openrouter": "qwen/qwen3.5-397b-a17b"},
-        inputs=_CHAT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "qwen3.5-122b-a10b": ModelDefinition(
@@ -84,8 +80,8 @@ class QwenDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://openrouter.ai/models/qwen/qwen3.5-122b-a10b",
         identifiers={"openrouter": "qwen/qwen3.5-122b-a10b"},
-        inputs=_CHAT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "qwen3.5-35b-a3b": ModelDefinition(
@@ -100,8 +96,8 @@ class QwenDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://openrouter.ai/models/qwen/qwen3.5-35b-a3b",
         identifiers={"openrouter": "qwen/qwen3.5-35b-a3b"},
-        inputs=_CHAT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "qwen3.5-27b": ModelDefinition(
@@ -116,8 +112,8 @@ class QwenDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://openrouter.ai/models/qwen/qwen3.5-27b",
         identifiers={"openrouter": "qwen/qwen3.5-27b"},
-        inputs=_CHAT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "qwen3.5-flash": ModelDefinition(
@@ -132,8 +128,8 @@ class QwenDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://openrouter.ai/models/qwen/qwen3.5-flash-02-23",
         identifiers={"openrouter": "qwen/qwen3.5-flash-02-23"},
-        inputs=_CHAT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "qwen3-max": ModelDefinition(
@@ -148,8 +144,8 @@ class QwenDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://openrouter.ai/models/qwen/qwen3-max",
         identifiers={"openrouter": "qwen/qwen3-max"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "qwen3-coder": ModelDefinition(
@@ -164,8 +160,8 @@ class QwenDefinitions(BaseDefinitionProvider):
         license="Open Weights",
         url="https://openrouter.ai/models/qwen/qwen3-coder",
         identifiers={"openrouter": "qwen/qwen3-coder"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "qwen3-coder-next": ModelDefinition(
@@ -180,7 +176,7 @@ class QwenDefinitions(BaseDefinitionProvider):
         license="Open Weights",
         url="https://openrouter.ai/models/qwen/qwen3-coder-next",
         identifiers={"openrouter": "qwen/qwen3-coder-next"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
     }

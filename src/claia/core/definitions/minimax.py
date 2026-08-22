@@ -9,9 +9,6 @@ from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
 
-_PROMPT = [ArtifactType.TEXT, MessageSequence]
-_TEXT = [TextChunk]
-
 
 @definitions
 @definitions.name("minimax")
@@ -35,8 +32,8 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
         license="Open Weights",
         url="https://openrouter.ai/models/minimax/minimax-m2.7",
         identifiers={"openrouter": "minimax/minimax-m2.7"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "minimax-m2.5": ModelDefinition(
@@ -51,8 +48,8 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
         license="Open Weights",
         url="https://openrouter.ai/models/minimax/minimax-m2.5",
         identifiers={"openrouter": "minimax/minimax-m2.5"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "minimax-m2": ModelDefinition(
@@ -67,8 +64,8 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
         license="Open Weights",
         url="https://openrouter.ai/models/minimax/minimax-m2",
         identifiers={"openrouter": "minimax/minimax-m2"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "minimax-m1": ModelDefinition(
@@ -83,7 +80,7 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
         license="Open Weights",
         url="https://openrouter.ai/models/minimax/minimax-m1",
         identifiers={"openrouter": "minimax/minimax-m1"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
     }

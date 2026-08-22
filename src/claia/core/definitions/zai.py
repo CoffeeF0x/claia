@@ -9,9 +9,6 @@ from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
 
-_PROMPT = [ArtifactType.TEXT, MessageSequence]
-_TEXT = [TextChunk]
-
 
 @definitions
 @definitions.name("zai")
@@ -35,8 +32,8 @@ class ZaiDefinitions(BaseDefinitionProvider):
         license="Open Source",
         url="https://openrouter.ai/models/z-ai/glm-5.3",
         identifiers={"openrouter": "z-ai/glm-5.3"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "glm-5.2": ModelDefinition(
@@ -51,8 +48,8 @@ class ZaiDefinitions(BaseDefinitionProvider):
         license="Open Source",
         url="https://openrouter.ai/models/z-ai/glm-5.2",
         identifiers={"openrouter": "z-ai/glm-5.2"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "glm-5.1": ModelDefinition(
@@ -67,8 +64,8 @@ class ZaiDefinitions(BaseDefinitionProvider):
         license="Open Source",
         url="https://openrouter.ai/models/z-ai/glm-5.1",
         identifiers={"openrouter": "z-ai/glm-5.1"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "glm-5": ModelDefinition(
@@ -83,8 +80,8 @@ class ZaiDefinitions(BaseDefinitionProvider):
         license="Open Source",
         url="https://openrouter.ai/models/z-ai/glm-5",
         identifiers={"openrouter": "z-ai/glm-5"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "glm-4.5": ModelDefinition(
@@ -99,7 +96,7 @@ class ZaiDefinitions(BaseDefinitionProvider):
         license="Open Source",
         url="https://openrouter.ai/models/z-ai/glm-4.5",
         identifiers={"openrouter": "z-ai/glm-4.5"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
     }

@@ -9,9 +9,6 @@ from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
 
-_CHAT = [ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence]
-_TEXT = [TextChunk]
-
 
 @definitions
 @definitions.name("meta")
@@ -35,8 +32,8 @@ class MetaDefinitions(BaseDefinitionProvider):
         license="Llama 4 Community License",
         url="https://openrouter.ai/models/meta-llama/llama-4-maverick",
         identifiers={"openrouter": "meta-llama/llama-4-maverick"},
-        inputs=_CHAT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "llama-4-scout": ModelDefinition(
@@ -51,7 +48,7 @@ class MetaDefinitions(BaseDefinitionProvider):
         license="Llama 4 Community License",
         url="https://openrouter.ai/models/meta-llama/llama-4-scout",
         identifiers={"openrouter": "meta-llama/llama-4-scout"},
-        inputs=_CHAT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
     }

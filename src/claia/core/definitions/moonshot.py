@@ -9,10 +9,6 @@ from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
 
-_CHAT = [ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence]
-_PROMPT = [ArtifactType.TEXT, MessageSequence]
-_TEXT = [TextChunk]
-
 
 @definitions
 @definitions.name("moonshot")
@@ -36,8 +32,8 @@ class MoonshotDefinitions(BaseDefinitionProvider):
         license="Open Weights",
         url="https://openrouter.ai/models/moonshotai/kimi-k3",
         identifiers={"openrouter": "moonshotai/kimi-k3"},
-        inputs=_CHAT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "kimi-k2.7-code": ModelDefinition(
@@ -52,8 +48,8 @@ class MoonshotDefinitions(BaseDefinitionProvider):
         license="Open Weights",
         url="https://openrouter.ai/models/moonshotai/kimi-k2.7-code",
         identifiers={"openrouter": "moonshotai/kimi-k2.7-code"},
-        inputs=_CHAT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "kimi-k2.6": ModelDefinition(
@@ -68,8 +64,8 @@ class MoonshotDefinitions(BaseDefinitionProvider):
         license="Open Weights",
         url="https://openrouter.ai/models/moonshotai/kimi-k2.6",
         identifiers={"openrouter": "moonshotai/kimi-k2.6"},
-        inputs=_CHAT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "kimi-k2.5": ModelDefinition(
@@ -84,8 +80,8 @@ class MoonshotDefinitions(BaseDefinitionProvider):
         license="Open Weights",
         url="https://openrouter.ai/models/moonshotai/kimi-k2.5",
         identifiers={"openrouter": "moonshotai/kimi-k2.5"},
-        inputs=_CHAT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk],
       ),
 
       "kimi-k2-thinking": ModelDefinition(
@@ -100,7 +96,7 @@ class MoonshotDefinitions(BaseDefinitionProvider):
         license="Open Weights",
         url="https://openrouter.ai/models/moonshotai/kimi-k2-thinking",
         identifiers={"openrouter": "moonshotai/kimi-k2-thinking"},
-        inputs=_PROMPT,
-        outputs=_TEXT,
+        inputs=[ArtifactType.TEXT, MessageSequence],
+        outputs=[TextChunk],
       ),
     }
