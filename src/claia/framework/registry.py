@@ -5,7 +5,7 @@ that provides a unified interface for tools, models, and agents.
 
 import logging
 import threading
-from typing import Any, Dict, Iterator, List, Optional, Union
+from typing import Any, Dict, Iterator, List, Optional
 
 from .manager import Manager
 from ..core.results import Result
@@ -13,8 +13,8 @@ from .task import Task
 from .queue import TaskQueue
 from ..core.enums.task import TaskEvent, TaskStatus
 from ..core.data import AgentRequest, Conversation
-from ..core.data.chunks import BaseChunk, TextChunk
-from ..core.data.response import GenerateStream
+from ..core.data.chunks import TextChunk
+from ..core.data.response import AgentResponse
 from ..core.enums.plugins import ParamScope
 from ..core.plugins.base import ParamSpec, ToolReference
 from .solver import Solver, SolverResult
@@ -395,10 +395,10 @@ class Registry:
     system: Optional[str] = None,
     solution: Optional[SolverResult] = None,
     **kwargs
-  ) -> GenerateStream:
+  ) -> AgentResponse:
     """
     Internal: solve the serving pairing and hand the call to the node.
-    Returns a ``GenerateStream``; raises ``ResolveError`` when no
+    Returns an ``AgentResponse``; raises ``ResolveError`` when no
     pairing satisfies the request. Pass ``solution`` to skip solve.
     """
     logger.debug(f"Running model {model_name}")
@@ -460,7 +460,7 @@ class Registry:
     system: Optional[str] = None,
     solution: Optional[SolverResult] = None,
     **kwargs
-  ) -> Union[Result, GenerateStream]:
+  ) -> AgentResponse:
     """
     Orchestrate model execution via solve -> node -> deployment ->
     architecture.
@@ -469,11 +469,10 @@ class Registry:
         model_name: Model identifier (e.g. "gpt-4")
         conversation: Conversation to process (translated here into
           a message sequence or artifact list before the node)
-        streaming: If True, returns a ``GenerateStream`` — iterate it
-          for chunks, read ``.response`` after exhaustion for the
-          terminal ``ModelResponse`` (usage, error, completeness).
-          If False (default), consumes the stream and returns a
-          ``Result`` with the concatenated text.
+        streaming: If True, returns the live ``AgentResponse`` —
+          iterate it for chunks. If False (default), consumes the
+          stream internally and returns the same ``AgentResponse``,
+          exhausted — callers read ``.text()``, ``.usage``, ``.error``.
         system: Optional generate-time system message. Becomes a
           ``SYSTEM`` turn on the sequence for this call only; not
           stored on the conversation.
@@ -486,29 +485,15 @@ class Registry:
           NATIVE provider tool calling).
 
     Returns:
-        ``Result`` (streaming=False) or ``GenerateStream``
-        (streaming=True).
+        ``AgentResponse`` in both modes.
     """
-    if streaming:
-      return self._run_stream(
-        model_name, conversation, system=system, solution=solution, **kwargs
-      )
-
-    try:
-      stream = self._run_stream(
-        model_name, conversation, system=system, solution=solution, **kwargs
-      )
-      full_response = ""
-      for chunk in stream:
-        if isinstance(chunk, TextChunk) and isinstance(chunk.data, str):
-          full_response += chunk.data
-      response = stream.response
-      if response is not None and response.error is not None:
-        return Result.fail(str(response.error))
-      return Result.ok(full_response)
-    except Exception as e:
-      logger.error(f"Error running model {model_name}: {e}")
-      return Result.fail(str(e))
+    response = self._run_stream(
+      model_name, conversation, system=system, solution=solution, **kwargs
+    )
+    if not streaming:
+      for _ in response:
+        pass
+    return response
 
   def stream_text(
     self,
@@ -534,7 +519,7 @@ class Registry:
     self,
     model_name: str,
     message: str,
-    on_token: Optional[callable] = None,
+    on_chunk: Optional[callable] = None,
     on_complete: Optional[callable] = None,
     on_error: Optional[callable] = None,
     agent_type: str = "simple",
@@ -552,7 +537,7 @@ class Registry:
     Args:
         model_name: Model identifier (e.g. "gpt-4")
         message: The user message to send
-        on_token: Optional callback fired for each streamed token
+        on_chunk: Optional callback fired for each streamed chunk
         on_complete: Optional callback fired with the full response on success
         on_error: Optional callback fired with error message on failure
         agent_type: Agent type to use (default "simple")
@@ -587,8 +572,8 @@ class Registry:
       parameters=parameters
     )
 
-    if on_token:
-      task.on(TaskEvent.TOKEN, on_token)
+    if on_chunk:
+      task.on(TaskEvent.CHUNK, on_chunk)
 
     def _on_complete(full_response):
       result_holder[0] = Result.ok(full_response)

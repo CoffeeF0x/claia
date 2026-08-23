@@ -36,9 +36,9 @@ streaming `TagParser` produces a `TagEvent` of type `TOOL`.
    `TagEvent` for each closed tag. For TOOL events the agent calls
    `Registry.execute_tool(qualified_name, raw_payload, conversation, **kwargs)`,
    which forwards to the owning protocol's `execute(...)`. The
-   result text is appended to the streaming assistant message and
-   emitted as ``TaskEvent.TOKEN`` so terminal renderers see the call
-   → response flow inline.
+   result text is attached as a ``ToolArtifact`` on the TOOL utility
+   (``TaskEvent.ARTIFACT``). Model chunks, including the call itself
+   when native, arrive on ``TaskEvent.CHUNK``.
 
 Swap in a different protocol to change execution behavior — batching,
 sandboxing, remote MCP servers — without touching the agent loop or

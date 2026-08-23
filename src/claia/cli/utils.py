@@ -42,7 +42,7 @@ def wait_for_task(
   """
   Block until a task completes, using the callback-based event system.
 
-  Before calling this, register TOKEN, COMPLETE, and ERROR callbacks
+  Before calling this, register CHUNK, COMPLETE, and ERROR callbacks
   on the task. This helper simply waits for the done event to be set
   by one of those callbacks.
   """

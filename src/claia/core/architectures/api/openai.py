@@ -13,11 +13,10 @@ from .tools import (
   openai_responses_tools,
   tool_chunk,
 )
-from .wire import iter_sse, provider_error
+from .wire import iter_sse, provider_error, usage_chunk
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.request import AgentRequest
-from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import (
@@ -63,7 +62,7 @@ class OpenAIArchitecture(APIArchitecture):
   def generate(
     self,
     request: AgentRequest,
-  ) -> Generator[BaseChunk, None, ModelResponse]:
+  ) -> Generator[BaseChunk, None, None]:
     """Generate a response using OpenAI's Responses API."""
     inputs = request.inputs
     args = request.args
@@ -99,11 +98,11 @@ class OpenAIArchitecture(APIArchitecture):
       return sequence.system, format_openai_responses_input(sequence)
     return sequence.system, self.format_messages(sequence)
 
-  def _generate_streaming(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, ModelResponse]:
+  def _generate_streaming(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, None]:
     response = self.post("responses", {**request_data, "stream": True}, stream=True)
-    chunks: List[BaseChunk] = []
     emitted: set = set()
     usage = None
+    finish_reason = None
 
     def emit_function_call(item: Dict[str, Any]) -> Generator[BaseChunk, None, None]:
       if item.get("type") != "function_call":
@@ -114,7 +113,6 @@ class OpenAIArchitecture(APIArchitecture):
       chunk = tool_chunk(item.get("name"), item.get("arguments"), item.get("call_id") or item.get("id"), tools=tools)
       if key:
         emitted.add(key)
-      chunks.append(chunk)
       yield chunk
 
     for event in iter_sse(response):
@@ -123,9 +121,7 @@ class OpenAIArchitecture(APIArchitecture):
       if event_type == "response.output_text.delta":
         delta = event.get("delta", "")
         if delta:
-          chunk = TextChunk(data=delta)
-          chunks.append(chunk)
-          yield chunk
+          yield TextChunk(data=delta)
 
       elif event_type == "response.output_item.done":
         yield from emit_function_call(event.get("item") or {})
@@ -134,24 +130,23 @@ class OpenAIArchitecture(APIArchitecture):
         err = event.get("error") or event.get("response", {}).get("error") or {}
         message = provider_error("OpenAI", err, "unknown error from the Responses API")
         logger.error(message)
-        if not chunks:
-          raise DeploymentError(message)
-        return ModelResponse(chunks=chunks, complete=False, error=message)
+        raise DeploymentError(message)
 
       elif event_type in ("response.completed", "response.incomplete"):
         payload = event.get("response") or {}
         usage = payload.get("usage")
+        finish_reason = payload.get("status") or event_type.split(".", 1)[-1]
         for item in payload.get("output") or []:
           yield from emit_function_call(item)
         break
 
-    return ModelResponse(
-      chunks=chunks,
-      complete=True,
-      metadata={"usage": usage} if usage else {},
+    chunk = usage_chunk(
+      usage, provider="openai", provider_model=self.model_name, finish_reason=finish_reason,
     )
+    if chunk:
+      yield chunk
 
-  def _generate_blocking(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, ModelResponse]:
+  def _generate_blocking(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, None]:
     response = self.post("responses", request_data)
     data = response.json()
 
@@ -178,18 +173,16 @@ class OpenAIArchitecture(APIArchitecture):
           tools=tools,
         ))
 
-    chunks: List[BaseChunk] = []
     if content or not tool_chunks:
-      chunk = TextChunk(data=content)
-      chunks.append(chunk)
-      yield chunk
+      yield TextChunk(data=content)
     for chunk in tool_chunks:
-      chunks.append(chunk)
       yield chunk
 
-    usage = data.get("usage")
-    return ModelResponse(
-      chunks=chunks,
-      complete=True,
-      metadata={"usage": usage} if usage else {},
+    chunk = usage_chunk(
+      data.get("usage"),
+      provider="openai",
+      provider_model=self.model_name,
+      finish_reason=data.get("status"),
     )
+    if chunk:
+      yield chunk

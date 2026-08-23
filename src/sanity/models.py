@@ -5,7 +5,7 @@ models are validated. Keep this file minimal and disposable.
 """
 
 from claia.core.architectures.dummy.dummy import DummyArchitecture
-from claia.core.data import AgentRequest, Conversation, ModelResponse, TextChunk
+from claia.core.data import AgentRequest, AgentResponse, Conversation, TextChunk
 from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.definitions.model_definition import ModelDefinition
 from claia.core.deployments.dummy import DummyDeployment
@@ -21,19 +21,16 @@ STREAM_KWARGS = {
 }
 
 
-def drain(generator):
-  """Collect yielded chunks and the generator's return value."""
+def drain(source):
+  """Collect yielded chunks from a generate iterator or AgentResponse."""
   chunks = []
-  try:
-    print("\nDraining generator...\n")
-    while True:
-      chunk = next(generator)
-      text = chunk.data if isinstance(chunk, TextChunk) else str(chunk)
-      print(text, end="", flush=True)
-      chunks.append(chunk)
-  except StopIteration as stop:
-    print("\nGenerator drained.\n\n")
-    return chunks, stop.value
+  print("\nDraining stream...\n")
+  for chunk in source:
+    text = chunk.data if isinstance(chunk, TextChunk) else str(chunk)
+    print(text, end="", flush=True)
+    chunks.append(chunk)
+  print("\nStream drained.\n\n")
+  return chunks
 
 
 def _definition():
@@ -66,13 +63,12 @@ def run_model():
   print(f"sequence turns: {len(sequence)} ({type(sequence).__name__})")
   print()
 
-  chunks, response = drain(model.generate(_request(sequence, **STREAM_KWARGS)))
+  chunks = drain(model.generate(_request(sequence, **STREAM_KWARGS)))
 
-  assert isinstance(response, ModelResponse)
-  preview = response.text()[:120].replace("\n", " ")
+  preview = "".join(
+    c.data for c in chunks if isinstance(c, TextChunk)
+  )[:120].replace("\n", " ")
   print(f"chunks: {len(chunks)}")
-  print(f"response.complete: {response.complete}")
-  print(f"response.error: {response.error}")
   print(f"yielded chars: {sum(len(c.data) for c in chunks if isinstance(c, TextChunk))}")
   print(f"preview: {preview}...")
   print(f"conversation untouched: {len(conversation.messages) == message_count_before}")
@@ -97,12 +93,17 @@ def run_deployment():
     args=STREAM_KWARGS,
   )
   instance = deployment.deploy(request)
-  chunks, _ = drain(deployment.run(instance, request))
+  response = deployment.run(instance, request)
+  chunks = drain(response)
 
+  assert isinstance(response, AgentResponse)
   preview = "".join(
     c.data for c in chunks if isinstance(c, TextChunk)
   )[:120].replace("\n", " ")
   print(f"chunks: {len(chunks)}")
+  print(f"complete: {response.complete}")
+  print(f"error: {response.error}")
+  print(f"metrics: {response.metrics.data if response.metrics else None}")
   print(f"yielded chars: {sum(len(c.data) for c in chunks if isinstance(c, TextChunk))}")
   print(f"preview: {preview}...")
   print()

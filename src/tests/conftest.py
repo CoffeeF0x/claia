@@ -9,7 +9,6 @@ import pytest
 from claia.core.results import Result, DeploymentError
 from claia.core.data import Conversation
 from claia.core.data.chunks import TextChunk
-from claia.core.data.response import ModelResponse
 from claia.core.definitions.model_definition import ModelDefinition
 from claia.core.deployments.base import BaseDeployment
 from claia.core.nodes.local import LocalNode
@@ -96,7 +95,6 @@ def fake_manager():
 
     def generate(self, request):
       yield TextChunk(data=f"deployed {self.model_name} via api")
-      return ModelResponse(complete=True)
 
   class FakeDeployment(BaseDeployment):
     info = DeploymentInfo(

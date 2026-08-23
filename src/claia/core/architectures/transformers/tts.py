@@ -14,7 +14,6 @@ from typing import Any, Dict, Generator, List, Optional, Tuple
 from ...data.artifacts import BaseArtifact, TextArtifact
 from ...data.chunks import AudioChunk, BaseChunk, TextChunk
 from ...data.request import AgentRequest, ModelInputs
-from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.data import AudioFormat
 from ...enums.plugins import ParamScope, ParamCategory
@@ -175,9 +174,8 @@ class TTSArchitecture(LocalArchitecture):
   def generate(
     self,
     request: AgentRequest,
-  ) -> Generator[BaseChunk, None, ModelResponse]:
+  ) -> Generator[BaseChunk, None, None]:
     """Generate speech audio from text artifact input or a prompt override."""
-    chunks: list = []
     if not self.loaded:
       self.load()
 
@@ -193,11 +191,9 @@ class TTSArchitecture(LocalArchitecture):
       **backend_kwargs,
     )
 
-    summary = TextChunk(data="Generated audio.")
-    chunks.append(summary)
-    yield summary
+    yield TextChunk(data="Generated audio.")
     audio_fmt = AudioFormat.WAV if response_format == "wav" else AudioFormat.MPEG
-    audio = AudioChunk(
+    yield AudioChunk(
       data=audio_bytes,
       format=audio_fmt,
       metadata={
@@ -208,9 +204,6 @@ class TTSArchitecture(LocalArchitecture):
         **metadata,
       },
     )
-    chunks.append(audio)
-    yield audio
-    return ModelResponse(chunks=chunks, complete=True)
 
   def tokenize(self, text: str) -> List[int]:
     """Tokenization is not exposed for TTS backends."""

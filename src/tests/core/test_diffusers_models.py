@@ -7,8 +7,7 @@ import sys
 import types
 
 from claia.core.data import AgentRequest, Conversation
-from claia.core.data.chunks import ImageChunk, TextChunk
-from claia.core.data.response import ModelResponse
+from claia.core.data.chunks import ImageChunk, MetricsChunk, TextChunk
 from claia.core.deployments.transformers import TransformersDeployment
 from claia.core.enums.conversation import MessageRole
 from claia.core.enums.data import ImageFormat
@@ -178,7 +177,6 @@ def test_transformers_deployment_passes_image_chunks_through():
 
     def generate(self, request):
       yield image_chunk
-      return ModelResponse(chunks=[image_chunk], complete=True)
 
   deployment = TransformersDeployment()
   request = AgentRequest(
@@ -189,8 +187,10 @@ def test_transformers_deployment_passes_image_chunks_through():
     inputs=_artifacts(_conversation()),
   )
   instance = deployment.deploy(request)
-  chunks = list(deployment.run(instance, request))
+  response = deployment.run(instance, request)
+  chunks = list(response)
 
-  assert len(chunks) == 1
   assert isinstance(chunks[0], ImageChunk)
   assert chunks[0].data == b"image"
+  assert isinstance(chunks[-1], MetricsChunk)
+  assert response.metrics is not None

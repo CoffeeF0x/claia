@@ -7,6 +7,6 @@ Artifacts and chunks live under:
 - `claia.core.data.artifacts`
 - `claia.core.data.chunks`
 - `claia.core.data.common` (`DataObject`)
-- `claia.core.data.response` (`ModelResponse`)
+- `claia.core.data.response` (`AgentResponse`)
 
 See `claia/reference/` in the ExoFox docs repo.

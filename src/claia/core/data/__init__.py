@@ -2,7 +2,7 @@
 Data package for CLAIA.
 
 Provides pure data models for IO (artifacts / chunks / AgentRequest /
-ModelResponse) and conversation-domain objects. Models are independent
+AgentResponse) and conversation-domain objects. Models are independent
 of persistence.
 """
 
@@ -24,9 +24,11 @@ from .chunks import (
   AudioChunk,
   RawChunk,
   ToolChunk,
+  UsageChunk,
+  MetricsChunk,
 )
 from .request import AgentRequest, ModelInputs
-from .response import GenerateStream, ModelResponse
+from .response import AgentResponse
 from .models import (
   Prompt,
   Conversation,
@@ -53,10 +55,11 @@ __all__ = [
   "AudioChunk",
   "RawChunk",
   "ToolChunk",
+  "UsageChunk",
+  "MetricsChunk",
   "AgentRequest",
   "ModelInputs",
-  "ModelResponse",
-  "GenerateStream",
+  "AgentResponse",
   "Prompt",
   "Conversation",
   "Message",

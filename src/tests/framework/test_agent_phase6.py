@@ -156,15 +156,15 @@ class TestStreamTextOnly:
   def test_no_tags_emits_full_text_and_no_dispatch(self):
     convo = Conversation(title="t")
     task = _task(convo)
-    tokens: List[str] = []
-    task.on(TaskEvent.TOKEN, lambda t: tokens.append(t))
+    texts: List[str] = []
+    task.on(TaskEvent.CHUNK, lambda c: texts.append(c.data) if isinstance(c, TextChunk) else None)
 
     reg = _FakeToolRegistry(_stream("Hello, ", "world!"))
     SimpleAgent.execute(task, registry=reg)
 
     assert task.status == TaskStatus.COMPLETED
     assert task.result == "Hello, world!"
-    assert "".join(tokens) == "Hello, world!"
+    assert "".join(texts) == "Hello, world!"
     assert reg.execute_calls == []
     assert _utilities(convo) == []
 
@@ -185,8 +185,8 @@ class TestStreamOneToolCall:
   def test_envelope_payload_dispatches_and_streams_result(self):
     convo = Conversation(title="t")
     task = _task(convo)
-    tokens: List[str] = []
-    task.on(TaskEvent.TOKEN, lambda t: tokens.append(t))
+    texts: List[str] = []
+    task.on(TaskEvent.CHUNK, lambda c: texts.append(c.data) if isinstance(c, TextChunk) else None)
 
     chunks = _stream(
       'Calling tool now: ',
@@ -215,7 +215,7 @@ class TestStreamOneToolCall:
     assert results[0].tool_name == "demo.echo"
     assert results[0].content == "echoed:hi"
     assert results[0].result_text() == format_tool_result("demo.echo", "echoed:hi")
-    assert "echoed:hi" not in "".join(tokens)
+    assert "echoed:hi" not in "".join(texts)
 
     utilities = _utilities(convo)
     assert len(utilities) == 1

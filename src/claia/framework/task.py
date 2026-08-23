@@ -56,7 +56,7 @@ class Task:
     # Cooperative cancellation. Hosts running an agent on a worker thread
     # can call request_cancel() to ask the agent to stop at the next
     # safe point. Long-running agents should poll cancel_requested
-    # between unit-of-work steps (e.g. between streamed tokens) and
+    # between unit-of-work steps (e.g. between streamed chunks) and
     # break cleanly. Implemented via threading.Event so it is safe to
     # set from a different thread than the one running the agent.
     self.cancel_event: threading.Event = threading.Event()
@@ -81,12 +81,6 @@ class Task:
         logger.error(f"Callback error on '{event.value}' for task {self.id}: {e}")
 
   # ── State transitions ─────────────────────────────────────────────
-
-  def mark_started(self):
-    """Mark the task as started."""
-    self.status = TaskStatus.PROCESSING
-    self.started_at = time.time()
-    self.emit(TaskEvent.START)
 
   def mark_completed(self, result: Any = None):
     """Mark the task as completed with an optional result."""

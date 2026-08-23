@@ -25,12 +25,13 @@ def test_simple_agent_success(task, fake_model_registry_ok):
   assert updated.error is None
 
 
-def test_simple_agent_emits_token_callbacks(task, fake_model_registry_ok):
-  tokens = []
-  task.on(TaskEvent.TOKEN, lambda t: tokens.append(t))
+def test_simple_agent_emits_chunk_callbacks(task, fake_model_registry_ok):
+  chunks = []
+  task.on(TaskEvent.CHUNK, lambda c: chunks.append(c))
   updated = SimpleAgent.execute(task, registry=fake_model_registry_ok)
   assert updated.status == TaskStatus.COMPLETED
-  assert len(tokens) > 0
+  assert len(chunks) > 0
+  assert all(isinstance(c, TextChunk) for c in chunks)
 
 
 def test_simple_agent_error(task, fake_model_registry_error):

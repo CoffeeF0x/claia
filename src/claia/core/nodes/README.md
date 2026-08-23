@@ -2,8 +2,7 @@
 
 Places compute lives. A node hosts deployments: given a resolved
 pairing from the solver it reuses or provisions a deployed
-architecture instance, then streams the generate contract back
-(chunks up, `ModelResponse` terminal, wrapped in a `GenerateStream`).
+architecture instance, then returns an `AgentResponse`.
 
 ## What lives here
 
@@ -20,7 +19,7 @@ at plugin load; the registry's `get_loaded_models` / `unload_model` /
 `get_cache_stats` facades aggregate across them.
 
 Remote nodes (runpod, massedcompute, ...) implement the same
-contract over a wire: artifacts across, chunks back, a terminal
-frame that becomes the `ModelResponse`. Provisioning primitives
+contract over a wire: artifacts across, an `AgentResponse` back.
+Provisioning primitives
 (upload, exec, ports) are internals of specific node modules, not
 part of the contract.

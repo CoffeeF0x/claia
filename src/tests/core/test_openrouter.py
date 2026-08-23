@@ -119,9 +119,10 @@ def test_openrouter_model_streams_deltas():
   )))
 
   endpoint, data, request_kwargs = model.calls[0]
-  assert [c.data for c in chunks] == ["Hello ", "world"]
+  assert [c.data for c in chunks if isinstance(c, TextChunk)] == ["Hello ", "world"]
   assert endpoint == "chat/completions"
   assert data["stream"] is True
+  assert data["stream_options"] == {"include_usage": True}
   assert request_kwargs == {"stream": True}
 
 

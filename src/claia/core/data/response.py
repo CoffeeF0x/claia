@@ -1,36 +1,51 @@
 """
-Model response wrapper and stream delivery.
+AgentResponse — one streamed response up the serving stack.
 
-Generation returns a ``ModelResponse`` carrying content chunks plus
-status fields (complete / error) and aggregate metadata (usage,
-timings). Control signals are not chunks. ``GenerateStream`` wraps a
-generate generator so callers never hand-roll terminal-value capture:
-iterate for chunks, read ``.response`` after exhaustion.
+Iterate for chunks (text, tool, image, audio, usage, metrics). After
+exhaustion the same object is the aggregate: collected chunks,
+completion state, concatenated text, and the usage / metrics chunks
+if any were yielded.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, Generator, Iterator, List, Optional
+from typing import Any, Iterator, List, Optional
 
-from .chunks import BaseChunk, TextChunk
+from .chunks import BaseChunk, MetricsChunk, TextChunk, UsageChunk
 
 
-@dataclass
-class ModelResponse:
-  """Return value of model generation.
+class AgentResponse:
+  """Streaming-first generate result.
 
-  Attributes:
-    chunks: Content produced by the model.
-    complete: Whether generation finished successfully / fully.
-    error: Optional error info (message, code, or structured data).
-    metadata: Provider extras (usage, finish_reason, …).
+  Wraps the deployment relay generator. Iterating yields chunks and
+  collects them. A second pass after exhaustion yields nothing and
+  leaves the aggregate fields intact.
   """
 
-  chunks: List[BaseChunk] = field(default_factory=list)
-  complete: bool = True
-  error: Optional[Any] = None
-  metadata: Dict[str, Any] = field(default_factory=dict)
+  def __init__(
+    self,
+    generator: Optional[Iterator[BaseChunk]] = None,
+    *,
+    chunks: Optional[List[BaseChunk]] = None,
+    complete: bool = True,
+    error: Optional[Any] = None,
+  ):
+    self._generator: Optional[Iterator[BaseChunk]] = generator
+    self.chunks: List[BaseChunk] = list(chunks) if chunks is not None else []
+    self.complete = complete
+    self.error = error
+
+  def bind(self, generator: Iterator[BaseChunk]) -> "AgentResponse":
+    """Attach the relay generator. Used by the deployment that owns this response."""
+    self._generator = generator
+    return self
+
+  def __iter__(self) -> Iterator[BaseChunk]:
+    if self._generator is not None:
+      generator, self._generator = self._generator, None
+      for chunk in generator:
+        self.chunks.append(chunk)
+        yield chunk
 
   def is_success(self) -> bool:
     return self.complete and self.error is None
@@ -45,29 +60,26 @@ class ModelResponse:
     """Concatenate all text chunk payloads."""
     return "".join(self.iter_text())
 
-  def to_dict(self) -> Dict[str, Any]:
+  @property
+  def usage(self) -> Optional[UsageChunk]:
+    """The ``UsageChunk`` from this stream, if any."""
+    for chunk in reversed(self.chunks):
+      if isinstance(chunk, UsageChunk):
+        return chunk
+    return None
+
+  @property
+  def metrics(self) -> Optional[MetricsChunk]:
+    """The ``MetricsChunk`` from this stream, if any."""
+    for chunk in reversed(self.chunks):
+      if isinstance(chunk, MetricsChunk):
+        return chunk
+    return None
+
+  def to_dict(self) -> dict:
     return {
       "chunks": [c.to_dict() for c in self.chunks],
       "complete": self.complete,
       "error": self.error,
-      "metadata": self.metadata,
+      "text": self.text(),
     }
-
-
-class GenerateStream:
-  """Iterable over a generate stream that captures the terminal wrapper.
-
-  Wraps a ``Generator[BaseChunk, None, ModelResponse]``. Iterating
-  yields the chunks; once the stream is exhausted the generator's
-  returned ``ModelResponse`` is available as ``.response``. Iterating
-  again after exhaustion yields nothing and leaves ``response`` intact.
-  """
-
-  def __init__(self, generator: Generator[BaseChunk, None, "ModelResponse"]):
-    self._generator: Optional[Generator] = generator
-    self.response: Optional[ModelResponse] = None
-
-  def __iter__(self) -> Iterator[BaseChunk]:
-    if self._generator is not None:
-      generator, self._generator = self._generator, None
-      self.response = yield from generator

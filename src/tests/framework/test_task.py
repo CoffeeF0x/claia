@@ -26,17 +26,17 @@ def test_task_initialization_defaults(conversation):
   assert t.completed_at is None
 
 
-def test_mark_started_sets_status_and_started_at(task):
+def test_started_at_survives_as_a_field(task):
+  assert task.started_at is None
   created_at = task.created_at
   time.sleep(0.01)
-  task.mark_started()
-  assert task.status == TaskStatus.PROCESSING
-  assert task.started_at is not None
+  task.started_at = time.time()
+  task.status = TaskStatus.PROCESSING
   assert task.started_at >= created_at
 
 
 def test_mark_completed_sets_status_result_and_timestamp(task):
-  task.mark_started()
+  task.started_at = time.time()
   time.sleep(0.01)
   result_payload = {"ok": True}
   task.mark_completed(result_payload)
@@ -47,7 +47,7 @@ def test_mark_completed_sets_status_result_and_timestamp(task):
 
 
 def test_mark_failed_sets_status_error_and_timestamp(task):
-  task.mark_started()
+  task.started_at = time.time()
   time.sleep(0.005)
   task.mark_failed("boom")
   assert task.status == TaskStatus.FAILED

@@ -8,6 +8,7 @@ import types
 from queue import Queue
 
 from claia.core.data import AgentRequest, Conversation
+from claia.core.data.chunks import TextChunk, UsageChunk
 from claia.core.enums.conversation import MessageRole
 
 
@@ -28,7 +29,10 @@ class FakeTensor:
     return self
 
   def __getitem__(self, item):
-    return self.tokens[item]
+    result = self.tokens[item]
+    if isinstance(item, slice):
+      return FakeTensor(result)
+    return result
 
 
 class FakeTokenizer:
@@ -41,6 +45,9 @@ class FakeTokenizer:
 
   def decode(self, tokens, skip_special_tokens=True):
     return "blocked response"
+
+  def encode(self, text, add_special_tokens=False):
+    return [1] * max(1, len((text or "").split()))
 
 
 class FakeStreamer:
@@ -141,7 +148,10 @@ def test_generic_transformer_streams_text_deltas(monkeypatch):
     max_tokens=10,
   )))
 
-  assert [c.data for c in chunks] == ["hello ", "world"]
+  assert [c.data for c in chunks if isinstance(c, TextChunk)] == ["hello ", "world"]
+  usage = next(c for c in chunks if isinstance(c, UsageChunk))
+  assert usage.prompt_tokens == 3
+  assert usage.completion_tokens == 2
 
 
 def test_generic_transformer_omits_unset_top_k(monkeypatch):
@@ -153,5 +163,8 @@ def test_generic_transformer_omits_unset_top_k(monkeypatch):
     top_k=None,
   )))
 
-  assert [c.data for c in chunks] == ["blocked response"]
+  assert [c.data for c in chunks if isinstance(c, TextChunk)] == ["blocked response"]
+  usage = next(c for c in chunks if isinstance(c, UsageChunk))
+  assert usage.prompt_tokens == 3
+  assert usage.completion_tokens == 2
   assert "top_k" not in model.model.calls[0]

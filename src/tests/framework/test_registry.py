@@ -5,27 +5,33 @@ import pytest
 
 # Internal dependencies
 from claia.framework.registry import Registry
-from claia.core.results import Result, ResolveError
+from claia.core.results import ResolveError
 from claia.core.data import Conversation
+from claia.core.data.response import AgentResponse
 
 
 def test_model_registry_run_success(registry_with_fake_manager, tmp_path):
   conv = Conversation(title="T")
   reg: Registry = registry_with_fake_manager
-  res: Result = reg.run("dummy", conv)
+  res = reg.run("dummy", conv)
+  assert isinstance(res, AgentResponse)
   assert res.is_success()
-  assert isinstance(res.get_data(), str)
-  assert "deployed dummy via api" in res.get_data()
+  assert isinstance(res.text(), str)
+  assert "deployed dummy via api" in res.text()
+  assert res.metrics is not None
 
 
 def test_model_registry_run_streaming_yields_generation_chunks(registry_with_fake_manager, tmp_path):
   """registry.run(streaming=True) exposes the BaseChunk stream."""
-  from claia.core.data.chunks import TextChunk
+  from claia.core.data.chunks import MetricsChunk, TextChunk
   conv = Conversation(title="T")
   reg: Registry = registry_with_fake_manager
-  chunks = list(reg.run("dummy", conv, streaming=True))
+  response = reg.run("dummy", conv, streaming=True)
+  chunks = list(response)
   assert len(chunks) > 0
-  assert all(isinstance(c, TextChunk) for c in chunks)
+  assert any(isinstance(c, TextChunk) for c in chunks)
+  assert any(isinstance(c, MetricsChunk) for c in chunks)
+  assert response.metrics is not None
 
 
 def test_model_registry_stream_text_flattens_to_strings(registry_with_fake_manager, tmp_path):
@@ -41,9 +47,8 @@ def test_model_registry_stream_text_flattens_to_strings(registry_with_fake_manag
 def test_model_registry_unknown_model(registry_with_unknown_model, tmp_path):
   conv = Conversation(title="T")
   reg: Registry = registry_with_unknown_model
-  res: Result = reg.run("dummy", conv)
-  assert res.is_error()
-  assert "not found" in res.get_message()
+  with pytest.raises(ResolveError, match="not found"):
+    reg.run("dummy", conv)
 
 
 def test_query_unblocks_on_cancel(registry_with_fake_manager):
@@ -70,7 +75,6 @@ def test_model_registry_unknown_model_streaming_raises(registry_with_unknown_mod
 def _make_identifier_manager(claia_name, architecture_name, provider_name):
   """Fake manager serving one weight-holding model through the real node path."""
   from claia.core.data.chunks import TextChunk
-  from claia.core.data.response import ModelResponse
   from claia.core.definitions.model_definition import ModelDefinition
   from claia.core.deployments.base import BaseDeployment
   from claia.core.nodes.local import LocalNode
@@ -90,7 +94,6 @@ def _make_identifier_manager(claia_name, architecture_name, provider_name):
 
     def generate(self, request):
       yield TextChunk(data=self.model_name)
-      return ModelResponse(complete=True)
 
   class FakeDeployment(BaseDeployment):
     info = DeploymentInfo(
@@ -154,7 +157,7 @@ def test_model_registry_resolves_diffusers_provider_identifier(monkeypatch):
   result = reg.run("stable-diffusion-v2", Conversation(title="T"))
 
   assert result.is_success()
-  assert result.get_data() == "sd2-community/stable-diffusion-2"
+  assert result.text() == "sd2-community/stable-diffusion-2"
 
 
 def test_model_registry_resolves_tts_provider_identifier(monkeypatch):
@@ -169,4 +172,4 @@ def test_model_registry_resolves_tts_provider_identifier(monkeypatch):
   result = reg.run("qwen3-tts-0.6b", Conversation(title="T"))
 
   assert result.is_success()
-  assert result.get_data() == "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
+  assert result.text() == "Qwen/Qwen3-TTS-12Hz-0.6B-Base"

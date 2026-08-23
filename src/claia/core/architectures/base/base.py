@@ -5,10 +5,9 @@ An architecture owns the inference protocol for a model family:
 input formatting, talking to the served model, parsing output, and
 the family's feature surface. Contract: an ``AgentRequest`` in
 (``request.inputs`` is a ``MessageSequence`` or artifact list;
-``request.args`` holds resolved runtime parameters),
-``ModelResponse`` out. Implementations may yield ``BaseChunk``
-items while streaming and return the filled ``ModelResponse``
-via the generator's return value.
+``request.args`` holds resolved runtime parameters), chunks
+yielded out. Implementations yield ``BaseChunk`` items only —
+the deployment owns terminal state on the ``AgentResponse``.
 
 Each architecture declares the deployment that serves it through the
 ``deployment`` class attribute (e.g. ``"api"``, ``"transformers"``);
@@ -16,13 +15,12 @@ the solver follows that link when resolving a model call.
 """
 
 from abc import ABC, abstractmethod
-from typing import ClassVar, Dict, Generator, List, Union
+from typing import ClassVar, Dict, Iterator, List
 
 from ...data.artifacts import ToolArtifact
 from ...data.chunks import BaseChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.request import AgentRequest
-from ...data.response import ModelResponse
 from ...enums.conversation import MessageRole
 
 
@@ -99,18 +97,19 @@ class BaseArchitecture(ABC):
   def generate(
     self,
     request: AgentRequest,
-  ) -> Union[ModelResponse, Generator[BaseChunk, None, ModelResponse]]:
+  ) -> Iterator[BaseChunk]:
     """Generate a response from an ``AgentRequest``.
 
     Read ``request.inputs`` (a ``MessageSequence`` /
     ``MessageSequenceOrdered`` or a list of artifacts) and
-    ``request.args`` (resolved runtime parameters). Prefer returning
-    a ``ModelResponse`` directly; streaming implementations may
-    yield chunks and ``return`` a ``ModelResponse``.
+    ``request.args`` (resolved runtime parameters). Yield chunks
+    only — including a ``UsageChunk`` at the end when the provider
+    reports real counts. Do not construct a terminal wrapper.
 
     Failure rule: raise when the request cannot start (bad inputs,
-    connection refused, provider rejects the request outright); once
-    content has streamed, finish with ``ModelResponse.error`` set and
-    ``complete=False`` instead. Errors are never chunk content.
+    connection refused, provider rejects the request outright).
+    Mid-stream failures also raise; the deployment marks
+    ``complete=False`` / ``error`` on the ``AgentResponse``.
+    Errors are never chunk content.
     """
     pass

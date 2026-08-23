@@ -416,7 +416,7 @@ def main() -> None:
         # as smooth typing rather than chunky bursts.
         renderer = PacedRenderer()
         renderer.start()
-        task.on(TaskEvent.TOKEN, renderer.feed)
+        task.on(TaskEvent.CHUNK, renderer.feed_chunk)
         saved_artifacts = []
 
         def on_artifact(artifact, message_id):

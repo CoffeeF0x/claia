@@ -26,9 +26,9 @@ and is discovered via the `claia.deployments` entry point.
 - The node asks the deployment to `deploy(architecture_class,
   model_name, init_kwargs)` — or reuses a cached instance — then
   calls `run(instance, inputs, runtime_kwargs)`.
-- `run` relays the architecture's chunks unchanged and meters the
-  stream (chunk counts, timings) into the terminal `ModelResponse`'s
-  `metadata["usage"]`, never clobbering provider-reported fields.
+- `run` returns an `AgentResponse`: relays the architecture's
+  chunks unchanged, yields a `MetricsChunk` after the stream
+  finishes, and marks `complete` / `error` on mid-stream failure.
 
 Deployments do not take a `Conversation`.
 

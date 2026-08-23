@@ -21,8 +21,6 @@ class TaskEvent(Enum):
   (including stream start/end) are ``EventType`` on the
   conversation, not task events.
   """
-  START = "start"
-  TOKEN = "token"
   CHUNK = "chunk"
   ARTIFACT = "artifact"
   COMPLETE = "complete"

@@ -3,10 +3,10 @@ Abstract base class for nodes.
 
 A node is a place compute lives. It hosts deployments: given a
 resolved pairing from the solver it reuses or provisions a deployed
-architecture instance, then streams the generate contract back
-(chunks up, ``ModelResponse`` terminal). Instance lifecycle — reuse,
-unload, stats — lives here, behind a stable interface that remote
-hosts implement by speaking the same contract over a wire.
+architecture instance, then returns the ``AgentResponse`` from the
+deployment relay. Instance lifecycle — reuse, unload, stats — lives
+here, behind a stable interface that remote hosts implement by
+speaking the same contract over a wire.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from abc import ABC
 from typing import Any, ClassVar, Dict, Optional, Tuple
 
 from ..data.request import AgentRequest
-from ..data.response import GenerateStream
+from ..data.response import AgentResponse
 from ..deployments.base import BaseDeployment
 from ..plugins.base import NodeInfo
 
@@ -51,14 +51,14 @@ class BaseNode(ABC):
   # ------------------------------------------------------------------
   # Serving
   # ------------------------------------------------------------------
-  def run(self, request: AgentRequest) -> GenerateStream:
+  def run(self, request: AgentRequest) -> AgentResponse:
     """Serve one generate call: reuse or provision, then stream.
 
-    Returns a ``GenerateStream`` — iterate it for chunks, read
-    ``.response`` after exhaustion for the terminal ``ModelResponse``.
+    Returns an ``AgentResponse`` — iterate it for chunks; after
+    exhaustion read ``.text()``, ``.usage``, ``.metrics``, ``.error``.
     """
     instance = self._resolve_instance(request)
-    return GenerateStream(request.deployment.run(instance, request))
+    return request.deployment.run(instance, request)
 
   @staticmethod
   def instance_key(model_name: str, deployment_name: str, architecture_name: str) -> str:

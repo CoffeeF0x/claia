@@ -14,10 +14,9 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStream
 import torch
 
 # Internal dependencies
-from ...data.chunks import BaseChunk, TextChunk
+from ...data.chunks import BaseChunk, TextChunk, UsageChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.request import AgentRequest
-from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import (
@@ -102,9 +101,8 @@ class GenericTransformerArchitecture(LocalArchitecture):
   def generate(
     self,
     request: AgentRequest,
-  ) -> Generator[BaseChunk, None, ModelResponse]:
+  ) -> Generator[BaseChunk, None, None]:
     """Generate a response using the transformer model."""
-    chunks: list = []
     if not self.loaded:
       self.load()
 
@@ -113,24 +111,39 @@ class GenericTransformerArchitecture(LocalArchitecture):
     if not isinstance(inputs, MessageSequence):
       raise TypeError("GenericTransformerArchitecture expects a MessageSequence input")
     prompt = self._convert_sequence_to_prompt(inputs)
-    inputs = self._tokenize_prompt(prompt)
+    tokenized = self._tokenize_prompt(prompt)
+    prompt_tokens = tokenized["input_ids"].shape[1]
 
     if args.get("stream", False):
-      token_gen = self._generate_streaming(inputs, args)
+      token_gen = self._generate_streaming(tokenized, args)
+      collected = []
       try:
         while True:
           token = next(token_gen)
-          chunk = TextChunk(data=token) if isinstance(token, str) else token
-          chunks.append(chunk)
-          yield chunk
+          collected.append(token if isinstance(token, str) else getattr(token, "data", str(token)))
+          yield TextChunk(data=token) if isinstance(token, str) else token
       except StopIteration:
-        return ModelResponse(chunks=chunks, complete=True)
+        pass
+      completion_tokens = self._count_tokens("".join(collected))
+      if prompt_tokens or completion_tokens:
+        yield UsageChunk(
+          prompt_tokens=prompt_tokens,
+          completion_tokens=completion_tokens,
+          total_tokens=prompt_tokens + completion_tokens,
+          provider="transformers_generic",
+          provider_model=self.model_name,
+        )
     else:
-      response = self._generate_blocking(inputs, args)
-      chunk = TextChunk(data=response)
-      chunks.append(chunk)
-      yield chunk
-      return ModelResponse(chunks=chunks, complete=True)
+      response, completion_tokens = self._generate_blocking(tokenized, args)
+      yield TextChunk(data=response)
+      if prompt_tokens or completion_tokens:
+        yield UsageChunk(
+          prompt_tokens=prompt_tokens,
+          completion_tokens=completion_tokens,
+          total_tokens=prompt_tokens + completion_tokens,
+          provider="transformers_generic",
+          provider_model=self.model_name,
+        )
 
   def _tokenize_prompt(self, prompt: str) -> Dict[str, Any]:
     """Tokenize and move a prompt to the configured device."""
@@ -153,8 +166,16 @@ class GenericTransformerArchitecture(LocalArchitecture):
 
     return generation_kwargs
 
-  def _generate_blocking(self, inputs: Dict[str, Any], kwargs: Dict[str, Any]) -> str:
-    """Generate the complete response before yielding it."""
+  def _count_tokens(self, text: str) -> int:
+    if not text or self.tokenizer is None:
+      return 0
+    return len(self.tokenizer.encode(text, add_special_tokens=False))
+
+  def _generate_blocking(self, inputs: Dict[str, Any], kwargs: Dict[str, Any]) -> tuple:
+    """Generate the complete response before yielding it.
+
+    Returns ``(text, completion_token_count)`` from the real generate output.
+    """
     with torch.no_grad():
       outputs = self.model.generate(
         **inputs,
@@ -164,7 +185,12 @@ class GenericTransformerArchitecture(LocalArchitecture):
     input_length = inputs["input_ids"].shape[1]
     generated_tokens = outputs[0][input_length:]
     response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
-    return self._postprocess_response(response)
+    completion_tokens = (
+      int(generated_tokens.shape[-1])
+      if hasattr(generated_tokens, "shape")
+      else len(generated_tokens)
+    )
+    return self._postprocess_response(response), completion_tokens
 
   def _generate_streaming(self, inputs: Dict[str, Any], kwargs: Dict[str, Any]) -> Generator[str, None, str]:
     """Generate text in a background thread and yield decoded deltas."""

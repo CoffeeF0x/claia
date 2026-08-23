@@ -11,7 +11,6 @@ from typing import Generator
 from ..base import BaseArchitecture
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.request import AgentRequest
-from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.data import TextFormat
 
@@ -114,7 +113,7 @@ class DummyArchitecture(BaseArchitecture):
   """
   A dummy architecture that returns a predefined story.
   It simulates streaming by yielding TextChunk items
-  at a controlled rate, then returns a ModelResponse.
+  at a controlled rate. No ``UsageChunk`` — there are no real token counts.
   """
 
   deployment = "dummy"
@@ -129,8 +128,8 @@ class DummyArchitecture(BaseArchitecture):
   def generate(
     self,
     request: AgentRequest,
-  ) -> Generator[BaseChunk, None, ModelResponse]:
-    """Stream the story as TextChunks; return a ModelResponse."""
+  ) -> Generator[BaseChunk, None, None]:
+    """Stream the story as TextChunks."""
     args = request.args
     chars_per_second = args.get("chars_per_second", CHARS_PER_SECOND)
     chars_per_chunk = args.get("chars_per_chunk", CHARS_PER_CHUNK)
@@ -138,18 +137,11 @@ class DummyArchitecture(BaseArchitecture):
       f"Generating at {chars_per_second} chars/s in chunks of {chars_per_chunk}"
     )
 
-    chunks = []
     for i in range(0, self.story_length, chars_per_chunk):
       end_idx = min(i + chars_per_chunk, self.story_length)
       text = "".join(self.characters[i:end_idx])
-      chunk = TextChunk(data=text, format=TextFormat.PLAIN)
-      chunks.append(chunk)
-      yield chunk
+      yield TextChunk(data=text, format=TextFormat.PLAIN)
       delay = (chars_per_chunk / chars_per_second) * (0.9 + (random.random() * 0.2))
       time.sleep(delay)
 
-    trailing = TextChunk(data="\n", format=TextFormat.PLAIN)
-    chunks.append(trailing)
-    yield trailing
-
-    return ModelResponse(chunks=chunks, complete=True)
+    yield TextChunk(data="\n", format=TextFormat.PLAIN)

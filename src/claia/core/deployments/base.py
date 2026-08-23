@@ -4,9 +4,10 @@ Abstract base class for deployments.
 A deployment serves an architecture: ``deploy`` turns an architecture
 class into a servable instance (configure an API client, load weights;
 later: start a llama.cpp/vllm server), and ``run`` relays the generate
-stream between that instance and the hosting node — metering it
-(timings, chunk counts) into the terminal ``ModelResponse`` as it
-passes. Completion and errors live on ``ModelResponse``.
+stream between that instance and the hosting node — yielding a
+``MetricsChunk`` after the architecture finishes and owning terminal
+state on the ``AgentResponse``. Completion and errors live on
+``AgentResponse``.
 """
 
 from __future__ import annotations
@@ -14,11 +15,11 @@ from __future__ import annotations
 import logging
 import time
 from abc import ABC
-from typing import Any, ClassVar, Dict, Generator, List, Optional
+from typing import Any, ClassVar, Generator, Optional
 
-from ..data.chunks import BaseChunk, RawChunk, TextChunk
+from ..data.chunks import BaseChunk, MetricsChunk, RawChunk, TextChunk
 from ..data.request import AgentRequest
-from ..data.response import ModelResponse
+from ..data.response import AgentResponse
 from ..plugins.base import DeploymentInfo
 
 
@@ -60,80 +61,53 @@ class BaseDeployment(ABC):
     self,
     instance: Any,
     request: AgentRequest,
-  ) -> Generator[BaseChunk, None, ModelResponse]:
+  ) -> AgentResponse:
     """Run generate on a deployed instance, relaying and metering the stream.
 
-    Yields the architecture's chunks unchanged and returns the terminal
-    ``ModelResponse`` with metering merged into ``metadata['usage']``
-    (never clobbering provider-reported fields).
-
-    Failure rule: exceptions raised before any content streamed
-    propagate (setup failure); exceptions after the first chunk are
-    converted into an errored wrapper (``complete=False``).
+    Yields the architecture's chunks unchanged, then a ``MetricsChunk``.
+    Setup failures (nothing streamed yet) raise; mid-stream failures
+    mark ``complete=False`` / ``error`` on the returned ``AgentResponse``.
     """
+    response = AgentResponse()
+    return response.bind(self._relay(instance, request, response))
+
+  def _relay(
+    self,
+    instance: Any,
+    request: AgentRequest,
+    response: AgentResponse,
+  ) -> Generator[BaseChunk, None, None]:
     started = time.monotonic()
     first_chunk_at: Optional[float] = None
-    chunks: List[BaseChunk] = []
+    chunk_count = 0
 
-    def relay(chunk: BaseChunk) -> BaseChunk:
-      nonlocal first_chunk_at
+    def note(chunk: BaseChunk) -> BaseChunk:
+      nonlocal first_chunk_at, chunk_count
       if first_chunk_at is None:
         first_chunk_at = time.monotonic()
-      chunks.append(chunk)
+      chunk_count += 1
       return chunk
 
     try:
       result = instance.generate(request)
 
-      if isinstance(result, ModelResponse):
-        for chunk in result.chunks:
-          yield relay(chunk)
-        response = result
-      elif not hasattr(result, "__iter__") or isinstance(result, (str, bytes)):
-        yield relay(self.normalize_chunk(result))
-        response = ModelResponse(chunks=list(chunks), complete=True)
+      if not hasattr(result, "__iter__") or isinstance(result, (str, bytes)):
+        yield note(self.normalize_chunk(result))
       else:
-        iterator = iter(result)
-        while True:
-          try:
-            item = next(iterator)
-          except StopIteration as stop:
-            response = self._coerce_response(stop.value, chunks)
-            break
-          yield relay(self.normalize_chunk(item))
+        for item in result:
+          yield note(self.normalize_chunk(item))
     except Exception as e:
-      if not chunks:
+      if chunk_count == 0:
         raise
-      logger.exception(f"Generation failed mid-stream after {len(chunks)} chunk(s)")
-      response = ModelResponse(chunks=list(chunks), complete=False, error=str(e))
+      logger.exception(f"Generation failed mid-stream after {chunk_count} chunk(s)")
+      response.complete = False
+      response.error = str(e)
 
-    return self._meter(response, started, first_chunk_at)
-
-  @staticmethod
-  def _coerce_response(value: Any, chunks: List[BaseChunk]) -> ModelResponse:
-    """Shape a generator's return value into a ``ModelResponse``."""
-    if isinstance(value, ModelResponse):
-      if not value.chunks:
-        value.chunks = list(chunks)
-      return value
-    return ModelResponse(
-      chunks=list(chunks),
-      complete=True,
-      metadata={"return": value} if value is not None else {},
+    now = time.monotonic()
+    yield MetricsChunk(
+      duration=round(now - started, 4),
+      time_to_first_chunk=(
+        round(first_chunk_at - started, 4) if first_chunk_at is not None else None
+      ),
+      chunk_count=chunk_count,
     )
-
-  @staticmethod
-  def _meter(
-    response: ModelResponse,
-    started: float,
-    first_chunk_at: Optional[float],
-  ) -> ModelResponse:
-    """Merge stream metering into ``response.metadata['usage']``."""
-    usage = response.metadata.setdefault("usage", {})
-    if isinstance(usage, dict):
-      now = time.monotonic()
-      usage.setdefault("chunks", len(response.chunks))
-      usage.setdefault("duration", round(now - started, 4))
-      if first_chunk_at is not None:
-        usage.setdefault("time_to_first_chunk", round(first_chunk_at - started, 4))
-    return response

@@ -6,8 +6,9 @@ Pure CLAIA data models for IO and conversation state. Nothing here owns persiste
 
 - `common/` — `DataObject` (shared `type` / `format` / `name` / `metadata`)
 - `artifacts/` — durable IO payloads: text, image, audio, file, link, raw, tool
-- `chunks/` — streamed content: text, image, audio, raw
-- `response.py` — `ModelResponse` (chunks + complete/error)
+- `chunks/` — streamed content: text, image, audio, raw, tool, usage, metrics
+- `request.py` — `AgentRequest`
+- `response.py` — `AgentResponse` (iterate for chunks; then the aggregate)
 - `models/` — `Conversation`, `Message`, `MessageSequence`, `MessageSequenceOrdered`, `Prompt`
 - `events.py` — `DomainEvent` / `EventType`
 - `utils/` — text, image, and tool-call parsing helpers
@@ -16,7 +17,7 @@ MIME enums live in `claia.core.enums.data` (`MediaType`, `TextFormat`, `Artifact
 
 ## Model boundary
 
-**Conversation → `to_model_inputs` → `MessageSequence` or artifact list → deployment / `ModelResponse`.**
+**Conversation → `to_model_inputs` → `MessageSequence` or artifact list → deployment / `AgentResponse`.**
 
 `ModelDefinition.inputs` lists `ArtifactType` values and optional complex types (`MessageSequence` / `MessageSequenceOrdered`). `outputs` lists the chunk classes the model is designed to yield. The conversation builds the sequence or takes artifacts from the latest message. Deployments do not see the conversation.
 

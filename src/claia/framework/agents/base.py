@@ -11,6 +11,7 @@ drives steps to completion synchronously for direct (queue-less) use.
 
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Type
 
@@ -76,7 +77,8 @@ class BaseAgent:
 
       if task.started_at is None:
         logger.info(f"Starting task {task.id} with agent {cls.__name__}")
-        task.mark_started()  # Legacy transition: fires once per task.
+        task.started_at = time.time()
+        task.status = TaskStatus.PROCESSING
         cls.validate_task(task, registry)
       else:
         task.status = TaskStatus.PROCESSING
@@ -198,7 +200,7 @@ class BaseAgent:
     solution=None,
     **kwargs,
   ) -> Tuple[str, List[Tuple[str, str]], bool]:
-    """One assistant stream: tokens, parse, tool dispatch.
+    """One assistant stream: chunks, parse, tool dispatch.
 
     Returns ``(text, tool_results, cancelled)``. Tool results are
     attached as ``ToolArtifact``s on TOOL utilities. MANUAL accepts
@@ -231,29 +233,32 @@ class BaseAgent:
           cancelled = True
           break
 
+        task.emit(TaskEvent.CHUNK, chunk)
+
+        if isinstance(chunk, ImageChunk):
+          cls._attach_image_chunk(task, streaming_message.message_id, chunk)
+          continue
+        if isinstance(chunk, AudioChunk):
+          cls._attach_audio_chunk(task, streaming_message.message_id, chunk)
+          continue
+        if isinstance(chunk, ToolChunk) and tool_mode is ToolMode.NATIVE:
+          result = cls._accept_tool_chunk(
+            chunk,
+            registry=registry,
+            conversation=conversation,
+            streaming_message_id=streaming_message.message_id,
+            tool_kwargs=kwargs,
+            task=task,
+          )
+          if result is not None:
+            tool_results.append(result)
+          continue
         if not isinstance(chunk, TextChunk):
-          if isinstance(chunk, ImageChunk):
-            cls._attach_image_chunk(task, streaming_message.message_id, chunk)
-          elif isinstance(chunk, AudioChunk):
-            cls._attach_audio_chunk(task, streaming_message.message_id, chunk)
-          elif isinstance(chunk, ToolChunk) and tool_mode is ToolMode.NATIVE:
-            result = cls._accept_tool_chunk(
-              chunk,
-              registry=registry,
-              conversation=conversation,
-              streaming_message_id=streaming_message.message_id,
-              tool_kwargs=kwargs,
-              task=task,
-            )
-            if result is not None:
-              tool_results.append(result)
-          task.emit(TaskEvent.CHUNK, chunk)
           continue
 
         token = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
         round_text += token
         conversation.append_stream_chunk(streaming_message.message_id, token)
-        task.emit(TaskEvent.TOKEN, token)
 
         tool_results.extend(cls._consume_parse_events(
           parser.feed(token),

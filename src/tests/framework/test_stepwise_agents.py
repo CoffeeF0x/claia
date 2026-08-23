@@ -139,18 +139,21 @@ class TestQueuedDispatch:
     # No further step ran after the cancellation.
     assert task.parameters["count"] == 1
 
-  def test_started_fires_once_across_steps(self, registry_with_fake_manager):
+  def test_started_at_stamped_once_across_steps(self, registry_with_fake_manager):
     reg = _registry_with_agent(registry_with_fake_manager, CountingAgent)
     task = _task(agent_type="counting", target=3)
-    starts = []
-    task.on(TaskEvent.START, lambda: starts.append(True))
+    assert task.started_at is None
     reg.add_task(task)
+
+    first = reg.dispatch_next()
+    stamped = first.started_at
+    assert stamped is not None
 
     while reg.dispatch_next() is not None:
       pass
 
     assert task.status == TaskStatus.COMPLETED
-    assert len(starts) == 1
+    assert task.started_at == stamped
 
   def test_terminal_task_popped_from_queue_is_skipped(self, registry_with_fake_manager):
     reg = _registry_with_agent(registry_with_fake_manager, CountingAgent)

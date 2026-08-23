@@ -2,7 +2,7 @@
 
 from claia.core.architectures.api.openai import OpenAIArchitecture
 from claia.core.data import AgentRequest, Conversation
-from claia.core.data.chunks import TextChunk, ToolChunk
+from claia.core.data.chunks import TextChunk, ToolChunk, UsageChunk
 from claia.core.enums.conversation import MessageRole
 from claia.core.plugins.base import ArgumentDefinition, ToolReference
 from claia.core.results import DeploymentError
@@ -139,6 +139,9 @@ def test_openai_streams_text_and_function_call():
   assert tool.tool_name == "demo.echo"
   assert tool.payload == {"message": "hi"}
   assert tool.call_id == "call_1"
+  usage = next(c for c in chunks if isinstance(c, UsageChunk))
+  assert usage.completion_tokens == 4
+  assert usage.provider == "openai"
 
 
 def test_openai_completed_event_emits_function_call_once():

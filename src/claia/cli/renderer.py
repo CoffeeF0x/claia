@@ -9,7 +9,7 @@ throughput.
 Usage:
     renderer = PacedRenderer()
     renderer.start()
-    task.on(TaskEvent.TOKEN, renderer.feed)
+    task.on(TaskEvent.CHUNK, renderer.feed_chunk)
     # ...later...
     renderer.finish(drain=True)
 """
@@ -20,6 +20,8 @@ import threading
 import time
 import logging
 from collections import deque
+
+from ..core.data.chunks import TextChunk
 
 
 
@@ -88,6 +90,12 @@ class PacedRenderer:
       return
     self._started = True
     self._thread.start()
+
+  def feed_chunk(self, chunk) -> None:
+    """Enqueue text from a ``TextChunk``; ignore non-text chunks."""
+    if isinstance(chunk, TextChunk):
+      data = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
+      self.feed(data)
 
   def feed(self, chunk: str) -> None:
     """Enqueue a chunk of text and update the arrival-rate estimate."""

@@ -8,11 +8,10 @@ import logging
 from typing import Any, Dict, Generator, List, Optional
 
 from .tools import TOOLS_PARAM, anthropic_tools, format_anthropic_messages, tool_chunk
-from .wire import iter_sse, provider_error
+from .wire import iter_sse, provider_error, usage_chunk
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.request import AgentRequest
-from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import (
@@ -72,7 +71,7 @@ class AnthropicArchitecture(APIArchitecture):
   def generate(
     self,
     request: AgentRequest,
-  ) -> Generator[BaseChunk, None, ModelResponse]:
+  ) -> Generator[BaseChunk, None, None]:
     """Generate a response using Anthropic's Messages API."""
     inputs = request.inputs
     args = request.args
@@ -118,9 +117,8 @@ class AnthropicArchitecture(APIArchitecture):
       self.format_messages(sequence)
     )
 
-  def _generate_streaming(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, ModelResponse]:
+  def _generate_streaming(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, None]:
     response = self.post("messages", {**request_data, "stream": True}, stream=True)
-    chunks: List[BaseChunk] = []
     usage: Dict[str, Any] = {}
     stop_reason = None
     tool_blocks: Dict[int, Dict[str, str]] = {}
@@ -140,9 +138,7 @@ class AnthropicArchitecture(APIArchitecture):
       elif event_type == "content_block_delta":
         delta = event.get("delta", {})
         if delta.get("type") == "text_delta" and delta.get("text"):
-          chunk = TextChunk(data=delta["text"])
-          chunks.append(chunk)
-          yield chunk
+          yield TextChunk(data=delta["text"])
         elif delta.get("type") == "input_json_delta":
           slot = tool_blocks.get(event.get("index", 0))
           if slot is not None:
@@ -151,9 +147,7 @@ class AnthropicArchitecture(APIArchitecture):
       elif event_type == "content_block_stop":
         slot = tool_blocks.pop(event.get("index", 0), None)
         if slot is not None:
-          chunk = tool_chunk(slot["name"], slot["json"], slot["id"] or None, tools=tools)
-          chunks.append(chunk)
-          yield chunk
+          yield tool_chunk(slot["name"], slot["json"], slot["id"] or None, tools=tools)
 
       elif event_type == "message_start":
         usage.update((event.get("message") or {}).get("usage") or {})
@@ -167,23 +161,19 @@ class AnthropicArchitecture(APIArchitecture):
       elif event_type == "error":
         message = provider_error("Anthropic", event.get("error"), "unknown error from the Messages API")
         logger.error(message)
-        if not chunks:
-          raise DeploymentError(message)
-        return ModelResponse(chunks=chunks, complete=False, error=message)
+        raise DeploymentError(message)
 
     if stop_reason == "refusal":
       logger.warning("Claude refused to generate content for safety reasons")
-      chunk = TextChunk(data=REFUSAL_NOTE)
-      chunks.append(chunk)
+      yield TextChunk(data=REFUSAL_NOTE)
+
+    chunk = usage_chunk(
+      usage, provider="anthropic", provider_model=self.model_name, finish_reason=stop_reason,
+    )
+    if chunk:
       yield chunk
 
-    return ModelResponse(
-      chunks=chunks,
-      complete=True,
-      metadata={"usage": usage} if usage else {},
-    )
-
-  def _generate_blocking(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, ModelResponse]:
+  def _generate_blocking(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, None]:
     response = self.post("messages", request_data)
     data = response.json()
 
@@ -209,18 +199,16 @@ class AnthropicArchitecture(APIArchitecture):
       logger.warning("Claude refused to generate content for safety reasons")
       content += REFUSAL_NOTE
 
-    chunks: List[BaseChunk] = []
     if content or not tool_chunks:
-      chunk = TextChunk(data=content)
-      chunks.append(chunk)
-      yield chunk
+      yield TextChunk(data=content)
     for chunk in tool_chunks:
-      chunks.append(chunk)
       yield chunk
 
-    usage = data.get("usage")
-    return ModelResponse(
-      chunks=chunks,
-      complete=True,
-      metadata={"usage": usage} if usage else {},
+    chunk = usage_chunk(
+      data.get("usage"),
+      provider="anthropic",
+      provider_model=self.model_name,
+      finish_reason=data.get("stop_reason"),
     )
+    if chunk:
+      yield chunk

@@ -31,8 +31,8 @@ decorators copy the inherited `info` and prepend the overrides
 
 ## Contract
 
-`generate(inputs, **kwargs)` — a `MessageSequence` or artifact list
-in, `BaseChunk` items yielded up, `ModelResponse` as the generator's
-return value. Raise when the request cannot start; once content has
-streamed, finish with `response.error` set and `complete=False`.
-Errors are never chunk content.
+`generate(request)` — an `AgentRequest` in, `BaseChunk` items
+yielded up (including a `UsageChunk` when the backend has real
+counts). Raise when the request cannot start; mid-stream failures
+also raise so the deployment can mark the `AgentResponse`. Errors
+are never chunk content.

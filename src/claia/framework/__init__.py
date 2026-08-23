@@ -43,10 +43,11 @@ from ..core.data import (
   AudioChunk,
   RawChunk,
   ToolChunk,
+  UsageChunk,
+  MetricsChunk,
   AgentRequest,
   ModelInputs,
-  ModelResponse,
-  GenerateStream,
+  AgentResponse,
   DomainEvent,
 )
 from ..core.plugins.base import (
@@ -103,9 +104,9 @@ __all__ = [
   "BaseArtifact", "TextArtifact", "ImageArtifact", "AudioArtifact",
   "FileArtifact", "LinkArtifact", "RawArtifact", "Prompt",
   "BaseChunk", "TextChunk", "ImageChunk", "AudioChunk", "RawChunk",
-  "ToolChunk",
+  "ToolChunk", "UsageChunk", "MetricsChunk",
   "AgentRequest", "ModelInputs",
-  "ModelResponse", "GenerateStream",
+  "AgentResponse",
   "DomainEvent", "EventType",
   # Plugin metadata
   "ExtensionInfo",

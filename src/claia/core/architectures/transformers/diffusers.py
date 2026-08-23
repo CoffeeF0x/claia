@@ -16,7 +16,6 @@ from diffusers import DiffusionPipeline
 from ...data.artifacts import BaseArtifact, TextArtifact
 from ...data.chunks import BaseChunk, ImageChunk, TextChunk
 from ...data.request import AgentRequest, ModelInputs
-from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.data import ImageFormat
 from ...enums.plugins import ParamScope, ParamCategory
@@ -217,9 +216,8 @@ class DiffusersArchitecture(LocalArchitecture):
   def generate(
     self,
     request: AgentRequest,
-  ) -> Generator[BaseChunk, None, ModelResponse]:
+  ) -> Generator[BaseChunk, None, None]:
     """Generate one or more images from text artifact input."""
-    chunks: list = []
     if not self.loaded:
       self.load()
 
@@ -233,11 +231,9 @@ class DiffusersArchitecture(LocalArchitecture):
     if not images:
       raise ValueError("No images were returned by the diffusers pipeline.")
 
-    summary = TextChunk(
+    yield TextChunk(
       data=f"Generated {len(images)} image{'s' if len(images) != 1 else ''}."
     )
-    chunks.append(summary)
-    yield summary
 
     output_format = self._normalize_output_format(args.get("output_format"))
     media_type = SUPPORTED_OUTPUT_FORMATS[output_format]
@@ -247,7 +243,7 @@ class DiffusersArchitecture(LocalArchitecture):
       image_fmt = ImageFormat.PNG
     for index, image in enumerate(images):
       image_bytes = self._image_to_bytes(image, output_format)
-      image_chunk = ImageChunk(
+      yield ImageChunk(
         data=image_bytes,
         format=image_fmt,
         metadata={
@@ -261,10 +257,6 @@ class DiffusersArchitecture(LocalArchitecture):
           "height": getattr(image, "height", None),
         },
       )
-      chunks.append(image_chunk)
-      yield image_chunk
-
-    return ModelResponse(chunks=chunks, complete=True)
 
   def tokenize(self, text: str) -> List[int]:
     """Tokenization is not exposed for image pipelines."""

@@ -60,7 +60,7 @@ class QueryCommand(BaseCommand):
 
       renderer = PacedRenderer()
       renderer.start()
-      task.on(TaskEvent.TOKEN, renderer.feed)
+      task.on(TaskEvent.CHUNK, renderer.feed_chunk)
       file_repo = JsonStore(self.settings.files_directory)
       saved_artifacts = []
 

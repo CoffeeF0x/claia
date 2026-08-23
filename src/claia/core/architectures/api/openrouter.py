@@ -11,11 +11,10 @@ import logging
 from typing import Any, Dict, Generator, List, Optional
 
 from .tools import TOOLS_PARAM, format_openai_chat_messages, openai_chat_tools, tool_chunk
-from .wire import iter_sse, provider_error
+from .wire import iter_sse, provider_error, usage_chunk
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.request import AgentRequest
-from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import (
@@ -114,7 +113,7 @@ class OpenRouterArchitecture(APIArchitecture):
   def generate(
     self,
     request: AgentRequest,
-  ) -> Generator[BaseChunk, None, ModelResponse]:
+  ) -> Generator[BaseChunk, None, None]:
     """Generate a response using the OpenRouter API."""
     inputs = request.inputs
     args = request.args
@@ -137,19 +136,18 @@ class OpenRouterArchitecture(APIArchitecture):
       return (yield from self._generate_streaming(request_data, tools=tools))
     return (yield from self._generate_blocking(request_data, tools=tools))
 
-  def _generate_streaming(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, ModelResponse]:
-    response = self.post("chat/completions", {**request_data, "stream": True}, stream=True)
-    chunks: List[BaseChunk] = []
+  def _generate_streaming(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, None]:
+    payload = {**request_data, "stream": True, "stream_options": {"include_usage": True}}
+    response = self.post("chat/completions", payload, stream=True)
     pending: Dict[int, Dict[str, str]] = {}
     usage = None
+    finish_reason = None
 
     for event in iter_sse(response):
       if "error" in event:
         message = provider_error("OpenRouter", event.get("error"), "unknown error from the OpenRouter API")
         logger.error(message)
-        if not chunks:
-          raise DeploymentError(message)
-        return ModelResponse(chunks=chunks, complete=False, error=message)
+        raise DeploymentError(message)
 
       if event.get("usage"):
         usage = event["usage"]
@@ -158,12 +156,11 @@ class OpenRouterArchitecture(APIArchitecture):
       if not choices:
         continue
 
+      finish_reason = choices[0].get("finish_reason") or finish_reason
       delta = choices[0].get("delta") or {}
       content = delta.get("content")
       if content:
-        chunk = TextChunk(data=content)
-        chunks.append(chunk)
-        yield chunk
+        yield TextChunk(data=content)
 
       for call in delta.get("tool_calls") or []:
         idx = call.get("index", 0)
@@ -179,17 +176,15 @@ class OpenRouterArchitecture(APIArchitecture):
     for slot in pending.values():
       if not slot["name"]:
         continue
-      chunk = tool_chunk(slot["name"], slot["arguments"], slot["id"] or None, tools=tools)
-      chunks.append(chunk)
+      yield tool_chunk(slot["name"], slot["arguments"], slot["id"] or None, tools=tools)
+
+    chunk = usage_chunk(
+      usage, provider="openrouter", provider_model=self.model_name, finish_reason=finish_reason,
+    )
+    if chunk:
       yield chunk
 
-    return ModelResponse(
-      chunks=chunks,
-      complete=True,
-      metadata={"usage": usage} if usage else {},
-    )
-
-  def _generate_blocking(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, ModelResponse]:
+  def _generate_blocking(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, None]:
     response = self.post("chat/completions", request_data)
     data = response.json()
 
@@ -216,18 +211,16 @@ class OpenRouterArchitecture(APIArchitecture):
       if (call.get("function") or {}).get("name")
     ]
 
-    chunks: List[BaseChunk] = []
     if content or not tool_chunks:
-      chunk = TextChunk(data=content)
-      chunks.append(chunk)
-      yield chunk
+      yield TextChunk(data=content)
     for chunk in tool_chunks:
-      chunks.append(chunk)
       yield chunk
 
-    usage = data.get("usage")
-    return ModelResponse(
-      chunks=chunks,
-      complete=True,
-      metadata={"usage": usage} if usage else {},
+    chunk = usage_chunk(
+      data.get("usage"),
+      provider="openrouter",
+      provider_model=self.model_name,
+      finish_reason=choices[0].get("finish_reason"),
     )
+    if chunk:
+      yield chunk

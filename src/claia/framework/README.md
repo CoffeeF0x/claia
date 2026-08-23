@@ -28,8 +28,8 @@ registry.load_plugins(openai_api_token="sk-...")
 conversation = Conversation()
 conversation.add_message("user", "Hello!")
 
-result = registry.run("gpt-4", conversation)
-print(result.get_data())
+response = registry.run("gpt-4", conversation)
+print(response.text())
 ```
 
 Because `claia` is a namespace package, `claia.framework` also acts as a convenience hub. It re-exports common `claia.core` types such as `Conversation`, `Result`, `ParamSpec`, `ModelDefinition`, and chunk classes.
