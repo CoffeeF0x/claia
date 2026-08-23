@@ -190,6 +190,11 @@ class BaseAgent:
     """
     conversation = task.conversation
     streaming_message = conversation.start_streaming_message(MessageRole.ASSISTANT)
+    logger.info(
+      "Starting %s message stream (task=%s)",
+      MessageRole.ASSISTANT.value,
+      task.id,
+    )
     parser = TagParser(tag_specs)
     cancelled = False
     round_text = ""
@@ -215,6 +220,7 @@ class BaseAgent:
         round_text += token
         conversation.append_stream_chunk(streaming_message.message_id, token)
         task.emit(TaskEvent.TOKEN, token)
+        logger.info("%s", token)
 
         tool_results.extend(cls._consume_parse_events(
           parser.feed(token),
@@ -483,6 +489,8 @@ class BaseAgent:
     if ev.tag_type is not TagType.TOOL:
       return None
 
+    name = cls._extract_tool_name(ev) or "unknown"
+    logger.info("Tool call detected: %s", name)
     result = cls._dispatch_tool_event(
       ev,
       registry=registry,
@@ -493,6 +501,8 @@ class BaseAgent:
     conversation.attach_artifact(utility.message_id, artifact)
     if task is not None:
       task.emit(TaskEvent.ARTIFACT, artifact, utility.message_id)
+    logger.info("Tool call processed: %s", result[0])
+    logger.info("%s", artifact.result_text())
     return result
 
   @classmethod
