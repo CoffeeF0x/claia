@@ -13,6 +13,7 @@ from .logging import LogLevel, LogFormat
 from .model import ModelCapability, IOType, SourcePreference
 from .parser import TagType
 from .plugins import ParamScope, ParamCategory
+from .tools import ToolMode
 from .task import TaskStatus, TaskEvent
 from .task_queue import TaskQueueHook
 from .data import (
@@ -34,6 +35,7 @@ __all__ = [
   "ModelCapability", "IOType", "SourcePreference",
   "TagType",
   "ParamScope", "ParamCategory",
+  "ToolMode",
   "TaskStatus", "TaskEvent",
   "TaskQueueHook",
   "MediaType", "TextFormat", "ImageFormat", "AudioFormat",
