@@ -6,13 +6,13 @@ class ToolMode(Enum):
 
   The agent still runs the tag-parser pass every turn. This value
   decides whether those parsed calls are used and stored, and whether
-  the agent prepends the CUSTOM tool-calling prompt.
+  the agent prepends the MANUAL tool-calling prompt.
 
   ``NATIVE`` — the architecture / provider implements tool calling.
   Parsed tags are ignored (not dispatched, not stored).
-  ``CUSTOM`` — framework-owned tag parsing. Parsed calls are
+  ``MANUAL`` — framework-owned tag parsing. Parsed calls are
   dispatched, stored as tool utilities, and the agent injects the
   tool-calling instructions.
   """
   NATIVE = "native"
-  CUSTOM = "custom"
+  MANUAL = "manual"

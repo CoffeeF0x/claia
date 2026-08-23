@@ -12,7 +12,7 @@ Typed enumerations used across the runtime.
 - `model.py` — model capabilities, IO types, source preference.
 - `parser.py` — categorical tag kinds (`TagType`).
 - `plugins.py` — parameter scope and optional param categories.
-- `tools.py` — tool-calling ownership (`ToolMode`: `NATIVE` / `CUSTOM`).
+- `tools.py` — tool-calling ownership (`ToolMode`: `NATIVE` / `MANUAL`).
 - `task.py` — task status and task callback events.
 - `task_queue.py` — task-queue lifecycle hooks.
 
