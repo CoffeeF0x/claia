@@ -22,6 +22,7 @@ from .chunks import (
   ImageChunk,
   AudioChunk,
   RawChunk,
+  ToolChunk,
 )
 from .response import GenerateStream, ModelResponse
 from .models import (
@@ -49,6 +50,7 @@ __all__ = [
   "ImageChunk",
   "AudioChunk",
   "RawChunk",
+  "ToolChunk",
   "ModelResponse",
   "GenerateStream",
   "Prompt",
