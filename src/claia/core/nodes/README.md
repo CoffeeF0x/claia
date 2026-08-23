@@ -9,7 +9,7 @@ architecture instance, then streams the generate contract back
 
 - `base.py` — `BaseNode`: the hosting contract plus the shared
   instance-lifecycle surface (`loaded` / `unload` / `stats`) and the
-  `remote` class attribute the solver's `deployment_preference`
+  `remote` class attribute the solver's `DeploymentPreference`
   filter reads.
 - `local.py` — `LocalNode`, the in-process host (no connection to
   manage; the base behavior is the whole job).

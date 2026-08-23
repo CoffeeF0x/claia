@@ -42,6 +42,7 @@ from ..core.data import (
   ImageChunk,
   AudioChunk,
   RawChunk,
+  ToolChunk,
   ModelResponse,
   GenerateStream,
   DomainEvent,
@@ -79,13 +80,15 @@ from .task import Task
 from .queue import TaskQueue
 from .registry import Registry
 from .manager import Manager
+from .solver import Solver, SolverResult
 from .agents.base import BaseAgent
 from ..core.decorators import tool, protocol, architecture, deployment, node, definitions
 from .decorators import agent
 
 __all__ = [
   # Framework primitives
-  "Registry", "Manager", "Task", "TaskQueue", "TaskQueueHook",
+  "Registry", "Manager", "Solver", "SolverResult",
+  "Task", "TaskQueue", "TaskQueueHook",
   "TaskEvent", "TaskStatus", "AgentStatus",
   "BaseAgent",
   # Plugin decorators
@@ -98,6 +101,7 @@ __all__ = [
   "BaseArtifact", "TextArtifact", "ImageArtifact", "AudioArtifact",
   "FileArtifact", "LinkArtifact", "RawArtifact", "Prompt",
   "BaseChunk", "TextChunk", "ImageChunk", "AudioChunk", "RawChunk",
+  "ToolChunk",
   "ModelResponse", "GenerateStream",
   "DomainEvent", "EventType",
   # Plugin metadata

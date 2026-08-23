@@ -13,7 +13,7 @@ from claia.core.definitions.openai import OpenAIDefinitions
 from claia.core.definitions.qwen import QwenDefinitions
 from claia.core.definitions.zai import ZaiDefinitions
 from claia.core.enums.conversation import MessageRole
-from claia.core.data.chunks import TextChunk
+from claia.core.data.chunks import TextChunk, ToolChunk
 from claia.core.enums.data import ArtifactType
 from claia.core.architectures.api.openrouter import OpenRouterArchitecture
 from claia.core.results import DeploymentError
@@ -151,6 +151,7 @@ def test_openrouter_company_definitions_are_large_open_models():
   qwen36 = QwenDefinitions().get_definitions()["qwen3.6-plus"]
   qwen35 = QwenDefinitions().get_definitions()["qwen3.5-397b-a17b"]
   llama = MetaDefinitions().get_definitions()["llama-4-maverick"]
+  llama_scout = MetaDefinitions().get_definitions()["llama-4-scout"]
 
   assert "openrouter-gpt-4o-mini" not in MoonshotDefinitions().get_definitions()
   assert kimi.architectures == ["openrouter"]
@@ -163,5 +164,7 @@ def test_openrouter_company_definitions_are_large_open_models():
   assert llama.context_length == 1000000
   assert ArtifactType.IMAGE in kimi.inputs
   assert ArtifactType.IMAGE in qwen35.inputs
-  assert kimi.outputs == [TextChunk]
-  assert qwen35.outputs == [TextChunk]
+  assert kimi.outputs == [TextChunk, ToolChunk]
+  assert qwen35.outputs == [TextChunk, ToolChunk]
+  assert llama.outputs == [TextChunk, ToolChunk]
+  assert llama_scout.outputs == [TextChunk]

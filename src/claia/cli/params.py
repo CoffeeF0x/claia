@@ -20,7 +20,9 @@ below. Settings will pick it up automatically — there is no separate
 from typing import List
 
 # Internal dependencies
+from ..core.enums.deployment import DeploymentPreference
 from ..core.enums.plugins import ParamScope, ParamCategory
+from ..core.enums.tools import ToolMode
 from ..core.plugins.base import ParamSpec
 
 
@@ -104,9 +106,17 @@ APP_PARAMS: List[ParamSpec] = [
   ),
   ParamSpec(
     name="deployment_preference",
-    type=str, scope=ParamScope.INIT, default="any",
+    type=str, scope=ParamScope.INIT, default=DeploymentPreference.ANY.value,
     category=ParamCategory.MODEL,
+    choices=[p.value for p in DeploymentPreference],
     description="Serving placement filter: local-only, remote, or any",
+  ),
+  ParamSpec(
+    name="tool_mode",
+    type=str, scope=ParamScope.INIT, default=ToolMode.MANUAL.value,
+    category=ParamCategory.MODEL,
+    choices=[ToolMode.MANUAL.value, ToolMode.NATIVE.value],
+    description="Tool-calling mode: manual (parser tags) or native (ToolChunk when the model lists it)",
   ),
 
   # ====================================================================

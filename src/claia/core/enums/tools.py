@@ -9,7 +9,8 @@ class ToolMode(Enum):
   the agent prepends the MANUAL tool-calling prompt.
 
   ``NATIVE`` — the architecture / provider implements tool calling.
-  Parsed tags are ignored (not dispatched, not stored).
+  Parsed tags are ignored (not dispatched, not stored). Used only
+  when requested and the solved definition lists ``ToolChunk``.
   ``MANUAL`` — framework-owned tag parsing. Parsed calls are
   dispatched, stored as tool utilities, and the agent injects the
   tool-calling instructions.

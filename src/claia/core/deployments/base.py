@@ -35,7 +35,7 @@ class BaseDeployment(ABC):
 
   #: True when inference happens on a hosted third-party API — request
   #: data leaves the machine regardless of which node runs the client.
-  #: The solver's ``deployment_preference`` filter reads this.
+  #: The solver's ``DeploymentPreference`` filter reads this.
   api: ClassVar[bool] = False
 
   def deploy(

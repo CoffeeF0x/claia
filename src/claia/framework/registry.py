@@ -8,7 +8,7 @@ import threading
 from typing import Any, Dict, Iterator, List, Optional, Union
 
 from .manager import Manager
-from ..core.results import Result, ResolveError
+from ..core.results import Result
 from .task import Task
 from .queue import TaskQueue
 from ..core.enums.task import TaskEvent, TaskStatus
@@ -16,7 +16,8 @@ from ..core.data import Conversation
 from ..core.data.chunks import BaseChunk, TextChunk
 from ..core.data.response import GenerateStream
 from ..core.enums.plugins import ParamScope
-from ..core.plugins.base import ParamSpec, ServingPlan, ToolReference
+from ..core.plugins.base import ParamSpec, ToolReference
+from .solver import Solver, SolverResult
 
 
 
@@ -43,12 +44,10 @@ class Registry:
   - Agents API: task queue + worker lifecycle and agent dispatch.
   """
 
-  #: Allowed values for the ``deployment_preference`` solve-time filter.
-  DEPLOYMENT_PREFERENCES = ("local-only", "remote", "any")
-
   def __init__(self, task_queue: Optional[TaskQueue] = None):
     # Core manager
     self._manager = Manager()
+    self.solver = Solver(self._manager)
 
     # Unified ``qualified_name -> ToolReference`` index assembled from
     # every loaded protocol's ``get_tool_references()``, plus a
@@ -389,115 +388,18 @@ class Registry:
   ######################################################################
   #                             MODELS API                             #
   ######################################################################
-  @staticmethod
-  def _resolve_model_name(model_name: str, available_models: Dict[str, Any]) -> Optional[str]:
-    """Resolve a model name or alias to its canonical name."""
-    if model_name in available_models:
-      return model_name
-
-    for canonical_name, model_info in available_models.items():
-      aliases = getattr(model_info, 'aliases', None)
-      if aliases and model_name in aliases:
-        logger.debug(f"Resolved alias '{model_name}' to '{canonical_name}'")
-        return canonical_name
-
-    logger.debug(f"No resolution found for '{model_name}'")
-    return None
-
-  def _resolve_serving(self, model_name: str, deployment_preference: str = "any"):
-    """Solve a model request into a serving pairing.
-
-    Resolution: name/alias -> definition -> first installed
-    architecture -> its linked deployment -> a node allowed by
-    ``deployment_preference``. The preference filters declared facts:
-
-    - ``local-only``: local nodes and non-api deployments only —
-      request data never leaves the machine.
-    - ``remote``: self-hosted compute only (remote nodes allowed,
-      api deployments still excluded).
-    - ``any``: unrestricted.
-
-    Returns ``(plan, definition, architecture_class, deployment, node)``.
-    Failures raise ``ResolveError``.
-    """
-    if deployment_preference not in self.DEPLOYMENT_PREFERENCES:
-      raise ResolveError(
-        f"Unknown deployment_preference '{deployment_preference}' "
-        f"(expected one of {', '.join(self.DEPLOYMENT_PREFERENCES)})"
-      )
-
-    definitions = self.manager.get_supported_models()
-    resolved_name = self._resolve_model_name(model_name, definitions)
-    if not resolved_name:
-      raise ResolveError(f"Model '{model_name}' not found")
-    definition = definitions[resolved_name]
-
-    candidates = getattr(definition, 'architectures', None) or []
-    if not candidates:
-      raise ResolveError(f"No architecture specified for model '{resolved_name}'")
-
-    rejected: List[str] = []
-    for architecture_name in candidates:
-      architecture_class = self.manager.get_architecture_class(architecture_name)
-      if architecture_class is None:
-        rejected.append(f"{architecture_name}: not installed")
-        continue
-
-      deployment_name = getattr(architecture_class, 'deployment', "")
-      deployment = self.manager.get_deployment_plugin(deployment_name) if deployment_name else None
-      if deployment is None:
-        rejected.append(f"{architecture_name}: deployment '{deployment_name}' unavailable")
-        continue
-
-      if deployment.api and deployment_preference != "any":
-        rejected.append(
-          f"{architecture_name}: api deployment excluded by preference '{deployment_preference}'"
-        )
-        continue
-
-      node = self._pick_node(deployment_preference)
-      if node is None:
-        rejected.append(
-          f"{architecture_name}: no node allowed by preference '{deployment_preference}'"
-        )
-        continue
-
-      provider_model_name = resolved_name
-      identifiers = getattr(definition, 'identifiers', None) or {}
-      if architecture_name in identifiers:
-        provider_model_name = identifiers[architecture_name]
-
-      plan = ServingPlan(
-        model_name=resolved_name,
-        provider_model_name=provider_model_name,
-        architecture_name=architecture_name,
-        deployment_name=deployment_name,
-        node_name=node.info.name,
-      )
-      return plan, definition, architecture_class, deployment, node
-
-    detail = "; ".join(rejected)
-    raise ResolveError(f"No serving pairing for model '{resolved_name}': {detail}")
-
-  def _pick_node(self, deployment_preference: str):
-    """Return the first node allowed by the preference, or ``None``."""
-    for node in self.manager.iter_node_instances():
-      if node.remote and deployment_preference == "local-only":
-        continue
-      return node
-    return None
-
   def _run_stream(
     self,
     model_name: str,
     conversation: Conversation,
     system: Optional[str] = None,
+    solution: Optional[SolverResult] = None,
     **kwargs
   ) -> GenerateStream:
     """
     Internal: solve the serving pairing and hand the call to the node.
     Returns a ``GenerateStream``; raises ``ResolveError`` when no
-    pairing satisfies the request.
+    pairing satisfies the request. Pass ``solution`` to skip solve.
     """
     logger.debug(f"Running model {model_name}")
 
@@ -507,13 +409,22 @@ class Registry:
       kwargs.pop("system", None)
     if isinstance(system, str):
       system = system.strip() or None
+    if solution is None:
+      solution = kwargs.pop("solution", None)
+    else:
+      kwargs.pop("solution", None)
 
     combined_kwargs = {**self._user_kwargs, **kwargs}
-    deployment_preference = combined_kwargs.pop("deployment_preference", None) or "any"
+    combined_kwargs.pop("tool_mode", None)
+    deployment_preference = combined_kwargs.pop("deployment_preference", None)
 
-    plan, definition, architecture_class, deployment, node = self._resolve_serving(
-      model_name, deployment_preference
-    )
+    if solution is None:
+      solution = self.solver.solve(model_name, deployment_preference)
+    plan = solution.plan
+    definition = solution.definition
+    architecture_class = solution.architecture_class
+    deployment = solution.deployment
+    node = solution.node
     logger.debug(
       f"Solve result: model={plan.model_name} arch={plan.architecture_name} "
       f"deployment={plan.deployment_name} node={plan.node_name}"
@@ -547,6 +458,7 @@ class Registry:
     conversation: Conversation,
     streaming: bool = False,
     system: Optional[str] = None,
+    solution: Optional[SolverResult] = None,
     **kwargs
   ) -> Union[Result, GenerateStream]:
     """
@@ -566,18 +478,24 @@ class Registry:
           ``SYSTEM`` turn on the sequence for this call only; not
           stored on the conversation.
         **kwargs: Forwarded to the serving stack
-          (``deployment_preference`` filters the solve: ``local-only``,
-          ``remote``, or ``any``).
+          (``deployment_preference`` is a ``DeploymentPreference``
+          or its value; ``solution`` is a prefetched
+          ``SolverResult`` that skips solve; ``tool_mode`` is a
+          registry setting, not an architecture kwarg).
 
     Returns:
         ``Result`` (streaming=False) or ``GenerateStream``
         (streaming=True).
     """
     if streaming:
-      return self._run_stream(model_name, conversation, system=system, **kwargs)
+      return self._run_stream(
+        model_name, conversation, system=system, solution=solution, **kwargs
+      )
 
     try:
-      stream = self._run_stream(model_name, conversation, system=system, **kwargs)
+      stream = self._run_stream(
+        model_name, conversation, system=system, solution=solution, **kwargs
+      )
       full_response = ""
       for chunk in stream:
         if isinstance(chunk, TextChunk) and isinstance(chunk.data, str):
@@ -595,6 +513,7 @@ class Registry:
     model_name: str,
     conversation: Conversation,
     system: Optional[str] = None,
+    solution: Optional[SolverResult] = None,
     **kwargs
   ) -> Iterator[str]:
     """
@@ -604,7 +523,7 @@ class Registry:
     data of each ``TextChunk``, skipping non-text chunks.
     """
     for chunk in self._run_stream(
-      model_name, conversation, system=system, **kwargs
+      model_name, conversation, system=system, solution=solution, **kwargs
     ):
       if isinstance(chunk, TextChunk):
         yield chunk.data if isinstance(chunk.data, str) else str(chunk.data)

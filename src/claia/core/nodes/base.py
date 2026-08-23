@@ -29,7 +29,7 @@ class BaseNode(ABC):
   info: ClassVar[NodeInfo]
 
   #: True when the node hosts compute off this machine. The solver's
-  #: ``deployment_preference`` filter reads this.
+  #: ``DeploymentPreference`` filter reads this.
   remote: ClassVar[bool] = False
 
   def __init__(self):

@@ -8,7 +8,7 @@ the hosting node.
 
 - `base.py` — `BaseDeployment`: `deploy` / `teardown` / `run` (the
   relay + metering path) and the `api` class attribute the solver's
-  `deployment_preference` filter reads.
+  `DeploymentPreference` filter reads.
 - `api.py` — session factory + metering relay for hosted-API
   architectures.
 - `transformers.py` — in-process weight loading and release for

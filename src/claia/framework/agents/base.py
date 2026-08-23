@@ -15,13 +15,14 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Type
 
 from ...core.data.artifacts import ToolArtifact
-from ...core.data.chunks import AudioChunk, BaseChunk, ImageChunk, TextChunk
+from ...core.data.chunks import AudioChunk, BaseChunk, ImageChunk, TextChunk, ToolChunk
 from ...core.data.models import AudioArtifact, ImageArtifact
 from ...core.enums.agent import AgentStatus
 from ...core.enums.conversation import MessageRole
 from ...core.enums.data import AudioFormat, ImageFormat
 from ...core.enums.parser import TagType
 from ...core.enums.task import TaskEvent, TaskStatus
+from ...core.enums.tools import ToolMode
 from ...core.parser import (
   ParseError,
   ParseEvent,
@@ -144,13 +145,16 @@ class BaseAgent:
     # drop them so they never reach the model call.
     kwargs.pop("model_id", None)
     kwargs.pop(cls.ROUND_PARAMETER, None)
-
+    requested_mode = cls._requested_tool_mode(registry, task, kwargs)
     model_id = task.parameters["model_id"]
+    solution = cls._prefetch_solution(registry, model_id, task, kwargs)
+    tool_mode = cls._effective_tool_mode(requested_mode, solution)
     round_index = int(task.parameters.get(cls.ROUND_PARAMETER, 0))
     tag_specs = cls.resolve_tag_specs(registry, model_id)
+    tools = registry.list_tools() if tool_mode is ToolMode.MANUAL else []
     composed = cls.compose_system_prompt(
       system,
-      tools=registry.list_tools(),
+      tools=tools,
       tag_specs=tag_specs,
     )
 
@@ -160,6 +164,8 @@ class BaseAgent:
       model_id=model_id,
       system=composed,
       tag_specs=tag_specs,
+      tool_mode=tool_mode,
+      solution=solution,
       **kwargs,
     )
     task.parameters[cls.ROUND_PARAMETER] = round_index + 1
@@ -180,14 +186,19 @@ class BaseAgent:
     model_id: str,
     system: str,
     tag_specs,
+    tool_mode: ToolMode = ToolMode.MANUAL,
+    solution=None,
     **kwargs,
   ) -> Tuple[str, List[Tuple[str, str]], bool]:
     """One assistant stream: tokens, parse, tool dispatch.
 
     Returns ``(text, tool_results, cancelled)``. Tool results are
-    attached as ``ToolArtifact``s on the parsed TOOL utilities. The
-    caller decides whether to generate again.
+    attached as ``ToolArtifact``s on TOOL utilities. MANUAL accepts
+    parser TOOL tags; NATIVE accepts ``ToolChunk``s. The caller
+    decides whether to generate again.
     """
+    kwargs.pop("tool_mode", None)
+    kwargs.pop("solution", None)
     conversation = task.conversation
     streaming_message = conversation.start_streaming_message(MessageRole.ASSISTANT)
     logger.info(
@@ -202,7 +213,12 @@ class BaseAgent:
 
     try:
       for chunk in registry.run(
-        model_id, conversation, streaming=True, system=system, **kwargs
+        model_id,
+        conversation,
+        streaming=True,
+        system=system,
+        solution=solution,
+        **kwargs,
       ):
         if task.cancel_requested:
           cancelled = True
@@ -213,6 +229,17 @@ class BaseAgent:
             cls._attach_image_chunk(task, streaming_message.message_id, chunk)
           elif isinstance(chunk, AudioChunk):
             cls._attach_audio_chunk(task, streaming_message.message_id, chunk)
+          elif isinstance(chunk, ToolChunk) and tool_mode is ToolMode.NATIVE:
+            result = cls._accept_tool_chunk(
+              chunk,
+              registry=registry,
+              conversation=conversation,
+              streaming_message_id=streaming_message.message_id,
+              tool_kwargs=kwargs,
+              task=task,
+            )
+            if result is not None:
+              tool_results.append(result)
           task.emit(TaskEvent.CHUNK, chunk)
           continue
 
@@ -229,6 +256,7 @@ class BaseAgent:
           streaming_message_id=streaming_message.message_id,
           tool_kwargs=kwargs,
           task=task,
+          tool_mode=tool_mode,
         ))
 
       if not cancelled:
@@ -239,6 +267,7 @@ class BaseAgent:
           streaming_message_id=streaming_message.message_id,
           tool_kwargs=kwargs,
           task=task,
+          tool_mode=tool_mode,
         ))
 
       if cancelled:
@@ -421,6 +450,51 @@ class BaseAgent:
     return None
 
   # ------------------------------------------------------------------
+  # Tool mode / solve prefetch
+  # ------------------------------------------------------------------
+  @classmethod
+  def _requested_tool_mode(cls, registry, task, kwargs) -> ToolMode:
+    requested = kwargs.pop("tool_mode", None)
+    if requested is None:
+      requested = task.parameters.get("tool_mode")
+    if requested is None:
+      requested = getattr(registry, "_user_kwargs", {}).get("tool_mode")
+    return cls._coerce_tool_mode(requested)
+
+  @staticmethod
+  def _coerce_tool_mode(requested) -> ToolMode:
+    if requested is None:
+      return ToolMode.MANUAL
+    if isinstance(requested, ToolMode):
+      return requested
+    try:
+      return ToolMode(requested)
+    except ValueError:
+      return ToolMode.MANUAL
+
+  @staticmethod
+  def _effective_tool_mode(requested: ToolMode, solution) -> ToolMode:
+    if (
+      requested is ToolMode.NATIVE
+      and solution is not None
+      and getattr(solution, "supports_native_tools", False)
+    ):
+      return ToolMode.NATIVE
+    return ToolMode.MANUAL
+
+  @classmethod
+  def _prefetch_solution(cls, registry, model_id: str, task, kwargs):
+    solver = getattr(registry, "solver", None)
+    if solver is None:
+      return None
+    preference = kwargs.get("deployment_preference")
+    if preference is None:
+      preference = task.parameters.get("deployment_preference")
+    if preference is None:
+      preference = getattr(registry, "_user_kwargs", {}).get("deployment_preference")
+    return solver.solve(model_id, preference or "any")
+
+  # ------------------------------------------------------------------
   # Parser / tools
   # ------------------------------------------------------------------
   @classmethod
@@ -442,6 +516,7 @@ class BaseAgent:
     streaming_message_id: str,
     tool_kwargs: dict,
     task=None,
+    tool_mode: ToolMode = ToolMode.MANUAL,
   ) -> List[Tuple[str, str]]:
     results: List[Tuple[str, str]] = []
     for ev in events:
@@ -461,6 +536,7 @@ class BaseAgent:
           streaming_message_id=streaming_message_id,
           tool_kwargs=tool_kwargs,
           task=task,
+          tool_mode=tool_mode,
         )
         if result is not None:
           results.append(result)
@@ -476,65 +552,114 @@ class BaseAgent:
     streaming_message_id: str,
     tool_kwargs: dict,
     task=None,
+    tool_mode: ToolMode = ToolMode.MANUAL,
   ) -> Optional[Tuple[str, str]]:
-    utility = conversation.append_utility(
-      tag_type=ev.tag_type,
-      content=ev.content,
-      source_message_id=streaming_message_id,
-      start_index=ev.start_index,
-      end_index=ev.end_index,
-      attributes=dict(ev.attributes) if ev.attributes else None,
-    )
-
     if ev.tag_type is not TagType.TOOL:
+      conversation.append_utility(
+        tag_type=ev.tag_type,
+        content=ev.content,
+        source_message_id=streaming_message_id,
+        start_index=ev.start_index,
+        end_index=ev.end_index,
+        attributes=dict(ev.attributes) if ev.attributes else None,
+      )
       return None
 
-    name = cls._extract_tool_name(ev) or "unknown"
-    logger.info("Tool call detected: %s", name)
-    result = cls._dispatch_tool_event(
-      ev,
+    if tool_mode is not ToolMode.MANUAL:
+      return None
+
+    return cls._accept_tool_call(
+      name=cls._extract_tool_name(ev),
+      raw_payload=ev.content,
       registry=registry,
       conversation=conversation,
+      streaming_message_id=streaming_message_id,
       tool_kwargs=tool_kwargs,
+      task=task,
+      attributes=ev.attributes,
+      start_index=ev.start_index,
+      end_index=ev.end_index,
     )
-    artifact = ToolArtifact.from_result(result[0], result[1])
-    conversation.attach_artifact(utility.message_id, artifact)
-    if task is not None:
-      task.emit(TaskEvent.ARTIFACT, artifact, utility.message_id)
-    logger.info("Tool call processed: %s", result[0])
-    logger.info("%s", artifact.result_text())
-    return result
 
   @classmethod
-  def _dispatch_tool_event(
+  def _accept_tool_chunk(
     cls,
-    ev: TagEvent,
+    chunk: ToolChunk,
     *,
     registry,
     conversation,
+    streaming_message_id: str,
     tool_kwargs: dict,
+    task=None,
   ) -> Tuple[str, str]:
-    name = cls._extract_tool_name(ev)
+    args = chunk.payload if chunk.payload is not None else chunk.data
+    if not isinstance(args, dict):
+      args = {}
+    name = (chunk.tool_name or "").strip() or None
+    raw_payload = json.dumps({"name": name or "", "parameters": args})
+    return cls._accept_tool_call(
+      name=name,
+      raw_payload=raw_payload,
+      registry=registry,
+      conversation=conversation,
+      streaming_message_id=streaming_message_id,
+      tool_kwargs=tool_kwargs,
+      task=task,
+      call_id=chunk.call_id,
+    )
+
+  @classmethod
+  def _accept_tool_call(
+    cls,
+    *,
+    name: Optional[str],
+    raw_payload: str,
+    registry,
+    conversation,
+    streaming_message_id: str,
+    tool_kwargs: dict,
+    task=None,
+    attributes=None,
+    start_index=None,
+    end_index=None,
+    call_id=None,
+  ) -> Tuple[str, str]:
+    utility = conversation.append_utility(
+      tag_type=TagType.TOOL,
+      content=raw_payload,
+      source_message_id=streaming_message_id,
+      start_index=start_index,
+      end_index=end_index,
+      attributes=dict(attributes) if attributes else None,
+    )
+
+    display = name or "unknown"
+    logger.info("Tool call detected: %s", display)
+
     if not name:
-      return (
-        "unknown",
-        f"[TOOL_ERROR] Tool call missing 'name' (tag attributes={ev.attributes})",
-      )
+      qualified = "unknown"
+      body = f"[TOOL_ERROR] Tool call missing 'name' (tag attributes={attributes})"
+    else:
+      qualified = registry.resolve_qualified_name(name) or name
+      try:
+        result = registry.execute_tool(
+          qualified,
+          raw_payload,
+          conversation,
+          **tool_kwargs,
+        )
+        body = cls._render_result(result)
+      except Exception as exc:
+        logger.exception("Error executing tool %r", qualified)
+        body = f"[TOOL_ERROR] {exc}"
 
-    qualified = registry.resolve_qualified_name(name) or name
-
-    try:
-      result = registry.execute_tool(
-        qualified,
-        ev.content,
-        conversation,
-        **tool_kwargs,
-      )
-    except Exception as exc:
-      logger.exception("Error executing tool %r", qualified)
-      return (qualified, f"[TOOL_ERROR] {exc}")
-
-    return (qualified, cls._render_result(result))
+    artifact = ToolArtifact.from_result(qualified, body, call_id=call_id)
+    conversation.attach_artifact(utility.message_id, artifact)
+    if task is not None:
+      task.emit(TaskEvent.ARTIFACT, artifact, utility.message_id)
+    logger.info("Tool call processed: %s", qualified)
+    logger.info("%s", artifact.result_text())
+    return (qualified, body)
 
   @staticmethod
   def _extract_tool_name(ev: TagEvent) -> Optional[str]:
