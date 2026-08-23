@@ -16,6 +16,7 @@ from .tools import (
 from .wire import iter_sse, provider_error
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
+from ...data.request import AgentRequest
 from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.plugins import ParamScope, ParamCategory
@@ -25,7 +26,6 @@ from ...plugins.base import (
 )
 from ...results import DeploymentError
 from ..base import APIArchitecture
-from ..base.base import ModelInputs
 
 
 ########################################################################
@@ -62,13 +62,14 @@ class OpenAIArchitecture(APIArchitecture):
 
   def generate(
     self,
-    inputs: ModelInputs,
-    **kwargs,
+    request: AgentRequest,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate a response using OpenAI's Responses API."""
+    inputs = request.inputs
+    args = request.args
     if not isinstance(inputs, MessageSequence):
       raise TypeError("OpenAIArchitecture expects a MessageSequence input")
-    tools = kwargs.pop("tools", None)
+    tools = args.get("tools")
     instructions, input_messages = self._convert_sequence(inputs, native=bool(tools))
 
     _skip = {"stream", "max_tokens", "n", "stop", "top_k", "tools"}
@@ -76,7 +77,7 @@ class OpenAIArchitecture(APIArchitecture):
       "model": self.model_name,
       "input": input_messages,
       "store": False,
-      **{k: v for k, v in kwargs.items() if v is not None and k not in _skip},
+      **{k: v for k, v in args.items() if v is not None and k not in _skip},
     }
     if tools:
       request_data["tools"] = openai_responses_tools(tools)
@@ -84,11 +85,11 @@ class OpenAIArchitecture(APIArchitecture):
     if instructions:
       request_data["instructions"] = instructions
 
-    max_tokens = kwargs.get("max_tokens")
+    max_tokens = args.get("max_tokens")
     if max_tokens is not None:
       request_data["max_output_tokens"] = max_tokens
 
-    if kwargs.get("stream", False):
+    if args.get("stream", False):
       return (yield from self._generate_streaming(request_data, tools=tools))
     return (yield from self._generate_blocking(request_data, tools=tools))
 

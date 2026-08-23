@@ -10,10 +10,10 @@ from typing import Generator
 
 from ..base import BaseArchitecture
 from ...data.chunks import BaseChunk, TextChunk
+from ...data.request import AgentRequest
 from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.data import TextFormat
-from ..base.base import ModelInputs
 
 
 ########################################################################
@@ -128,13 +128,12 @@ class DummyArchitecture(BaseArchitecture):
 
   def generate(
     self,
-    inputs: ModelInputs,
-    **kwargs,
+    request: AgentRequest,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Stream the story as TextChunks; return a ModelResponse."""
-    del inputs  # Dummy ignores input content
-    chars_per_second = kwargs.get("chars_per_second", CHARS_PER_SECOND)
-    chars_per_chunk = kwargs.get("chars_per_chunk", CHARS_PER_CHUNK)
+    args = request.args
+    chars_per_second = args.get("chars_per_second", CHARS_PER_SECOND)
+    chars_per_chunk = args.get("chars_per_chunk", CHARS_PER_CHUNK)
     logger.debug(
       f"Generating at {chars_per_second} chars/s in chunks of {chars_per_chunk}"
     )

@@ -6,7 +6,7 @@ import importlib
 import sys
 import types
 
-from claia.core.data import Conversation
+from claia.core.data import AgentRequest, Conversation
 from claia.core.data.chunks import AudioChunk, TextChunk
 from claia.core.enums.conversation import MessageRole
 
@@ -61,6 +61,17 @@ def _import_tts_module(monkeypatch):
   return importlib.import_module("claia.core.architectures.transformers.tts")
 
 
+def _request(inputs, **args):
+  return AgentRequest(
+    model="test",
+    provider_model="test",
+    architecture_class=object,
+    deployment=None,
+    inputs=inputs,
+    args=args,
+  )
+
+
 def _artifacts(conversation):
   from claia.core.definitions.model_definition import ModelDefinition
   from claia.core.enums.data import ArtifactType
@@ -86,12 +97,12 @@ def test_local_tts_model_yields_text_and_audio_chunks(monkeypatch):
     huggingface_api_token="hf_test",
   )
 
-  chunks = list(model.generate(
+  chunks = list(model.generate(_request(
     _artifacts(_conversation()),
     language="English",
     reference_audio_path="/tmp/ref.wav",
     response_format="wav",
-  ))
+  )))
 
   assert isinstance(chunks[0], TextChunk)
   assert chunks[0].data == "Generated audio."
@@ -119,11 +130,11 @@ def test_local_tts_model_allows_prompt_override(monkeypatch):
   tts = _import_tts_module(monkeypatch)
   model = tts.TTSArchitecture("example/tts", defer_loading=True)
 
-  chunks = list(model.generate(
+  chunks = list(model.generate(_request(
     _artifacts(_conversation()),
     prompt="Override text.",
     reference_audio_path="/tmp/ref.wav",
-  ))
+  )))
 
   assert chunks[1].metadata["prompt"] == "Override text."
   assert "reference_text" not in chunks[1].metadata
@@ -137,4 +148,4 @@ def test_local_tts_model_raises_on_missing_qwen_reference_audio(monkeypatch):
   model = tts.TTSArchitecture("Qwen/Qwen3-TTS-12Hz-0.6B-Base", defer_loading=True)
 
   with pytest.raises(ValueError, match="reference_audio_path"):
-    list(model.generate(_artifacts(_conversation())))
+    list(model.generate(_request(_artifacts(_conversation()))))

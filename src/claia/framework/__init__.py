@@ -43,6 +43,8 @@ from ..core.data import (
   AudioChunk,
   RawChunk,
   ToolChunk,
+  AgentRequest,
+  ModelInputs,
   ModelResponse,
   GenerateStream,
   DomainEvent,
@@ -102,6 +104,7 @@ __all__ = [
   "FileArtifact", "LinkArtifact", "RawArtifact", "Prompt",
   "BaseChunk", "TextChunk", "ImageChunk", "AudioChunk", "RawChunk",
   "ToolChunk",
+  "AgentRequest", "ModelInputs",
   "ModelResponse", "GenerateStream",
   "DomainEvent", "EventType",
   # Plugin metadata

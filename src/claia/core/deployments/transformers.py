@@ -7,9 +7,10 @@ the architecture instance — which is where weight loading happens —
 and teardown releases the weights.
 """
 
-from typing import Any, Dict, Type
+from typing import Any
 
 from .base import BaseDeployment
+from ..data.request import AgentRequest
 from ..decorators import deployment
 
 
@@ -20,18 +21,13 @@ from ..decorators import deployment
 class TransformersDeployment(BaseDeployment):
   """In-process weight loading and release for local architectures."""
 
-  def deploy(
-    self,
-    architecture_class: Type,
-    model_name: str,
-    init_kwargs: Dict[str, Any],
-  ) -> Any:
-    ctor_kwargs = dict(init_kwargs)
+  def deploy(self, request: AgentRequest) -> Any:
+    ctor_kwargs = dict(request.init_args)
     device = ctor_kwargs.pop("device", "cpu")
     model_path = ctor_kwargs.pop("model_path", None)
     defer_loading = ctor_kwargs.pop("defer_loading", False)
-    return architecture_class(
-      model_name=model_name,
+    return request.architecture_class(
+      model_name=request.provider_model,
       model_path=model_path,
       defer_loading=defer_loading,
       device=device,

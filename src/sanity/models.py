@@ -1,20 +1,20 @@
 """Sanity: exercise model implementations standalone (no Registry).
 
-Start here with DummyModel. Swap MODULE / run_* helpers as more models
-are validated. Keep this file minimal and disposable.
+Start here with DummyArchitecture. Swap MODULE / run_* helpers as more
+models are validated. Keep this file minimal and disposable.
 """
 
-from claia.core.data import Conversation, ModelResponse, TextChunk
+from claia.core.architectures.dummy.dummy import DummyArchitecture
+from claia.core.data import AgentRequest, Conversation, ModelResponse, TextChunk
 from claia.core.data.models.conversation.message_sequence import MessageSequence
 from claia.core.definitions.model_definition import ModelDefinition
 from claia.core.deployments.dummy import DummyDeployment
 from claia.core.enums.conversation import MessageRole
 from claia.core.enums.data import ArtifactType
-from claia.core.models.dummy import DummyModel
 
-MODULE = DummyModel
+MODULE = DummyArchitecture
 
-# Visible streaming for manual sanity runs (DummyModel defaults).
+# Visible streaming for manual sanity runs (DummyArchitecture defaults).
 STREAM_KWARGS = {
   "chars_per_second": 2000,
   "chars_per_chunk": 20,
@@ -42,8 +42,19 @@ def _definition():
   )
 
 
+def _request(inputs, **args):
+  return AgentRequest(
+    model="dummy",
+    provider_model="dummy-model",
+    architecture_class=MODULE,
+    deployment=None,
+    inputs=inputs,
+    args=args,
+  )
+
+
 def run_model():
-  """Construct DummyModel directly and stream a response."""
+  """Construct DummyArchitecture directly and stream a response."""
   model = MODULE(model_name="dummy-model")
   conversation = Conversation(title="sanity-models")
   conversation.add_message(MessageRole.USER, "Tell me a story.")
@@ -55,7 +66,7 @@ def run_model():
   print(f"sequence turns: {len(sequence)} ({type(sequence).__name__})")
   print()
 
-  chunks, response = drain(model.generate(sequence, **STREAM_KWARGS))
+  chunks, response = drain(model.generate(_request(sequence, **STREAM_KWARGS)))
 
   assert isinstance(response, ModelResponse)
   preview = response.text()[:120].replace("\n", " ")
@@ -77,14 +88,16 @@ def run_deployment():
 
   print(f"deployment: {info.name} - {info.description}")
 
-  chunks, _ = drain(deployment.run(
-    model_name="dummy-model",
-    model_class=MODULE,
+  request = AgentRequest(
+    model="dummy",
+    provider_model="dummy-model",
+    architecture_class=MODULE,
+    deployment=deployment,
     inputs=conversation.to_model_inputs(_definition()),
-    cache={},
-    init_kwargs={},
-    runtime_kwargs=STREAM_KWARGS,
-  ))
+    args=STREAM_KWARGS,
+  )
+  instance = deployment.deploy(request)
+  chunks, _ = drain(deployment.run(instance, request))
 
   preview = "".join(
     c.data for c in chunks if isinstance(c, TextChunk)

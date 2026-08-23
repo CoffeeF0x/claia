@@ -5,9 +5,10 @@ Serves the dummy architecture; also the minimal reference for the
 deployment seam.
 """
 
-from typing import Any, Dict, Type
+from typing import Any
 
 from .base import BaseDeployment
+from ..data.request import AgentRequest
 from ..decorators import deployment
 
 
@@ -18,11 +19,6 @@ from ..decorators import deployment
 class DummyDeployment(BaseDeployment):
   """Deployment for the dummy architecture."""
 
-  def deploy(
-    self,
-    architecture_class: Type,
-    model_name: str,
-    init_kwargs: Dict[str, Any],
-  ) -> Any:
+  def deploy(self, request: AgentRequest) -> Any:
     # The dummy architecture takes no init-time configuration.
-    return architecture_class(model_name=model_name)
+    return request.architecture_class(model_name=request.provider_model)

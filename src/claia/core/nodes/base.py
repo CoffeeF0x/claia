@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import logging
 from abc import ABC
-from typing import Any, ClassVar, Dict, Optional, Tuple, Type
+from typing import Any, ClassVar, Dict, Optional, Tuple
 
+from ..data.request import AgentRequest
 from ..data.response import GenerateStream
-from ..deployments.base import BaseDeployment, ModelInputs
+from ..deployments.base import BaseDeployment
 from ..plugins.base import NodeInfo
 
 
@@ -50,47 +51,34 @@ class BaseNode(ABC):
   # ------------------------------------------------------------------
   # Serving
   # ------------------------------------------------------------------
-  def run(
-    self,
-    deployment: BaseDeployment,
-    architecture_class: Type,
-    model_name: str,
-    inputs: ModelInputs,
-    init_kwargs: Dict[str, Any],
-    runtime_kwargs: Dict[str, Any],
-  ) -> GenerateStream:
+  def run(self, request: AgentRequest) -> GenerateStream:
     """Serve one generate call: reuse or provision, then stream.
 
     Returns a ``GenerateStream`` — iterate it for chunks, read
     ``.response`` after exhaustion for the terminal ``ModelResponse``.
     """
-    instance = self._resolve_instance(
-      deployment, architecture_class, model_name, init_kwargs
-    )
-    return GenerateStream(deployment.run(instance, inputs, runtime_kwargs))
+    instance = self._resolve_instance(request)
+    return GenerateStream(request.deployment.run(instance, request))
 
   @staticmethod
   def instance_key(model_name: str, deployment_name: str, architecture_name: str) -> str:
     """Key identifying one deployed instance on this node."""
     return f"{model_name}:{deployment_name}:{architecture_name}"
 
-  def _resolve_instance(
-    self,
-    deployment: BaseDeployment,
-    architecture_class: Type,
-    model_name: str,
-    init_kwargs: Dict[str, Any],
-  ) -> Any:
+  def _resolve_instance(self, request: AgentRequest) -> Any:
     """Return a hosted instance, deploying one if none is cached."""
+    architecture_class = request.architecture_class
     architecture_name = getattr(getattr(architecture_class, "info", None), "name", architecture_class.__name__)
-    key = self.instance_key(model_name, deployment.info.name, architecture_name)
+    key = self.instance_key(
+      request.model, request.deployment.info.name, architecture_name
+    )
     if key in self._instances:
       logger.debug(f"Reusing deployed instance {key} on node {self.info.name}")
       return self._instances[key][1]
 
     logger.debug(f"Deploying {key} on node {self.info.name}")
-    instance = deployment.deploy(architecture_class, model_name, init_kwargs)
-    self._instances[key] = (deployment, instance)
+    instance = request.deployment.deploy(request)
+    self._instances[key] = (request.deployment, instance)
     return instance
 
   # ------------------------------------------------------------------

@@ -13,13 +13,13 @@ from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from ...data.artifacts import BaseArtifact, TextArtifact
 from ...data.chunks import AudioChunk, BaseChunk, TextChunk
+from ...data.request import AgentRequest, ModelInputs
 from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.data import AudioFormat
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import ParamSpec
 from ..base import LocalArchitecture
-from ..base.base import ModelInputs
 
 
 logger = logging.getLogger(__name__)
@@ -174,17 +174,18 @@ class TTSArchitecture(LocalArchitecture):
 
   def generate(
     self,
-    inputs: ModelInputs,
-    **kwargs,
+    request: AgentRequest,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate speech audio from text artifact input or a prompt override."""
     chunks: list = []
     if not self.loaded:
       self.load()
 
-    text = self._resolve_text(inputs, kwargs.get("prompt") or kwargs.get("input"))
-    response_format = self._normalize_response_format(kwargs.get("response_format"))
-    backend_kwargs = dict(kwargs)
+    inputs = request.inputs
+    args = request.args
+    text = self._resolve_text(inputs, args.get("prompt") or args.get("input"))
+    response_format = self._normalize_response_format(args.get("response_format"))
+    backend_kwargs = dict(args)
     backend_kwargs.pop("response_format", None)
     audio_bytes, metadata = self.backend.synthesize(
       text=text,

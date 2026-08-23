@@ -56,8 +56,8 @@ class Gemma3Architecture(GenericTransformerArchitecture):
 
   Generation defaults (``max_tokens``, ``temperature``, ``top_p``,
   ``top_k``) override the inherited generic stack as RUNTIME
-  ``ParamSpec`` entries; the framework resolves them into ``kwargs``
-  before calling ``generate``.
+  ``ParamSpec`` entries; the framework resolves them into
+  ``request.args`` before calling ``generate``.
   """
 
   def __init__(self, model_name: str, model_path: str, defer_loading: bool = False, device: str = "cpu", huggingface_api_token: Optional[str] = None):

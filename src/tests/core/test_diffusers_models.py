@@ -6,7 +6,7 @@ import importlib
 import sys
 import types
 
-from claia.core.data import Conversation
+from claia.core.data import AgentRequest, Conversation
 from claia.core.data.chunks import ImageChunk, TextChunk
 from claia.core.data.response import ModelResponse
 from claia.core.deployments.transformers import TransformersDeployment
@@ -83,6 +83,17 @@ def _import_diffusers_module(monkeypatch):
   return importlib.import_module("claia.core.architectures.transformers.diffusers")
 
 
+def _request(inputs, **args):
+  return AgentRequest(
+    model="test",
+    provider_model="test",
+    architecture_class=object,
+    deployment=None,
+    inputs=inputs,
+    args=args,
+  )
+
+
 def _artifacts(conversation):
   from claia.core.definitions.model_definition import ModelDefinition
   from claia.core.enums.data import ArtifactType
@@ -106,7 +117,7 @@ def test_diffusers_model_yields_text_and_image_chunks(monkeypatch):
     huggingface_api_token="hf_test",
   )
 
-  chunks = list(model.generate(
+  chunks = list(model.generate(_request(
     _artifacts(_conversation()),
     height=32,
     width=64,
@@ -116,7 +127,7 @@ def test_diffusers_model_yields_text_and_image_chunks(monkeypatch):
     seed=123,
     num_images=1,
     output_format="png",
-  ))
+  )))
 
   assert isinstance(chunks[0], TextChunk)
   assert chunks[0].data == "Generated 1 image."
@@ -145,10 +156,10 @@ def test_diffusers_model_allows_prompt_override(monkeypatch):
   diffusers = _import_diffusers_module(monkeypatch)
   model = diffusers.DiffusersArchitecture("example/image-model", defer_loading=True)
 
-  chunks = list(model.generate(
+  chunks = list(model.generate(_request(
     _artifacts(_conversation()),
     prompt="Override prompt",
-  ))
+  )))
 
   assert chunks[1].metadata["prompt"] == "Override prompt"
   assert FakePipeline.loaded[0].calls[0]["prompt"] == "Override prompt"
@@ -165,13 +176,20 @@ def test_transformers_deployment_passes_image_chunks_through():
     def __init__(self, model_name, model_path=None, defer_loading=False, device="cpu"):
       self.model_name = model_name
 
-    def generate(self, inputs, **kwargs):
+    def generate(self, request):
       yield image_chunk
       return ModelResponse(chunks=[image_chunk], complete=True)
 
   deployment = TransformersDeployment()
-  instance = deployment.deploy(ImageArchitecture, "fake-image-model", {})
-  chunks = list(deployment.run(instance, _artifacts(_conversation()), {}))
+  request = AgentRequest(
+    model="fake-image-model",
+    provider_model="fake-image-model",
+    architecture_class=ImageArchitecture,
+    deployment=deployment,
+    inputs=_artifacts(_conversation()),
+  )
+  instance = deployment.deploy(request)
+  chunks = list(deployment.run(instance, request))
 
   assert len(chunks) == 1
   assert isinstance(chunks[0], ImageChunk)

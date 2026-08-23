@@ -15,13 +15,13 @@ from diffusers import DiffusionPipeline
 
 from ...data.artifacts import BaseArtifact, TextArtifact
 from ...data.chunks import BaseChunk, ImageChunk, TextChunk
+from ...data.request import AgentRequest, ModelInputs
 from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.data import ImageFormat
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import ParamSpec
 from ..base import LocalArchitecture
-from ..base.base import ModelInputs
 
 
 logger = logging.getLogger(__name__)
@@ -216,16 +216,17 @@ class DiffusersArchitecture(LocalArchitecture):
 
   def generate(
     self,
-    inputs: ModelInputs,
-    **kwargs,
+    request: AgentRequest,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate one or more images from text artifact input."""
     chunks: list = []
     if not self.loaded:
       self.load()
 
-    prompt = self._resolve_prompt(inputs, kwargs.get("prompt"))
-    pipeline_kwargs = self._build_pipeline_kwargs(prompt, kwargs)
+    inputs = request.inputs
+    args = request.args
+    prompt = self._resolve_prompt(inputs, args.get("prompt"))
+    pipeline_kwargs = self._build_pipeline_kwargs(prompt, args)
 
     output = self.pipeline(**pipeline_kwargs)
     images = list(getattr(output, "images", []) or [])
@@ -238,7 +239,7 @@ class DiffusersArchitecture(LocalArchitecture):
     chunks.append(summary)
     yield summary
 
-    output_format = self._normalize_output_format(kwargs.get("output_format"))
+    output_format = self._normalize_output_format(args.get("output_format"))
     media_type = SUPPORTED_OUTPUT_FORMATS[output_format]
     try:
       image_fmt = ImageFormat(output_format.lower())
@@ -255,7 +256,7 @@ class DiffusersArchitecture(LocalArchitecture):
           "index": index,
           "model": self.model_name,
           "prompt": prompt,
-          "seed": kwargs.get("seed"),
+          "seed": args.get("seed"),
           "width": getattr(image, "width", None),
           "height": getattr(image, "height", None),
         },

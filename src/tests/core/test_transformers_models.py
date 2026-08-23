@@ -7,7 +7,7 @@ import sys
 import types
 from queue import Queue
 
-from claia.core.data import Conversation
+from claia.core.data import AgentRequest, Conversation
 from claia.core.enums.conversation import MessageRole
 
 
@@ -105,6 +105,17 @@ def _model(monkeypatch):
   return model
 
 
+def _request(inputs, **args):
+  return AgentRequest(
+    model="test",
+    provider_model="test",
+    architecture_class=object,
+    deployment=None,
+    inputs=inputs,
+    args=args,
+  )
+
+
 def _sequence(conversation):
   from claia.core.definitions.model_definition import ModelDefinition
   from claia.core.data.models.conversation.message_sequence import MessageSequence
@@ -124,11 +135,11 @@ def _conversation():
 def test_generic_transformer_streams_text_deltas(monkeypatch):
   model = _model(monkeypatch)
 
-  chunks = list(model.generate(
+  chunks = list(model.generate(_request(
     _sequence(_conversation()),
     stream=True,
     max_tokens=10,
-  ))
+  )))
 
   assert [c.data for c in chunks] == ["hello ", "world"]
 
@@ -136,11 +147,11 @@ def test_generic_transformer_streams_text_deltas(monkeypatch):
 def test_generic_transformer_omits_unset_top_k(monkeypatch):
   model = _model(monkeypatch)
 
-  chunks = list(model.generate(
+  chunks = list(model.generate(_request(
     _sequence(_conversation()),
     stream=False,
     top_k=None,
-  ))
+  )))
 
   assert [c.data for c in chunks] == ["blocked response"]
   assert "top_k" not in model.model.calls[0]

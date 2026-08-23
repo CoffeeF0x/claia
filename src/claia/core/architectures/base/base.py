@@ -3,10 +3,12 @@ Base architecture abstract class.
 
 An architecture owns the inference protocol for a model family:
 input formatting, talking to the served model, parsing output, and
-the family's feature surface. Contract: model inputs in (a
-``MessageSequence`` or artifact list), ``ModelResponse`` out.
-Implementations may yield ``BaseChunk`` items while streaming and
-return the filled ``ModelResponse`` via the generator's return value.
+the family's feature surface. Contract: an ``AgentRequest`` in
+(``request.inputs`` is a ``MessageSequence`` or artifact list;
+``request.args`` holds resolved runtime parameters),
+``ModelResponse`` out. Implementations may yield ``BaseChunk``
+items while streaming and return the filled ``ModelResponse``
+via the generator's return value.
 
 Each architecture declares the deployment that serves it through the
 ``deployment`` class attribute (e.g. ``"api"``, ``"transformers"``);
@@ -14,16 +16,14 @@ the solver follows that link when resolving a model call.
 """
 
 from abc import ABC, abstractmethod
-from typing import ClassVar, Dict, Generator, List, Sequence, Union
+from typing import ClassVar, Dict, Generator, List, Union
 
-from ...data.artifacts import BaseArtifact, ToolArtifact
+from ...data.artifacts import ToolArtifact
 from ...data.chunks import BaseChunk
 from ...data.models.conversation.message_sequence import MessageSequence
+from ...data.request import AgentRequest
 from ...data.response import ModelResponse
 from ...enums.conversation import MessageRole
-
-
-ModelInputs = Union[MessageSequence, Sequence[BaseArtifact], BaseArtifact, List[BaseArtifact]]
 
 
 ########################################################################
@@ -98,15 +98,15 @@ class BaseArchitecture(ABC):
   @abstractmethod
   def generate(
     self,
-    inputs: ModelInputs,
-    **kwargs,
+    request: AgentRequest,
   ) -> Union[ModelResponse, Generator[BaseChunk, None, ModelResponse]]:
-    """Generate a response from model inputs.
+    """Generate a response from an ``AgentRequest``.
 
-    ``inputs`` is either a ``MessageSequence`` / ``MessageSequenceOrdered``
-    or a list of artifacts (possibly empty). Prefer returning a
-    ``ModelResponse`` directly; streaming implementations may yield
-    chunks and ``return`` a ``ModelResponse``.
+    Read ``request.inputs`` (a ``MessageSequence`` /
+    ``MessageSequenceOrdered`` or a list of artifacts) and
+    ``request.args`` (resolved runtime parameters). Prefer returning
+    a ``ModelResponse`` directly; streaming implementations may
+    yield chunks and ``return`` a ``ModelResponse``.
 
     Failure rule: raise when the request cannot start (bad inputs,
     connection refused, provider rejects the request outright); once

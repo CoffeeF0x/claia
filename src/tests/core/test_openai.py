@@ -1,7 +1,7 @@
 """Tests for the OpenAI Responses API architecture."""
 
 from claia.core.architectures.api.openai import OpenAIArchitecture
-from claia.core.data import Conversation
+from claia.core.data import AgentRequest, Conversation
 from claia.core.data.chunks import TextChunk, ToolChunk
 from claia.core.enums.conversation import MessageRole
 from claia.core.plugins.base import ArgumentDefinition, ToolReference
@@ -31,6 +31,17 @@ class RecordingOpenAIArchitecture(OpenAIArchitecture):
   def post(self, endpoint, data, *args, **kwargs):
     self.calls.append((endpoint, data, kwargs))
     return self.response
+
+
+def _request(inputs, **args):
+  return AgentRequest(
+    model="test",
+    provider_model="test",
+    architecture_class=object,
+    deployment=None,
+    inputs=inputs,
+    args=args,
+  )
 
 
 def _sequence(conversation, system=None):
@@ -71,7 +82,7 @@ def test_openai_blocking_text_omits_tools():
   })
   model = RecordingOpenAIArchitecture("gpt-4o-mini", openai_api_token="secret", response=response)
 
-  chunks = list(model.generate(_sequence(_conversation(), system="Be brief"), stream=False))
+  chunks = list(model.generate(_request(_sequence(_conversation(), system="Be brief"), stream=False)))
 
   endpoint, data, _ = model.calls[0]
   assert [c.data for c in chunks] == ["Hi there"]
@@ -93,11 +104,11 @@ def test_openai_sends_responses_tools_and_yields_function_call():
   })
   model = RecordingOpenAIArchitecture("gpt-4o-mini", response=response)
 
-  chunks = list(model.generate(
+  chunks = list(model.generate(_request(
     _sequence(_conversation()),
     stream=False,
     tools=[_echo_ref()],
-  ))
+  )))
 
   _, data, _ = model.calls[0]
   assert data["tools"][0]["name"] == "demo__echo"
@@ -117,11 +128,11 @@ def test_openai_streams_text_and_function_call():
   ])
   model = RecordingOpenAIArchitecture("gpt-4o-mini", response=response)
 
-  chunks = list(model.generate(
+  chunks = list(model.generate(_request(
     _sequence(_conversation()),
     stream=True,
     tools=[_echo_ref()],
-  ))
+  )))
 
   assert [c.data for c in chunks if isinstance(c, TextChunk)] == ["Let me "]
   tool = next(c for c in chunks if isinstance(c, ToolChunk))
@@ -137,7 +148,7 @@ def test_openai_completed_event_emits_function_call_once():
   ])
   model = RecordingOpenAIArchitecture("gpt-4o-mini", response=response)
 
-  chunks = list(model.generate(_sequence(_conversation()), stream=True, tools=[_echo_ref()]))
+  chunks = list(model.generate(_request(_sequence(_conversation()), stream=True, tools=[_echo_ref()])))
   tools = [c for c in chunks if isinstance(c, ToolChunk)]
   assert len(tools) == 1
 
@@ -164,7 +175,7 @@ def test_openai_native_follow_up_uses_function_call_items():
   })
   model = RecordingOpenAIArchitecture("gpt-4o-mini", response=response)
 
-  list(model.generate(sequence, stream=False, tools=[_echo_ref()]))
+  list(model.generate(_request(sequence, stream=False, tools=[_echo_ref()])))
 
   items = model.calls[0][1]["input"]
   assert items[2]["type"] == "function_call"
@@ -181,4 +192,4 @@ def test_openai_raises_on_api_errors():
   model = RecordingOpenAIArchitecture("bad-model", response=response)
 
   with pytest.raises(DeploymentError, match=r"OpenAI error \(invalid_model\): Unknown model"):
-    list(model.generate(_sequence(_conversation()), stream=False))
+    list(model.generate(_request(_sequence(_conversation()), stream=False)))

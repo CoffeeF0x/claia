@@ -12,7 +12,7 @@ from ..core.results import Result
 from .task import Task
 from .queue import TaskQueue
 from ..core.enums.task import TaskEvent, TaskStatus
-from ..core.data import Conversation
+from ..core.data import AgentRequest, Conversation
 from ..core.data.chunks import BaseChunk, TextChunk
 from ..core.data.response import GenerateStream
 from ..core.enums.plugins import ParamScope
@@ -430,27 +430,27 @@ class Registry:
       f"deployment={plan.deployment_name} node={plan.node_name}"
     )
 
-    # Split by spec scope so each layer gets only the kwargs it
-    # consumes: the architecture's INIT specs feed its constructor at
-    # deploy time (credentials, endpoints, paths), RUNTIME specs feed
-    # ``generate`` (temperature, max_tokens, ...) with declared
-    # defaults resolved so implementations never re-derive them.
+    # Split by spec scope once, onto the request. INIT specs become
+    # ``init_args`` (credentials, endpoints, paths); RUNTIME specs
+    # become ``args`` (temperature, max_tokens, tools, stream, …)
+    # with declared defaults resolved so lower layers never re-filter.
     arch_params = getattr(getattr(architecture_class, 'info', None), 'params', None)
-    init_kwargs = Manager.filter_init_kwargs(combined_kwargs, arch_params)
-    runtime_kwargs = Manager.resolve_runtime_kwargs(combined_kwargs, arch_params)
-    runtime_kwargs.update(
+    init_args = Manager.filter_init_kwargs(combined_kwargs, arch_params)
+    args = Manager.resolve_runtime_kwargs(combined_kwargs, arch_params)
+    args.update(
       Manager.filter_runtime_kwargs(combined_kwargs, getattr(deployment.info, 'params', None))
     )
 
-    inputs = conversation.to_model_inputs(definition, system=system)
-    return node.run(
-      deployment=deployment,
+    request = AgentRequest(
+      model=plan.model_name,
+      provider_model=plan.provider_model_name,
       architecture_class=architecture_class,
-      model_name=plan.provider_model_name,
-      inputs=inputs,
-      init_kwargs=init_kwargs,
-      runtime_kwargs=runtime_kwargs,
+      deployment=deployment,
+      inputs=conversation.to_model_inputs(definition, system=system),
+      init_args=init_args,
+      args=args,
     )
+    return node.run(request)
 
   def run(
     self,

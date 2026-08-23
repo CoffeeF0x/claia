@@ -14,18 +14,15 @@ from __future__ import annotations
 import logging
 import time
 from abc import ABC
-from typing import Any, ClassVar, Dict, Generator, List, Optional, Type, Union
+from typing import Any, ClassVar, Dict, Generator, List, Optional
 
-from ..data.artifacts import BaseArtifact
 from ..data.chunks import BaseChunk, RawChunk, TextChunk
-from ..data.models.conversation.message_sequence import MessageSequence
+from ..data.request import AgentRequest
 from ..data.response import ModelResponse
 from ..plugins.base import DeploymentInfo
 
 
 logger = logging.getLogger(__name__)
-
-ModelInputs = Union[MessageSequence, List[BaseArtifact]]
 
 
 class BaseDeployment(ABC):
@@ -38,14 +35,11 @@ class BaseDeployment(ABC):
   #: The solver's ``DeploymentPreference`` filter reads this.
   api: ClassVar[bool] = False
 
-  def deploy(
-    self,
-    architecture_class: Type,
-    model_name: str,
-    init_kwargs: Dict[str, Any],
-  ) -> Any:
+  def deploy(self, request: AgentRequest) -> Any:
     """Construct a servable architecture instance."""
-    return architecture_class(model_name=model_name, **init_kwargs)
+    return request.architecture_class(
+      model_name=request.provider_model, **request.init_args
+    )
 
   def teardown(self, instance: Any) -> None:
     """Release whatever ``deploy`` acquired. Default: nothing."""
@@ -65,8 +59,7 @@ class BaseDeployment(ABC):
   def run(
     self,
     instance: Any,
-    inputs: ModelInputs,
-    runtime_kwargs: Dict[str, Any],
+    request: AgentRequest,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Run generate on a deployed instance, relaying and metering the stream.
 
@@ -90,7 +83,7 @@ class BaseDeployment(ABC):
       return chunk
 
     try:
-      result = instance.generate(inputs, **runtime_kwargs)
+      result = instance.generate(request)
 
       if isinstance(result, ModelResponse):
         for chunk in result.chunks:

@@ -94,7 +94,7 @@ def fake_manager():
     def __init__(self, model_name):
       self.model_name = model_name
 
-    def generate(self, inputs, **kwargs):
+    def generate(self, request):
       yield TextChunk(data=f"deployed {self.model_name} via api")
       return ModelResponse(complete=True)
 

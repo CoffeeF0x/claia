@@ -14,6 +14,7 @@ from .tools import TOOLS_PARAM, format_openai_chat_messages, openai_chat_tools, 
 from .wire import iter_sse, provider_error
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
+from ...data.request import AgentRequest
 from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.plugins import ParamScope, ParamCategory
@@ -23,7 +24,6 @@ from ...plugins.base import (
 )
 from ...results import DeploymentError
 from ..base import APIArchitecture
-from ..base.base import ModelInputs
 
 
 ########################################################################
@@ -113,26 +113,27 @@ class OpenRouterArchitecture(APIArchitecture):
 
   def generate(
     self,
-    inputs: ModelInputs,
-    **kwargs,
+    request: AgentRequest,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate a response using the OpenRouter API."""
+    inputs = request.inputs
+    args = request.args
     if not isinstance(inputs, MessageSequence):
       raise TypeError("OpenRouterArchitecture expects a MessageSequence input")
-    tools = kwargs.pop("tools", None)
+    tools = args.get("tools")
 
     request_data: Dict[str, Any] = {
       "model": self.model_name,
       "messages": self._format_messages(inputs, native=bool(tools)),
     }
     for param in PASSTHROUGH_PARAMS:
-      value = kwargs.get(param)
+      value = args.get(param)
       if value is not None:
         request_data[param] = value
     if tools:
       request_data["tools"] = openai_chat_tools(tools)
 
-    if kwargs.get("stream", False):
+    if args.get("stream", False):
       return (yield from self._generate_streaming(request_data, tools=tools))
     return (yield from self._generate_blocking(request_data, tools=tools))
 

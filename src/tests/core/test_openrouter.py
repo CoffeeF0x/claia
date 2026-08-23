@@ -4,7 +4,7 @@ Tests for the OpenRouter API architecture and definitions.
 
 import pytest
 
-from claia.core.data import Conversation
+from claia.core.data import AgentRequest, Conversation
 from claia.core.definitions.anthropic import AnthropicDefinitions
 from claia.core.definitions.deepseek import DeepSeekDefinitions
 from claia.core.definitions.meta import MetaDefinitions
@@ -42,6 +42,17 @@ class RecordingOpenRouterArchitecture(OpenRouterArchitecture):
     return self.response
 
 
+def _request(inputs, **args):
+  return AgentRequest(
+    model="test",
+    provider_model="test",
+    architecture_class=object,
+    deployment=None,
+    inputs=inputs,
+    args=args,
+  )
+
+
 def _sequence(conversation, system=None):
   from claia.core.definitions.model_definition import ModelDefinition
   from claia.core.data.models.conversation.message_sequence import MessageSequence
@@ -69,14 +80,14 @@ def test_openrouter_model_builds_non_streaming_request():
     response=response,
   )
 
-  chunks = list(model.generate(
+  chunks = list(model.generate(_request(
     _sequence(_conversation(), system="Be brief"),
     stream=False,
     max_tokens=25,
     temperature=0,
     top_p=1,
     top_k=None,
-  ))
+  )))
 
   endpoint, data, request_kwargs = model.calls[0]
   assert [c.data for c in chunks] == ["Hi there"]
@@ -101,11 +112,11 @@ def test_openrouter_model_streams_deltas():
   ])
   model = RecordingOpenRouterArchitecture("anthropic/claude-sonnet-4.5", response=response)
 
-  chunks = list(model.generate(
+  chunks = list(model.generate(_request(
     _sequence(_conversation(), system="Be brief"),
     stream=True,
     max_tokens=25,
-  ))
+  )))
 
   endpoint, data, request_kwargs = model.calls[0]
   assert [c.data for c in chunks] == ["Hello ", "world"]
@@ -121,7 +132,7 @@ def test_openrouter_model_raises_on_api_errors():
   model = RecordingOpenRouterArchitecture("bad/model", response=response)
 
   with pytest.raises(DeploymentError, match=r"OpenRouter error \(invalid_model\): Unknown model"):
-    list(model.generate(_sequence(_conversation()), stream=False))
+    list(model.generate(_request(_sequence(_conversation()), stream=False)))
 
 
 def _echo_ref():
@@ -156,11 +167,11 @@ def test_openrouter_sends_chat_tools_and_yields_tool_chunk():
   })
   model = RecordingOpenRouterArchitecture("openai/gpt-4o-mini", response=response)
 
-  chunks = list(model.generate(
+  chunks = list(model.generate(_request(
     _sequence(_conversation()),
     stream=False,
     tools=[_echo_ref()],
-  ))
+  )))
 
   endpoint, data, _ = model.calls[0]
   assert endpoint == "chat/completions"
@@ -181,11 +192,11 @@ def test_openrouter_streams_tool_call_deltas():
   ])
   model = RecordingOpenRouterArchitecture("openai/gpt-4o-mini", response=response)
 
-  chunks = list(model.generate(
+  chunks = list(model.generate(_request(
     _sequence(_conversation()),
     stream=True,
     tools=[_echo_ref()],
-  ))
+  )))
 
   assert [c.data for c in chunks if isinstance(c, TextChunk)] == ["Let me "]
   tool = next(c for c in chunks if isinstance(c, ToolChunk))
@@ -218,7 +229,7 @@ def test_openrouter_without_tools_keeps_manual_utility_text():
   response = FakeResponse({"choices": [{"message": {"content": "done"}}]})
   model = RecordingOpenRouterArchitecture("openai/gpt-4o-mini", response=response)
 
-  list(model.generate(_sequence_with_utility(), stream=False))
+  list(model.generate(_request(_sequence_with_utility(), stream=False)))
 
   messages = model.calls[0][1]["messages"]
   assert messages[2]["role"] == "user"
@@ -230,7 +241,7 @@ def test_openrouter_native_follow_up_uses_tool_role():
   response = FakeResponse({"choices": [{"message": {"content": "done"}}]})
   model = RecordingOpenRouterArchitecture("openai/gpt-4o-mini", response=response)
 
-  list(model.generate(_sequence_with_utility(), stream=False, tools=[_echo_ref()]))
+  list(model.generate(_request(_sequence_with_utility(), stream=False, tools=[_echo_ref()])))
 
   messages = model.calls[0][1]["messages"]
   assert messages[1]["tool_calls"][0]["id"] == "call_1"

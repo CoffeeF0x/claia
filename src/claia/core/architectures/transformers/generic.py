@@ -16,6 +16,7 @@ import torch
 # Internal dependencies
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
+from ...data.request import AgentRequest
 from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.plugins import ParamScope, ParamCategory
@@ -24,7 +25,6 @@ from ...plugins.base import (
   ParamSpec,
 )
 from ..base import LocalArchitecture
-from ..base.base import ModelInputs
 
 
 ########################################################################
@@ -101,21 +101,22 @@ class GenericTransformerArchitecture(LocalArchitecture):
 
   def generate(
     self,
-    inputs: ModelInputs,
-    **kwargs,
+    request: AgentRequest,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate a response using the transformer model."""
     chunks: list = []
     if not self.loaded:
       self.load()
 
+    inputs = request.inputs
+    args = request.args
     if not isinstance(inputs, MessageSequence):
       raise TypeError("GenericTransformerArchitecture expects a MessageSequence input")
     prompt = self._convert_sequence_to_prompt(inputs)
     inputs = self._tokenize_prompt(prompt)
 
-    if kwargs.get("stream", False):
-      token_gen = self._generate_streaming(inputs, kwargs)
+    if args.get("stream", False):
+      token_gen = self._generate_streaming(inputs, args)
       try:
         while True:
           token = next(token_gen)
@@ -125,7 +126,7 @@ class GenericTransformerArchitecture(LocalArchitecture):
       except StopIteration:
         return ModelResponse(chunks=chunks, complete=True)
     else:
-      response = self._generate_blocking(inputs, kwargs)
+      response = self._generate_blocking(inputs, args)
       chunk = TextChunk(data=response)
       chunks.append(chunk)
       yield chunk

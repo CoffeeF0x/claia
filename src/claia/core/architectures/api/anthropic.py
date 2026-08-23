@@ -11,6 +11,7 @@ from .tools import TOOLS_PARAM, anthropic_tools, format_anthropic_messages, tool
 from .wire import iter_sse, provider_error
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
+from ...data.request import AgentRequest
 from ...data.response import ModelResponse
 from ...decorators import architecture
 from ...enums.plugins import ParamScope, ParamCategory
@@ -20,7 +21,6 @@ from ...plugins.base import (
 )
 from ...results import DeploymentError
 from ..base import APIArchitecture
-from ..base.base import ModelInputs
 
 
 ########################################################################
@@ -71,19 +71,20 @@ class AnthropicArchitecture(APIArchitecture):
 
   def generate(
     self,
-    inputs: ModelInputs,
-    **kwargs,
+    request: AgentRequest,
   ) -> Generator[BaseChunk, None, ModelResponse]:
     """Generate a response using Anthropic's Messages API."""
+    inputs = request.inputs
+    args = request.args
     if not isinstance(inputs, MessageSequence):
       raise TypeError("AnthropicArchitecture expects a MessageSequence input")
-    tools = kwargs.pop("tools", None)
+    tools = args.get("tools")
     system_message, messages = self._convert_sequence(inputs, native=bool(tools))
 
     request_data: Dict[str, Any] = {
       "model": self.model_name,
       "messages": messages,
-      "max_tokens": kwargs.get("max_tokens", 1000),
+      "max_tokens": args.get("max_tokens", 1000),
     }
     if tools:
       request_data["tools"] = anthropic_tools(tools)
@@ -93,9 +94,9 @@ class AnthropicArchitecture(APIArchitecture):
 
     # Anthropic rejects requests that include both temperature and top_p.
     # Prefer temperature; only send top_p when temperature is absent.
-    temperature = kwargs.get("temperature")
-    top_p = kwargs.get("top_p")
-    top_k = kwargs.get("top_k")
+    temperature = args.get("temperature")
+    top_p = args.get("top_p")
+    top_k = args.get("top_k")
 
     if temperature is not None:
       request_data["temperature"] = temperature
@@ -105,7 +106,7 @@ class AnthropicArchitecture(APIArchitecture):
     if top_k is not None:
       request_data["top_k"] = top_k
 
-    if kwargs.get("stream", False):
+    if args.get("stream", False):
       return (yield from self._generate_streaming(request_data, tools=tools))
     return (yield from self._generate_blocking(request_data, tools=tools))
 
