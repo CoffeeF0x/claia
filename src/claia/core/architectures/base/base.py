@@ -14,12 +14,13 @@ the solver follows that link when resolving a model call.
 """
 
 from abc import ABC, abstractmethod
-from typing import ClassVar, Generator, List, Sequence, Union
+from typing import ClassVar, Dict, Generator, List, Sequence, Union
 
-from ...data.artifacts import BaseArtifact
+from ...data.artifacts import BaseArtifact, ToolArtifact
 from ...data.chunks import BaseChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.response import ModelResponse
+from ...enums.conversation import MessageRole
 
 
 ModelInputs = Union[MessageSequence, Sequence[BaseArtifact], BaseArtifact, List[BaseArtifact]]
@@ -36,6 +37,63 @@ class BaseArchitecture(ABC):
 
   def __init__(self, model_name: str):
     self.model_name = model_name
+
+  def format_messages(self, sequence: MessageSequence) -> List[Dict[str, str]]:
+    """Default MANUAL presentation of a message sequence.
+
+    User and assistant text pass through. Tool-result utilities become
+    user turns carrying ``[TOOL_RESULT]`` blocks. ``SYSTEM`` turns are
+    omitted — callers use ``sequence.system``. Architectures that need
+    a different wire shape override this.
+    """
+    formatted: List[Dict[str, str]] = []
+    for message in sequence.messages:
+      role = message.role
+      if role == MessageRole.SYSTEM:
+        continue
+      if role == MessageRole.UTILITY:
+        text = self.format_tool_utility(message)
+        if text:
+          formatted.append({"role": "user", "content": text})
+        continue
+      if role in (MessageRole.USER, MessageRole.ASSISTANT) and message.content:
+        formatted.append({"role": role.value, "content": message.content})
+    return formatted
+
+  def format_tool_utility(self, message) -> str:
+    """Render a utility turn's tool-result artifacts as MANUAL text."""
+    blocks = [
+      artifact.result_text()
+      for artifact in getattr(message, "artifacts", []) or []
+      if isinstance(artifact, ToolArtifact) and artifact.is_result
+    ]
+    return "\n\n".join(blocks)
+
+  @staticmethod
+  def format_tool_result(name: str, body: str) -> str:
+    """Default MANUAL-mode presentation of a tool result."""
+    return ToolArtifact.format_result(name, body)
+
+  @staticmethod
+  def coalesce_consecutive_roles(
+    messages: List[Dict[str, str]],
+  ) -> List[Dict[str, str]]:
+    """Merge adjacent same-role text turns.
+
+    For provider APIs that require strict user/assistant alternation
+    after utilities have been mapped to user turns.
+    """
+    if not messages:
+      return []
+    merged: List[Dict[str, str]] = [dict(messages[0])]
+    for message in messages[1:]:
+      if message.get("role") == merged[-1].get("role"):
+        prev = merged[-1].get("content") or ""
+        nxt = message.get("content") or ""
+        merged[-1]["content"] = (prev + "\n" + nxt).strip()
+      else:
+        merged.append(dict(message))
+    return merged
 
   @abstractmethod
   def generate(

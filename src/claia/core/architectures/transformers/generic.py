@@ -18,7 +18,6 @@ from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.response import ModelResponse
 from ...decorators import architecture
-from ...enums.conversation import MessageRole
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import (
   COMMON_TEXT_RUNTIME_PARAMS,
@@ -234,13 +233,15 @@ class GenericTransformerArchitecture(LocalArchitecture):
   def _convert_sequence_to_prompt(self, sequence: MessageSequence) -> str:
     """Convert a MessageSequence to a text prompt."""
     parts = []
-    for message in sequence.messages:
-      if message.role == MessageRole.SYSTEM:
-        parts.append(f"System: {message.content}")
-      elif message.role == MessageRole.USER:
-        parts.append(f"User: {message.content}")
-      elif message.role == MessageRole.ASSISTANT:
-        parts.append(f"Assistant: {message.content}")
+    if sequence.system:
+      parts.append(f"System: {sequence.system}")
+    for message in self.format_messages(sequence):
+      role = message.get("role")
+      content = message.get("content") or ""
+      if role == "user":
+        parts.append(f"User: {content}")
+      elif role == "assistant":
+        parts.append(f"Assistant: {content}")
     parts.append("Assistant:")
     return "\n".join(parts)
 

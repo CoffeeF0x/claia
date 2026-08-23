@@ -143,6 +143,74 @@ def test_ordered_sequence_keeps_system_at_front():
   assert sequence.system == "Stay terse"
 
 
+def test_to_message_sequence_includes_tool_result_utilities():
+  from claia.core.data.artifacts import ToolArtifact
+  from claia.core.enums.parser import TagType
+
+  conv = Conversation(title="t")
+  user = conv.add_message(MessageRole.USER, "hi")
+  assistant = conv.add_message(MessageRole.ASSISTANT, "[TOOL_CALL]{}[/TOOL_CALL]")
+  thinking = conv.append_utility(
+    tag_type=TagType.THINKING,
+    content="ponder",
+    source_message_id=assistant.message_id,
+  )
+  tool = conv.append_utility(
+    tag_type=TagType.TOOL,
+    content='{"name":"demo.echo"}',
+    source_message_id=assistant.message_id,
+  )
+  conv.attach_artifact(tool.message_id, ToolArtifact.from_result("demo.echo", "pong"))
+  conv.add_message(MessageRole.ASSISTANT, "done")
+
+  sequence = conv.to_message_sequence([ArtifactType.TEXT])
+  roles = [m.role for m in sequence.messages]
+  assert roles == [
+    MessageRole.USER,
+    MessageRole.ASSISTANT,
+    MessageRole.UTILITY,
+    MessageRole.ASSISTANT,
+  ]
+  utility = sequence.messages[2]
+  results = utility.tool_result_artifacts()
+  assert len(results) == 1
+  assert results[0].content == "pong"
+  assert utility.content == ""
+  assert user.content == "hi"
+  assert thinking.tag_type is TagType.THINKING
+  assert all(m.tag_type is not TagType.THINKING for m in sequence.messages)
+
+
+def test_ordered_sequence_keeps_utility_between_assistants():
+  from claia.core.data import Message
+  from claia.core.data.artifacts import ToolArtifact
+  from claia.core.data.models.conversation.message_sequence import (
+    MessageSequenceOrdered,
+  )
+  from claia.core.enums.parser import TagType
+
+  utility = Message(
+    role=MessageRole.UTILITY,
+    tag_type=TagType.TOOL,
+    artifacts=[ToolArtifact.from_result("demo.echo", "pong")],
+  )
+  sequence = MessageSequenceOrdered(
+    messages=[
+      Message(role=MessageRole.USER, content="hi"),
+      Message(role=MessageRole.ASSISTANT, content="calling"),
+      utility,
+      Message(role=MessageRole.ASSISTANT, content="done"),
+    ],
+  )
+  assert [m.role for m in sequence.messages] == [
+    MessageRole.USER,
+    MessageRole.ASSISTANT,
+    MessageRole.UTILITY,
+    MessageRole.ASSISTANT,
+  ]
+  assert sequence.messages[2].tool_result_artifacts()[0].content == "pong"
+
+
 def test_conversation_created_metadata_has_no_system_prompt():
   conv = Conversation(title="named")
   created = conv.events[0]

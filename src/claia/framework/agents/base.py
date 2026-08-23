@@ -14,6 +14,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Type
 
+from ...core.data.artifacts import ToolArtifact
 from ...core.data.chunks import AudioChunk, BaseChunk, ImageChunk, TextChunk
 from ...core.data.models import AudioArtifact, ImageArtifact
 from ...core.enums.agent import AgentStatus
@@ -161,7 +162,6 @@ class BaseAgent:
       tag_specs=tag_specs,
       **kwargs,
     )
-    cls._post_tool_results(task, task.conversation, results)
     task.parameters[cls.ROUND_PARAMETER] = round_index + 1
     task.result = text
 
@@ -184,8 +184,9 @@ class BaseAgent:
   ) -> Tuple[str, List[Tuple[str, str]], bool]:
     """One assistant stream: tokens, parse, tool dispatch.
 
-    Returns ``(text, tool_results, cancelled)``. The caller posts
-    results and decides whether to generate again.
+    Returns ``(text, tool_results, cancelled)``. Tool results are
+    attached as ``ToolArtifact``s on the parsed TOOL utilities. The
+    caller decides whether to generate again.
     """
     conversation = task.conversation
     streaming_message = conversation.start_streaming_message(MessageRole.ASSISTANT)
@@ -221,6 +222,7 @@ class BaseAgent:
           conversation=conversation,
           streaming_message_id=streaming_message.message_id,
           tool_kwargs=kwargs,
+          task=task,
         ))
 
       if not cancelled:
@@ -230,6 +232,7 @@ class BaseAgent:
           conversation=conversation,
           streaming_message_id=streaming_message.message_id,
           tool_kwargs=kwargs,
+          task=task,
         ))
 
       if cancelled:
@@ -317,8 +320,8 @@ class BaseAgent:
       '{"name": "<qualified tool name>", "parameters": { ... }}',
       spec.close_token,
       "",
-      "Call one tool at a time. The next user message is the tool result",
-      "in a [TOOL_RESULT] tag — not a new human request. Continue: call",
+      "Call one tool at a time. Tool results arrive as a [TOOL_RESULT] block",
+      "on the following turn — not a new human request. Continue: call",
       "another tool the same way, or answer the user. Do not invent tools.",
       "",
       "Available tools:",
@@ -329,9 +332,8 @@ class BaseAgent:
 
   @classmethod
   def format_tool_result(cls, name: str, body: str) -> str:
-    """Render a tool result as a user-turn ``[TOOL_RESULT]`` block."""
-    label = (name or "").strip() or "unknown"
-    return f'[TOOL_RESULT name="{label}"]\n{body}\n[/TOOL_RESULT]'
+    """Default MANUAL-mode presentation of a tool result."""
+    return ToolArtifact.format_result(name, body)
 
   @staticmethod
   def _tool_spec(tag_specs: Iterable[TagSpec]) -> Optional[TagSpec]:
@@ -425,17 +427,6 @@ class BaseAgent:
     return resolve_tag_specs(model_def)
 
   @classmethod
-  def _post_tool_results(cls, task, conversation, results: List[Tuple[str, str]]) -> None:
-    """Persist one user message for every tool result from this turn."""
-    if not results:
-      return
-    text = "\n\n".join(
-      cls.format_tool_result(name, body) for name, body in results
-    )
-    conversation.add_message(MessageRole.USER, text)
-    task.emit(TaskEvent.TOKEN, "\n" + text)
-
-  @classmethod
   def _consume_parse_events(
     cls,
     events: Iterable[ParseEvent],
@@ -444,6 +435,7 @@ class BaseAgent:
     conversation,
     streaming_message_id: str,
     tool_kwargs: dict,
+    task=None,
   ) -> List[Tuple[str, str]]:
     results: List[Tuple[str, str]] = []
     for ev in events:
@@ -462,6 +454,7 @@ class BaseAgent:
           conversation=conversation,
           streaming_message_id=streaming_message_id,
           tool_kwargs=tool_kwargs,
+          task=task,
         )
         if result is not None:
           results.append(result)
@@ -476,8 +469,9 @@ class BaseAgent:
     conversation,
     streaming_message_id: str,
     tool_kwargs: dict,
+    task=None,
   ) -> Optional[Tuple[str, str]]:
-    conversation.append_utility(
+    utility = conversation.append_utility(
       tag_type=ev.tag_type,
       content=ev.content,
       source_message_id=streaming_message_id,
@@ -489,12 +483,17 @@ class BaseAgent:
     if ev.tag_type is not TagType.TOOL:
       return None
 
-    return cls._dispatch_tool_event(
+    result = cls._dispatch_tool_event(
       ev,
       registry=registry,
       conversation=conversation,
       tool_kwargs=tool_kwargs,
     )
+    artifact = ToolArtifact.from_result(result[0], result[1])
+    conversation.attach_artifact(utility.message_id, artifact)
+    if task is not None:
+      task.emit(TaskEvent.ARTIFACT, artifact, utility.message_id)
+    return result
 
   @classmethod
   def _dispatch_tool_event(

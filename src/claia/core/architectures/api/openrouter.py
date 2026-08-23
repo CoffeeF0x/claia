@@ -15,7 +15,6 @@ from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.response import ModelResponse
 from ...decorators import architecture
-from ...enums.conversation import MessageRole
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import (
   COMMON_TEXT_RUNTIME_PARAMS,
@@ -103,15 +102,7 @@ class OpenRouterArchitecture(APIArchitecture):
     messages: List[Dict[str, Any]] = []
     if sequence.system:
       messages.append({"role": "system", "content": sequence.system})
-    for message in sequence.messages:
-      if message.role not in (MessageRole.USER, MessageRole.ASSISTANT):
-        continue
-      if not message.content:
-        continue
-      messages.append({
-        "role": message.role.value,
-        "content": message.content,
-      })
+    messages.extend(self.format_messages(sequence))
     logger.debug(f"Sending {len(messages)} messages to OpenRouter API")
     return messages
 

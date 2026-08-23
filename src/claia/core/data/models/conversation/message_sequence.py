@@ -90,9 +90,10 @@ class MessageSequence:
 class MessageSequenceOrdered(MessageSequence):
   """Message sequence with user/assistant role alternation enforced.
 
-  Consecutive same-role turns are merged. Leading assistant turns are
-  dropped. ``SYSTEM`` turns stay at the front; only user/assistant
-  turns are normalized.
+  Consecutive same-role user/assistant turns are merged. Leading
+  assistant and utility turns are dropped. ``SYSTEM`` turns stay at
+  the front. ``UTILITY`` turns (tool results) are valid between
+  assistant turns and are never merged with a neighbour.
   """
 
   def __init__(
@@ -111,12 +112,12 @@ class MessageSequenceOrdered(MessageSequence):
     systems = [m for m in messages if _role(m) == MessageRole.SYSTEM]
     filtered = [
       m for m in messages
-      if _role(m) in (MessageRole.USER, MessageRole.ASSISTANT)
+      if _role(m) in (MessageRole.USER, MessageRole.ASSISTANT, MessageRole.UTILITY)
     ]
     if not filtered:
       return list(systems)
 
-    while filtered and _role(filtered[0]) == MessageRole.ASSISTANT:
+    while filtered and _role(filtered[0]) in (MessageRole.ASSISTANT, MessageRole.UTILITY):
       filtered.pop(0)
     if not filtered:
       return list(systems)
@@ -124,6 +125,12 @@ class MessageSequenceOrdered(MessageSequence):
     merged: List[Any] = []
     for message in filtered:
       role = _role(message)
+      if role == MessageRole.UTILITY:
+        if isinstance(message, Message):
+          merged.append(Message.from_dict(message.to_dict()))
+        else:
+          merged.append(message)
+        continue
       if merged and _role(merged[-1]) == role:
         prev = merged[-1]
         prev_text = getattr(prev, "content", "") or ""

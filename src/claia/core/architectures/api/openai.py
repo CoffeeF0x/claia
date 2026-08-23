@@ -12,7 +12,6 @@ from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.response import ModelResponse
 from ...decorators import architecture
-from ...enums.conversation import MessageRole
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import (
   COMMON_TEXT_RUNTIME_PARAMS,
@@ -85,16 +84,7 @@ class OpenAIArchitecture(APIArchitecture):
 
   def _convert_sequence(self, sequence: MessageSequence) -> tuple:
     """Convert a MessageSequence to (instructions, input_messages)."""
-    instructions = sequence.system
-    input_messages: List[Dict[str, str]] = []
-    for message in sequence.messages:
-      if message.role not in (MessageRole.USER, MessageRole.ASSISTANT):
-        continue
-      if not message.content:
-        continue
-      role = "user" if message.role == MessageRole.USER else "assistant"
-      input_messages.append({"role": role, "content": message.content})
-    return instructions, input_messages
+    return sequence.system, self.format_messages(sequence)
 
   def _generate_streaming(self, request_data: Dict[str, Any]) -> Generator[BaseChunk, None, ModelResponse]:
     response = self.post("responses", {**request_data, "stream": True}, stream=True)

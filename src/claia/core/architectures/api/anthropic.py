@@ -12,7 +12,6 @@ from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...data.response import ModelResponse
 from ...decorators import architecture
-from ...enums.conversation import MessageRole
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import (
   COMMON_TEXT_RUNTIME_PARAMS,
@@ -107,13 +106,9 @@ class AnthropicArchitecture(APIArchitecture):
 
   def _convert_sequence(self, sequence: MessageSequence) -> tuple:
     """Convert a MessageSequence to Anthropic messages format."""
-    messages = []
-    for message in sequence.messages:
-      if message.role == MessageRole.USER and message.content:
-        messages.append({"role": "user", "content": message.content})
-      elif message.role == MessageRole.ASSISTANT and message.content:
-        messages.append({"role": "assistant", "content": message.content})
-    return sequence.system or "", messages
+    return sequence.system or "", self.coalesce_consecutive_roles(
+      self.format_messages(sequence)
+    )
 
   def _generate_streaming(self, request_data: Dict[str, Any]) -> Generator[BaseChunk, None, ModelResponse]:
     response = self.post("messages", {**request_data, "stream": True}, stream=True)

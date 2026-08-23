@@ -123,3 +123,25 @@ class ToolArtifact(BaseArtifact):
       is_result=True,
       **kwargs,
     )
+
+  @staticmethod
+  def format_result(name: str, body: str) -> str:
+    """Default MANUAL-mode presentation of a tool result."""
+    label = (name or "").strip() or "unknown"
+    return f'[TOOL_RESULT name="{label}"]\n{body}\n[/TOOL_RESULT]'
+
+  def payload_text(self) -> str:
+    """String form of ``payload`` for default architecture formatting."""
+    data = self.content
+    if data is None:
+      return ""
+    if isinstance(data, str):
+      return data
+    try:
+      return json.dumps(data)
+    except Exception:
+      return str(data)
+
+  def result_text(self) -> str:
+    """``format_result`` applied to this artifact's name and payload."""
+    return self.format_result(self.tool_name, self.payload_text())

@@ -139,6 +139,14 @@ class Message:
     self.artifacts.append(artifact)
     self.updated_at = time.time()
 
+  def tool_result_artifacts(self) -> List[Any]:
+    """Return ``ToolArtifact`` results attached to this message."""
+    from ...artifacts import ToolArtifact
+    return [
+      a for a in self.artifacts
+      if isinstance(a, ToolArtifact) and a.is_result
+    ]
+
   def copy_with_artifacts(self, artifacts: List[Any]) -> "Message":
     """Return a copy of this message carrying ``artifacts`` only."""
     data = self.to_dict()

@@ -281,6 +281,11 @@ class Conversation:
         ``ArtifactType`` is in ``supported_artifact_types``, drops turns
         that end up empty, and returns an instance of ``sequence_cls``
         (default ``MessageSequence``).
+
+        Tool-result utilities are always included: each becomes a
+        ``UTILITY`` turn carrying only its ``ToolArtifact`` results.
+        Thinking/reference utilities stay stripped unless
+        ``include_utility`` is True.
         """
         from ....enums.data import ArtifactType
         from .message_sequence import MessageSequence
@@ -290,7 +295,14 @@ class Conversation:
 
         allowed = set(supported_artifact_types or [])
         copies = []
-        for message in self.export_thread(include_utility=include_utility):
+        for message in self.export_thread(include_utility=True):
+            if message.role == MessageRole.UTILITY:
+                results = message.tool_result_artifacts()
+                if results:
+                    copies.append(message.copy_with_artifacts(results))
+                    continue
+                if not include_utility:
+                    continue
             filtered = [
                 a for a in (message.artifacts or [])
                 if ArtifactType.from_artifact(a) in allowed
@@ -488,8 +500,8 @@ class Conversation:
           subsequent edits to the tree.
         - ``active_head_id`` advances to the new utility message so
           later additions follow it. Default ``get_thread()`` calls
-          filter utility messages out, so the linearization seen by
-          models is unaffected.
+          filter utility messages out (UI / host views). Generate-time
+          ``to_message_sequence`` re-includes tool-result utilities.
         - The standard ``MESSAGE_CREATED`` domain event is emitted,
           carrying ``tag_type`` / ``source_message_id`` in the
           event metadata for persistence/observer consumers.

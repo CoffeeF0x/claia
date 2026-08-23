@@ -11,7 +11,6 @@ from typing import Any, Dict, Optional
 # Internal dependencies
 from ...data.models.conversation.message_sequence import MessageSequence
 from ...decorators import architecture
-from ...enums.conversation import MessageRole
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import ParamSpec
 from .generic import GenericTransformerArchitecture
@@ -67,15 +66,15 @@ class Gemma3Architecture(GenericTransformerArchitecture):
   def _convert_sequence_to_prompt(self, sequence: MessageSequence) -> str:
     """Convert a MessageSequence to Gemma3-specific prompt format."""
     prompt_parts = []
-
-    for message in sequence.messages:
-      if message.role == MessageRole.SYSTEM:
-        prompt_parts.append(f"<start_of_turn>system\n{message.content}<end_of_turn>")
-      elif message.role == MessageRole.USER:
-        prompt_parts.append(f"<start_of_turn>user\n{message.content}<end_of_turn>")
-      elif message.role == MessageRole.ASSISTANT:
-        prompt_parts.append(f"<start_of_turn>model\n{message.content}<end_of_turn>")
-
+    if sequence.system:
+      prompt_parts.append(f"<start_of_turn>system\n{sequence.system}<end_of_turn>")
+    for message in self.format_messages(sequence):
+      role = message.get("role")
+      content = message.get("content") or ""
+      if role == "user":
+        prompt_parts.append(f"<start_of_turn>user\n{content}<end_of_turn>")
+      elif role == "assistant":
+        prompt_parts.append(f"<start_of_turn>model\n{content}<end_of_turn>")
     prompt_parts.append("<start_of_turn>model\n")
     return "".join(prompt_parts)
 

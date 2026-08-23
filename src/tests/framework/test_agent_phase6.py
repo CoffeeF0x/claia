@@ -3,7 +3,7 @@ Agent loop tests.
 
 End-to-end coverage of the agent loop that owns the per-turn
 ``TagParser``, dispatches tool calls through ``Registry.execute_tool``,
-posts results as user ``[TOOL_RESULT]`` turns, and generates again:
+attaches results as ``ToolArtifact``s on TOOL utilities, and generates again:
 
 - Streaming text-only response (no tags).
 - Streaming with one tool call, then a follow-up generate.
@@ -66,6 +66,14 @@ def _users(convo):
 def _visible_roles(convo):
   """Roles the next generate sees: the thread with utilities stripped."""
   return [m.role for m in convo.get_thread()]
+
+
+def _tool_results(convo):
+  """Result ``ToolArtifact``s on TOOL utilities, in tree order."""
+  artifacts = []
+  for utility in _utilities(convo):
+    artifacts.extend(utility.tool_result_artifacts())
+  return artifacts
 
 
 # ---------------------------------------------------------------------------
@@ -197,19 +205,23 @@ class TestStreamOneToolCall:
     assert call["qualified_name"] == "demo.echo"
     assert call["raw_payload"] == '{"name": "demo.echo", "parameters": {"message": "hi"}}'
 
-    # The assistant keeps the call; the result is a later user turn.
+    # The assistant keeps the call; the result is a ToolArtifact on the utility.
     assistant_msg = _assistants(convo)[0]
     assert "[TOOL_CALL]" in assistant_msg.content
     assert "echoed:hi" not in assistant_msg.content
 
-    result_msg = _users(convo)[-1]
-    assert result_msg.content == format_tool_result("demo.echo", "echoed:hi")
-    assert "echoed:hi" in "".join(tokens)
+    results = _tool_results(convo)
+    assert len(results) == 1
+    assert results[0].tool_name == "demo.echo"
+    assert results[0].content == "echoed:hi"
+    assert results[0].result_text() == format_tool_result("demo.echo", "echoed:hi")
+    assert "echoed:hi" not in "".join(tokens)
 
     utilities = _utilities(convo)
     assert len(utilities) == 1
     assert utilities[0].tag_type is TagType.TOOL
     assert utilities[0].source_message_id == assistant_msg.message_id
+    assert results[0] in utilities[0].artifacts
 
   def test_bare_name_resolves_via_registry(self):
     convo = Conversation(title="t")
@@ -223,7 +235,7 @@ class TestStreamOneToolCall:
     # Bare ``echo`` resolved to ``demo.echo``.
     assert reg.execute_calls[0]["qualified_name"] == "demo.echo"
     assert "echoed:yo" not in _assistants(convo)[0].content
-    assert format_tool_result("demo.echo", "echoed:yo") == _users(convo)[-1].content
+    assert _tool_results(convo)[0].result_text() == format_tool_result("demo.echo", "echoed:yo")
 
   def test_tool_failure_surfaces_inline_error_text(self):
     convo = Conversation(title="t")
@@ -239,7 +251,7 @@ class TestStreamOneToolCall:
     SimpleAgent.execute(task, registry=reg)
     assert task.status == TaskStatus.COMPLETED
     assert "[TOOL_ERROR]" not in _assistants(convo)[0].content
-    result = _users(convo)[-1].content
+    result = _tool_results(convo)[0].payload_text()
     assert "[TOOL_ERROR]" in result
     assert "Tool not found" in result
     utilities = _utilities(convo)
@@ -258,7 +270,7 @@ class TestStreamOneToolCall:
     # No dispatch happened.
     assert reg.execute_calls == []
     assert "[TOOL_ERROR]" not in _assistants(convo)[0].content
-    result = _users(convo)[-1].content
+    result = _tool_results(convo)[0].payload_text()
     assert "[TOOL_ERROR]" in result
     assert "missing 'name'" in result
 
@@ -296,16 +308,18 @@ class TestStreamMultipleToolCalls:
     SimpleAgent.execute(task, registry=reg)
     assert task.status == TaskStatus.COMPLETED
 
-    # Both calls fired in order; one user message holds both results.
+    # Both calls fired in order; each utility holds its own result artifact.
     assert [c["qualified_name"] for c in reg.execute_calls] == ["math.add", "demo.shout"]
 
     assistant = _assistants(convo)[0]
     assert "5" not in assistant.content
     assert "HI" not in assistant.content
 
-    result = _users(convo)[-1].content
-    assert format_tool_result("math.add", "5") in result
-    assert format_tool_result("demo.shout", "HI") in result
+    results = _tool_results(convo)
+    assert [a.result_text() for a in results] == [
+      format_tool_result("math.add", "5"),
+      format_tool_result("demo.shout", "HI"),
+    ]
 
     utilities = _utilities(convo)
     assert len(utilities) == 2
@@ -348,7 +362,7 @@ class TestStreamThinkingPlusTool:
 # Generate-again after a tool result
 # ---------------------------------------------------------------------------
 class TestToolRoundTrip:
-  def test_follow_up_generate_sees_user_result(self):
+  def test_follow_up_generate_sees_utility_result(self):
     convo = Conversation(title="t")
     convo.add_message(MessageRole.USER, "please echo hi")
     task = _task(convo)
@@ -374,15 +388,30 @@ class TestToolRoundTrip:
     assert assistants[1].content == "The tool said hi."
 
     users = _users(convo)
-    assert users[0].content == "please echo hi"
-    assert users[1].content == format_tool_result("demo.echo", "echoed:hi")
+    assert [u.content for u in users] == ["please echo hi"]
+    results = _tool_results(convo)
+    assert len(results) == 1
+    assert results[0].result_text() == format_tool_result("demo.echo", "echoed:hi")
 
     assert _visible_roles(convo) == [
       MessageRole.USER,
       MessageRole.ASSISTANT,
-      MessageRole.USER,
       MessageRole.ASSISTANT,
     ]
+
+    from claia.core.data.models.conversation.message_sequence import MessageSequence
+    from claia.core.definitions.model_definition import ModelDefinition
+    from claia.core.enums.data import ArtifactType
+    sequence = convo.to_model_inputs(
+      ModelDefinition(inputs=[ArtifactType.TEXT, MessageSequence]),
+    )
+    assert [m.role for m in sequence.messages] == [
+      MessageRole.USER,
+      MessageRole.ASSISTANT,
+      MessageRole.UTILITY,
+      MessageRole.ASSISTANT,
+    ]
+    assert sequence.messages[2].tool_result_artifacts()[0].content == "echoed:hi"
 
   def test_max_tool_rounds_stops_without_another_generate(self, monkeypatch):
     monkeypatch.setattr(SimpleAgent, "MAX_TOOL_ROUNDS", 2)
@@ -406,7 +435,8 @@ class TestToolRoundTrip:
     assert task.status == TaskStatus.COMPLETED
     assert reg.run_calls == 2
     assert len(_assistants(convo)) == 2
-    assert len(_users(convo)) == 2
+    assert len(_users(convo)) == 0
+    assert len(_tool_results(convo)) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -437,7 +467,7 @@ class TestStreamingChunkBoundaries:
     assert task.status == TaskStatus.COMPLETED
     assert reg.execute_calls[0]["qualified_name"] == "demo.ping"
     assert "pong" not in _assistants(convo)[0].content
-    assert format_tool_result("demo.ping", "pong") == _users(convo)[-1].content
+    assert _tool_results(convo)[0].result_text() == format_tool_result("demo.ping", "pong")
 
 
 # ---------------------------------------------------------------------------

@@ -4,8 +4,9 @@ Shared architecture interfaces and base classes.
 
 ## What lives here
 
-- `base.py` — `BaseArchitecture`, the abstract generate contract and
-  the `deployment` class attribute that links each family to the
+- `base.py` — `BaseArchitecture`, the abstract generate contract,
+  default `format_messages` / tool-utility presentation, and the
+  `deployment` class attribute that links each family to the
   deployment serving it.
 - `api.py` — `APIArchitecture`, base for hosted-API architectures
   (`deployment = "api"`; session, key and header handling).

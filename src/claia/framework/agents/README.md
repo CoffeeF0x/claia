@@ -10,7 +10,7 @@ Agent implementations that orchestrate tasks, models, and tools.
   `execute` drives steps to completion synchronously for direct,
   queue-less use. Utilities: `chat_step` (one tool-loop turn),
   `compose_system_prompt`, `stream_turn`, tag parsing, tool dispatch,
-  posting user `[TOOL_RESULT]` turns.
+  attaching result `ToolArtifact`s onto TOOL utilities.
 - `simple.py` — `SimpleAgent`, the default registered agent. Reads
   `system` from the call or the queued task and runs one `chat_step`
   per step.

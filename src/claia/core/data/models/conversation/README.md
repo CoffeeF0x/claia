@@ -17,7 +17,7 @@ All primary types are available from `claia.core.data`; `Conversation` and `Mess
 - Mutations record `DomainEvent`s for auditing and host-runtime persistence.
 - Streaming updates can append chunks without flooding the event log.
 - Generation settings stay outside the data model and are passed at runtime through registry or process parameters.
-- `to_model_inputs` is the generate-time translation: a filtered message sequence or the latest message's artifacts. Deployments receive that result, not the conversation.
+- `to_model_inputs` is the generate-time translation: a filtered message sequence (tool-result utilities included) or the latest message's artifacts. Deployments receive that result, not the conversation. Architectures format the sequence.
 
 ## Quick Example
 
