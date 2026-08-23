@@ -22,7 +22,7 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from ..data.chunks import TextChunk
+from ..data.chunks import TextChunk, ToolChunk
 from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequenceOrdered
@@ -53,7 +53,7 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-fable-5", "openrouter": "anthropic/claude-fable-5"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       # ----------------------------------------------------------------
@@ -72,7 +72,7 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-opus-5", "openrouter": "anthropic/claude-opus-5"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "claude-opus-4-8": ModelDefinition(
@@ -88,7 +88,7 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-opus-4-8", "openrouter": "anthropic/claude-opus-4.8"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "claude-opus-4-7": ModelDefinition(
@@ -103,7 +103,7 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-opus-4-7", "openrouter": "anthropic/claude-opus-4.7"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "claude-opus-4-6": ModelDefinition(
@@ -118,7 +118,7 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-opus-4-6", "openrouter": "anthropic/claude-opus-4.6"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "claude-opus-4-5": ModelDefinition(
@@ -133,7 +133,7 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-opus-4-5-20251101", "openrouter": "anthropic/claude-opus-4.5"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "claude-opus-4-1": ModelDefinition(
@@ -148,7 +148,7 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-opus-4-1-20250805", "openrouter": "anthropic/claude-opus-4.1"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       # ----------------------------------------------------------------
@@ -167,7 +167,7 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-sonnet-5", "openrouter": "anthropic/claude-sonnet-5"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "claude-sonnet-4-6": ModelDefinition(
@@ -183,7 +183,7 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-sonnet-4-6", "openrouter": "anthropic/claude-sonnet-4.6"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "claude-sonnet-4-5": ModelDefinition(
@@ -198,7 +198,7 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-sonnet-4-5-20250929", "openrouter": "anthropic/claude-sonnet-4.5"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       # ----------------------------------------------------------------
@@ -218,6 +218,6 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-haiku-4-5-20251001", "openrouter": "anthropic/claude-haiku-4.5"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
     }

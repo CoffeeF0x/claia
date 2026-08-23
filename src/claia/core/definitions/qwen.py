@@ -4,7 +4,7 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from ..data.chunks import TextChunk
+from ..data.chunks import TextChunk, ToolChunk
 from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
@@ -32,7 +32,7 @@ class QwenDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/qwen/qwen3.6-plus",
         identifiers={"openrouter": "qwen/qwen3.6-plus"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "qwen3.6-plus-preview": ModelDefinition(
@@ -47,7 +47,7 @@ class QwenDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/qwen/qwen3.6-plus-preview",
         identifiers={"openrouter": "qwen/qwen3.6-plus-preview"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "qwen3.5-397b-a17b": ModelDefinition(
@@ -62,7 +62,7 @@ class QwenDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/qwen/qwen3.5-397b-a17b",
         identifiers={"openrouter": "qwen/qwen3.5-397b-a17b"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "qwen3.5-122b-a10b": ModelDefinition(
@@ -77,7 +77,7 @@ class QwenDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/qwen/qwen3.5-122b-a10b",
         identifiers={"openrouter": "qwen/qwen3.5-122b-a10b"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "qwen3.5-35b-a3b": ModelDefinition(
@@ -92,7 +92,7 @@ class QwenDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/qwen/qwen3.5-35b-a3b",
         identifiers={"openrouter": "qwen/qwen3.5-35b-a3b"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "qwen3.5-27b": ModelDefinition(
@@ -107,7 +107,7 @@ class QwenDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/qwen/qwen3.5-27b",
         identifiers={"openrouter": "qwen/qwen3.5-27b"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "qwen3.5-flash": ModelDefinition(
@@ -122,7 +122,7 @@ class QwenDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/qwen/qwen3.5-flash-02-23",
         identifiers={"openrouter": "qwen/qwen3.5-flash-02-23"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "qwen3-max": ModelDefinition(
@@ -137,7 +137,7 @@ class QwenDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/qwen/qwen3-max",
         identifiers={"openrouter": "qwen/qwen3-max"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "qwen3-coder": ModelDefinition(
@@ -152,7 +152,7 @@ class QwenDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/qwen/qwen3-coder",
         identifiers={"openrouter": "qwen/qwen3-coder"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "qwen3-coder-next": ModelDefinition(
@@ -167,6 +167,6 @@ class QwenDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/qwen/qwen3-coder-next",
         identifiers={"openrouter": "qwen/qwen3-coder-next"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
     }

@@ -4,7 +4,7 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from ..data.chunks import TextChunk
+from ..data.chunks import TextChunk, ToolChunk
 from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
@@ -32,7 +32,7 @@ class ZaiDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/z-ai/glm-5.3",
         identifiers={"openrouter": "z-ai/glm-5.3"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "glm-5.2": ModelDefinition(
@@ -47,7 +47,7 @@ class ZaiDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/z-ai/glm-5.2",
         identifiers={"openrouter": "z-ai/glm-5.2"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "glm-5.1": ModelDefinition(
@@ -62,7 +62,7 @@ class ZaiDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/z-ai/glm-5.1",
         identifiers={"openrouter": "z-ai/glm-5.1"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "glm-5": ModelDefinition(
@@ -77,7 +77,7 @@ class ZaiDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/z-ai/glm-5",
         identifiers={"openrouter": "z-ai/glm-5"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "glm-4.5": ModelDefinition(
@@ -92,6 +92,6 @@ class ZaiDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/z-ai/glm-4.5",
         identifiers={"openrouter": "z-ai/glm-4.5"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
     }

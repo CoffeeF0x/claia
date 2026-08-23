@@ -4,7 +4,7 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from ..data.chunks import TextChunk
+from ..data.chunks import TextChunk, ToolChunk
 from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
@@ -32,7 +32,7 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/minimax/minimax-m2.7",
         identifiers={"openrouter": "minimax/minimax-m2.7"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "minimax-m2.5": ModelDefinition(
@@ -47,7 +47,7 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/minimax/minimax-m2.5",
         identifiers={"openrouter": "minimax/minimax-m2.5"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "minimax-m2": ModelDefinition(
@@ -62,7 +62,7 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/minimax/minimax-m2",
         identifiers={"openrouter": "minimax/minimax-m2"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "minimax-m1": ModelDefinition(
@@ -77,6 +77,6 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/minimax/minimax-m1",
         identifiers={"openrouter": "minimax/minimax-m1"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
     }

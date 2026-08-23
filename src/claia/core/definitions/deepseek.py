@@ -4,7 +4,7 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from ..data.chunks import TextChunk
+from ..data.chunks import TextChunk, ToolChunk
 from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
@@ -32,7 +32,7 @@ class DeepSeekDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/deepseek/deepseek-v4-pro",
         identifiers={"openrouter": "deepseek/deepseek-v4-pro"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "deepseek-v4-flash": ModelDefinition(
@@ -47,7 +47,7 @@ class DeepSeekDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/deepseek/deepseek-v4-flash",
         identifiers={"openrouter": "deepseek/deepseek-v4-flash"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "deepseek-r1-0528": ModelDefinition(
@@ -62,6 +62,6 @@ class DeepSeekDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/deepseek/deepseek-r1-0528",
         identifiers={"openrouter": "deepseek/deepseek-r1-0528"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
     }

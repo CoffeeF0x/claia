@@ -4,7 +4,7 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from ..data.chunks import TextChunk
+from ..data.chunks import TextChunk, ToolChunk
 from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
@@ -32,7 +32,7 @@ class MetaDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/meta-llama/llama-4-maverick",
         identifiers={"openrouter": "meta-llama/llama-4-maverick"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "llama-4-scout": ModelDefinition(

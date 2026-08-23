@@ -15,7 +15,7 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from ..data.chunks import TextChunk
+from ..data.chunks import TextChunk, ToolChunk
 from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
@@ -46,7 +46,7 @@ class OpenAIDefinitions(BaseDefinitionProvider):
         url="https://developers.openai.com/api/docs/models/gpt-5.6-sol",
         identifiers={"openai": "gpt-5.6-sol", "openrouter": "openai/gpt-5.6-sol"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "gpt-5.6-terra": ModelDefinition(
@@ -61,7 +61,7 @@ class OpenAIDefinitions(BaseDefinitionProvider):
         url="https://developers.openai.com/api/docs/models/gpt-5.6-terra",
         identifiers={"openai": "gpt-5.6-terra", "openrouter": "openai/gpt-5.6-terra"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "gpt-5.6-luna": ModelDefinition(
@@ -76,7 +76,7 @@ class OpenAIDefinitions(BaseDefinitionProvider):
         url="https://developers.openai.com/api/docs/models/gpt-5.6-luna",
         identifiers={"openai": "gpt-5.6-luna", "openrouter": "openai/gpt-5.6-luna"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       # ----------------------------------------------------------------
@@ -94,7 +94,7 @@ class OpenAIDefinitions(BaseDefinitionProvider):
         url="https://developers.openai.com/api/docs/models/gpt-5.5",
         identifiers={"openai": "gpt-5.5", "openrouter": "openai/gpt-5.5"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       # ----------------------------------------------------------------
@@ -112,7 +112,7 @@ class OpenAIDefinitions(BaseDefinitionProvider):
         url="https://developers.openai.com/api/docs/models/gpt-5.4",
         identifiers={"openai": "gpt-5.4-2026-03-05", "openrouter": "openai/gpt-5.4"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "gpt-5.4-mini": ModelDefinition(
@@ -127,7 +127,7 @@ class OpenAIDefinitions(BaseDefinitionProvider):
         url="https://developers.openai.com/api/docs/models/gpt-5.4-mini",
         identifiers={"openai": "gpt-5.4-mini-2026-03-17", "openrouter": "openai/gpt-5.4-mini"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "gpt-5.4-nano": ModelDefinition(
@@ -142,7 +142,7 @@ class OpenAIDefinitions(BaseDefinitionProvider):
         url="https://developers.openai.com/api/docs/models/gpt-5.4-nano",
         identifiers={"openai": "gpt-5.4-nano-2026-03-17", "openrouter": "openai/gpt-5.4-nano"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       # ----------------------------------------------------------------
@@ -160,7 +160,7 @@ class OpenAIDefinitions(BaseDefinitionProvider):
         url="https://developers.openai.com/api/docs/models/gpt-5",
         identifiers={"openai": "gpt-5-2025-08-07", "openrouter": "openai/gpt-5"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       # ----------------------------------------------------------------
@@ -178,7 +178,7 @@ class OpenAIDefinitions(BaseDefinitionProvider):
         url="https://developers.openai.com/api/docs/models/gpt-4o",
         identifiers={"openai": "gpt-4o", "openrouter": "openai/gpt-4o"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "gpt-4o-mini": ModelDefinition(
@@ -193,6 +193,6 @@ class OpenAIDefinitions(BaseDefinitionProvider):
         url="https://developers.openai.com/api/docs/models/gpt-4o-mini",
         identifiers={"openai": "gpt-4o-mini", "openrouter": "openai/gpt-4o-mini"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
     }

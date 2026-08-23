@@ -4,7 +4,7 @@ from typing import Dict
 
 from .base import BaseDefinitionProvider
 from .model_definition import ModelDefinition
-from ..data.chunks import TextChunk
+from ..data.chunks import TextChunk, ToolChunk
 from ..decorators import definitions
 from ..enums.data import ArtifactType
 from ..data.models.conversation.message_sequence import MessageSequence
@@ -32,7 +32,7 @@ class MoonshotDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/moonshotai/kimi-k3",
         identifiers={"openrouter": "moonshotai/kimi-k3"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "kimi-k2.7-code": ModelDefinition(
@@ -47,7 +47,7 @@ class MoonshotDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/moonshotai/kimi-k2.7-code",
         identifiers={"openrouter": "moonshotai/kimi-k2.7-code"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "kimi-k2.6": ModelDefinition(
@@ -62,7 +62,7 @@ class MoonshotDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/moonshotai/kimi-k2.6",
         identifiers={"openrouter": "moonshotai/kimi-k2.6"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "kimi-k2.5": ModelDefinition(
@@ -77,7 +77,7 @@ class MoonshotDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/moonshotai/kimi-k2.5",
         identifiers={"openrouter": "moonshotai/kimi-k2.5"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
 
       "kimi-k2-thinking": ModelDefinition(
@@ -92,6 +92,6 @@ class MoonshotDefinitions(BaseDefinitionProvider):
         url="https://openrouter.ai/models/moonshotai/kimi-k2-thinking",
         identifiers={"openrouter": "moonshotai/kimi-k2-thinking"},
         inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk],
+        outputs=[TextChunk, ToolChunk],
       ),
     }
