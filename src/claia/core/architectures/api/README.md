@@ -7,6 +7,9 @@ Architectures for hosted LLM APIs.
 - `anthropic.py` — Anthropic architecture.
 - `openai.py` — OpenAI architecture.
 - `openrouter.py` — OpenRouter architecture.
+- `tools.py` — shared native tool-calling helpers: JSON Schema from
+  `ToolReference`, each provider's `tools` array, follow-up
+  message shapes, and `ToolChunk` construction.
 - `wire.py` — shared OpenAI-wire utility: SSE parsing and provider
   error formatting, used by all three (and by future
   OpenAI-compatible architectures such as llama.cpp/vllm).

@@ -7,6 +7,12 @@ Uses the Responses API (POST /v1/responses).
 import logging
 from typing import Any, Dict, Generator, List, Optional
 
+from .tools import (
+  TOOLS_PARAM,
+  format_openai_responses_input,
+  openai_responses_tools,
+  tool_chunk,
+)
 from .wire import iter_sse, provider_error
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
@@ -34,7 +40,7 @@ logger = logging.getLogger(__name__)
 @architecture
 @architecture.name("openai")
 @architecture.title("OpenAI API Architecture")
-@architecture.description("Implements OpenAI chat/completions API-backed models")
+@architecture.description("Implements OpenAI Responses API-backed models")
 @architecture.param(ParamSpec(
   name="openai_api_token",
   type=str,
@@ -44,6 +50,7 @@ logger = logging.getLogger(__name__)
   category=ParamCategory.API,
   description="OpenAI API Token",
 ))
+@architecture.param(TOOLS_PARAM)
 @architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)
 class OpenAIArchitecture(APIArchitecture):
   """OpenAI API architecture using the Responses API."""
@@ -61,15 +68,18 @@ class OpenAIArchitecture(APIArchitecture):
     """Generate a response using OpenAI's Responses API."""
     if not isinstance(inputs, MessageSequence):
       raise TypeError("OpenAIArchitecture expects a MessageSequence input")
-    instructions, input_messages = self._convert_sequence(inputs)
+    tools = kwargs.pop("tools", None)
+    instructions, input_messages = self._convert_sequence(inputs, native=bool(tools))
 
-    _skip = {"stream", "max_tokens", "n", "stop", "top_k"}
+    _skip = {"stream", "max_tokens", "n", "stop", "top_k", "tools"}
     request_data: Dict[str, Any] = {
       "model": self.model_name,
       "input": input_messages,
       "store": False,
       **{k: v for k, v in kwargs.items() if v is not None and k not in _skip},
     }
+    if tools:
+      request_data["tools"] = openai_responses_tools(tools)
 
     if instructions:
       request_data["instructions"] = instructions
@@ -82,14 +92,29 @@ class OpenAIArchitecture(APIArchitecture):
       return (yield from self._generate_streaming(request_data))
     return (yield from self._generate_blocking(request_data))
 
-  def _convert_sequence(self, sequence: MessageSequence) -> tuple:
+  def _convert_sequence(self, sequence: MessageSequence, native: bool = False) -> tuple:
     """Convert a MessageSequence to (instructions, input_messages)."""
+    if native:
+      return sequence.system, format_openai_responses_input(sequence)
     return sequence.system, self.format_messages(sequence)
 
   def _generate_streaming(self, request_data: Dict[str, Any]) -> Generator[BaseChunk, None, ModelResponse]:
     response = self.post("responses", {**request_data, "stream": True}, stream=True)
     chunks: List[BaseChunk] = []
+    emitted: set = set()
     usage = None
+
+    def emit_function_call(item: Dict[str, Any]) -> Generator[BaseChunk, None, None]:
+      if item.get("type") != "function_call":
+        return
+      key = item.get("call_id") or item.get("id")
+      if key in emitted:
+        return
+      chunk = tool_chunk(item.get("name"), item.get("arguments"), item.get("call_id") or item.get("id"))
+      if key:
+        emitted.add(key)
+      chunks.append(chunk)
+      yield chunk
 
     for event in iter_sse(response):
       event_type = event.get("type")
@@ -101,6 +126,9 @@ class OpenAIArchitecture(APIArchitecture):
           chunks.append(chunk)
           yield chunk
 
+      elif event_type == "response.output_item.done":
+        yield from emit_function_call(event.get("item") or {})
+
       elif event_type in ("error", "response.failed"):
         err = event.get("error") or event.get("response", {}).get("error") or {}
         message = provider_error("OpenAI", err, "unknown error from the Responses API")
@@ -110,7 +138,10 @@ class OpenAIArchitecture(APIArchitecture):
         return ModelResponse(chunks=chunks, complete=False, error=message)
 
       elif event_type in ("response.completed", "response.incomplete"):
-        usage = (event.get("response") or {}).get("usage")
+        payload = event.get("response") or {}
+        usage = payload.get("usage")
+        for item in payload.get("output") or []:
+          yield from emit_function_call(item)
         break
 
     return ModelResponse(
@@ -132,18 +163,31 @@ class OpenAIArchitecture(APIArchitecture):
       raise DeploymentError(message)
 
     content = ""
+    tool_chunks: List[BaseChunk] = []
     for item in data.get("output", []):
       if item.get("type") == "message":
         for part in item.get("content", []):
           if part.get("type") == "output_text":
             content += part.get("text", "")
+      elif item.get("type") == "function_call":
+        tool_chunks.append(tool_chunk(
+          item.get("name"),
+          item.get("arguments"),
+          item.get("call_id") or item.get("id"),
+        ))
 
-    chunk = TextChunk(data=content)
-    yield chunk
+    chunks: List[BaseChunk] = []
+    if content or not tool_chunks:
+      chunk = TextChunk(data=content)
+      chunks.append(chunk)
+      yield chunk
+    for chunk in tool_chunks:
+      chunks.append(chunk)
+      yield chunk
 
     usage = data.get("usage")
     return ModelResponse(
-      chunks=[chunk],
+      chunks=chunks,
       complete=True,
       metadata={"usage": usage} if usage else {},
     )

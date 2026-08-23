@@ -151,12 +151,20 @@ class BaseAgent:
     tool_mode = cls._effective_tool_mode(requested_mode, solution)
     round_index = int(task.parameters.get(cls.ROUND_PARAMETER, 0))
     tag_specs = cls.resolve_tag_specs(registry, model_id)
-    tools = registry.list_tools() if tool_mode is ToolMode.MANUAL else []
-    composed = cls.compose_system_prompt(
-      system,
-      tools=tools,
-      tag_specs=tag_specs,
-    )
+    catalog = registry.list_tools()
+    if tool_mode is ToolMode.MANUAL:
+      composed = cls.compose_system_prompt(
+        system,
+        tools=catalog,
+        tag_specs=tag_specs,
+      )
+    else:
+      composed = cls.compose_system_prompt(
+        system,
+        tools=[],
+        tag_specs=tag_specs,
+      )
+      kwargs["tools"] = catalog
 
     text, results, cancelled = cls.stream_turn(
       task,
@@ -199,6 +207,7 @@ class BaseAgent:
     """
     kwargs.pop("tool_mode", None)
     kwargs.pop("solution", None)
+    native_tools = kwargs.pop("tools", None)
     conversation = task.conversation
     streaming_message = conversation.start_streaming_message(MessageRole.ASSISTANT)
     logger.info(
@@ -212,13 +221,16 @@ class BaseAgent:
     tool_results: List[Tuple[str, str]] = []
 
     try:
+      run_kwargs = dict(kwargs)
+      if native_tools is not None:
+        run_kwargs["tools"] = native_tools
       for chunk in registry.run(
         model_id,
         conversation,
         streaming=True,
         system=system,
         solution=solution,
-        **kwargs,
+        **run_kwargs,
       ):
         if task.cancel_requested:
           cancelled = True

@@ -53,6 +53,7 @@ class _FakeRegistry:
     self.execute_calls: List[Dict[str, Any]] = []
     self.run_calls = 0
     self.systems: List[Optional[str]] = []
+    self.run_tools: List[Any] = []
     self.solver = _FakeSolver(supports_native)
     self.solutions: List[Any] = []
 
@@ -60,6 +61,7 @@ class _FakeRegistry:
     assert streaming is True
     self.run_calls += 1
     self.systems.append(kwargs.get("system"))
+    self.run_tools.append(kwargs.get("tools"))
     self.solutions.append(solution)
     if self._runs:
       chunks = self._runs.pop(0)
@@ -121,6 +123,7 @@ def test_manual_prepends_tool_prompt():
   assert task.status == TaskStatus.COMPLETED
   assert reg.systems[0].startswith("You can call tools")
   assert "demo.echo" in reg.systems[0]
+  assert reg.run_tools[0] is None
   assert reg.solver.calls == 1
   assert reg.solutions[0] is not None
 
@@ -134,6 +137,7 @@ def test_native_skips_tool_prompt_when_outputs_list_toolchunk():
   assert task.status == TaskStatus.COMPLETED
   assert reg.systems[0] == "You write poetry."
   assert "You can call tools" not in reg.systems[0]
+  assert [ref.qualified_name for ref in reg.run_tools[0]] == ["demo.echo"]
 
 
 def test_native_parser_tool_tags_are_ignored():
@@ -212,3 +216,4 @@ def test_native_request_without_toolchunk_stays_manual():
   assert task.status == TaskStatus.COMPLETED
   assert reg.systems[0].startswith("You can call tools")
   assert reg.systems[0].endswith("You write poetry.")
+  assert reg.run_tools[0] is None

@@ -481,7 +481,9 @@ class Registry:
           (``deployment_preference`` is a ``DeploymentPreference``
           or its value; ``solution`` is a prefetched
           ``SolverResult`` that skips solve; ``tool_mode`` is a
-          registry setting, not an architecture kwarg).
+          registry setting, not an architecture kwarg;
+          ``tools`` is a RUNTIME list of ``ToolReference``s for
+          NATIVE provider tool calling).
 
     Returns:
         ``Result`` (streaming=False) or ``GenerateStream``

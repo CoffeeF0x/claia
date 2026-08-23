@@ -34,8 +34,8 @@ from claia.core.data import Conversation
 from claia.core.enums.conversation import MessageRole
 from claia.core.enums.parser import TagType
 from claia.core.enums.task import TaskEvent, TaskStatus
-from claia.core.data.chunks import BaseChunk, TextChunk
-from claia.core.plugins.base import ToolReference
+from claia.core.data.chunks import BaseChunk, TextChunk, ToolChunk
+from claia.core.plugins.base import ArgumentDefinition, ToolReference
 from claia.core.results import Result
 from claia.framework.agents.base import BaseAgent
 from claia.framework.agents.simple import SimpleAgent
@@ -578,3 +578,97 @@ class TestLegacySurfaceRemoved:
   def test_simple_protocol_no_longer_has_execute_legacy(self):
     from claia.core.tools.protocols.simple import SimpleProtocol
     assert not hasattr(SimpleProtocol, "execute_legacy")
+
+
+# ---------------------------------------------------------------------------
+# NATIVE: forward tools into run, dispatch ToolChunk
+# ---------------------------------------------------------------------------
+class _NativeCapable:
+  supports_native_tools = True
+
+  def solve(self, model_id, preference="any"):
+    return self
+
+
+class _NativeRegistry(_FakeToolRegistry):
+  def __init__(self, chunks, catalog, tools=None, follow_ups=None):
+    super().__init__(chunks, tools=tools, follow_ups=follow_ups)
+    self.solver = _NativeCapable()
+    self.catalog = catalog
+    self.run_kwargs = []
+
+  def list_tools(self):
+    return self.catalog
+
+  def run(self, model_id, conversation, streaming=False, **kwargs):
+    self.run_kwargs.append(kwargs)
+    return super().run(model_id, conversation, streaming=streaming, **kwargs)
+
+
+def _echo_catalog():
+  return [ToolReference(
+    qualified_name="demo.echo",
+    description="Echo",
+    protocol_name="simple",
+    parameter_schema={
+      "message": ArgumentDefinition(
+        name="message", description="Text", data_type="str", required=True,
+      ),
+    },
+  )]
+
+
+class TestNativeToolForwarding:
+  def test_manual_keeps_prompt_and_does_not_forward_tools(self):
+    convo = Conversation(title="t")
+    task = _task(convo)
+    catalog = _echo_catalog()
+    reg = _NativeRegistry(_stream("hello"), catalog=catalog)
+
+    SimpleAgent.execute(task, registry=reg)
+
+    assert "tools" not in reg.run_kwargs[0]
+    assert "You can call tools" in reg.run_kwargs[0]["system"]
+    assert "demo.echo" in reg.run_kwargs[0]["system"]
+
+  def test_native_forwards_catalog_and_skips_prompt(self):
+    convo = Conversation(title="t")
+    task = _task(convo)
+    catalog = _echo_catalog()
+    reg = _NativeRegistry(_stream("hello"), catalog=catalog)
+
+    SimpleAgent.execute(task, registry=reg, tool_mode="native")
+
+    assert reg.run_kwargs[0]["tools"] == catalog
+    assert "You can call tools" not in reg.run_kwargs[0]["system"]
+
+  def test_native_dispatches_tool_chunk_without_leaking_tools_kwarg(self):
+    convo = Conversation(title="t")
+    task = _task(convo)
+
+    def _echo(raw_payload, conversation, **kwargs):
+      import json as _json
+      data = _json.loads(raw_payload)
+      return Result.ok(f"echoed:{data['parameters']['message']}")
+
+    chunks = [
+      TextChunk(data="calling "),
+      ToolChunk(tool_name="demo.echo", payload={"message": "hi"}, call_id="call_1"),
+    ]
+    follow = [_stream("done.")]
+    reg = _NativeRegistry(
+      chunks,
+      catalog=_echo_catalog(),
+      tools={"demo.echo": _echo},
+      follow_ups=follow,
+    )
+
+    SimpleAgent.execute(task, registry=reg, tool_mode="native")
+
+    assert len(reg.execute_calls) == 1
+    assert "tools" not in reg.execute_calls[0]["kwargs"]
+    payload = reg.execute_calls[0]["raw_payload"]
+    assert "demo.echo" in payload
+    artifacts = _tool_results(convo)
+    assert artifacts[0].call_id == "call_1"
+    assert artifacts[0].content == "echoed:hi"

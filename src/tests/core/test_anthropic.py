@@ -1,0 +1,184 @@
+"""Tests for the Anthropic Messages API architecture."""
+
+from claia.core.architectures.api.anthropic import AnthropicArchitecture
+from claia.core.data import Conversation
+from claia.core.data.chunks import TextChunk, ToolChunk
+from claia.core.enums.conversation import MessageRole
+from claia.core.plugins.base import ArgumentDefinition, ToolReference
+from claia.core.results import DeploymentError
+
+import pytest
+
+
+class FakeResponse:
+  def __init__(self, json_data=None, lines=None):
+    self._json_data = json_data or {}
+    self._lines = lines or []
+
+  def json(self):
+    return self._json_data
+
+  def iter_lines(self):
+    return iter(self._lines)
+
+
+class RecordingAnthropicArchitecture(AnthropicArchitecture):
+  def __init__(self, *args, response, **kwargs):
+    super().__init__(*args, **kwargs)
+    self.response = response
+    self.calls = []
+
+  def post(self, endpoint, data, *args, **kwargs):
+    self.calls.append((endpoint, data, kwargs))
+    return self.response
+
+
+def _sequence(conversation, system=None):
+  from claia.core.definitions.model_definition import ModelDefinition
+  from claia.core.data.models.conversation.message_sequence import MessageSequence
+  from claia.core.enums.data import ArtifactType
+  return conversation.to_model_inputs(
+    ModelDefinition(inputs=[ArtifactType.TEXT, MessageSequence]),
+    system=system,
+  )
+
+
+def _conversation():
+  conversation = Conversation(title="T")
+  conversation.add_message(MessageRole.USER, "Hello")
+  return conversation
+
+
+def _echo_ref():
+  return ToolReference(
+    qualified_name="demo.echo",
+    description="Echo",
+    protocol_name="simple",
+    parameter_schema={
+      "message": ArgumentDefinition(
+        name="message", description="Text", data_type="str", required=True,
+      ),
+    },
+  )
+
+
+def test_anthropic_blocking_text_omits_tools():
+  response = FakeResponse({
+    "content": [{"type": "text", "text": "Hi there"}],
+  })
+  model = RecordingAnthropicArchitecture(
+    "claude-sonnet-5",
+    anthropic_api_token="secret",
+    response=response,
+  )
+
+  chunks = list(model.generate(
+    _sequence(_conversation(), system="Be brief"),
+    stream=False,
+    temperature=0,
+  ))
+
+  endpoint, data, _ = model.calls[0]
+  assert [c.data for c in chunks] == ["Hi there"]
+  assert endpoint == "messages"
+  assert data["system"] == "Be brief"
+  assert data["temperature"] == 0
+  assert "tools" not in data
+  assert model.session.headers["x-api-key"] == "secret"
+
+
+def test_anthropic_sends_tools_and_yields_tool_use():
+  response = FakeResponse({
+    "content": [
+      {"type": "text", "text": "Calling"},
+      {
+        "type": "tool_use",
+        "id": "call_1",
+        "name": "demo.echo",
+        "input": {"message": "hi"},
+      },
+    ],
+  })
+  model = RecordingAnthropicArchitecture("claude-sonnet-5", response=response)
+
+  chunks = list(model.generate(
+    _sequence(_conversation()),
+    stream=False,
+    tools=[_echo_ref()],
+  ))
+
+  _, data, _ = model.calls[0]
+  assert data["tools"][0]["name"] == "demo.echo"
+  assert data["tools"][0]["input_schema"]["required"] == ["message"]
+  assert [c.data for c in chunks if isinstance(c, TextChunk)] == ["Calling"]
+  tool = next(c for c in chunks if isinstance(c, ToolChunk))
+  assert tool.tool_name == "demo.echo"
+  assert tool.payload == {"message": "hi"}
+  assert tool.call_id == "call_1"
+
+
+def test_anthropic_streams_tool_use_json_deltas():
+  response = FakeResponse(lines=[
+    b'data: {"type":"content_block_start","index":0,"content_block":{"type":"text"}}',
+    b'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Let me "}}',
+    b'data: {"type":"content_block_stop","index":0}',
+    b'data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"call_1","name":"demo.echo"}}',
+    b'data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"message\\":"}}',
+    b'data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\\"hi\\"}"}}',
+    b'data: {"type":"content_block_stop","index":1}',
+  ])
+  model = RecordingAnthropicArchitecture("claude-sonnet-5", response=response)
+
+  chunks = list(model.generate(
+    _sequence(_conversation()),
+    stream=True,
+    tools=[_echo_ref()],
+  ))
+
+  assert [c.data for c in chunks if isinstance(c, TextChunk)] == ["Let me "]
+  tool = next(c for c in chunks if isinstance(c, ToolChunk))
+  assert tool.tool_name == "demo.echo"
+  assert tool.payload == {"message": "hi"}
+  assert tool.call_id == "call_1"
+
+
+def test_anthropic_native_follow_up_uses_tool_result_blocks():
+  import json
+  from claia.core.data import Message, MessageSequence
+  from claia.core.data.artifacts import ToolArtifact
+  from claia.core.enums.parser import TagType
+
+  utility = Message(
+    role=MessageRole.UTILITY,
+    tag_type=TagType.TOOL,
+    content=json.dumps({"name": "demo.echo", "parameters": {"message": "hi"}}),
+  )
+  utility.add_artifact(ToolArtifact.from_result("demo.echo", "pong", call_id="call_1"))
+  sequence = MessageSequence(messages=[
+    Message(role=MessageRole.USER, content="Hello"),
+    Message(role=MessageRole.ASSISTANT, content="calling"),
+    utility,
+  ])
+  response = FakeResponse({"content": [{"type": "text", "text": "done"}]})
+  model = RecordingAnthropicArchitecture("claude-sonnet-5", response=response)
+
+  list(model.generate(sequence, stream=False, tools=[_echo_ref()]))
+
+  messages = model.calls[0][1]["messages"]
+  assert messages[1]["content"][1]["type"] == "tool_use"
+  assert messages[2]["content"][0] == {
+    "type": "tool_result",
+    "tool_use_id": "call_1",
+    "content": "pong",
+  }
+
+
+def test_anthropic_raises_on_api_errors():
+  response = FakeResponse({
+    "type": "error",
+    "error": {"type": "invalid_request_error", "message": "Unknown model"},
+  })
+  model = RecordingAnthropicArchitecture("bad-model", response=response)
+
+  with pytest.raises(DeploymentError, match=r"Anthropic error \(invalid_request_error\): Unknown model"):
+    list(model.generate(_sequence(_conversation()), stream=False))

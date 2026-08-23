@@ -89,6 +89,7 @@ def test_openrouter_model_builds_non_streaming_request():
     {"role": "system", "content": "Be brief"},
     {"role": "user", "content": "Hello"},
   ]
+  assert "tools" not in data
   assert model.session.headers["Authorization"] == "Bearer secret"
 
 
@@ -121,6 +122,120 @@ def test_openrouter_model_raises_on_api_errors():
 
   with pytest.raises(DeploymentError, match=r"OpenRouter error \(invalid_model\): Unknown model"):
     list(model.generate(_sequence(_conversation()), stream=False))
+
+
+def _echo_ref():
+  from claia.core.plugins.base import ArgumentDefinition, ToolReference
+  return ToolReference(
+    qualified_name="demo.echo",
+    description="Echo",
+    protocol_name="simple",
+    parameter_schema={
+      "message": ArgumentDefinition(
+        name="message", description="Text", data_type="str", required=True,
+      ),
+    },
+  )
+
+
+def test_openrouter_sends_chat_tools_and_yields_tool_chunk():
+  response = FakeResponse({
+    "choices": [{
+      "message": {
+        "content": "",
+        "tool_calls": [{
+          "id": "call_1",
+          "type": "function",
+          "function": {
+            "name": "demo.echo",
+            "arguments": '{"message": "hi"}',
+          },
+        }],
+      },
+    }],
+  })
+  model = RecordingOpenRouterArchitecture("openai/gpt-4o-mini", response=response)
+
+  chunks = list(model.generate(
+    _sequence(_conversation()),
+    stream=False,
+    tools=[_echo_ref()],
+  ))
+
+  endpoint, data, _ = model.calls[0]
+  assert endpoint == "chat/completions"
+  assert data["tools"][0]["function"]["name"] == "demo.echo"
+  assert len(chunks) == 1
+  assert isinstance(chunks[0], ToolChunk)
+  assert chunks[0].tool_name == "demo.echo"
+  assert chunks[0].payload == {"message": "hi"}
+  assert chunks[0].call_id == "call_1"
+
+
+def test_openrouter_streams_tool_call_deltas():
+  response = FakeResponse(lines=[
+    b'data: {"choices":[{"delta":{"content":"Let me "}}]}',
+    b'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"demo.echo","arguments":""}}]}}]}',
+    b'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"message\\": \\"hi\\"}"}}]}}]}',
+    b"data: [DONE]",
+  ])
+  model = RecordingOpenRouterArchitecture("openai/gpt-4o-mini", response=response)
+
+  chunks = list(model.generate(
+    _sequence(_conversation()),
+    stream=True,
+    tools=[_echo_ref()],
+  ))
+
+  assert [c.data for c in chunks if isinstance(c, TextChunk)] == ["Let me "]
+  tool = next(c for c in chunks if isinstance(c, ToolChunk))
+  assert tool.tool_name == "demo.echo"
+  assert tool.payload == {"message": "hi"}
+  assert tool.call_id == "call_1"
+
+
+def _sequence_with_utility():
+  import json
+  from claia.core.data import Message, MessageSequence
+  from claia.core.data.artifacts import ToolArtifact
+  from claia.core.enums.parser import TagType
+
+  utility = Message(
+    role=MessageRole.UTILITY,
+    tag_type=TagType.TOOL,
+    content=json.dumps({"name": "demo.echo", "parameters": {"message": "hi"}}),
+  )
+  utility.add_artifact(ToolArtifact.from_result("demo.echo", "pong", call_id="call_1"))
+  return MessageSequence(messages=[
+    Message(role=MessageRole.USER, content="Hello"),
+    Message(role=MessageRole.ASSISTANT, content="calling"),
+    utility,
+  ])
+
+
+def test_openrouter_without_tools_keeps_manual_utility_text():
+  from claia.core.data.artifacts import ToolArtifact
+  response = FakeResponse({"choices": [{"message": {"content": "done"}}]})
+  model = RecordingOpenRouterArchitecture("openai/gpt-4o-mini", response=response)
+
+  list(model.generate(_sequence_with_utility(), stream=False))
+
+  messages = model.calls[0][1]["messages"]
+  assert messages[2]["role"] == "user"
+  assert messages[2]["content"] == ToolArtifact.format_result("demo.echo", "pong")
+  assert "tools" not in model.calls[0][1]
+
+
+def test_openrouter_native_follow_up_uses_tool_role():
+  response = FakeResponse({"choices": [{"message": {"content": "done"}}]})
+  model = RecordingOpenRouterArchitecture("openai/gpt-4o-mini", response=response)
+
+  list(model.generate(_sequence_with_utility(), stream=False, tools=[_echo_ref()]))
+
+  messages = model.calls[0][1]["messages"]
+  assert messages[1]["tool_calls"][0]["id"] == "call_1"
+  assert messages[2]["role"] == "tool"
+  assert messages[2]["content"] == "pong"
 
 
 def test_openrouter_architecture_exposes_model_and_params():

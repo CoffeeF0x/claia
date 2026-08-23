@@ -7,6 +7,7 @@ Uses the Messages API (POST /v1/messages), streaming or blocking.
 import logging
 from typing import Any, Dict, Generator, List, Optional
 
+from .tools import TOOLS_PARAM, anthropic_tools, format_anthropic_messages, tool_chunk
 from .wire import iter_sse, provider_error
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
@@ -50,6 +51,7 @@ logger = logging.getLogger(__name__)
   category=ParamCategory.API,
   description="Anthropic API Token",
 ))
+@architecture.param(TOOLS_PARAM)
 @architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)
 class AnthropicArchitecture(APIArchitecture):
   """Anthropic Claude API architecture."""
@@ -75,13 +77,16 @@ class AnthropicArchitecture(APIArchitecture):
     """Generate a response using Anthropic's Messages API."""
     if not isinstance(inputs, MessageSequence):
       raise TypeError("AnthropicArchitecture expects a MessageSequence input")
-    system_message, messages = self._convert_sequence(inputs)
+    tools = kwargs.pop("tools", None)
+    system_message, messages = self._convert_sequence(inputs, native=bool(tools))
 
     request_data: Dict[str, Any] = {
       "model": self.model_name,
       "messages": messages,
       "max_tokens": kwargs.get("max_tokens", 1000),
     }
+    if tools:
+      request_data["tools"] = anthropic_tools(tools)
 
     if system_message:
       request_data["system"] = system_message
@@ -104,8 +109,10 @@ class AnthropicArchitecture(APIArchitecture):
       return (yield from self._generate_streaming(request_data))
     return (yield from self._generate_blocking(request_data))
 
-  def _convert_sequence(self, sequence: MessageSequence) -> tuple:
+  def _convert_sequence(self, sequence: MessageSequence, native: bool = False) -> tuple:
     """Convert a MessageSequence to Anthropic messages format."""
+    if native:
+      return sequence.system or "", format_anthropic_messages(sequence)
     return sequence.system or "", self.coalesce_consecutive_roles(
       self.format_messages(sequence)
     )
@@ -115,14 +122,35 @@ class AnthropicArchitecture(APIArchitecture):
     chunks: List[BaseChunk] = []
     usage: Dict[str, Any] = {}
     stop_reason = None
+    tool_blocks: Dict[int, Dict[str, str]] = {}
 
     for event in iter_sse(response):
       event_type = event.get("type")
 
-      if event_type == "content_block_delta":
+      if event_type == "content_block_start":
+        block = event.get("content_block") or {}
+        if block.get("type") == "tool_use":
+          tool_blocks[event.get("index", 0)] = {
+            "id": block.get("id") or "",
+            "name": block.get("name") or "",
+            "json": "",
+          }
+
+      elif event_type == "content_block_delta":
         delta = event.get("delta", {})
         if delta.get("type") == "text_delta" and delta.get("text"):
           chunk = TextChunk(data=delta["text"])
+          chunks.append(chunk)
+          yield chunk
+        elif delta.get("type") == "input_json_delta":
+          slot = tool_blocks.get(event.get("index", 0))
+          if slot is not None:
+            slot["json"] += delta.get("partial_json") or ""
+
+      elif event_type == "content_block_stop":
+        slot = tool_blocks.pop(event.get("index", 0), None)
+        if slot is not None:
+          chunk = tool_chunk(slot["name"], slot["json"], slot["id"] or None)
           chunks.append(chunk)
           yield chunk
 
@@ -164,21 +192,33 @@ class AnthropicArchitecture(APIArchitecture):
       raise DeploymentError(message)
 
     content = ""
-    if data.get("content"):
-      content_block = data["content"][0]
-      if content_block.get("type") == "text":
-        content = content_block.get("text", "")
+    tool_chunks: List[BaseChunk] = []
+    for block in data.get("content") or []:
+      if block.get("type") == "text":
+        content += block.get("text", "")
+      elif block.get("type") == "tool_use":
+        tool_chunks.append(tool_chunk(
+          block.get("name"),
+          block.get("input"),
+          block.get("id"),
+        ))
 
     if data.get("stop_reason") == "refusal":
       logger.warning("Claude refused to generate content for safety reasons")
       content += REFUSAL_NOTE
 
-    chunk = TextChunk(data=content)
-    yield chunk
+    chunks: List[BaseChunk] = []
+    if content or not tool_chunks:
+      chunk = TextChunk(data=content)
+      chunks.append(chunk)
+      yield chunk
+    for chunk in tool_chunks:
+      chunks.append(chunk)
+      yield chunk
 
     usage = data.get("usage")
     return ModelResponse(
-      chunks=[chunk],
+      chunks=chunks,
       complete=True,
       metadata={"usage": usage} if usage else {},
     )

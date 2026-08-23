@@ -10,4 +10,4 @@ from .openai import OpenAIArchitecture
 from .anthropic import AnthropicArchitecture
 from .openrouter import OpenRouterArchitecture
 
-__all__ = ['OpenAIArchitecture', 'AnthropicArchitecture', 'OpenRouterArchitecture']
+__all__ = ["OpenAIArchitecture", "AnthropicArchitecture", "OpenRouterArchitecture"]

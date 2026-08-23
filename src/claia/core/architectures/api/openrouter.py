@@ -10,6 +10,7 @@ and yields one complete text response otherwise.
 import logging
 from typing import Any, Dict, Generator, List, Optional
 
+from .tools import TOOLS_PARAM, format_openai_chat_messages, openai_chat_tools, tool_chunk
 from .wire import iter_sse, provider_error
 from ...data.chunks import BaseChunk, TextChunk
 from ...data.models.conversation.message_sequence import MessageSequence
@@ -80,6 +81,7 @@ logger = logging.getLogger(__name__)
   category=ParamCategory.APPLICATION,
   description="X-Title header sent to OpenRouter for app attribution.",
 ))
+@architecture.param(TOOLS_PARAM)
 @architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)
 class OpenRouterArchitecture(APIArchitecture):
   """OpenRouter API architecture."""
@@ -97,12 +99,15 @@ class OpenRouterArchitecture(APIArchitecture):
     if openrouter_api_token:
       self.set_api_key(openrouter_api_token)
 
-  def _format_messages(self, sequence: MessageSequence) -> List[Dict[str, Any]]:
+  def _format_messages(self, sequence: MessageSequence, native: bool = False) -> List[Dict[str, Any]]:
     """Format a message sequence for the OpenRouter API."""
     messages: List[Dict[str, Any]] = []
     if sequence.system:
       messages.append({"role": "system", "content": sequence.system})
-    messages.extend(self.format_messages(sequence))
+    if native:
+      messages.extend(format_openai_chat_messages(sequence))
+    else:
+      messages.extend(self.format_messages(sequence))
     logger.debug(f"Sending {len(messages)} messages to OpenRouter API")
     return messages
 
@@ -114,15 +119,18 @@ class OpenRouterArchitecture(APIArchitecture):
     """Generate a response using the OpenRouter API."""
     if not isinstance(inputs, MessageSequence):
       raise TypeError("OpenRouterArchitecture expects a MessageSequence input")
+    tools = kwargs.pop("tools", None)
 
     request_data: Dict[str, Any] = {
       "model": self.model_name,
-      "messages": self._format_messages(inputs),
+      "messages": self._format_messages(inputs, native=bool(tools)),
     }
     for param in PASSTHROUGH_PARAMS:
       value = kwargs.get(param)
       if value is not None:
         request_data[param] = value
+    if tools:
+      request_data["tools"] = openai_chat_tools(tools)
 
     if kwargs.get("stream", False):
       return (yield from self._generate_streaming(request_data))
@@ -131,6 +139,7 @@ class OpenRouterArchitecture(APIArchitecture):
   def _generate_streaming(self, request_data: Dict[str, Any]) -> Generator[BaseChunk, None, ModelResponse]:
     response = self.post("chat/completions", {**request_data, "stream": True}, stream=True)
     chunks: List[BaseChunk] = []
+    pending: Dict[int, Dict[str, str]] = {}
     usage = None
 
     for event in iter_sse(response):
@@ -148,11 +157,30 @@ class OpenRouterArchitecture(APIArchitecture):
       if not choices:
         continue
 
-      content = (choices[0].get("delta") or {}).get("content")
+      delta = choices[0].get("delta") or {}
+      content = delta.get("content")
       if content:
         chunk = TextChunk(data=content)
         chunks.append(chunk)
         yield chunk
+
+      for call in delta.get("tool_calls") or []:
+        idx = call.get("index", 0)
+        slot = pending.setdefault(idx, {"id": "", "name": "", "arguments": ""})
+        if call.get("id"):
+          slot["id"] = call["id"]
+        function = call.get("function") or {}
+        if function.get("name"):
+          slot["name"] += function["name"]
+        if function.get("arguments"):
+          slot["arguments"] += function["arguments"]
+
+    for slot in pending.values():
+      if not slot["name"]:
+        continue
+      chunk = tool_chunk(slot["name"], slot["arguments"], slot["id"] or None)
+      chunks.append(chunk)
+      yield chunk
 
     return ModelResponse(
       chunks=chunks,
@@ -174,13 +202,30 @@ class OpenRouterArchitecture(APIArchitecture):
       logger.error(f"Unexpected response format from OpenRouter: {data}")
       raise DeploymentError("OpenRouter error: invalid response format")
 
-    content = choices[0].get("message", {}).get("content", "") or ""
-    chunk = TextChunk(data=content)
-    yield chunk
+    message = choices[0].get("message") or {}
+    content = message.get("content") or ""
+    tool_chunks = [
+      tool_chunk(
+        (call.get("function") or {}).get("name"),
+        (call.get("function") or {}).get("arguments"),
+        call.get("id"),
+      )
+      for call in message.get("tool_calls") or []
+      if (call.get("function") or {}).get("name")
+    ]
+
+    chunks: List[BaseChunk] = []
+    if content or not tool_chunks:
+      chunk = TextChunk(data=content)
+      chunks.append(chunk)
+      yield chunk
+    for chunk in tool_chunks:
+      chunks.append(chunk)
+      yield chunk
 
     usage = data.get("usage")
     return ModelResponse(
-      chunks=[chunk],
+      chunks=chunks,
       complete=True,
       metadata={"usage": usage} if usage else {},
     )
