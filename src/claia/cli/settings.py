@@ -25,6 +25,7 @@ from ..core.enums.logging import LogLevel, LogFormat
 from ..core.enums.plugins import ParamScope, ParamCategory
 from ..core.plugins.base import ParamSpec
 from .params import APP_PARAMS
+from .logger import initialize_logging
 from ..framework.manager import Manager
 from ..framework.registry import Registry
 
@@ -522,6 +523,7 @@ class Settings:
 
     try:
       self._save_settings_to_file()
+      self._apply_logging_if_needed(setting_name)
       return (True, f"Setting '{setting_name}' updated successfully", old_value)
     except Exception as e:
       setattr(self, setting_name, old_value)
@@ -549,6 +551,7 @@ class Settings:
 
     try:
       self._save_settings_to_file()
+      self._apply_logging_if_needed(setting_name)
       return (True, f"Setting '{setting_name}' reset to default", old_value)
     except Exception as e:
       setattr(self, setting_name, old_value)
@@ -579,6 +582,13 @@ class Settings:
         logger.warning(f"Failed to persist runtime reset: {e}")
     return changed
 
+
+  def _apply_logging_if_needed(self, setting_name: str) -> None:
+    """Reconfigure the process logger when a live logging setting changes."""
+    if setting_name not in ("log_level", "log_format"):
+      return
+    self.validate()
+    self.root_logger = initialize_logging(self.log_level, self.log_format)
 
   def _mask_sensitive_value(self, var_name: str, value: Any) -> Any:
     """Mask sensitive values (tokens, passwords) for display."""
