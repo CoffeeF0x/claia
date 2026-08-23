@@ -100,7 +100,7 @@ def test_openai_sends_responses_tools_and_yields_function_call():
   ))
 
   _, data, _ = model.calls[0]
-  assert data["tools"][0]["name"] == "demo.echo"
+  assert data["tools"][0]["name"] == "demo__echo"
   assert data["tools"][0]["type"] == "function"
   assert len(chunks) == 1
   assert isinstance(chunks[0], ToolChunk)

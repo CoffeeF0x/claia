@@ -133,10 +133,10 @@ class OpenRouterArchitecture(APIArchitecture):
       request_data["tools"] = openai_chat_tools(tools)
 
     if kwargs.get("stream", False):
-      return (yield from self._generate_streaming(request_data))
-    return (yield from self._generate_blocking(request_data))
+      return (yield from self._generate_streaming(request_data, tools=tools))
+    return (yield from self._generate_blocking(request_data, tools=tools))
 
-  def _generate_streaming(self, request_data: Dict[str, Any]) -> Generator[BaseChunk, None, ModelResponse]:
+  def _generate_streaming(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, ModelResponse]:
     response = self.post("chat/completions", {**request_data, "stream": True}, stream=True)
     chunks: List[BaseChunk] = []
     pending: Dict[int, Dict[str, str]] = {}
@@ -178,7 +178,7 @@ class OpenRouterArchitecture(APIArchitecture):
     for slot in pending.values():
       if not slot["name"]:
         continue
-      chunk = tool_chunk(slot["name"], slot["arguments"], slot["id"] or None)
+      chunk = tool_chunk(slot["name"], slot["arguments"], slot["id"] or None, tools=tools)
       chunks.append(chunk)
       yield chunk
 
@@ -188,7 +188,7 @@ class OpenRouterArchitecture(APIArchitecture):
       metadata={"usage": usage} if usage else {},
     )
 
-  def _generate_blocking(self, request_data: Dict[str, Any]) -> Generator[BaseChunk, None, ModelResponse]:
+  def _generate_blocking(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, ModelResponse]:
     response = self.post("chat/completions", request_data)
     data = response.json()
 
@@ -209,6 +209,7 @@ class OpenRouterArchitecture(APIArchitecture):
         (call.get("function") or {}).get("name"),
         (call.get("function") or {}).get("arguments"),
         call.get("id"),
+        tools=tools,
       )
       for call in message.get("tool_calls") or []
       if (call.get("function") or {}).get("name")

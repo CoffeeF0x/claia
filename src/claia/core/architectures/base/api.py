@@ -20,6 +20,21 @@ from .base import BaseArchitecture
 logger = logging.getLogger(__name__)
 
 
+def _response_error_detail(response) -> str:
+  """Best-effort provider error message from a failed HTTP response."""
+  try:
+    payload = response.json()
+  except Exception:
+    text = (getattr(response, "text", None) or "").strip()
+    return text[:800] if text else (response.reason or "request failed")
+  err = payload.get("error", payload) if isinstance(payload, dict) else payload
+  if isinstance(err, dict):
+    return str(err.get("message") or err)
+  if isinstance(err, str) and err:
+    return err
+  return response.reason or "request failed"
+
+
 ########################################################################
 #                               CLASSES                                #
 ########################################################################
@@ -45,7 +60,12 @@ class APIArchitecture(BaseArchitecture):
     """Make an API request with the configured session."""
     url = f"{self.base_url}/{endpoint}"
     response = self.session.request(method, url, json=data, params=params, *args, **kwargs)
-    response.raise_for_status()
+    if not response.ok:
+      detail = _response_error_detail(response)
+      raise requests.HTTPError(
+        f"{response.status_code} {response.reason} for url: {url}: {detail}",
+        response=response,
+      )
     return response
 
   def get(self, endpoint: str, params: Optional[Dict] = None) -> requests.Response:

@@ -11,7 +11,9 @@ from claia.core.architectures.api.tools import (
   openai_chat_tools,
   openai_responses_tools,
   parse_arguments,
+  resolve_wire_tool_name,
   tool_chunk,
+  wire_tool_name,
 )
 from claia.core.data import Message, MessageSequence
 from claia.core.data.artifacts import ToolArtifact
@@ -91,15 +93,23 @@ def test_json_schema_passes_through_json_schema_dict():
   assert schema["required"] == ["q"]
 
 
+def test_wire_tool_name_encodes_dotted_namespaces():
+  assert wire_tool_name("cli.settings_get") == "cli__settings_get"
+  assert wire_tool_name("mcp.fs.read") == "mcp__fs__read"
+  assert resolve_wire_tool_name("cli__settings_get") == "cli.settings_get"
+  assert resolve_wire_tool_name("demo__echo", [_echo_ref()]) == "demo.echo"
+
+
 def test_provider_tool_arrays():
   refs = [_echo_ref()]
   assert openai_responses_tools(refs) == [{
     "type": "function",
-    "name": "demo.echo",
+    "name": "demo__echo",
     "description": "Echo a message",
     "parameters": json_schema_from_tool(refs[0]),
   }]
-  assert openai_chat_tools(refs)[0]["function"]["name"] == "demo.echo"
+  assert openai_chat_tools(refs)[0]["function"]["name"] == "demo__echo"
+  assert anthropic_tools(refs)[0]["name"] == "demo__echo"
   assert anthropic_tools(refs)[0]["input_schema"]["required"] == ["message"]
 
 
@@ -121,7 +131,7 @@ def test_openai_responses_follow_up_uses_function_call_items():
     {
       "type": "function_call",
       "call_id": "call_echo",
-      "name": "demo.echo",
+      "name": "demo__echo",
       "arguments": '{"message": "yo"}',
     },
     {
@@ -139,7 +149,7 @@ def test_openai_chat_follow_up_attaches_tool_calls_to_assistant():
   assert messages[1]["tool_calls"] == [{
     "id": "call_echo",
     "type": "function",
-    "function": {"name": "demo.echo", "arguments": '{"message": "yo"}'},
+    "function": {"name": "demo__echo", "arguments": '{"message": "yo"}'},
   }]
   assert messages[2] == {
     "role": "tool",
@@ -167,7 +177,7 @@ def test_anthropic_follow_up_uses_tool_use_and_tool_result():
   assert messages[1]["content"][1] == {
     "type": "tool_use",
     "id": "call_echo",
-    "name": "demo.echo",
+    "name": "demo__echo",
     "input": {"message": "yo"},
   }
   assert messages[2] == {

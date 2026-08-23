@@ -9,6 +9,7 @@ parses native call payloads into ``ToolChunk``.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Dict, Iterable, List, Optional
 
 from ...data.chunks import ToolChunk
@@ -43,6 +44,11 @@ _JSON_TYPES = {
   "boolean": "boolean",
 }
 
+# Anthropic and OpenAI function names: ^[a-zA-Z0-9_-]{1,64}$
+# CLAIA qualified names use dotted namespaces (cli.settings_get).
+_WIRE_NAME_INVALID = re.compile(r"[^a-zA-Z0-9_-]")
+_WIRE_NAME_MAX = 64
+
 TOOLS_PARAM = ParamSpec(
   name="tools",
   type=list,
@@ -52,6 +58,34 @@ TOOLS_PARAM = ParamSpec(
   category=ParamCategory.GENERATION,
   description="ToolReference list for provider-native tool calling.",
 )
+
+
+########################################################################
+#                             WIRE NAMES                               #
+########################################################################
+def wire_tool_name(qualified_name: Optional[str]) -> str:
+  """Encode a qualified name for Anthropic / OpenAI function names."""
+  encoded = (qualified_name or "").replace(".", "__")
+  encoded = _WIRE_NAME_INVALID.sub("_", encoded)
+  encoded = encoded[:_WIRE_NAME_MAX]
+  return encoded or "tool"
+
+
+def resolve_wire_tool_name(
+  wire_name: Optional[str],
+  refs: Optional[Iterable[ToolReference]] = None,
+) -> str:
+  """Map a provider function name back to a CLAIA qualified name."""
+  name = (wire_name or "").strip()
+  if not name:
+    return ""
+  if refs:
+    for ref in refs:
+      if wire_tool_name(ref.qualified_name) == name:
+        return ref.qualified_name
+  if "." not in name and "__" in name:
+    return name.replace("__", ".")
+  return name
 
 
 ########################################################################
@@ -74,7 +108,7 @@ def openai_responses_tools(refs: Iterable[ToolReference]) -> List[Dict[str, Any]
   return [
     {
       "type": "function",
-      "name": ref.qualified_name,
+      "name": wire_tool_name(ref.qualified_name),
       "description": ref.description or "",
       "parameters": json_schema_from_tool(ref),
     }
@@ -88,7 +122,7 @@ def openai_chat_tools(refs: Iterable[ToolReference]) -> List[Dict[str, Any]]:
     {
       "type": "function",
       "function": {
-        "name": ref.qualified_name,
+        "name": wire_tool_name(ref.qualified_name),
         "description": ref.description or "",
         "parameters": json_schema_from_tool(ref),
       },
@@ -101,7 +135,7 @@ def anthropic_tools(refs: Iterable[ToolReference]) -> List[Dict[str, Any]]:
   """Anthropic Messages ``tools`` array."""
   return [
     {
-      "name": ref.qualified_name,
+      "name": wire_tool_name(ref.qualified_name),
       "description": ref.description or "",
       "input_schema": json_schema_from_tool(ref),
     }
@@ -125,7 +159,7 @@ def format_openai_responses_input(sequence: MessageSequence) -> List[Dict[str, A
       items.append({
         "type": "function_call",
         "call_id": call["call_id"],
-        "name": call["name"],
+        "name": wire_tool_name(call["name"]),
         "arguments": json.dumps(call["arguments"]),
       })
       items.append({
@@ -153,7 +187,7 @@ def format_openai_chat_messages(sequence: MessageSequence) -> List[Dict[str, Any
         "id": call["call_id"],
         "type": "function",
         "function": {
-          "name": call["name"],
+          "name": wire_tool_name(call["name"]),
           "arguments": json.dumps(call["arguments"]),
         },
       }
@@ -188,7 +222,7 @@ def format_anthropic_messages(sequence: MessageSequence) -> List[Dict[str, Any]]
       tool_use = {
         "type": "tool_use",
         "id": call["call_id"],
-        "name": call["name"],
+        "name": wire_tool_name(call["name"]),
         "input": call["arguments"],
       }
       assistant = _last_role(formatted, "assistant")
@@ -235,10 +269,11 @@ def tool_chunk(
   name: Optional[str],
   arguments: Any,
   call_id: Optional[str] = None,
+  tools: Optional[Iterable[ToolReference]] = None,
 ) -> ToolChunk:
   """Build a ``ToolChunk`` from a native provider call."""
   return ToolChunk(
-    tool_name=(name or "").strip(),
+    tool_name=resolve_wire_tool_name(name, tools),
     payload=parse_arguments(arguments),
     call_id=call_id,
   )

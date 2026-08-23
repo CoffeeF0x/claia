@@ -108,7 +108,7 @@ def test_anthropic_sends_tools_and_yields_tool_use():
   ))
 
   _, data, _ = model.calls[0]
-  assert data["tools"][0]["name"] == "demo.echo"
+  assert data["tools"][0]["name"] == "demo__echo"
   assert data["tools"][0]["input_schema"]["required"] == ["message"]
   assert [c.data for c in chunks if isinstance(c, TextChunk)] == ["Calling"]
   tool = next(c for c in chunks if isinstance(c, ToolChunk))

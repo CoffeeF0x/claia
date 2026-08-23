@@ -89,8 +89,8 @@ class OpenAIArchitecture(APIArchitecture):
       request_data["max_output_tokens"] = max_tokens
 
     if kwargs.get("stream", False):
-      return (yield from self._generate_streaming(request_data))
-    return (yield from self._generate_blocking(request_data))
+      return (yield from self._generate_streaming(request_data, tools=tools))
+    return (yield from self._generate_blocking(request_data, tools=tools))
 
   def _convert_sequence(self, sequence: MessageSequence, native: bool = False) -> tuple:
     """Convert a MessageSequence to (instructions, input_messages)."""
@@ -98,7 +98,7 @@ class OpenAIArchitecture(APIArchitecture):
       return sequence.system, format_openai_responses_input(sequence)
     return sequence.system, self.format_messages(sequence)
 
-  def _generate_streaming(self, request_data: Dict[str, Any]) -> Generator[BaseChunk, None, ModelResponse]:
+  def _generate_streaming(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, ModelResponse]:
     response = self.post("responses", {**request_data, "stream": True}, stream=True)
     chunks: List[BaseChunk] = []
     emitted: set = set()
@@ -110,7 +110,7 @@ class OpenAIArchitecture(APIArchitecture):
       key = item.get("call_id") or item.get("id")
       if key in emitted:
         return
-      chunk = tool_chunk(item.get("name"), item.get("arguments"), item.get("call_id") or item.get("id"))
+      chunk = tool_chunk(item.get("name"), item.get("arguments"), item.get("call_id") or item.get("id"), tools=tools)
       if key:
         emitted.add(key)
       chunks.append(chunk)
@@ -150,7 +150,7 @@ class OpenAIArchitecture(APIArchitecture):
       metadata={"usage": usage} if usage else {},
     )
 
-  def _generate_blocking(self, request_data: Dict[str, Any]) -> Generator[BaseChunk, None, ModelResponse]:
+  def _generate_blocking(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, ModelResponse]:
     response = self.post("responses", request_data)
     data = response.json()
 
@@ -174,6 +174,7 @@ class OpenAIArchitecture(APIArchitecture):
           item.get("name"),
           item.get("arguments"),
           item.get("call_id") or item.get("id"),
+          tools=tools,
         ))
 
     chunks: List[BaseChunk] = []

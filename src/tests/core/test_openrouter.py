@@ -164,7 +164,7 @@ def test_openrouter_sends_chat_tools_and_yields_tool_chunk():
 
   endpoint, data, _ = model.calls[0]
   assert endpoint == "chat/completions"
-  assert data["tools"][0]["function"]["name"] == "demo.echo"
+  assert data["tools"][0]["function"]["name"] == "demo__echo"
   assert len(chunks) == 1
   assert isinstance(chunks[0], ToolChunk)
   assert chunks[0].tool_name == "demo.echo"

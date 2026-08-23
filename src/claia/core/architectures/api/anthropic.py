@@ -106,8 +106,8 @@ class AnthropicArchitecture(APIArchitecture):
       request_data["top_k"] = top_k
 
     if kwargs.get("stream", False):
-      return (yield from self._generate_streaming(request_data))
-    return (yield from self._generate_blocking(request_data))
+      return (yield from self._generate_streaming(request_data, tools=tools))
+    return (yield from self._generate_blocking(request_data, tools=tools))
 
   def _convert_sequence(self, sequence: MessageSequence, native: bool = False) -> tuple:
     """Convert a MessageSequence to Anthropic messages format."""
@@ -117,7 +117,7 @@ class AnthropicArchitecture(APIArchitecture):
       self.format_messages(sequence)
     )
 
-  def _generate_streaming(self, request_data: Dict[str, Any]) -> Generator[BaseChunk, None, ModelResponse]:
+  def _generate_streaming(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, ModelResponse]:
     response = self.post("messages", {**request_data, "stream": True}, stream=True)
     chunks: List[BaseChunk] = []
     usage: Dict[str, Any] = {}
@@ -150,7 +150,7 @@ class AnthropicArchitecture(APIArchitecture):
       elif event_type == "content_block_stop":
         slot = tool_blocks.pop(event.get("index", 0), None)
         if slot is not None:
-          chunk = tool_chunk(slot["name"], slot["json"], slot["id"] or None)
+          chunk = tool_chunk(slot["name"], slot["json"], slot["id"] or None, tools=tools)
           chunks.append(chunk)
           yield chunk
 
@@ -182,7 +182,7 @@ class AnthropicArchitecture(APIArchitecture):
       metadata={"usage": usage} if usage else {},
     )
 
-  def _generate_blocking(self, request_data: Dict[str, Any]) -> Generator[BaseChunk, None, ModelResponse]:
+  def _generate_blocking(self, request_data: Dict[str, Any], tools=None) -> Generator[BaseChunk, None, ModelResponse]:
     response = self.post("messages", request_data)
     data = response.json()
 
@@ -201,6 +201,7 @@ class AnthropicArchitecture(APIArchitecture):
           block.get("name"),
           block.get("input"),
           block.get("id"),
+          tools=tools,
         ))
 
     if data.get("stop_reason") == "refusal":
