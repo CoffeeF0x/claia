@@ -16,6 +16,7 @@ widget mutation happens on the UI thread.
 # External dependencies
 from typing import Dict, List, Optional
 
+from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container
@@ -146,7 +147,7 @@ class ClaiaApp(App):
     # Custom variables must resolve under any theme.
     return {
       "user-label": "#4A8B8C",
-      "toast-background": "#33302C",
+      "toast-background": "#211F1C",
     }
 
   async def on_mount(self) -> None:
@@ -167,6 +168,26 @@ class ClaiaApp(App):
     if self._log_state is not None:
       restore(*self._log_state)
       self._log_state = None
+
+  def on_key(self, event: events.Key) -> None:
+    """Stray typing always lands in the current screen's composer.
+
+    A printable key that bubbles unhandled all the way up here —
+    focus wandered to the transcript, the ledger list, nowhere —
+    pulls focus back to the composer and types its character, so
+    input never needs a click. Screens without a composer (the
+    help card) ignore it.
+    """
+    if not event.is_printable:
+      return
+    composers = self.screen.query(Composer)
+    if not composers:
+      return
+    event.stop()
+    event.prevent_default()
+    composer = composers.first(Composer)
+    composer.focus()
+    composer.insert(event.character)
 
   # ── Actions ──────────────────────────────────────────────────────
 

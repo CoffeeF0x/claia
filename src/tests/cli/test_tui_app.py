@@ -816,6 +816,37 @@ class TestActions:
 
 
 ########################################################################
+#                            TYPE TO FOCUS                             #
+########################################################################
+class TestTypeToFocus:
+  async def test_stray_typing_lands_in_the_main_composer(self, app):
+    async with app.run_test() as pilot:
+      composer = app.query_one(Composer)
+      app.switchboard.bound.transcript.focus()
+      await pilot.pause()
+      assert app.focused is not composer
+      await pilot.press("h", "i")
+      assert app.focused is composer
+      assert composer.text == "hi"
+
+  async def test_stray_typing_lands_in_the_ledger_composer(self, app):
+    async with app.run_test() as pilot:
+      await pilot.press("alt+a")
+      assert isinstance(app.screen, Ledger)
+      app.screen.set_focus(None)
+      await pilot.press("x")
+      ledger_composer = app.screen.query_one(Composer)
+      assert app.focused is ledger_composer
+      assert ledger_composer.text == "x"
+
+  async def test_unfocused_bound_keys_still_route(self, app):
+    async with app.run_test() as pilot:
+      app.screen.set_focus(None)
+      await pilot.press("alt+a")   # a binding, not stray typing
+      assert isinstance(app.screen, Ledger)
+
+
+########################################################################
 #                          LOGGING OWNERSHIP                           #
 ########################################################################
 class TestLoggingOwnership:
