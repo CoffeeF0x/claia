@@ -1,28 +1,35 @@
 """
 Turn widgets: one ``TurnView`` per assistant turn.
 
-A TurnView consumes block events and composes widgets in stream
-order: markdown segments for TEXT (via ``Markdown.get_stream`` so
-bursts collapse into few updates), muted plain-text segments for
-THINKING (inline, never collapsed), ``ToolBlock``s for tool calls,
-and dim notice lines for artifacts and terminal states. Live and
-replayed turns run through the same :meth:`handle` pipeline — the
-only difference is whether a pacer sits upstream — so both render
-identically by construction.
+A TurnView opens with a ``TurnLabel`` heading (gold glyph + name, a
+hairline rule, the turn's compact usage whispered at the end once a
+live turn closes), then consumes block events and composes widgets
+in stream order: markdown segments for TEXT (via
+``Markdown.get_stream`` so bursts collapse into few updates), muted
+plain-text segments for THINKING (inline, never collapsed),
+``ToolBlock``s for tool calls (breathing gold until their result
+lands), and dim notice lines for artifacts and terminal states.
+Live and replayed turns run through the same :meth:`handle`
+pipeline — the only difference is whether a pacer sits upstream —
+so both render identically by construction.
 """
 
 # External dependencies
 import json
+import math
 from typing import Iterable, List, Optional
 
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Vertical
+from textual.timer import Timer
+from textual.widget import Widget
 from textual.widgets import Collapsible, Markdown, Static
 from textual.widgets._markdown import MarkdownStream
 
 # Internal dependencies
 from ...core.enums.task import TaskStatus
+from ..renderer import compact_summary
 from ..stream import (
   ArtifactNotice,
   BlockEvent,
@@ -41,6 +48,9 @@ from ..stream import (
 ARGS_PREVIEW_LINES = 3
 ARGS_PREVIEW_CHARS = 240
 RESULT_PREVIEW_CHARS = 120
+
+PULSE_TICK = 0.1     # seconds between breathing frames
+PULSE_STEP = 0.4     # phase advance per frame (radians)
 
 
 
@@ -79,6 +89,66 @@ def truncate(text: str, max_lines: int, max_chars: int) -> str:
 
 
 ########################################################################
+#                              TURN LABEL                              #
+########################################################################
+class TurnLabel(Widget):
+  """A turn's heading: glyph + name, a hairline rule, trailing meta.
+
+  The rule stretches to the widget's width; ``meta`` (the turn's
+  compact usage/duration, live turns only — accounting is not
+  persisted per message) whispers at the right end once the turn
+  closes.
+  """
+
+  COMPONENT_CLASSES = {
+    "turnlabel--name",
+    "turnlabel--rule",
+    "turnlabel--meta",
+  }
+
+  DEFAULT_CSS = """
+  TurnLabel {
+    height: 1;
+  }
+  TurnLabel > .turnlabel--name {
+    color: $primary;
+    text-style: bold;
+  }
+  TurnLabel > .turnlabel--rule {
+    color: $text-muted 35%;
+  }
+  TurnLabel > .turnlabel--meta {
+    color: $text-muted;
+  }
+  """
+
+  def __init__(self, label: str, **kwargs):
+    super().__init__(**kwargs)
+    self.label = label
+    self.meta: Optional[str] = None
+
+  def set_meta(self, meta: str) -> None:
+    self.meta = meta
+    self.refresh()
+
+  def render(self) -> Text:
+    name = self.get_component_rich_style("turnlabel--name")
+    rule = self.get_component_rich_style("turnlabel--rule")
+    meta_style = self.get_component_rich_style("turnlabel--meta")
+    meta = f" {self.meta}" if self.meta else ""
+    text = Text(no_wrap=True, overflow="crop")
+    text.append("◆ ", name)
+    text.append(self.label, name)
+    fill = self.size.width - len(self.label) - len(meta) - 3
+    if fill > 1:
+      text.append(" " + "╌" * fill, rule)
+    if meta:
+      text.append(meta, meta_style)
+    return text
+
+
+
+########################################################################
 #                              TOOL BLOCK                              #
 ########################################################################
 class ToolBlock(Collapsible):
@@ -87,7 +157,8 @@ class ToolBlock(Collapsible):
   Collapsed (default) shows truncated pretty-printed args and a
   one-line result preview when a result exists; expanding swaps the
   previews for the full payloads. Results attach when they arrive —
-  no placeholder while they don't.
+  no placeholder, but the gold name line breathes (a text-opacity
+  pulse on its own timer) until the result lands or the turn ends.
   """
 
   DEFAULT_CSS = """
@@ -109,14 +180,21 @@ class ToolBlock(Collapsible):
       padding: 0 3;
       color: $text-muted;
     }
-    &.-collapsed > .tool-preview {
+    &.-collapsed > .tool-args-preview {
+      display: block;
+    }
+    &.-collapsed.-has-result > .tool-result-preview {
       display: block;
     }
     & > Contents {
       padding: 0 3;
     }
     & .tool-result {
+      display: none;
       margin-top: 1;
+    }
+    &.-has-result .tool-result {
+      display: block;
     }
   }
   """
@@ -130,8 +208,22 @@ class ToolBlock(Collapsible):
     self.tool_name = name or "unknown"
     self.args_text = pretty_args(args)
     self.result_body: Optional[str] = None
+    self._settled = False
+    self._pulse_timer: Optional[Timer] = None
+    self._pulse_phase = 0
+    self._result_preview: Optional[Static] = None
+    self._result_full: Optional[Static] = None
+
+  def on_mount(self) -> None:
+    animated = getattr(self.app, "animation_level", "full") != "none"
+    if self.result_body is None and not self._settled and animated:
+      self._pulse_timer = self.set_interval(PULSE_TICK, self._pulse)
 
   def compose(self) -> ComposeResult:
+    # The result widgets always compose (hidden behind ``-has-result``)
+    # and render from current state, so a result that lands at any
+    # point relative to mounting — same pacer tick, mid-mount, or
+    # replay — displays identically. Nothing mounts later.
     yield self._title
     yield Static(
       Text(truncate(
@@ -139,36 +231,47 @@ class ToolBlock(Collapsible):
       )),
       classes="tool-preview tool-args-preview",
     )
-    if self.result_body is not None:
-      yield self._result_preview()
+    self._result_preview = Static(
+      self._preview_text(), classes="tool-preview tool-result-preview",
+    )
+    yield self._result_preview
     with self.Contents():
       yield Static(Text(self.args_text), classes="tool-args")
-      if self.result_body is not None:
-        yield self._result_full()
+      self._result_full = Static(
+        Text(self.result_body or ""), classes="tool-result",
+      )
+      yield self._result_full
 
   @property
   def has_result(self) -> bool:
     return self.result_body is not None
 
   def set_result(self, body: str) -> None:
-    """Attach a result; mounts the preview/detail when already live."""
+    """Attach a result; the composed widgets re-render from state."""
+    self.settle()
     self.result_body = body
-    if self.is_mounted:
-      self.mount(
-        self._result_preview(),
-        after=self.query_one(".tool-args-preview"),
-      )
-      self.query_one(Collapsible.Contents).mount(self._result_full())
+    self.add_class("-has-result")
+    if self._result_preview is not None:
+      self._result_preview.update(self._preview_text())
+    if self._result_full is not None:
+      self._result_full.update(Text(body))
 
-  def _result_preview(self) -> Static:
+  def settle(self) -> None:
+    """Stop breathing: a result arrived or the turn is over."""
+    self._settled = True
+    if self._pulse_timer is not None:
+      self._pulse_timer.stop()
+      self._pulse_timer = None
+    self._title.styles.text_opacity = 1.0
+
+  def _pulse(self) -> None:
+    self._pulse_phase += 1
+    wave = (math.sin(self._pulse_phase * PULSE_STEP) + 1) / 2
+    self._title.styles.text_opacity = 0.45 + 0.55 * wave
+
+  def _preview_text(self) -> Text:
     line = (self.result_body or "").strip().splitlines() or [""]
-    return Static(
-      Text("→ " + truncate(line[0], 1, RESULT_PREVIEW_CHARS)),
-      classes="tool-preview tool-result-preview",
-    )
-
-  def _result_full(self) -> Static:
-    return Static(Text(self.result_body or ""), classes="tool-result")
+    return Text("→ " + truncate(line[0], 1, RESULT_PREVIEW_CHARS))
 
 
 
@@ -183,10 +286,6 @@ class TurnView(Vertical):
     height: auto;
     margin-top: 1;
 
-    & > .turn-label {
-      color: $primary;
-      text-style: bold;
-    }
     & > Markdown {
       padding: 0;
       margin: 0;
@@ -211,6 +310,7 @@ class TurnView(Vertical):
   def __init__(self, label: str, **kwargs):
     super().__init__(**kwargs)
     self.label = (label or "").upper()
+    self._heading = TurnLabel(self.label)
     self._markdown: Optional[Markdown] = None
     self._stream: Optional[MarkdownStream] = None
     self._thinking: Optional[Static] = None
@@ -218,7 +318,7 @@ class TurnView(Vertical):
     self._tools: List[ToolBlock] = []
 
   def compose(self) -> ComposeResult:
-    yield Static(Text(self.label), classes="turn-label")
+    yield self._heading
 
   # ── Event intake ─────────────────────────────────────────────────
 
@@ -240,13 +340,19 @@ class TurnView(Vertical):
       self._attach_result(event)
     elif isinstance(event, ArtifactNotice):
       await self._close_segments()
-      self._notice(f"[saved: {event.name}]")
+      self._notice(f"— saved {event.name}")
     elif isinstance(event, StreamEnd):
       await self.finish()
+      meta = compact_summary(event)
+      if meta:
+        self._heading.set_meta(meta)
       if event.status is TaskStatus.CANCELLED:
-        self._notice("[cancelled]", "notice-warning")
+        self._notice("— cancelled", "notice-warning")
       if event.error:
-        self._notice(f"[error: {event.error}]", "notice-error")
+        self._notice(
+          f"— well, that wasn't supposed to happen: {event.error}",
+          "notice-error",
+        )
 
   async def load(self, events: Iterable[BlockEvent]) -> None:
     """Render a replayed turn: same pipeline, instant, unpaced."""
@@ -255,8 +361,10 @@ class TurnView(Vertical):
     await self.finish()
 
   async def finish(self) -> None:
-    """Stop the live stream and close all open segments."""
+    """Stop the live stream, close open segments, settle the tools."""
     await self._close_segments()
+    for block in self._tools:
+      block.settle()
 
   # ── Segments ─────────────────────────────────────────────────────
 

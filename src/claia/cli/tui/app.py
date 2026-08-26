@@ -31,9 +31,11 @@ from .actions import (
   ActionState,
 )
 from .composer import Composer
+from .help import HelpScreen
 from .log_bridge import LogNotice, install, restore
 from .pacer import TICK
 from .panel import ActionPanel
+from .seam import Seam
 from .status import StatusBar
 from .switchboard import StreamBlocks, Switchboard
 from .theme import EXOFOX_DARK, EXOFOX_LIGHT
@@ -76,6 +78,10 @@ class ClaiaApp(App):
             priority=True, id="previous-track"),
     Binding("alt+a", "toggle_actions", "Actions", show=False,
             priority=True, id="toggle-actions"),
+    Binding("f1", "help", "Help", show=False, id="help"),
+    # Alias for terminals that eat F-keys.
+    Binding("alt+h", "help", "Help", show=False, priority=True,
+            id="help-alt"),
   ]
 
   def __init__(self, registry, settings, **kwargs):
@@ -94,6 +100,7 @@ class ClaiaApp(App):
   def compose(self) -> ComposeResult:
     yield Container(id="tracks")
     yield ActionPanel(id="actions")
+    yield Seam(id="seam")
     yield Composer(id="composer")
     yield StatusBar(id="status")
 
@@ -140,6 +147,12 @@ class ClaiaApp(App):
   def action_toggle_actions(self) -> None:
     self.query_one(ActionPanel).toggle()
 
+  def action_help(self) -> None:
+    if isinstance(self.screen, HelpScreen):
+      self.pop_screen()
+    else:
+      self.push_screen(HelpScreen())
+
   # ── Composer routing ─────────────────────────────────────────────
 
   async def on_composer_submitted(
@@ -158,7 +171,10 @@ class ClaiaApp(App):
     track = self.switchboard.bound
     if track.busy:
       if track.pending is not None:
-        self.notify("A message is already queued.", severity="warning")
+        self.notify(
+          "One message is already waiting — let this turn land first.",
+          severity="warning",
+        )
         return False
       track.pending = text
       return True
@@ -179,7 +195,9 @@ class ClaiaApp(App):
     line = text[1:].strip()
     tokens = line.split()
     if not tokens:
-      self.notify("Empty command.", severity="warning")
+      self.notify(
+        "A lonely ':' — try :help for the menu.", severity="warning",
+      )
       return False
     if tokens == ["actions"]:
       self.query_one(ActionPanel).toggle()
@@ -188,7 +206,10 @@ class ClaiaApp(App):
     if name == "query":
       rest = " ".join(tokens[1:])
       if not rest:
-        self.notify("Missing query text.", severity="warning")
+        self.notify(
+          "A query needs words — give it something to work with.",
+          severity="warning",
+        )
         return False
       return await self._submit_chat(rest)
 
@@ -196,11 +217,11 @@ class ClaiaApp(App):
     self.query_one(ActionPanel).add_record(action)
     if name is None:
       self._refuse_action(
-        action, f"Unknown command: {tokens[0]}. Try ':help'.",
+        action, f"No command called '{tokens[0]}' — :help knows the way.",
       )
     elif name == "setup":
       self._refuse_action(
-        action, "setup is interactive — run 'claia setup' in a shell.",
+        action, "Setup wants a real terminal — run 'claia setup' in a shell.",
       )
     else:
       self._lane.submit(action)
@@ -223,7 +244,9 @@ class ClaiaApp(App):
     failed = action.state is ActionState.FAILED
     self.query_one(StatusBar).set_action_failed(failed)
     if failed:
-      self.notify(action.message or "Command failed.", severity="error")
+      self.notify(
+        action.message or "That didn't go as planned.", severity="error",
+      )
     if message.result.is_exit():
       self.switchboard.cancel_all()
       self.exit()

@@ -66,6 +66,28 @@ def stream_summary(end: StreamEnd) -> Optional[str]:
   return " | ".join(parts) if parts else None
 
 
+def compact_summary(end: StreamEnd) -> Optional[str]:
+  """Terse usage/duration form for the TUI, or None.
+
+  The status bar and turn headings show this after every live
+  turn (``86→124 tok · 3.4s``); the one-shot renderer keeps the
+  verbose :func:`stream_summary`.
+  """
+  parts = []
+  usage = end.usage
+  if usage is not None:
+    prompt, completion = usage.prompt_tokens, usage.completion_tokens
+    if prompt is not None and completion is not None:
+      parts.append(f"{prompt}→{completion} tok")
+    elif completion is not None:
+      parts.append(f"{completion} tok")
+    elif usage.total_tokens is not None:
+      parts.append(f"{usage.total_tokens} tok")
+  if end.metrics is not None and end.metrics.duration is not None:
+    parts.append(f"{end.metrics.duration:.1f}s")
+  return " · ".join(parts) if parts else None
+
+
 
 ########################################################################
 #                               CLASSES                                #

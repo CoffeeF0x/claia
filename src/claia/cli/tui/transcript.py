@@ -3,18 +3,29 @@ Transcript pane: a scrolling list of user blocks and turn views.
 
 User messages are transcript-level label blocks (``YOU`` + text);
 assistant turns are ``TurnView`` widgets fed block events by the app
-(paced when live, replayed instantly on reload). Follow-tail uses
-Textual anchor semantics: pinned to the bottom while content grows,
-released when the user scrolls up, re-engaged at the bottom.
+(paced when live, replayed instantly on reload). An empty transcript
+centers a small greeting in the brand voice, dismissed by the first
+content. Follow-tail uses Textual anchor semantics: pinned to the
+bottom while content grows, released when the user scrolls up,
+re-engaged at the bottom.
 """
 
 # External dependencies
 from rich.text import Text
-from textual.containers import VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static
 
 # Internal dependencies
 from .turn import TurnView
+
+
+
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
+GREETING_TITLE = "◆ CLAIA"
+GREETING_BODY = "Nothing here yet. Want to change that?"
+GREETING_HINTS = "Enter sends · :help commands · F1 keys"
 
 
 
@@ -29,6 +40,31 @@ class Transcript(VerticalScroll):
     height: 1fr;
     padding: 0 1;
 
+    &.-empty {
+      align: center middle;
+    }
+    & > .transcript-greeting {
+      width: 100%;
+      height: auto;
+
+      & > .greeting-title {
+        width: 100%;
+        text-align: center;
+        color: $primary;
+        text-style: bold;
+      }
+      & > .greeting-body {
+        width: 100%;
+        text-align: center;
+        margin-top: 1;
+      }
+      & > .greeting-hints {
+        width: 100%;
+        text-align: center;
+        margin-top: 1;
+        color: $text-muted;
+      }
+    }
     & > .user-label {
       margin-top: 1;
       color: $user-label;
@@ -45,9 +81,18 @@ class Transcript(VerticalScroll):
 
   def on_mount(self) -> None:
     self.anchor()
+    if not self.children:
+      self.add_class("-empty")
+      self.mount(Vertical(
+        Static(Text(GREETING_TITLE), classes="greeting-title"),
+        Static(Text(GREETING_BODY), classes="greeting-body"),
+        Static(Text(GREETING_HINTS), classes="greeting-hints"),
+        classes="transcript-greeting",
+      ))
 
   def add_user(self, text: str) -> None:
     """Append a user message: the YOU micro-label plus its text."""
+    self._dismiss_greeting()
     self.mount(Static(Text("YOU"), classes="user-label"))
     if text:
       self.mount(Static(Text(text), classes="user-text"))
@@ -58,6 +103,13 @@ class Transcript(VerticalScroll):
     Awaits the mount so the composed label lands before any block
     events mount segments into the view.
     """
+    self._dismiss_greeting()
     view = TurnView(label)
     await self.mount(view)
     return view
+
+  def _dismiss_greeting(self) -> None:
+    if self.has_class("-empty"):
+      self.remove_class("-empty")
+      for node in self.query(".transcript-greeting"):
+        node.remove()

@@ -5,7 +5,12 @@ this full-screen Textual app. Conversations are tracks owned by a
 switchboard — every track keeps accumulating (paced turn views,
 one queued message) whether or not it is on screen — with a live
 composer that routes chat into the bound track and `:` lines onto
-a serial action lane, all in the ExoFox family-look theme.
+a serial action lane, all in the ExoFox family-look theme. The
+presentation is a quiet instrument panel: the kintsugi seam (a
+crack of gold between transcript and composer) carries the bound
+track's liveness, the status bar is a glyph-based cluster with
+per-track dots, and the brand voice lives in the greeting, the
+notices, and the toasts.
 
 ## What Lives Here
 
@@ -29,12 +34,23 @@ a serial action lane, all in the ExoFox family-look theme.
   on the right edge, and `ActionRecord`.
 - `transcript.py` — `Transcript`, a scrolling pane of user label
   blocks and `TurnView`s with follow-tail (Textual anchor)
-  scrolling; one per track.
-- `turn.py` — `TurnView` (one per assistant turn: markdown
-  segments via `Markdown.get_stream`, inline muted thinking,
-  notice lines) and `ToolBlock` (gold-guttered `Collapsible`:
-  name line, truncated args preview, result preview, full
-  payloads behind the toggle).
+  scrolling; one per track. An empty transcript centers a brand
+  greeting, dismissed by the first content.
+- `turn.py` — `TurnView` (one per assistant turn: a `TurnLabel`
+  heading with a hairline rule and the turn's compact usage meta,
+  markdown segments via `Markdown.get_stream`, inline muted
+  thinking, notice lines) and `ToolBlock` (gold-guttered
+  `Collapsible`: a name line that breathes until its result lands,
+  truncated args preview, result preview, full payloads behind
+  the toggle — result widgets always compose, hidden behind a
+  `-has-result` class, so delivery timing cannot race mounting).
+- `seam.py` — `Seam` and `Phase`: the one-line kintsugi crack
+  between transcript and composer. Gold glints travel it while
+  the bound track streams, amber during a tool call, and failures
+  or cancels flash it in the semantic color; it owns its own
+  timer, paused whenever idle.
+- `help.py` — `HelpScreen`, the F1/Alt+H modal card: the key map
+  with fallbacks plus a pointer to `:help`.
 - `pacer.py` — `Pacer`, the per-turn jitter buffer: text drips
   at an adaptive rate on a ~40ms tick; structural events are
   barriers; graceful ends accelerate the drain, cancel/failure
@@ -45,10 +61,15 @@ a serial action lane, all in the ExoFox family-look theme.
   submits, Shift+Enter (or Ctrl+J where the terminal cannot report
   it) inserts a newline, Up/Down at an empty composer recall the
   in-session submission history.
-- `status.py` — `StatusBar`: model, agent, conversation,
-  `track i/N`, task state, unseen badge (`●2`), the last turn's
-  usage/duration, the action lane's last-failure marker, and
-  right-aligned key hints.
+- `status.py` — `StatusBar` and `StatusLine`: the instrument
+  cluster. Identity (`◆ agent · model`), a braille spinner with
+  elapsed time while the bound track works (amber during a tool
+  call), per-track dots (gold = bound, spinner = hidden and
+  streaming, teal = unseen completion, muted = idle), the action
+  lane's last-failure marker, the conversation title and compact
+  last-turn usage as whispers, and right-aligned key hints.
+  Colors resolve through CSS component classes so any theme's
+  `auto` shades work.
 - `log_bridge.py` — console-handler takeover for the app's
   lifetime plus the forwarding handler that turns WARNING+ log
   records into toasts.
@@ -91,7 +112,8 @@ consecutive same-label assistant messages merging into one view.
 
 Esc cancels the bound track's in-flight task
 (`task.request_cancel()`); Alt+N/Alt+P hop tracks; Alt+A toggles
-the action panel; Ctrl+Q quits, with Alt+Q as the alias for
-terminals that capture Ctrl+Q, and quit cancels every track's
-in-flight task first. Submitting into a busy track queues exactly
-one pending message that auto-submits when that track's turn ends.
+the action panel; F1 (Alt+H alias) toggles the help card; Ctrl+Q
+quits, with Alt+Q as the alias for terminals that capture Ctrl+Q,
+and quit cancels every track's in-flight task first. Submitting
+into a busy track queues exactly one pending message that
+auto-submits when that track's turn ends.

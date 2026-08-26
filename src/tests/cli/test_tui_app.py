@@ -33,9 +33,11 @@ from claia.cli.storage import JsonStore
 from claia.cli.tui import ClaiaApp
 from claia.cli.tui.actions import ActionState
 from claia.cli.tui.composer import Composer
+from claia.cli.tui.help import HelpScreen
 from claia.cli.tui.panel import ActionPanel, ActionRecord
-from claia.cli.tui.status import StatusBar
-from claia.cli.tui.turn import ToolBlock, TurnView
+from claia.cli.tui.seam import Phase, Seam
+from claia.cli.tui.status import StatusBar, StatusLine
+from claia.cli.tui.turn import ToolBlock, TurnLabel, TurnView
 
 
 SHORT_STORY = "Hello from the dummy model."
@@ -128,8 +130,8 @@ def flatten(app, track=None):
           out.append(("thinking", str(child.content)))
         elif child.has_class("turn-notice"):
           out.append(("notice", str(child.content)))
-        elif child.has_class("turn-label"):
-          out.append(("label", str(child.content)))
+        elif isinstance(child, TurnLabel):
+          out.append(("label", child.label))
     elif node.has_class("user-label"):
       out.append(("user-label", str(node.content)))
     elif node.has_class("user-text"):
@@ -261,6 +263,10 @@ class TestTurnFlow:
       ]
       bar = app.query_one(StatusBar)
       assert bar.conversation == "Earlier"
+      # A replayed conversation never greets.
+      transcript = app.switchboard.bound.transcript
+      assert not transcript.has_class("-empty")
+      assert not transcript.query(".transcript-greeting")
 
 
 ########################################################################
@@ -285,6 +291,11 @@ class TestToolTurns:
       assert tool[1] == "sample.echo"
       assert tool[2] == json.dumps({"message": "ping"}, indent=2)
       assert tool[3] == "ping"  # live result attached from ARTIFACT
+      # The result preview renders regardless of when the result
+      # landed relative to the block's mount (same-tick delivery).
+      block = app.query(ToolBlock).first()
+      assert block.has_class("-has-result")
+      assert str(block._result_preview.content).startswith("→ ping")
       markdown = texts_of(app, "markdown")
       assert "Let me check." in markdown[0]
       assert "All done." in markdown[1]
@@ -417,7 +428,7 @@ class TestCancel:
       await wait_idle(app, pilot)
 
       assert task.status is TaskStatus.CANCELLED
-      assert ("notice", "[cancelled]") in flatten(app)
+      assert ("notice", "— cancelled") in flatten(app)
       assert app.switchboard.bound.task is None
 
       # The shell is still usable: a fresh fast turn completes.
@@ -493,7 +504,7 @@ class TestSwitchboard:
       assert await wait_for(pilot, lambda: sb.bound is not track_a)
       track_b = sb.bound
       assert len(sb.tracks) == 2
-      assert bar.track_count == 2
+      assert len(bar.dots) == 2
       assert flatten(app, track_b) == []
 
       await submit(app, pilot, "second topic")
@@ -529,13 +540,13 @@ class TestSwitchboard:
         timeout=60.0,
       )
       assert track_b.unseen
-      assert bar.unseen == 1
+      assert sum(1 for d in bar.dots if d.unseen) == 1
 
       # …and binding it clears the badge.
       await pilot.press("alt+n")
       assert sb.bound is track_b
       assert not track_b.unseen
-      assert bar.unseen == 0
+      assert sum(1 for d in bar.dots if d.unseen) == 0
 
       assert await wait_for(
         pilot,
@@ -639,7 +650,7 @@ class TestActions:
       ]
       bar = app.query_one(StatusBar)
       assert bar.conversation == "Stored"
-      assert bar.track_count == 2
+      assert len(bar.dots) == 2
 
   async def test_unknown_command_fails_with_toast(self, app):
     async with app.run_test() as pilot:
@@ -651,7 +662,7 @@ class TestActions:
       )
       action = await act(app, pilot, ":frobnicate now")
       assert action.state is ActionState.FAILED
-      assert "Unknown command: frobnicate" in action.message
+      assert "No command called 'frobnicate'" in action.message
       assert any(sev == "error" for _, sev in toasts)
       assert app.query_one(StatusBar).action_failed
       assert flatten(app) == []  # it never ran, never chatted
@@ -767,3 +778,74 @@ class TestLoggingOwnership:
       assert "mid-turn warning" not in captured.err
     finally:
       root.removeHandler(console)
+
+
+########################################################################
+#                             PRESENTATION                             #
+########################################################################
+class TestPresentation:
+  async def test_greeting_shows_until_first_content(self, app, set_dummy):
+    set_dummy(SHORT_STORY)
+    async with app.run_test() as pilot:
+      await pilot.pause()
+      transcript = app.switchboard.bound.transcript
+      assert transcript.has_class("-empty")
+      assert transcript.query(".transcript-greeting")
+
+      await submit(app, pilot, "hi")
+      await wait_idle(app, pilot)
+      assert not transcript.has_class("-empty")
+      assert not transcript.query(".transcript-greeting")
+
+  async def test_seam_follows_the_turn_and_flashes_on_cancel(
+    self, app, set_dummy,
+  ):
+    set_dummy("stream " * 200, chars_per_second=SLOW)
+    async with app.run_test() as pilot:
+      seam = app.query_one(Seam)
+      assert seam.phase is Phase.IDLE
+
+      await submit(app, pilot, "go")
+      assert await wait_for(pilot, lambda: seam.phase is Phase.STREAMING)
+
+      await pilot.press("escape")
+      await wait_idle(app, pilot)
+      assert seam.phase is Phase.IDLE
+      assert seam._flash_kind == "warning"
+
+  async def test_tool_pulse_settles_when_the_turn_ends(
+    self, app, set_dummy, monkeypatch,
+  ):
+    monkeypatch.setattr(BaseAgent, "MAX_TOOL_ROUNDS", 1)
+    set_dummy(TOOL_STORY)
+    async with app.run_test() as pilot:
+      await submit(app, pilot, "run the check")
+      await wait_idle(app, pilot)
+
+      block = app.query(ToolBlock).first()
+      assert block._settled
+      assert block._pulse_timer is None
+      assert block._title.styles.text_opacity == 1.0
+
+  async def test_status_cluster_shows_identity_glyph(self, app):
+    async with app.run_test() as pilot:
+      await pilot.pause()
+      line = app.query_one(StatusLine).render().plain
+      assert line.startswith("◆ ")
+      assert "simple" in line
+      assert "dummy-model" in line
+
+  async def test_help_card_toggles(self, app):
+    async with app.run_test() as pilot:
+      await pilot.pause()
+      await pilot.press("f1")
+      assert isinstance(app.screen, HelpScreen)
+      await pilot.press("escape")
+      await pilot.pause()
+      assert not isinstance(app.screen, HelpScreen)
+      # F1 toggles closed from the app binding too.
+      await pilot.press("f1")
+      assert isinstance(app.screen, HelpScreen)
+      await pilot.press("f1")
+      await pilot.pause()
+      assert not isinstance(app.screen, HelpScreen)

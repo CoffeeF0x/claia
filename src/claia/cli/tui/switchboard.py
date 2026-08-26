@@ -22,6 +22,7 @@ new``/``load`` just work with no command interception.
 # External dependencies
 import asyncio
 import logging
+import time
 from typing import Dict, List, Optional
 
 from textual.message import Message
@@ -31,18 +32,20 @@ from ...core.data.artifacts import ToolArtifact
 from ...core.enums.conversation import MessageRole
 from ...core.enums.task import TaskEvent, TaskStatus
 from ...framework.task import Task
-from ..renderer import stream_summary
+from ..renderer import compact_summary
 from ..storage import JsonStore
 from ..stream import (
   BlockEvent,
   StreamEnd,
   StreamRouter,
+  ToolCall,
   ToolResult,
   replay_turn,
 )
 from ..utils import prepare_query_task, stream_tag_specs
 from .pacer import Pacer
-from .status import StatusBar
+from .seam import Phase, Seam
+from .status import StatusBar, TrackDot
 from .transcript import Transcript
 from .turn import TurnView
 
@@ -83,6 +86,8 @@ class Track:
     self.pending: Optional[str] = None
     self.unseen = False
     self.last_turn: Optional[str] = None
+    self.phase = Phase.IDLE
+    self.started: Optional[float] = None
 
   @property
   def busy(self) -> bool:
@@ -201,6 +206,8 @@ class Switchboard:
     )
     track.pacer = Pacer()
     track.task = task
+    track.phase = Phase.STREAMING
+    track.started = time.time()
     app.resume_pacing()
     self.refresh_status()
 
@@ -275,6 +282,7 @@ class Switchboard:
     # event order intact across await points.
     async with self._deliver_lock:
       for event in events:
+        self._observe(track, event)
         turn = track.live_turn
         if turn is None:
           return
@@ -282,14 +290,36 @@ class Switchboard:
         if isinstance(event, StreamEnd):
           await self._end_turn(track, event)
 
+  def _observe(self, track: Track, event: BlockEvent) -> None:
+    """Track the display phase as delivered events pass by."""
+    if isinstance(event, ToolCall):
+      phase = Phase.TOOL
+    elif isinstance(event, StreamEnd):
+      phase = Phase.IDLE
+    else:
+      phase = Phase.STREAMING
+    if phase is track.phase:
+      return
+    track.phase = phase
+    if track is self.bound:
+      self._app.query_one(Seam).set_phase(phase)
+      self._app.query_one(StatusBar).set_activity(phase, track.started)
+
   async def _end_turn(self, track: Track, end: StreamEnd) -> None:
     track.pacer = None
     track.live_turn = None
     track.task = None
-    track.last_turn = stream_summary(end)
+    track.phase = Phase.IDLE
+    track.started = None
+    track.last_turn = compact_summary(end)
     if end.error:
       self._app.notify(str(end.error), severity="error")
-    if track is not self.bound:
+    if track is self.bound:
+      if end.status is TaskStatus.CANCELLED:
+        self._app.query_one(Seam).flash("warning")
+      elif end.status is TaskStatus.FAILED or end.error:
+        self._app.query_one(Seam).flash("error")
+    else:
       track.unseen = True
     self.refresh_status()
 
@@ -300,7 +330,7 @@ class Switchboard:
   # ── Status ───────────────────────────────────────────────────────
 
   def refresh_status(self) -> None:
-    """Render the bound track's context into the status bar."""
+    """Render the bound track's context into the bar and the seam."""
     settings = self._app.settings
     bar = self._app.query_one(StatusBar)
     track = self.bound
@@ -313,10 +343,13 @@ class Switchboard:
       getattr(settings, "active_agent", None),
       label,
     )
-    bar.set_tracks(self.tracks.index(track) + 1, len(self.tracks))
-    bar.set_unseen(sum(1 for t in self.tracks if t.unseen))
-    bar.set_state("streaming" if track.busy else "idle")
+    bar.set_tracks([
+      TrackDot(bound=t is track, busy=t.busy, unseen=t.unseen)
+      for t in self.tracks
+    ])
+    bar.set_activity(track.phase, track.started)
     bar.set_last_turn(track.last_turn)
+    self._app.query_one(Seam).set_phase(track.phase)
 
   # ── Replay ───────────────────────────────────────────────────────
 

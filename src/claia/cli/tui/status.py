@@ -1,41 +1,164 @@
 """
-Status bar: one line of session context, task state, and key hints.
+Status bar: the instrument cluster. One line, glyphs over prose.
 
-Left side: active model, agent, conversation, ``track i/N`` when
-more than one track exists, the bound track's idle/streaming
-state, an unseen-completion badge (``●2``) when hidden tracks
-finished, the last turn's usage/duration, and a ``✗ action``
-marker while the action lane's most recent command failed. Right
-side: curated key hints so the non-obvious keys are discoverable
-in the UI — this is the app's one bottom bar; there is no Footer
-widget. The app pushes updates; the bar renders.
+Left side, dynamic segments first so clipping on narrow terminals
+eats the whispers rather than the instruments: identity
+(``◆ agent · model``), a braille spinner with elapsed time while
+the bound track works (gold while streaming, amber during a tool
+call), track dots when more than one track exists (gold = bound,
+spinner = hidden and streaming, teal = unseen completion, muted =
+idle), an ``✗ action`` marker while the lane's last command
+failed, then the conversation title and the last turn's compact
+usage as muted whispers. Right side: the three key hints that
+matter; the rest live on the F1 card. The app pushes updates; the
+bar renders and owns its own spinner timer, paused whenever
+nothing is busy. Colors resolve through CSS component classes so
+every theme (including Textual's ``auto`` shades) just works.
 """
 
 # External dependencies
-from typing import Optional
+import time
+from dataclasses import dataclass
+from typing import List, Optional
 
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal
+from textual.timer import Timer
+from textual.widget import Widget
 from textual.widgets import Static
+
+# Internal dependencies
+from .seam import Phase
 
 
 
 ########################################################################
 #                              CONSTANTS                               #
 ########################################################################
-# Kept short: the hints share one line with the status segments,
-# and a long hint block clips the track/unseen badges on narrow
-# terminals.
-KEY_HINTS = "M-a actions · M-n/p track · ^Q quit"
+KEY_HINTS = "F1 keys · M-a actions · ^Q quit"
+SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+TICK = 0.1
+
+
+@dataclass(frozen=True)
+class TrackDot:
+  """One track's state, as far as the dot row cares."""
+  bound: bool
+  busy: bool
+  unseen: bool
 
 
 
 ########################################################################
-#                               CLASSES                                #
+#                              STATUS LINE                             #
+########################################################################
+class StatusLine(Widget):
+  """The cluster's renderer; reads state from its owning bar."""
+
+  COMPONENT_CLASSES = {
+    "statusline--gold",
+    "statusline--muted",
+    "statusline--tool",
+    "statusline--busy",
+    "statusline--unseen",
+    "statusline--failed",
+  }
+
+  DEFAULT_CSS = """
+  StatusLine {
+    width: 1fr;
+    height: 1;
+    color: $foreground;
+  }
+  StatusLine > .statusline--gold {
+    color: $primary;
+    text-style: bold;
+  }
+  StatusLine > .statusline--muted {
+    color: $text-muted;
+  }
+  StatusLine > .statusline--tool {
+    color: $warning;
+  }
+  StatusLine > .statusline--busy {
+    color: $secondary;
+  }
+  StatusLine > .statusline--unseen {
+    color: $user-label;
+  }
+  StatusLine > .statusline--failed {
+    color: $error;
+  }
+  """
+
+  def __init__(self, bar: "StatusBar", **kwargs):
+    super().__init__(**kwargs)
+    self._bar = bar
+
+  def render(self) -> Text:
+    bar = self._bar
+    gold = self.get_component_rich_style("statusline--gold")
+    muted = self.get_component_rich_style("statusline--muted")
+    line = Text(no_wrap=True, overflow="crop")
+
+    line.append("◆ ", gold)
+    if bar.agent:
+      line.append(bar.agent)
+    if bar.agent and bar.model:
+      line.append(" · ", muted)
+    if bar.model:
+      line.append(bar.model, muted)
+
+    if bar.phase is not Phase.IDLE:
+      spin = (
+        "statusline--tool" if bar.phase is Phase.TOOL
+        else "statusline--gold"
+      )
+      line.append("  ")
+      line.append(bar.spin, self.get_component_rich_style(spin))
+      if bar.since is not None:
+        line.append(f" {bar.elapsed}", muted)
+
+    if len(bar.dots) > 1:
+      line.append("  ")
+      for i, dot in enumerate(bar.dots):
+        if i:
+          line.append(" ")
+        if dot.bound:
+          line.append("●", gold)
+        elif dot.busy:
+          line.append(
+            bar.spin, self.get_component_rich_style("statusline--busy"),
+          )
+        elif dot.unseen:
+          line.append(
+            "●", self.get_component_rich_style("statusline--unseen"),
+          )
+        else:
+          line.append("○", muted)
+
+    if bar.action_failed:
+      line.append("  ")
+      line.append(
+        "✗ action", self.get_component_rich_style("statusline--failed"),
+      )
+
+    if bar.conversation:
+      line.append("  ")
+      line.append(bar.conversation, muted)
+    if bar.last_turn:
+      line.append("  ")
+      line.append(bar.last_turn, muted)
+    return line
+
+
+
+########################################################################
+#                              STATUS BAR                              #
 ########################################################################
 class StatusBar(Horizontal):
-  """Single-line status readout with right-aligned key hints."""
+  """Single-line instrument cluster with right-aligned key hints."""
 
   DEFAULT_CSS = """
   StatusBar {
@@ -44,10 +167,6 @@ class StatusBar(Horizontal):
     padding: 0 1;
     background: $panel;
 
-    & > .status-line {
-      width: 1fr;
-      color: $foreground;
-    }
     & > .status-hints {
       width: auto;
       color: $text-muted;
@@ -60,19 +179,41 @@ class StatusBar(Horizontal):
     self.model: Optional[str] = None
     self.agent: Optional[str] = None
     self.conversation: Optional[str] = None
-    self.state = "idle"
+    self.phase = Phase.IDLE
+    self.since: Optional[float] = None
+    self.dots: List[TrackDot] = []
     self.last_turn: Optional[str] = None
-    self.track_index = 1
-    self.track_count = 1
-    self.unseen = 0
     self.action_failed = False
+    self._frame = 0
+    self._line: Optional[StatusLine] = None
+    self._timer: Optional[Timer] = None
+
+  @property
+  def state(self) -> str:
+    """The bound track's coarse state: ``idle`` or ``streaming``."""
+    return "idle" if self.phase is Phase.IDLE else "streaming"
+
+  @property
+  def spin(self) -> str:
+    return SPINNER[self._frame % len(SPINNER)]
+
+  @property
+  def elapsed(self) -> str:
+    seconds = max(0, int(time.time() - (self.since or 0)))
+    if seconds < 60:
+      return f"{seconds}s"
+    return f"{seconds // 60}m{seconds % 60:02d}s"
 
   def compose(self) -> ComposeResult:
-    yield Static(classes="status-line")
+    self._line = StatusLine(self, classes="status-line")
+    yield self._line
     yield Static(Text(KEY_HINTS), classes="status-hints")
 
   def on_mount(self) -> None:
-    self._render_line()
+    self._timer = self.set_interval(TICK, self._tick, pause=True)
+    self._ensure_ticker()
+
+  # ── State pushed by the app ──────────────────────────────────────
 
   def set_context(
     self,
@@ -85,25 +226,22 @@ class StatusBar(Horizontal):
     self.conversation = conversation
     self._render_line()
 
-  def set_state(self, state: str) -> None:
-    """Bound track's task state: ``idle`` or ``streaming``."""
-    self.state = state
+  def set_activity(self, phase: Phase, since: Optional[float]) -> None:
+    """Bound track's phase plus its task's start time."""
+    self.phase = phase
+    self.since = since if phase is not Phase.IDLE else None
+    self._ensure_ticker()
+    self._render_line()
+
+  def set_tracks(self, dots: List[TrackDot]) -> None:
+    """All tracks' dot states, in creation order."""
+    self.dots = dots
+    self._ensure_ticker()
     self._render_line()
 
   def set_last_turn(self, summary: Optional[str]) -> None:
-    """Usage/duration summary from the last turn's StreamEnd."""
+    """Compact usage/duration from the last turn's StreamEnd."""
     self.last_turn = summary
-    self._render_line()
-
-  def set_tracks(self, index: int, count: int) -> None:
-    """Bound track's 1-based position; shown only when count > 1."""
-    self.track_index = index
-    self.track_count = count
-    self._render_line()
-
-  def set_unseen(self, count: int) -> None:
-    """How many hidden tracks completed since they were last bound."""
-    self.unseen = count
     self._render_line()
 
   def set_action_failed(self, failed: bool) -> None:
@@ -111,26 +249,26 @@ class StatusBar(Horizontal):
     self.action_failed = failed
     self._render_line()
 
-  def _render_line(self) -> None:
-    if not self.is_mounted:
+  # ── Spinner timer ────────────────────────────────────────────────
+
+  def _animated(self) -> bool:
+    return getattr(self.app, "animation_level", "full") != "none"
+
+  def _ensure_ticker(self) -> None:
+    if self._timer is None:
       return
-    # The line clips right-first on narrow terminals, so the
-    # dynamic segments (track, badge, state) come before the
-    # conversation label and usage summary.
-    parts = [
-      f"model: {self.model or '-'}",
-      f"agent: {self.agent or '-'}",
-    ]
-    if self.track_count > 1:
-      parts.append(f"track {self.track_index}/{self.track_count}")
-    if self.unseen:
-      parts.append(f"●{self.unseen}")
-    parts.append(self.state)
-    if self.action_failed:
-      parts.append("✗ action")
-    parts.append(f"conversation: {self.conversation or '-'}")
-    if self.last_turn:
-      parts.append(self.last_turn)
-    self.query_one(".status-line", Static).update(
-      Text("  |  ".join(parts))
-    )
+    busy = self.phase is not Phase.IDLE or any(d.busy for d in self.dots)
+    if busy and self._animated():
+      self._timer.resume()
+    else:
+      self._timer.pause()
+
+  def _tick(self) -> None:
+    self._frame += 1
+    self._render_line()
+
+  # ── Rendering ────────────────────────────────────────────────────
+
+  def _render_line(self) -> None:
+    if self._line is not None and self._line.is_mounted:
+      self._line.refresh()
