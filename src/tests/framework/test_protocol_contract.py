@@ -43,12 +43,12 @@ class TestToolReference:
 
   def test_required_fields_construct_with_defaults(self):
     ref = ToolReference(
-      qualified_name="system.clear",
-      description="Clear the active conversation.",
+      qualified_name="system.exit",
+      description="Exit the application.",
       protocol_name="simple",
     )
-    assert ref.qualified_name == "system.clear"
-    assert ref.description == "Clear the active conversation."
+    assert ref.qualified_name == "system.exit"
+    assert ref.description == "Exit the application."
     assert ref.protocol_name == "simple"
     assert ref.parameter_schema is None
     assert ref.tags == []

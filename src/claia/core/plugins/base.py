@@ -233,7 +233,7 @@ class ToolReference:
 
   Fields:
     - ``qualified_name``: fully-namespaced tool name, e.g.
-      ``"system.clear"`` for native modules or
+      ``"system.exit"`` for native modules or
       ``"mcp.<server>.<tool>"`` for MCP-sourced tools.
     - ``description``: human-readable description surfaced by UIs and
       help text. Sourced from the protocol's own metadata.

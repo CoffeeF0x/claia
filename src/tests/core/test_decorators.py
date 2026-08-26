@@ -408,8 +408,7 @@ def test_system_module_uses_decorators():
   assert SystemToolModule.info.name == "system"
   assert SystemToolModule.info.title == "System Utilities"
   tools = plugin.get_module_tools()
-  assert set(tools) == {"clear", "exit"}
-  assert tools["clear"].description == "Clear the terminal screen"
+  assert set(tools) == {"exit"}
   assert tools["exit"].description == "Exit the application"
   assert tools["exit"].callable.__self__ is plugin
   assert PENDING_ATTR not in SystemToolModule.__dict__
