@@ -41,6 +41,9 @@ EXOFOX_DARK = Theme(
     "link-color": "#E2C47E",
     "input-selection-background": "#C49A3A 35%",
     "user-label": "#4A8B8C",         # info teal
+    # Toast chips: a half-step between surface-800 and surface-700,
+    # so the chip reads against the app background it floats over.
+    "toast-background": "#33302C",
     # Scrollbars: invisible track, stone thumb, gold under the hand.
     "scrollbar": "#3A3633",
     "scrollbar-hover": "#6B5A2E",
@@ -73,6 +76,8 @@ EXOFOX_LIGHT = Theme(
     "link-color": "#856320",
     "input-selection-background": "#D4A94C 35%",
     "user-label": "#4A8B8C",
+    # Toast chips: a half-step below panel toward surface-200.
+    "toast-background": "#DDD8D2",
     # Scrollbars: invisible track, stone thumb, gold under the hand.
     "scrollbar": "#D5D1CC",
     "scrollbar-hover": "#C4AE6E",

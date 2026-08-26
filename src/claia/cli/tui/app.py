@@ -78,7 +78,7 @@ class ClaiaApp(App):
     min-width: 24;
     max-width: 50%;
     padding: 0 2 0 1;
-    background: $panel;
+    background: $toast-background;
     color: $foreground;
 
     &.-information {
@@ -144,7 +144,10 @@ class ClaiaApp(App):
 
   def get_theme_variable_defaults(self) -> Dict[str, str]:
     # Custom variables must resolve under any theme.
-    return {"user-label": "#4A8B8C"}
+    return {
+      "user-label": "#4A8B8C",
+      "toast-background": "#33302C",
+    }
 
   async def on_mount(self) -> None:
     self.register_theme(EXOFOX_DARK)
