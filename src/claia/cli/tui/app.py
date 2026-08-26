@@ -1,70 +1,42 @@
 """
-The CLAIA Textual app: one conversation, a live composer, paced
-turn-view rendering, and a status bar.
+The CLAIA Textual app: tracks over one screen, a live composer,
+an action lane, and a status bar.
 
-Task wiring mirrors the one-shot query path but never blocks the
-UI loop: submit goes through ``registry.add_task`` and every
-``TaskEvent`` callback (fired on worker threads) is marshalled
-into the app as a posted message — all widget mutation happens on
-the UI thread. Posted block events pass through a per-turn
-``Pacer`` (a ~40ms timer drips text, structural events are
-barriers) before reaching the live ``TurnView``; reloaded history
-replays through the same turn pipeline instantly. Persistence
-(``pull_events`` → ``JsonStore.save``) stays in the terminal
-callbacks on the worker thread, exactly as in ``QueryCommand``.
+Conversations are tracks owned by a switchboard: every track keeps
+accumulating (paced turn views, per-track queued message) whether
+or not it is bound to the screen, and one app timer drips every
+live pacer. The composer routes by prefix — ``:`` mints an action
+for the serial lane (``Commands.run`` untouched), anything else is
+a chat submit into the bound track. Task wiring mirrors the
+one-shot query path but never blocks the UI loop: ``TaskEvent``
+callbacks (worker threads) post block events into the app, and all
+widget mutation happens on the UI thread.
 """
 
 # External dependencies
-import asyncio
-import logging
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.message import Message
+from textual.containers import Container
 from textual.timer import Timer
 
 # Internal dependencies
-from ...core.data.artifacts import ToolArtifact
-from ...core.enums.conversation import MessageRole
-from ...core.enums.task import TaskEvent, TaskStatus
-from ...framework.task import Task
-from ..renderer import stream_summary
-from ..storage import JsonStore
-from ..stream import (
-  BlockEvent,
-  StreamEnd,
-  StreamRouter,
-  ToolResult,
-  replay_turn,
+from ..commands import Commands
+from .actions import (
+  Action,
+  ActionFinished,
+  ActionLane,
+  ActionStarted,
+  ActionState,
 )
-from ..utils import prepare_query_task, stream_tag_specs
 from .composer import Composer
 from .log_bridge import LogNotice, install, restore
-from .pacer import TICK, Pacer
+from .pacer import TICK
+from .panel import ActionPanel
 from .status import StatusBar
+from .switchboard import StreamBlocks, Switchboard
 from .theme import EXOFOX_DARK, EXOFOX_LIGHT
-from .transcript import Transcript
-from .turn import TurnView
-
-
-
-########################################################################
-#                            INITIALIZATION                            #
-########################################################################
-logger = logging.getLogger(__name__)
-
-
-
-########################################################################
-#                               MESSAGES                               #
-########################################################################
-class StreamBlocks(Message):
-  """Block events crossing from a worker thread into the UI loop."""
-
-  def __init__(self, events: List[BlockEvent]) -> None:
-    super().__init__()
-    self.events = events
 
 
 
@@ -72,9 +44,18 @@ class StreamBlocks(Message):
 #                                 APP                                  #
 ########################################################################
 class ClaiaApp(App):
-  """Full-screen chat shell over the active conversation."""
+  """Full-screen chat shell over the session's conversations."""
 
   TITLE = "CLAIA"
+
+  CSS = """
+  Screen {
+    layers: base actions;
+  }
+  #tracks {
+    height: 1fr;
+  }
+  """
 
   BINDINGS = [
     Binding("escape", "cancel_task", "Cancel", show=False,
@@ -85,6 +66,16 @@ class ClaiaApp(App):
     # everywhere (ESC-prefix), so alt+q is the portable alias.
     Binding("alt+q", "quit", "Quit", show=False, priority=True,
             id="quit-alt"),
+    # Alt+letter arrives from real terminals as a printable key
+    # (character set), which a focused TextArea would insert;
+    # priority routes these to the app before the composer sees
+    # them.
+    Binding("alt+n", "next_track", "Next track", show=False,
+            priority=True, id="next-track"),
+    Binding("alt+p", "previous_track", "Previous track", show=False,
+            priority=True, id="previous-track"),
+    Binding("alt+a", "toggle_actions", "Actions", show=False,
+            priority=True, id="toggle-actions"),
   ]
 
   def __init__(self, registry, settings, **kwargs):
@@ -92,20 +83,17 @@ class ClaiaApp(App):
     # Note: Textual's App reserves ``_registry`` and ``_task``.
     self.registry = registry
     self.settings = settings
-    self._store = JsonStore(settings.files_directory)
-    self._active_task: Optional[Task] = None
-    self._pending: Optional[str] = None
-    self._exiting = False
+    self.switchboard = Switchboard(self)
+    self._commands = Commands(registry, settings)
+    self._lane = ActionLane(self, self._commands, settings)
     self._log_state = None
-    self._live_turn: Optional[TurnView] = None
-    self._pacer: Optional[Pacer] = None
     self._pace_timer: Optional[Timer] = None
-    self._deliver_lock = asyncio.Lock()
 
   # ── Layout and theme ─────────────────────────────────────────────
 
   def compose(self) -> ComposeResult:
-    yield Transcript(id="transcript")
+    yield Container(id="tracks")
+    yield ActionPanel(id="actions")
     yield Composer(id="composer")
     yield StatusBar(id="status")
 
@@ -118,15 +106,16 @@ class ClaiaApp(App):
     self.register_theme(EXOFOX_LIGHT)
     self.theme = "exofox"
     self._log_state = install(self)
+    self._lane.start()
     # One persistent timer: ticks run in the timer's own task, so a
     # stop() from inside a tick would cancel the running tick's work
     # (including a pending queued submit). Pause/resume instead.
     self._pace_timer = self.set_interval(TICK, self._pace_tick, pause=True)
-    await self._render_history()
-    self._refresh_context()
+    await self.switchboard.initialize()
     self.query_one(Composer).focus()
 
   def on_unmount(self) -> None:
+    self._lane.stop()
     if self._log_state is not None:
       restore(*self._log_state)
       self._log_state = None
@@ -134,190 +123,128 @@ class ClaiaApp(App):
   # ── Actions ──────────────────────────────────────────────────────
 
   def action_cancel_task(self) -> None:
-    if self._active_task is not None:
-      self._active_task.request_cancel()
+    track = self.switchboard.bound
+    if track is not None and track.task is not None:
+      track.task.request_cancel()
 
   async def action_quit(self) -> None:
-    self._exiting = True
-    if self._active_task is not None:
-      self._active_task.request_cancel()
+    self.switchboard.cancel_all()
     self.exit()
 
-  # ── Composer ─────────────────────────────────────────────────────
+  def action_next_track(self) -> None:
+    self.switchboard.hop(1)
+
+  def action_previous_track(self) -> None:
+    self.switchboard.hop(-1)
+
+  def action_toggle_actions(self) -> None:
+    self.query_one(ActionPanel).toggle()
+
+  # ── Composer routing ─────────────────────────────────────────────
 
   async def on_composer_submitted(
     self, message: Composer.Submitted,
   ) -> None:
-    composer = message.composer
-    if self._active_task is not None:
-      if self._pending is not None:
-        self.notify("A message is already queued.", severity="warning")
-        return
-      self._pending = message.text
+    if message.text.startswith(":"):
+      accepted = await self._submit_action(message.text)
     else:
-      await self._submit(message.text)
-    composer.remember(message.text)
-    composer.clear()
+      accepted = await self._submit_chat(message.text)
+    if accepted:
+      message.composer.remember(message.text)
+      message.composer.clear()
 
-  # ── Task lifecycle ───────────────────────────────────────────────
+  async def _submit_chat(self, text: str) -> bool:
+    """Chat into the bound track; queue one message while busy."""
+    track = self.switchboard.bound
+    if track.busy:
+      if track.pending is not None:
+        self.notify("A message is already queued.", severity="warning")
+        return False
+      track.pending = text
+      return True
+    await self.switchboard.submit(track, text)
+    return True
 
-  async def _submit(self, text: str) -> None:
-    """Start a turn: record the user line, wire the task, enqueue."""
-    task = prepare_query_task(self.settings, text)
-    router = StreamRouter(
-      stream_tag_specs(self.registry, task.parameters.get("model_id"))
-    )
-    store = self._store
+  async def _submit_action(self, text: str) -> bool:
+    """Mint an action from a ``:`` line and hand it to the lane.
 
-    transcript = self.query_one(Transcript)
-    transcript.add_user(text)
-    self._live_turn = await transcript.begin_turn(self._assistant_label())
-    self._pacer = Pacer()
-    if self._pace_timer is not None:
-      self._pace_timer.resume()
-    self._refresh_context()
-    self.query_one(StatusBar).set_state("streaming")
+    Special cases stay minimal: ``query`` redirects to a chat
+    submit (its one-shot wiring blocks a thread), ``setup`` is
+    refused (its ``input()`` wizard needs a real terminal),
+    ``actions`` toggles the panel (the fallback for terminals
+    that never deliver Alt+A), and an unknown command fails
+    without running so it can never wrap into an implicit query
+    on the lane.
+    """
+    line = text[1:].strip()
+    tokens = line.split()
+    if not tokens:
+      self.notify("Empty command.", severity="warning")
+      return False
+    if tokens == ["actions"]:
+      self.query_one(ActionPanel).toggle()
+      return True
+    name = self._commands.resolve_name(tokens[0])
+    if name == "query":
+      rest = " ".join(tokens[1:])
+      if not rest:
+        self.notify("Missing query text.", severity="warning")
+        return False
+      return await self._submit_chat(rest)
 
-    def persist():
-      # Save only when domain events indicate mutations; by now the
-      # conversation already reflects every tool result and utility.
-      if task.conversation.pull_events():
-        if not store.save(task.conversation):
-          logger.error("Failed to save conversation")
+    action = Action(line=line, tokens=tokens)
+    self.query_one(ActionPanel).add_record(action)
+    if name is None:
+      self._refuse_action(
+        action, f"Unknown command: {tokens[0]}. Try ':help'.",
+      )
+    elif name == "setup":
+      self._refuse_action(
+        action, "setup is interactive — run 'claia setup' in a shell.",
+      )
+    else:
+      self._lane.submit(action)
+    return True
 
-    def post(events):
-      events = list(events)
-      if events:
-        self.post_message(StreamBlocks(events))
+  def _refuse_action(self, action: Action, message: str) -> None:
+    action.fail(message)
+    self.query_one(ActionPanel).update_record(action)
+    self.query_one(StatusBar).set_action_failed(True)
+    self.notify(message, severity="error")
 
-    def on_chunk(chunk):
-      post(router.feed(chunk))
+  # ── Action lane results ──────────────────────────────────────────
 
-    def on_artifact(artifact, message_id):
-      if not store.save(artifact):
-        logger.error(f"Failed to save artifact for message {message_id}")
-        return
-      if isinstance(artifact, ToolArtifact) and artifact.is_result:
-        post([ToolResult(
-          name=artifact.tool_name,
-          body=artifact.payload_text(),
-          call_id=artifact.call_id,
-        )])
-      else:
-        post(router.feed_artifact(artifact))
+  def on_action_started(self, message: ActionStarted) -> None:
+    self.query_one(ActionPanel).update_record(message.action)
 
-    def on_complete(_result):
-      persist()
-      post(router.end(TaskStatus.COMPLETED))
+  async def on_action_finished(self, message: ActionFinished) -> None:
+    action = message.action
+    self.query_one(ActionPanel).update_record(action)
+    failed = action.state is ActionState.FAILED
+    self.query_one(StatusBar).set_action_failed(failed)
+    if failed:
+      self.notify(action.message or "Command failed.", severity="error")
+    if message.result.is_exit():
+      self.switchboard.cancel_all()
+      self.exit()
+      return
+    await self.switchboard.reconcile()
 
-    def on_error(error_msg):
-      post(router.end(TaskStatus.FAILED, error=str(error_msg)))
-
-    def on_cancelled(_result=None):
-      persist()
-      post(router.end(TaskStatus.CANCELLED))
-
-    task.on(TaskEvent.CHUNK, on_chunk)
-    task.on(TaskEvent.ARTIFACT, on_artifact)
-    task.on(TaskEvent.COMPLETE, on_complete)
-    task.on(TaskEvent.ERROR, on_error)
-    task.on(TaskEvent.CANCELLED, on_cancelled)
-
-    self._active_task = task
-    self.registry.add_task(task)
+  # ── Stream delivery ──────────────────────────────────────────────
 
   async def on_stream_blocks(self, message: StreamBlocks) -> None:
-    if self._pacer is None:
-      return
-    released = self._pacer.feed(message.events)
-    if released:
-      await self._deliver(released)
+    await self.switchboard.receive(message.track, message.events)
+
+  def resume_pacing(self) -> None:
+    if self._pace_timer is not None:
+      self._pace_timer.resume()
 
   async def _pace_tick(self) -> None:
-    if self._pacer is None:
-      return
-    events = self._pacer.tick()
-    if events:
-      await self._deliver(events)
-
-  async def _deliver(self, events: List[BlockEvent]) -> None:
-    # Ticks and cancel flushes interleave on the loop; the lock keeps
-    # event order intact across await points.
-    async with self._deliver_lock:
-      for event in events:
-        turn = self._live_turn
-        if turn is None:
-          return
-        await turn.handle(event)
-        if isinstance(event, StreamEnd):
-          await self._end_turn(event)
-
-  async def _end_turn(self, end: StreamEnd) -> None:
-    if self._pace_timer is not None:
+    live = await self.switchboard.tick()
+    if not live and self._pace_timer is not None:
       self._pace_timer.pause()
-    self._pacer = None
-    self._live_turn = None
-    if end.error:
-      self.notify(str(end.error), severity="error")
-
-    status = self.query_one(StatusBar)
-    status.set_last_turn(stream_summary(end))
-    status.set_state("idle")
-    self._active_task = None
-
-    if self._pending is not None and not self._exiting:
-      text, self._pending = self._pending, None
-      await self._submit(text)
 
   # ── Notifications ────────────────────────────────────────────────
 
   def on_log_notice(self, message: LogNotice) -> None:
     self.notify(message.text, severity=message.severity)
-
-  # ── Helpers ──────────────────────────────────────────────────────
-
-  async def _render_history(self) -> None:
-    """Replay the active conversation's prior turns, if any.
-
-    Consecutive same-label assistant messages (the rounds of one
-    multi-round task) merge into one turn view, so a reloaded
-    conversation matches its live rendering by construction.
-    """
-    conversation = getattr(self.settings, "active_conversation", None)
-    if conversation is None:
-      return
-    transcript = self.query_one(Transcript)
-    thread = conversation.get_thread(include_utility=True)
-
-    utilities: Dict[str, List] = {}
-    for msg in thread:
-      if msg.role is MessageRole.UTILITY and msg.source_message_id:
-        utilities.setdefault(msg.source_message_id, []).append(msg)
-
-    view: Optional[TurnView] = None
-    for msg in thread:
-      if msg.role is MessageRole.UTILITY:
-        continue
-      if msg.role is MessageRole.USER:
-        transcript.add_user(msg.content or "")
-        view = None
-        continue
-      label = (msg.attributes.get("agent") or msg.role.value).upper()
-      if view is None or view.label != label:
-        view = await transcript.begin_turn(label)
-      await view.load(replay_turn(msg, utilities.get(msg.message_id, [])))
-
-  def _assistant_label(self) -> str:
-    agent = getattr(self.settings, "active_agent", None)
-    return (agent or MessageRole.ASSISTANT.value).upper()
-
-  def _refresh_context(self) -> None:
-    conversation = getattr(self.settings, "active_conversation", None)
-    label = None
-    if conversation is not None:
-      label = conversation.title or conversation.id[:8]
-    self.query_one(StatusBar).set_context(
-      getattr(self.settings, "active_model", None),
-      getattr(self.settings, "active_agent", None),
-      label,
-    )

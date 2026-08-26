@@ -42,14 +42,19 @@ def ensure_active_conversation(settings) -> Conversation:
   return conversation
 
 
-def prepare_query_task(settings, text: str) -> Task:
+def prepare_query_task(
+  settings, text: str, conversation: Optional[Conversation] = None,
+) -> Task:
   """Build a query task for ``text`` from the active settings.
 
-  Ensures an active conversation and agent, records the user turn on
-  the conversation, and assembles the task the same way for every
-  host path (one-shot query and TUI submit).
+  Records the user turn on ``conversation`` — the active one by
+  default (created when missing), or an explicit one so the TUI can
+  submit into tracks that are not currently active — and assembles
+  the task the same way for every host path (one-shot query and TUI
+  submit).
   """
-  conversation = ensure_active_conversation(settings)
+  if conversation is None:
+    conversation = ensure_active_conversation(settings)
 
   if not settings.active_agent:
     settings.active_agent = settings.default_agent or DEFAULT_AGENT

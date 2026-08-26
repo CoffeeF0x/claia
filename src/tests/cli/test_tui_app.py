@@ -8,6 +8,10 @@ architecture's module constants are patched per test to control
 story content and pace; ``unload_all_models`` forces a fresh
 instance so the new story takes effect. Tool turns dispatch the
 real ``sample.echo`` tool with ``MAX_TOOL_ROUNDS`` pinned to one.
+
+Phase-4 coverage drives the switchboard (two concurrent tracks,
+hopping, unseen badges), per-track queueing, and the ``:`` action
+lane (panel records, reconciliation, quit, serial ordering).
 """
 
 import json
@@ -19,6 +23,7 @@ import pytest
 from textual.widgets import Markdown
 
 import claia.core.architectures.dummy.dummy as dummy_module
+from claia.core.data import Conversation
 from claia.core.enums.conversation import MessageRole
 from claia.core.enums.task import TaskStatus
 from claia.framework.agents.base import BaseAgent
@@ -26,9 +31,10 @@ from claia.framework.registry import Registry
 
 from claia.cli.storage import JsonStore
 from claia.cli.tui import ClaiaApp
+from claia.cli.tui.actions import ActionState
 from claia.cli.tui.composer import Composer
+from claia.cli.tui.panel import ActionPanel, ActionRecord
 from claia.cli.tui.status import StatusBar
-from claia.cli.tui.transcript import Transcript
 from claia.cli.tui.turn import ToolBlock, TurnView
 
 
@@ -72,6 +78,8 @@ def tui_settings(tmp_path):
   return SimpleNamespace(
     files_directory=str(tmp_path / "storage"),
     active_model="dummy-model",
+    active_model_source=None,
+    default_model="dummy-model",
     active_agent="simple",
     default_agent="simple",
     active_prompt=None,
@@ -98,14 +106,16 @@ async def wait_for(pilot, condition, timeout=15.0):
   return False
 
 
-def flatten(app):
-  """(kind, …) tuples for every transcript block, top to bottom.
+def flatten(app, track=None):
+  """(kind, …) tuples for a track's transcript, top to bottom.
 
-  Markdown segments carry their source, thinking/notice/label blocks
-  their text, tool blocks their name, pretty args, and result body.
+  Defaults to the bound track. Markdown segments carry their source,
+  thinking/notice/label blocks their text, tool blocks their name,
+  pretty args, and result body.
   """
+  track = track or app.switchboard.bound
   out = []
-  for node in app.query_one(Transcript).children:
+  for node in track.transcript.children:
     if isinstance(node, TurnView):
       for child in node.children:
         if isinstance(child, Markdown):
@@ -127,12 +137,21 @@ def flatten(app):
   return out
 
 
-def kinds(app):
-  return [item[0] for item in flatten(app)]
+def kinds(app, track=None):
+  return [item[0] for item in flatten(app, track)]
 
 
-def texts_of(app, kind):
-  return [item[1] for item in flatten(app) if item[0] == kind]
+def texts_of(app, kind, track=None):
+  return [item[1] for item in flatten(app, track) if item[0] == kind]
+
+
+def markdown_size(app, track=None):
+  return sum(len(s) for s in texts_of(app, "markdown", track))
+
+
+def records(app):
+  """Action records in panel order (newest first)."""
+  return list(app.query_one(ActionPanel).query(ActionRecord))
 
 
 async def submit(app, pilot, text):
@@ -150,6 +169,20 @@ async def submit(app, pilot, text):
   composer.post_message(Composer.Submitted(composer, text))
   for _ in range(5):
     await pilot.pause(0.01)
+
+
+async def act(app, pilot, line, timeout=15.0):
+  """Submit a ``:`` action line and wait for its record to settle."""
+  await submit(app, pilot, line)
+
+  def settled():
+    recs = records(app)
+    return bool(recs) and recs[0].action.state in (
+      ActionState.DONE, ActionState.FAILED,
+    )
+
+  assert await wait_for(pilot, settled, timeout), f"action never settled: {line}"
+  return records(app)[0].action
 
 
 async def wait_idle(app, pilot, timeout=15.0):
@@ -180,6 +213,7 @@ class TestTurnFlow:
       assert any(SHORT_STORY in s for s in texts_of(app, "markdown"))
 
       conversation = tui_settings.active_conversation
+      assert conversation is app.switchboard.bound.conversation
       roles = [m.role for m in conversation.messages]
       assert roles == [MessageRole.USER, MessageRole.ASSISTANT]
       # The framework stamps the producing agent on the message.
@@ -208,7 +242,6 @@ class TestTurnFlow:
   async def test_prior_messages_render_on_launch(
     self, tui_registry, tui_settings,
   ):
-    from claia.core.data import Conversation
     conversation = Conversation(title="Earlier")
     conversation.add_message(MessageRole.USER, "old question")
     stamped = conversation.add_message(MessageRole.ASSISTANT, "old answer")
@@ -263,8 +296,9 @@ class TestToolTurns:
     async with app.run_test() as pilot:
       await submit(app, pilot, "go")
       await wait_idle(app, pilot)
-      assert app._live_turn is None
-      assert app._pacer is None
+      track = app.switchboard.bound
+      assert track.live_turn is None
+      assert track.pacer is None
       view = app.query(TurnView).last()
       assert view._stream is None  # the markdown stream was stopped
 
@@ -295,6 +329,8 @@ class TestReload:
     fresh = SimpleNamespace(
       files_directory=tui_settings.files_directory,
       active_model="dummy-model",
+      active_model_source=None,
+      default_model="dummy-model",
       active_agent="simple",
       default_agent="simple",
       active_prompt=None,
@@ -343,7 +379,7 @@ class TestBusyComposer:
       assert bar.state == "streaming"
       assert texts_of(app, "user-label") == ["YOU"]
       await submit(app, pilot, "third")
-      assert app._pending == "second"
+      assert app.switchboard.bound.pending == "second"
 
       done = await wait_for(
         pilot,
@@ -375,14 +411,14 @@ class TestCancel:
       await submit(app, pilot, "go")
       bar = app.query_one(StatusBar)
       assert await wait_for(pilot, lambda: bar.state == "streaming")
-      task = app._active_task
+      task = app.switchboard.bound.task
 
       await pilot.press("escape")
       await wait_idle(app, pilot)
 
       assert task.status is TaskStatus.CANCELLED
       assert ("notice", "[cancelled]") in flatten(app)
-      assert app._active_task is None
+      assert app.switchboard.bound.task is None
 
       # The shell is still usable: a fresh fast turn completes.
       set_dummy(SHORT_STORY)
@@ -404,7 +440,7 @@ class TestFollowTail:
     set_dummy(story, chars_per_second=2000, chars_per_chunk=40)
     async with app.run_test() as pilot:
       await submit(app, pilot, "go")
-      transcript = app.query_one(Transcript)
+      transcript = app.switchboard.bound.transcript
 
       # Anchored: the pane follows the tail while content grows.
       assert await wait_for(
@@ -434,6 +470,267 @@ class TestFollowTail:
 
       await pilot.press("escape")
       await wait_idle(app, pilot)
+
+
+########################################################################
+#                             SWITCHBOARD                              #
+########################################################################
+class TestSwitchboard:
+  async def test_two_tracks_stream_and_badge_hidden_completion(
+    self, app, set_dummy,
+  ):
+    set_dummy("stream " * 400, chars_per_second=600)
+    async with app.run_test() as pilot:
+      sb = app.switchboard
+      bar = app.query_one(StatusBar)
+
+      await submit(app, pilot, "first topic")
+      track_a = sb.bound
+      assert await wait_for(pilot, lambda: track_a.task is not None)
+
+      # conversation new rebinds to a fresh track mid-stream.
+      await submit(app, pilot, ":conversation new")
+      assert await wait_for(pilot, lambda: sb.bound is not track_a)
+      track_b = sb.bound
+      assert len(sb.tracks) == 2
+      assert bar.track_count == 2
+      assert flatten(app, track_b) == []
+
+      await submit(app, pilot, "second topic")
+      assert await wait_for(pilot, lambda: track_b.task is not None)
+      assert track_a.task is not None  # still streaming while hidden
+
+      # Both tracks accumulate concurrently, hidden or not.
+      assert await wait_for(
+        pilot,
+        lambda: markdown_size(app, track_a) > 40
+        and markdown_size(app, track_b) > 40,
+        timeout=30.0,
+      )
+
+      # Hop rebinds the view: same widgets, no replay, live growth.
+      views_before = list(track_a.transcript.query(TurnView))
+      size_at_hop = markdown_size(app, track_a)
+      await pilot.press("alt+n")
+      assert sb.bound is track_a
+      assert track_a.transcript.display
+      assert not track_b.transcript.display
+      assert list(track_a.transcript.query(TurnView)) == views_before
+      assert await wait_for(
+        pilot,
+        lambda: markdown_size(app, track_a) > size_at_hop,
+        timeout=30.0,
+      )
+
+      # The hidden track's completion sets the badge…
+      assert await wait_for(
+        pilot,
+        lambda: track_b.task is None and track_b.pacer is None,
+        timeout=60.0,
+      )
+      assert track_b.unseen
+      assert bar.unseen == 1
+
+      # …and binding it clears the badge.
+      await pilot.press("alt+n")
+      assert sb.bound is track_b
+      assert not track_b.unseen
+      assert bar.unseen == 0
+
+      assert await wait_for(
+        pilot,
+        lambda: track_a.task is None and track_a.pacer is None,
+        timeout=60.0,
+      )
+
+  async def test_idle_track_accepts_while_another_streams(
+    self, app, set_dummy,
+  ):
+    set_dummy("stream " * 300, chars_per_second=SLOW)
+    async with app.run_test() as pilot:
+      sb = app.switchboard
+      await submit(app, pilot, "keep going")
+      track_a = sb.bound
+      assert await wait_for(pilot, lambda: track_a.task is not None)
+
+      await submit(app, pilot, ":conversation new")
+      assert await wait_for(pilot, lambda: sb.bound is not track_a)
+      track_b = sb.bound
+      assert track_b.task is None  # idle: a submit starts immediately
+
+      await submit(app, pilot, "start the second")
+      assert await wait_for(pilot, lambda: track_b.task is not None)
+      assert track_a.task is not None
+      assert app.query_one(StatusBar).state == "streaming"
+
+      # Queueing is per track: B takes one pending while A streams.
+      await submit(app, pilot, "queued on b")
+      assert track_b.pending == "queued on b"
+      assert track_a.pending is None
+
+      track_a.task.request_cancel()
+      track_b.task.request_cancel()
+      assert await wait_for(
+        pilot,
+        lambda: all(t.task is None and t.pacer is None for t in sb.tracks),
+        timeout=30.0,
+      )
+
+
+########################################################################
+#                               ACTIONS                                #
+########################################################################
+class TestActions:
+  async def test_model_list_lands_in_panel_not_transcript(self, app):
+    async with app.run_test() as pilot:
+      action = await act(app, pilot, ":model list")
+      assert action.state is ActionState.DONE
+      assert action.line == "model list"
+      assert "dummy" in (action.output or "").lower()
+      assert flatten(app) == []  # command output never hits the transcript
+      assert len(records(app)) == 1
+      assert not app.query_one(StatusBar).action_failed
+
+  async def test_conversation_new_rebinds_to_fresh_track(
+    self, app, tui_settings, set_dummy,
+  ):
+    set_dummy(SHORT_STORY)
+    async with app.run_test() as pilot:
+      await submit(app, pilot, "hi")
+      await wait_idle(app, pilot)
+      sb = app.switchboard
+      first = sb.bound
+      assert first.conversation is not None
+
+      action = await act(app, pilot, ":conversation new")
+      assert action.state is ActionState.DONE
+      assert await wait_for(pilot, lambda: sb.bound is not first)
+      assert sb.bound.conversation is None
+      assert tui_settings.active_conversation is None
+      assert flatten(app) == []          # a fresh transcript is bound
+      assert flatten(app, first) != []   # the old track kept its content
+
+      # Running it again on the already-fresh track changes nothing.
+      await act(app, pilot, ":conversation new")
+      assert len(sb.tracks) == 2
+
+  async def test_conversation_load_creates_and_replays(
+    self, app, tui_settings,
+  ):
+    conversation = Conversation(title="Stored")
+    conversation.add_message(MessageRole.USER, "old question")
+    stamped = conversation.add_message(MessageRole.ASSISTANT, "stored answer")
+    stamped.attributes["agent"] = "writer"
+    JsonStore(tui_settings.files_directory).save(conversation)
+
+    async with app.run_test() as pilot:
+      sb = app.switchboard
+      action = await act(app, pilot, f":conversation load {conversation.id}")
+      assert action.state is ActionState.DONE
+      assert await wait_for(
+        pilot,
+        lambda: sb.bound.conversation is not None
+        and sb.bound.conversation.id == conversation.id,
+      )
+      assert len(sb.tracks) == 2
+      assert flatten(app) == [
+        ("user-label", "YOU"), ("user-text", "old question"),
+        ("label", "WRITER"), ("markdown", "stored answer"),
+      ]
+      bar = app.query_one(StatusBar)
+      assert bar.conversation == "Stored"
+      assert bar.track_count == 2
+
+  async def test_unknown_command_fails_with_toast(self, app):
+    async with app.run_test() as pilot:
+      toasts = []
+      original_notify = app.notify
+      app.notify = lambda msg, **kw: (
+        toasts.append((msg, kw.get("severity"))),
+        original_notify(msg, **kw),
+      )
+      action = await act(app, pilot, ":frobnicate now")
+      assert action.state is ActionState.FAILED
+      assert "Unknown command: frobnicate" in action.message
+      assert any(sev == "error" for _, sev in toasts)
+      assert app.query_one(StatusBar).action_failed
+      assert flatten(app) == []  # it never ran, never chatted
+
+  async def test_setup_is_refused_with_oneshot_pointer(self, app):
+    async with app.run_test() as pilot:
+      action = await act(app, pilot, ":setup")
+      assert action.state is ActionState.FAILED
+      assert "claia setup" in action.message
+
+  async def test_query_action_redirects_to_chat(self, app, set_dummy):
+    set_dummy(SHORT_STORY)
+    async with app.run_test() as pilot:
+      await submit(app, pilot, ":query hello there")
+      await wait_idle(app, pilot)
+      flat = flatten(app)
+      assert ("user-text", "hello there") in flat
+      assert any(SHORT_STORY in s for s in texts_of(app, "markdown"))
+      assert records(app) == []  # the chat turn is the record
+
+  async def test_actions_run_serially_in_order(self, app, monkeypatch):
+    calls = []
+    original_run = app._commands.run
+
+    def slow_run(tokens, conversation=None):
+      calls.append(("start", tokens[0]))
+      time.sleep(0.15)
+      result = original_run(tokens, conversation)
+      calls.append(("end", tokens[0]))
+      return result
+
+    monkeypatch.setattr(app._commands, "run", slow_run)
+    async with app.run_test() as pilot:
+      await submit(app, pilot, ":version")
+      await submit(app, pilot, ":model current")
+
+      def all_done():
+        recs = records(app)
+        return len(recs) == 2 and all(
+          r.action.state is ActionState.DONE for r in recs
+        )
+
+      assert await wait_for(pilot, all_done)
+      assert calls == [
+        ("start", "version"), ("end", "version"),
+        ("start", "model"), ("end", "model"),
+      ]
+      # Newest first in the panel.
+      assert [r.action.line for r in records(app)] == [
+        "model current", "version",
+      ]
+
+  async def test_quit_action_cancels_inflight_and_exits(
+    self, app, set_dummy,
+  ):
+    set_dummy("long story " * 500, chars_per_second=SLOW)
+    async with app.run_test() as pilot:
+      await submit(app, pilot, "go")
+      sb = app.switchboard
+      assert await wait_for(pilot, lambda: sb.bound.task is not None)
+      task = sb.bound.task
+
+      await submit(app, pilot, ":quit")
+      assert await wait_for(pilot, lambda: app._exit, 10.0)
+
+    # Cooperative cancel lands on the worker thread shortly after.
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline and task.status is not TaskStatus.CANCELLED:
+      time.sleep(0.05)
+    assert task.status is TaskStatus.CANCELLED
+
+  async def test_panel_toggles_with_alt_a(self, app):
+    async with app.run_test() as pilot:
+      panel = app.query_one(ActionPanel)
+      assert not panel.display  # hidden by default
+      await pilot.press("alt+a")
+      assert panel.display
+      await pilot.press("alt+a")
+      assert not panel.display
 
 
 ########################################################################

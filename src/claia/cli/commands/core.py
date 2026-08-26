@@ -60,6 +60,7 @@ class Commands:
     # Maps alias -> (command_class, help_text, needs_args, needs_conversation, priority)
     self._word_command_map: Dict[str, Tuple[Type[BaseCommand], str, bool, bool, CommandPriority]] = {}
     self._flag_command_map: Dict[str, Tuple[Type[BaseCommand], str, bool, bool, CommandPriority]] = {}
+    self._alias_names: Dict[str, str] = {}
     self._build_command_maps()
   
   def _build_command_maps(self) -> None:
@@ -74,6 +75,20 @@ class Commands:
         entry = (command_class, help_text, needs_args, needs_conversation, priority)
         self._word_command_map[alias.lower()] = entry
         self._flag_command_map[generate_cli_alias(alias)] = entry
+        self._alias_names[alias.lower()] = cmd_name
+        self._alias_names[generate_cli_alias(alias)] = cmd_name
+  
+  def resolve_name(self, token: str) -> Optional[str]:
+    """Canonical command name for a bare word or flag alias.
+    
+    Mirrors :meth:`run`'s lookup rules — flag aliases are matched
+    case-sensitively, bare words case-insensitively — and returns
+    ``None`` for tokens that would not resolve to a command.
+    """
+    name = self._alias_names.get(token)
+    if name is None and not token.startswith('-'):
+      name = self._alias_names.get(token.lower())
+    return name
   
   def run(self, tokens: List[str], conversation: Optional[Any] = None) -> Result:
     """
