@@ -66,8 +66,7 @@ class SetupCommand(BaseCommand):
   def _all_configured(self) -> Result:
     """Handle case where all keys are configured."""
     print("✓ All API keys are configured!")
-    prefix = self.get_help_prefix()
-    print(f"\nYou can still update any settings using:\n  {prefix}set <key> <value>  or  {prefix}get <key>\n")
+    print("\nYou can still update any settings using:\n  claia set <key> <value>  or  claia get <key>\n")
     return Result(success=True, message="All API keys already configured")
   
   def _display_unset_keys(self, unset_keys: List[tuple]) -> None:
@@ -80,31 +79,17 @@ class SetupCommand(BaseCommand):
   def _display_config_methods(self) -> None:
     """Display available configuration methods."""
     print("\nYou can configure API keys in several ways:")
-    
-    if self._current_mode == 'interactive':
-      print("  1. Interactively now (recommended for getting started)")
-      print("  2. Using the ':set' command (e.g., :set openai_api_token YOUR_KEY)")
-      print("  3. Setting environment variables (e.g., CLAIA_OPENAI_API_TOKEN)")
-      print("  4. Adding them to your .env file")
-    else:
-      print("  1. Using the '--set' flag (e.g., --set openai_api_token YOUR_KEY)")
-      print("  2. Setting environment variables (e.g., CLAIA_OPENAI_API_TOKEN)")
-      print("  3. Adding them to your .env file")
-      print("  4. Editing settings.json in your files directory")
+    print("  1. Interactively now (recommended for getting started)")
+    print("  2. Using 'claia set' (e.g., claia set openai_api_token YOUR_KEY)")
+    print("  3. Setting environment variables (e.g., CLAIA_OPENAI_API_TOKEN)")
+    print("  4. Adding them to your .env file")
+    print("  5. Editing settings.json in your files directory")
     
     print(f"\n{'-' * 70}")
   
   def _setup_cancelled(self) -> Result:
     """Handle cancelled setup."""
-    if self._current_mode == 'interactive':
-      print("\nSetup cancelled. You can run ':setup' again anytime.")
-      print("To suppress this notice on startup, run:")
-      print("  :set suppress_setup_notice true\n")
-    else:
-      print("\nSetup cancelled.")
-      print("To suppress this notice on startup, use:")
-      print("  --set suppress_setup_notice true\n")
-    
+    print("\nSetup cancelled. You can run 'claia setup' again anytime.\n")
     return Result(success=True, message="Setup cancelled by user")
   
   def _configure_keys(self, unset_keys: List[tuple]) -> int:

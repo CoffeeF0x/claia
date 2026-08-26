@@ -1,12 +1,12 @@
 """
 CLAIA CLI Commands Package.
 
-This package handles command processing for the CLAIA application.
-It provides both CLI-style commands (with flags like -q, --quit) and interactive
-commands (with simple prefixes like :q, :quit).
+This package handles command processing for the CLAIA application:
+bare subcommands (``claia model list``) and their generated flag
+aliases (``--model``, ``-m``) resolve against the same spec list.
 
-The new architecture uses a command registry pattern where each command type
-has its own dedicated class inheriting from BaseCommand.
+Each command type has its own dedicated class inheriting from
+BaseCommand, registered in ``core.COMMAND_REGISTRY``.
 """
 
 from .core import Commands

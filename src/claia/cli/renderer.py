@@ -1,27 +1,35 @@
 """
-Jitter-buffered renderer for streaming text output.
+Terminal renderers for streamed output.
 
-Decouples token arrival from terminal rendering so bursty streams
-(several deltas arriving in one TCP segment, server-side batching, etc.)
-appear as smooth typing at a rate that tracks the API's average
-throughput.
-
-Usage:
-    renderer = PacedRenderer()
-    renderer.start()
-    task.on(TaskEvent.CHUNK, renderer.feed_chunk)
-    # ...later...
-    renderer.finish(drain=True)
+- ``BlockRenderer`` — plaintext sink for the stream router's block
+  events: assistant text to stdout, tool calls and artifact notices
+  as dim one-liners, thinking and a usage summary in verbose mode,
+  errors to stderr. ANSI styling and pacing apply only when stdout
+  is a TTY; piped output is raw. ``NO_COLOR`` is respected.
+- ``PacedRenderer`` — jitter buffer that decouples token arrival
+  from terminal writes so bursty streams (several deltas arriving
+  in one TCP segment, server-side batching, etc.) appear as smooth
+  typing at a rate that tracks the source's average throughput.
 """
 
 # External dependencies
+import os
 import sys
 import threading
 import time
 import logging
 from collections import deque
+from typing import Iterable, Optional
 
-from ..core.data.chunks import TextChunk
+from ..core.enums.task import TaskStatus
+from .stream import (
+  ArtifactNotice,
+  BlockEvent,
+  Channel,
+  StreamEnd,
+  TextDelta,
+  ToolCall,
+)
 
 
 
@@ -91,12 +99,6 @@ class PacedRenderer:
     self._started = True
     self._thread.start()
 
-  def feed_chunk(self, chunk) -> None:
-    """Enqueue text from a ``TextChunk``; ignore non-text chunks."""
-    if isinstance(chunk, TextChunk):
-      data = chunk.data if isinstance(chunk.data, str) else str(chunk.data)
-      self.feed(data)
-
   def feed(self, chunk: str) -> None:
     """Enqueue a chunk of text and update the arrival-rate estimate."""
     if not chunk:
@@ -164,3 +166,128 @@ class PacedRenderer:
         time.sleep(1.0 / render_rate)
     except Exception as e:
       logger.exception(f"PacedRenderer thread crashed: {e}")
+
+
+class BlockRenderer:
+  """Plaintext renderer for stream-router block events.
+
+  Default output: TEXT deltas verbatim, thinking dropped, tool calls
+  as one dim ``[tool <name>]`` line, artifacts as ``[saved: <name>]``,
+  stream errors to stderr. Verbose adds dim ``[thinking]`` blocks and
+  one usage/duration summary line at stream end.
+
+  ``tty``, ``color``, and ``paced`` default from the output stream:
+  a TTY gets ANSI dim styling (unless ``NO_COLOR`` is set) and paced
+  typing via ``PacedRenderer``; piped output is raw and immediate.
+  """
+
+  DIM = "\x1b[2m"
+  RESET = "\x1b[0m"
+
+  def __init__(
+    self,
+    out=None,
+    err=None,
+    verbose: bool = False,
+    tty: Optional[bool] = None,
+    color: Optional[bool] = None,
+    paced: Optional[bool] = None,
+  ):
+    self._out = out if out is not None else sys.stdout
+    self._err = err if err is not None else sys.stderr
+    self._verbose = verbose
+    if tty is None:
+      tty = getattr(self._out, "isatty", lambda: False)()
+    self._color = (tty and not os.environ.get("NO_COLOR")) if color is None else color
+    self._paced = tty if paced is None else paced
+    self._pacer: Optional[PacedRenderer] = None
+    self._at_line_start = True
+    self._closed = False
+
+  # ── Event handling ───────────────────────────────────────────────────
+
+  def handle_all(self, events: Iterable[BlockEvent]) -> None:
+    for event in events:
+      self.handle(event)
+
+  def handle(self, event: BlockEvent) -> None:
+    if isinstance(event, TextDelta):
+      if event.channel is Channel.THINKING:
+        if self._verbose:
+          self._write_notice(f"[thinking] {event.text}")
+      else:
+        self._write(event.text)
+    elif isinstance(event, ToolCall):
+      self._write_notice(f"[tool {event.name or 'unknown'}]")
+    elif isinstance(event, ArtifactNotice):
+      self._write_notice(f"[saved: {event.name}]")
+    elif isinstance(event, StreamEnd):
+      self._end(event)
+
+  # ── Output plumbing ──────────────────────────────────────────────────
+
+  def _write(self, text: str) -> None:
+    if not text:
+      return
+    self._at_line_start = text.endswith("\n")
+    if self._paced:
+      if self._pacer is None:
+        self._pacer = PacedRenderer(sink=self._out)
+        self._pacer.start()
+      self._pacer.feed(text)
+    else:
+      self._sink_write(text)
+
+  def _sink_write(self, text: str) -> None:
+    # Downstream may close the pipe mid-stream (`claia … | head`);
+    # go quiet and let the task run to completion.
+    if self._closed:
+      return
+    try:
+      self._out.write(text)
+      self._out.flush()
+    except BrokenPipeError:
+      self._closed = True
+
+  def _write_notice(self, line: str) -> None:
+    prefix = "" if self._at_line_start else "\n"
+    self._write(prefix + self._dim(line) + "\n")
+
+  def _dim(self, text: str) -> str:
+    return f"{self.DIM}{text}{self.RESET}" if self._color else text
+
+  def _end(self, end: StreamEnd) -> None:
+    # On failure, drop whatever the pacer is still holding — the
+    # error line should not wait behind a slow drain.
+    drain = end.status is not TaskStatus.FAILED
+    if not self._at_line_start and drain:
+      self._write("\n")
+    if self._pacer is not None:
+      self._pacer.finish(drain=drain)
+      self._pacer = None
+    if self._verbose:
+      summary = self._summary(end)
+      if summary:
+        self._sink_write(self._dim(summary) + "\n")
+    if end.error:
+      prefix = "" if self._at_line_start else "\n"
+      self._err.write(f"{prefix}Error: {end.error}\n")
+      self._err.flush()
+
+  @staticmethod
+  def _summary(end: StreamEnd) -> Optional[str]:
+    parts = []
+    usage = end.usage
+    if usage is not None:
+      tokens = []
+      if usage.prompt_tokens is not None:
+        tokens.append(f"{usage.prompt_tokens} in")
+      if usage.completion_tokens is not None:
+        tokens.append(f"{usage.completion_tokens} out")
+      if not tokens and usage.total_tokens is not None:
+        tokens.append(f"{usage.total_tokens} total")
+      if tokens:
+        parts.append("tokens: " + ", ".join(tokens))
+    if end.metrics is not None and end.metrics.duration is not None:
+      parts.append(f"{end.metrics.duration:.2f}s")
+    return f"[{' | '.join(parts)}]" if parts else None

@@ -22,9 +22,6 @@ dependencies = [
   "python-dotenv",
   "beautifulsoup4",
   "chardet<6",
-  # claia.cli
-  "pyfiglet",
-  "pyreadline3",
 ]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
@@ -49,10 +46,7 @@ core = [
   "chardet<6",
 ]
 framework = []
-cli = [
-  "pyfiglet",
-  "pyreadline3",
-]
+cli = []
 
 # Optional model backends
 local = [

@@ -13,6 +13,7 @@ Covers:
 - Tags split across chunk boundaries (every legal break point of a
   representative fixture)
 - Default tag spec resolution and per-model override merging
+- The confirmed_text streaming-display watermark
 """
 
 # External dependencies
@@ -588,6 +589,51 @@ class TestResolveTagSpecsModelDefinition:
       assert types[tag_type] == spec
     # No leftover default specs after a full override.
     assert len(specs) == len(overrides)
+
+
+########################################################################
+#                          CONFIRMED TEXT                              #
+########################################################################
+class TestConfirmedText:
+  """The streaming-display watermark accessor."""
+
+  def test_plain_text_confirms_immediately(self, parser: TagParser):
+    list(parser.feed("hello world"))
+    text, mark = parser.confirmed_text(0)
+    assert text == "hello world"
+    assert mark == len("hello world")
+
+  def test_partial_open_is_held_back(self, parser: TagParser):
+    # "<think" could still become an open tag: not confirmed.
+    list(parser.feed("say <think"))
+    text, mark = parser.confirmed_text(0)
+    assert text == "say "
+    assert mark == len("say ")
+
+  def test_inside_open_tag_yields_nothing(self, parser: TagParser):
+    list(parser.feed("<think>private "))
+    text, mark = parser.confirmed_text(0)
+    assert text == ""
+    assert mark == 0
+
+  def test_watermark_advances_without_rereads(self, parser: TagParser):
+    list(parser.feed("one "))
+    _, mark = parser.confirmed_text(0)
+    list(parser.feed("two"))
+    text, mark = parser.confirmed_text(mark)
+    assert text == "two"
+    text, mark = parser.confirmed_text(mark)
+    assert text == ""
+
+  def test_overlap_with_text_events_dedups_by_index(self, parser: TagParser):
+    # Consumers using both sources slice TextEvents by the watermark.
+    list(parser.feed("abc"))
+    text, mark = parser.confirmed_text(0)
+    assert text == "abc"
+    events = list(parser.feed("<think>t</think>"))
+    text_events = [e for e in events if isinstance(e, TextEvent)]
+    assert len(text_events) == 1
+    assert text_events[0].end_index == mark  # fully covered already
 
 
 ########################################################################

@@ -201,9 +201,9 @@ APP_PARAMS: List[ParamSpec] = [
     description="Path to .env file for configuration",
   ),
   ParamSpec(
-    name="suppress_setup_notice",
+    name="verbose",
     type=bool, scope=ParamScope.INIT, default=False,
     category=ParamCategory.APPLICATION,
-    description="Suppress API key setup notice on startup",
+    description="Show thinking and a usage summary in query output",
   ),
 ]

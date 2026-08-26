@@ -1,18 +1,25 @@
 """
-Query command for sending one-shot queries to the AI.
+Query command: the one-shot task-wiring path.
+
+Builds the task from the active settings, mirrors the agent's tag
+segmentation through a ``StreamRouter``, and renders block events
+with a ``BlockRenderer``. This is the only place the CLI wires a
+task's callbacks to terminal output.
 """
 
 import logging
 import threading
-from typing import List, Optional, Any
+from typing import Any, List, Optional
 
-from ...core.results import Result
 from ...core.enums.conversation import MessageRole
 from ...core.enums.model import SourcePreference
+from ...core.enums.task import TaskEvent, TaskStatus
+from ...core.parser import resolve_tag_specs
+from ...core.results import Result
 from ...framework.task import Task
-from ...core.enums.task import TaskEvent
-from ..renderer import PacedRenderer
+from ..renderer import BlockRenderer
 from ..storage import JsonStore
+from ..stream import StreamRouter
 from ..utils import active_system, ensure_active_conversation
 from .base import BaseCommand
 
@@ -25,7 +32,7 @@ class QueryCommand(BaseCommand):
   """Command to send a one-shot query to the AI."""
 
   def execute(self, args: List[str], conversation: Optional[Any] = None) -> Result:
-    """Send a message and get a response."""
+    """Send a message and stream the response to the terminal."""
     if not args:
       return Result(success=False, message=f"Missing query text. Usage: {self.format_command('query <your question>')}")
 
@@ -38,73 +45,103 @@ class QueryCommand(BaseCommand):
         self.settings.active_agent = self.settings.default_agent or DEFAULT_AGENT
 
       conversation.add_message(MessageRole.USER, query_text)
-      user_kwargs = self.settings.get_user_kwargs()
 
-      done_event = threading.Event()
-      error_holder = [None]
+      task = self._build_task(conversation)
+      renderer = BlockRenderer(verbose=bool(getattr(self.settings, "verbose", False)))
+      error = self._run_task(task, renderer)
 
-      parameters = {
-        "source_preference": SourcePreference.ANY,
-        "model_id": self.settings.active_model,
-        **user_kwargs
-      }
-      system = active_system(self.settings)
-      if system:
-        parameters["system"] = system
-
-      task = Task(
-        agent_type=self.settings.active_agent,
-        conversation=conversation,
-        parameters=parameters
-      )
-
-      renderer = PacedRenderer()
-      renderer.start()
-      task.on(TaskEvent.CHUNK, renderer.feed_chunk)
-      file_repo = JsonStore(self.settings.files_directory)
-      saved_artifacts = []
-
-      def on_artifact(artifact, message_id):
-        if file_repo.save(artifact):
-          saved_artifacts.append(artifact)
-          logger.debug(f"Saved artifact {artifact.id} for message {message_id}")
-        else:
-          logger.error(f"Failed to save artifact for message {message_id}")
-
-      def on_complete(full_response):
-        renderer.finish(drain=True)
-        if full_response and not full_response.endswith('\n'):
-          print()
-        for artifact in saved_artifacts:
-          print(f"[Saved attachment: {artifact.name}]")
-        if self.settings.active_conversation.pull_events():
-          file_repo.save(self.settings.active_conversation)
-        done_event.set()
-
-      def on_error(error_msg):
-        renderer.finish(drain=False)
-        error_holder[0] = error_msg
-        print(f"\nError: {error_msg}")
-        done_event.set()
-
-      def on_cancelled(_full_response=None):
-        renderer.finish(drain=True)
-        if self.settings.active_conversation.pull_events():
-          file_repo.save(self.settings.active_conversation)
-        done_event.set()
-
-      task.on(TaskEvent.COMPLETE, on_complete)
-      task.on(TaskEvent.ERROR, on_error)
-      task.on(TaskEvent.CANCELLED, on_cancelled)
-      task.on(TaskEvent.ARTIFACT, on_artifact)
-
-      self.registry.add_task(task)
-      done_event.wait()
-
-      if error_holder[0]:
-        return Result(success=False, message=f"Query failed: {error_holder[0]}")
+      if error is not None:
+        # The renderer already put the error on stderr; a bare
+        # failure result keeps the exit code non-zero without
+        # printing it twice.
+        return Result(success=False)
       return Result(success=True)
 
     except Exception as e:
       self.logger.error(f"Error processing query: {e}", exc_info=True)
       return Result(success=False, message=f"Error processing query: {str(e)}")
+
+  def _build_task(self, conversation: Any) -> Task:
+    """Assemble the task from the active settings."""
+    parameters = {
+      "source_preference": SourcePreference.ANY,
+      "model_id": self.settings.active_model,
+      **self.settings.get_user_kwargs(),
+    }
+    system = active_system(self.settings)
+    if system:
+      parameters["system"] = system
+
+    return Task(
+      agent_type=self.settings.active_agent,
+      conversation=conversation,
+      parameters=parameters,
+    )
+
+  def _run_task(self, task: Task, renderer: BlockRenderer) -> Optional[str]:
+    """Submit ``task`` and stream its output through router + renderer.
+
+    Blocks until the task is terminal. Returns the error message on
+    failure, ``None`` otherwise.
+    """
+    router = StreamRouter(self._tag_specs(task.parameters.get("model_id")))
+    store = JsonStore(self.settings.files_directory)
+    done = threading.Event()
+    error_holder: List[Optional[str]] = [None]
+
+    def persist():
+      # Save only when domain events indicate mutations; by now the
+      # conversation already reflects every tool result and utility.
+      if task.conversation.pull_events():
+        if not store.save(task.conversation):
+          logger.error("Failed to save conversation")
+
+    def on_chunk(chunk):
+      renderer.handle_all(router.feed(chunk))
+
+    def on_artifact(artifact, message_id):
+      if store.save(artifact):
+        renderer.handle_all(router.feed_artifact(artifact))
+      else:
+        logger.error(f"Failed to save artifact for message {message_id}")
+
+    # Terminal callbacks must always release the wait, even when the
+    # render sink is gone (e.g. stdout closed by a downstream pipe).
+    def on_complete(_result):
+      try:
+        renderer.handle_all(router.end(TaskStatus.COMPLETED))
+        persist()
+      finally:
+        done.set()
+
+    def on_error(error_msg):
+      error_holder[0] = str(error_msg)
+      try:
+        renderer.handle_all(router.end(TaskStatus.FAILED, error=str(error_msg)))
+      finally:
+        done.set()
+
+    def on_cancelled(_result=None):
+      try:
+        renderer.handle_all(router.end(TaskStatus.CANCELLED))
+        persist()
+      finally:
+        done.set()
+
+    task.on(TaskEvent.CHUNK, on_chunk)
+    task.on(TaskEvent.ARTIFACT, on_artifact)
+    task.on(TaskEvent.COMPLETE, on_complete)
+    task.on(TaskEvent.ERROR, on_error)
+    task.on(TaskEvent.CANCELLED, on_cancelled)
+
+    self.registry.add_task(task)
+    done.wait()
+    return error_holder[0]
+
+  def _tag_specs(self, model_id: Optional[str]):
+    """Mirror the agent's spec resolution: exact id, else defaults."""
+    definitions = self.registry.get_supported_models()
+    model_def = None
+    if isinstance(definitions, dict) and model_id in definitions:
+      model_def = definitions[model_id]
+    return resolve_tag_specs(model_def)

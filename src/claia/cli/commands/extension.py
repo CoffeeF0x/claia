@@ -306,13 +306,6 @@ class CLIToolModule(BaseToolModule):
             data_type="custom",
             required=False
           ),
-          "current_mode": ArgumentDefinition(
-            name="current_mode",
-            description="Current mode (interactive or cli)",
-            data_type="str",
-            required=False,
-            default_value="interactive"
-          ),
         }
       ),
     }
@@ -838,7 +831,7 @@ class CLIToolModule(BaseToolModule):
 
     return version_text
 
-  def _help(self, registry=None, command_specs=None, current_mode: str = "interactive", **kwargs) -> str:
+  def _help(self, registry=None, command_specs=None, **kwargs) -> str:
     """Show help information."""
     output_lines = []
     output_lines.append("\n" + "=" * 70)
@@ -846,21 +839,20 @@ class CLIToolModule(BaseToolModule):
     output_lines.append("=" * 70)
 
     # Built-in Commands
-    output_lines.append("BUILT-IN COMMANDS")
+    output_lines.append("USAGE")
     output_lines.append("-" * 70)
+    output_lines.append("  claia <command> [args…]")
+    output_lines.append("")
 
     if command_specs:
-      if current_mode == 'interactive':
-        output_lines.append("  Commands (prefix with ':'):")
-        for aliases, _, help_desc, _, _, _ in command_specs:
-          aliases_str = ', '.join(aliases)
-          output_lines.append(f"    :{aliases_str:24s} - {help_desc}")
-      else:
-        output_lines.append("  Command Line Flags:")
-        for aliases, _, help_desc, _, _, _ in command_specs:
-          cli_aliases = [f"-{a}" if len(a) == 1 else f"--{a}" for a in aliases]
-          aliases_str = ', '.join(cli_aliases)
-          output_lines.append(f"    {aliases_str:25s} - {help_desc}")
+      output_lines.append("  Commands:")
+      for aliases, cmd_name, help_desc, _, _, _ in command_specs:
+        others = [a for a in aliases if a != cmd_name]
+        display = cmd_name + (f" ({', '.join(others)})" if others else "")
+        output_lines.append(f"    {display:28s} - {help_desc}")
+      output_lines.append("")
+      output_lines.append("  Every command also has a generated flag alias (--query / -q,")
+      output_lines.append("  --help / -h, …) usable anywhere in the argument list.")
     else:
       output_lines.append("  (Command specifications not available)")
 

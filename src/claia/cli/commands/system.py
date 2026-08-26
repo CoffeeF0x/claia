@@ -41,8 +41,8 @@ class VersionCommand(BaseCommand):
 class HelpCommand(BaseCommand):
   """Command to display help information."""
   
-  def __init__(self, registry, settings, current_mode='interactive', command_specs=None):
-    super().__init__(registry, settings, current_mode)
+  def __init__(self, registry, settings, command_specs=None):
+    super().__init__(registry, settings)
     self.command_specs = command_specs or []
   
   def execute(self, args: List[str], conversation: Optional[Any] = None) -> Result:
@@ -50,7 +50,6 @@ class HelpCommand(BaseCommand):
     params = {
       'registry': self.registry,
       'command_specs': self.command_specs,
-      'current_mode': self._current_mode,
     }
     
     result = self.registry.run_command('cli.help', params, None)
@@ -67,28 +66,13 @@ class HelpCommand(BaseCommand):
   def _get_settings_help(self) -> List[str]:
     """Generate help text for configuration settings."""
     lines = ["  Settings can be configured via:"]
-    is_interactive = self._current_mode == 'interactive'
-    
-    if is_interactive:
-      lines.extend([
-        "    • Interactive commands: :get <setting> or :set <setting> <value>",
-        "    • Command line: --setting-name value (when launching)",
-        "    • Environment: CLAIA_SETTING_NAME=value",
-        "    • .env file (default: .env)",
-        "    • settings.json (in files directory)",
-        "",
-        "  Use ':get' to view current values, ':set <name> <value>' to change."
-      ])
-    else:
-      lines.extend([
-        "    • Command line: --setting-name value",
-        "    • Environment: CLAIA_SETTING_NAME=value",
-        "    • .env file (default: .env)",
-        "    • settings.json (in files directory)",
-        "",
-        "  Note: the settings below are not saved to the settings.json file.",
-        "        please use one of the other methods to save your settings."
-      ])
+    lines.extend([
+      "    • Persisted: claia set <setting> <value> (view: claia get)",
+      "    • Command line: --setting-name value (this run only)",
+      "    • Environment: CLAIA_SETTING_NAME=value",
+      "    • .env file (default: .env)",
+      "    • settings.json (in files directory)",
+    ])
     
     lines.append("")
     
@@ -98,11 +82,7 @@ class HelpCommand(BaseCommand):
       if not spec.externally_settable:
         continue
       help_desc = spec.description or ""
-      if is_interactive:
-        setting_line = f"    {spec.name:30s} {help_desc}"
-      else:
-        cli_name = spec.name.replace('_', '-')
-        setting_line = f"    --{cli_name:30s} {help_desc}"
+      setting_line = f"    {spec.name:32s} {help_desc}"
       category = spec.category if spec.category is not None else ParamCategory.MISC
       categorized[category].append(setting_line)
 
@@ -112,7 +92,6 @@ class HelpCommand(BaseCommand):
         lines.extend(categorized[category])
         lines.append("")
     
-    help_cmd = ":help" if is_interactive else "--help"
-    lines.append(f"  Use '{help_cmd}' to see this help message anytime.")
+    lines.append("  Use 'claia help' to see this help message anytime.")
     
     return lines

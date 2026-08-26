@@ -84,6 +84,14 @@ position.
 `TextEvent` outside open tags and a `ParseError` for each unclosed
 tag still on the stack.
 
+`confirmed_text(start)` is the streaming-display accessor: it
+returns the plain text the scanner has already ruled out as tag
+material (empty while inside an open tag) plus a new watermark to
+pass back on the next call. Spans returned here are covered again
+by later `TextEvent`s — consumers using both dedup by buffer
+index. Live renderers use this to show text mid-chunk instead of
+waiting for the next tag boundary.
+
 ## Errors
 
 Errors are surfaced **in-band** as `ParseError` events. Consumers

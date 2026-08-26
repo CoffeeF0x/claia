@@ -55,44 +55,30 @@
 
 
 # External dependencies
-import readline
-import atexit
 import logging
 import os
 import sys
-import shutil
-import threading
-import importlib.metadata as importlib_metadata
-import pyfiglet
+from typing import List, Optional, Tuple
 
 # Internal dependencies
-from ..framework.task import Task
 from ..core.results import Result
-from ..core.enums.task import TaskEvent
-from ..core.enums.model import SourcePreference
-from ..core.enums.conversation import MessageRole
-from .storage import JsonStore
+from ..framework.registry import Registry
 from .settings import Settings
 from .commands import Commands
 from .defaults import initialize_defaults
 from .logger import initialize_logging
 from .agents import register_cli_agents
-from .renderer import PacedRenderer
-from .utils import active_system, ensure_active_conversation
-from ..framework.registry import Registry
 
 
 
 ########################################################################
 #                              CONSTANTS                               #
 ########################################################################
-HISTORY_FILE = ".claia_history"
-MAX_HISTORY_LEN = 1000
-COMMAND_CHARACTER = ":"
-INPUT_CHARACTER = ":"
-NEWLINE_CHARACTER = "\\"
-CONTINUATION_PROMPT = ">"
-DEFAULT_AGENT = "simple"
+USAGE_LINE = "usage: claia <command> [args…]  (see 'claia help')"
+HELP_POINTER = (
+  "Run 'claia <command> [args…]' — e.g. claia query \"hello\", "
+  "or pipe text in: echo \"hello\" | claia"
+)
 
 
 
@@ -104,162 +90,48 @@ logger = logging.getLogger(__name__)
 
 
 ########################################################################
-#                              FUNCTIONS                               #
+#                               DISPATCH                               #
 ########################################################################
-def setup_command_history(settings: Settings) -> None:
-  """Initialize readline for command history with arrow key navigation."""
-  logger.debug("Setting up command history")
-  try:
-    # Create history file path in the files directory
-    history_file = os.path.join(settings.files_directory, HISTORY_FILE)
+def resolve_invocation(
+  args: List[str],
+  stdin_tty: bool,
+  stdin_data: Optional[str],
+) -> Tuple[str, List[str]]:
+  """Map startup inputs to a dispatch action.
 
-    # Ensure the history file directory exists
-    history_dir = os.path.dirname(history_file)
-    if history_dir and not os.path.exists(history_dir):
-      logger.debug(f"Creating history directory: {history_dir}")
-      os.makedirs(history_dir, exist_ok=True)
+  Returns ``(action, tokens)`` where action is one of:
 
-    # Try to read the history file
-    logger.debug(f"Reading history from file: {history_file}")
-    readline.read_history_file(history_file)
-    readline.set_history_length(MAX_HISTORY_LEN)
-    logger.debug(f"Command history initialized with max length: {MAX_HISTORY_LEN}")
-  except FileNotFoundError:
-    logger.debug(f"History file not found, will create on exit: {history_file}")
-  except Exception as e:
-    logger.error(f"Error setting up command history: {e}")
-
-  atexit.register(readline.write_history_file, history_file)
-  logger.debug("Registered history file write on exit")
-
-  # Bind Shift+Enter to insert a trailing backslash then accept the line.
-  # This triggers the multiline continuation loop in get_user_input().
-  # The sequences are terminal-dependent (KKP and xterm variants); failures
-  # are silently ignored so the app still runs normally if unsupported.
-  try:
-    readline.parse_and_bind(r'"\e[13;2u": "\\\C-j"')    # Kitty Keyboard Protocol
-    readline.parse_and_bind(r'"\e[27;2;13~": "\\\C-j"') # xterm / some VTE terminals
-  except Exception:
-    pass
-
-
-def get_user_input() -> str:
-  """Get user input, with multiline support via trailing backslash continuation.
-
-  A line ending with NEWLINE_CHARACTER is treated as a continuation: further lines are
-  collected (shown with an indented prompt) and all parts are joined with a return character
-  before being returned to the main loop.
-
-  Shift+Enter is bound in setup_command_history() to insert NEWLINE_CHARACTER and accept
-  the current line, which triggers the same continuation flow in terminals that
-  support the relevant escape sequences.
+  - ``"run"`` — execute ``tokens`` as a one-shot command; piped
+    stdin becomes an implicit leading query.
+  - ``"help"`` — no input on a terminal: print help and a pointer.
+  - ``"usage"`` — no input and no terminal: usage error, exit
+    non-zero.
   """
-  logger.debug("Waiting for user input")
-  try:
-    line = input(INPUT_CHARACTER)
-  except EOFError:
-    return ""
-
-  if not line.endswith(NEWLINE_CHARACTER):
-    return line
-
-  # Continuation mode: strip the trailing newline character and keep collecting.
-  parts = [line[:-1]]
-  while True:
-    try:
-      line = input(CONTINUATION_PROMPT)
-    except EOFError:
-      break
-    if line.endswith(NEWLINE_CHARACTER):
-      parts.append(line[:-1])
-    else:
-      parts.append(line)
-      break
-
-  return "\n".join(parts)
+  tokens = list(args)
+  if not stdin_tty and stdin_data:
+    tokens = ['--query', stdin_data] + tokens
+  if tokens:
+    return ("run", tokens)
+  if stdin_tty:
+    return ("help", [])
+  return ("usage", [])
 
 
+def result_exit_code(result: Result) -> int:
+  """Process exit code for a command result; failures are non-zero."""
+  code = result.get_exit_code() if result.is_exit() else 0
+  if not result.is_success() and code == 0:
+    code = 1
+  return code
 
-########################################################################
-#                             UI/UX HELPERS                            #
-########################################################################
-def _get_app_version() -> str:
-  """Attempt to retrieve the installed package version; fallback to 'dev'."""
-  try:
-    return importlib_metadata.version("claia")
-  except importlib_metadata.PackageNotFoundError:
-    return "dev"
-  except Exception:
-    return "dev"
-
-
-def print_header(settings: Settings) -> None:
-  """Print a friendly startup banner for the interactive CLI.
-
-  Shows application name, version, Python version, website, and quick tips.
-  Uses Unicode box drawing for aesthetics; falls back to sensible widths.
-  """
-  try:
-    cols = shutil.get_terminal_size(fallback=(80, 20)).columns
-  except Exception:
-    cols = 80
-  width = max(60, min(100, cols))
-
-  def line(text: str) -> str:
-    inner = text[:width - 4].ljust(width - 4)
-    return f"║ {inner} ║"
-
-  title = "CLAIA"
-  subtitle = "Command Line Artificial Intelligence Agent"
-  ver = _get_app_version()
-  pyver = sys.version.split()[0]
-
-  print()
-  # Render big-letter title above the border
-  art = pyfiglet.figlet_format(title)
-  for art_line in art.rstrip("\n").splitlines():
-    print(art_line.center(width))
-
-  print("╔" + ("═" * (width - 2)) + "╗")
-  print(line(subtitle))
-  print(line(f"Version v{ver} • Python {pyver} • https://claia.dev"))
-  print(line(""))
-
-  # Show active configuration
-  active_model = settings.active_model or settings.default_model or "None"
-  active_agent = settings.active_agent or settings.default_agent or "None"
-  print(line(f"Active Model: {active_model}"))
-  print(line(f"Active Agent: {active_agent}"))
-  print("╟" + ("─" * (width - 2)) + "╢")
-
-  # Quick start guide
-  print(line("QUICK START"))
-  print(line("  • Chat: Just type your message"))
-  print(line(f"  • Commands: Type '{COMMAND_CHARACTER}' followed by command (e.g., '{COMMAND_CHARACTER}help')"))
-  print(line(f"  • Tools: Type '{COMMAND_CHARACTER}tool' to see modules, '{COMMAND_CHARACTER}tool <module>' for tools"))
-  print(line(f"  • Setup: Type '{COMMAND_CHARACTER}setup' to configure API keys"))
-  print(line(f"  • Exit: Press Ctrl+C or type '{COMMAND_CHARACTER}quit'"))
-
-  # Check for unset API keys and show notice if not suppressed
-  if not settings.suppress_setup_notice:
-    unset_keys = settings.get_unset_api_keys()
-    if unset_keys:
-      print("╟" + ("─" * (width - 2)) + "╢")
-      print(line("⚠ Notice: Some API keys are not configured"))
-      print(line(f"  Run '{COMMAND_CHARACTER}setup' to configure {len(unset_keys)} API key(s)"))
-      print(line(f"  Or use '{COMMAND_CHARACTER}set suppress_setup_notice true' to hide this"))
-
-  print("╚" + ("═" * (width - 2)) + "╝")
-  print()
 
 
 ########################################################################
 #                                 MAIN                                 #
 ########################################################################
 def main() -> None:
-  """Main application entry point."""
+  """One-shot entry point: build the app, run one command, exit."""
   try:
-    # Initialize the application
     logger.info("Initializing CLAIA...")
 
     # Create registry (discovers extensions but doesn't load them yet)
@@ -280,8 +152,8 @@ def main() -> None:
     # their ``ArgumentDefinition`` declarations. ``registry`` is always
     # injected from within ``run_command`` itself; the extras below let
     # tools like ``cli.help`` or ``cli.settings_get`` work identically
-    # whether invoked through a command wrapper (``:help``) or directly
-    # (``:tool cli.help``).
+    # whether invoked through a command wrapper (``claia help``) or
+    # directly (``claia tool cli.help``).
     from .commands.specs import COMMAND_SPECS
     registry.set_tool_context(
       settings=settings,
@@ -300,15 +172,20 @@ def main() -> None:
     for arg in settings.extra_args:
       logger.debug(f"Stored extra argument: {arg}")
 
-    # Check if stdin has data (piped input)
-    if not sys.stdin.isatty():
+    # Read piped stdin up front; it becomes an implicit query
+    stdin_tty = sys.stdin.isatty()
+    stdin_data = None
+    if not stdin_tty:
       logger.debug("Detected stdin input (piped data)")
-      stdin_data = sys.stdin.read().strip()
+      stdin_data = sys.stdin.read().strip() or None
       if stdin_data:
-        logger.debug(f"Read {len(stdin_data)} characters from stdin")
-        # Prepend --query to treat stdin as a query command
-        settings.extra_args = ['--query', stdin_data] + settings.extra_args
-        logger.info(f"Treating stdin as query command")
+        logger.info("Treating stdin as query command")
+
+    action, tokens = resolve_invocation(settings.extra_args, stdin_tty, stdin_data)
+
+    if action == "usage":
+      print(USAGE_LINE, file=sys.stderr)
+      sys.exit(2)
 
     # Register CLI-specific agents using the programmatic registration API
     logger.debug("Registering CLI-specific agents")
@@ -320,158 +197,43 @@ def main() -> None:
     logger.debug("Initializing command processor")
     commands = Commands(registry, settings)
 
-    # Initialize file system repository
-    file_repo = JsonStore(settings.files_directory)
-
-    # Set up command history with arrow key navigation
-    setup_command_history(settings)
-
     # Log active model, agent, and prompt information
     logger.debug(f"Active model: {settings.active_model}")
     logger.debug(f"Active agent: {settings.active_agent}")
     logger.debug(f"Active prompt: {settings.active_prompt.prompt_name if settings.active_prompt else 'None'}")
 
-    # Check for and process command line arguments
-    if settings.extra_args:
-      # Process command line arguments using Commands processor
-      logger.info(f"Processing command line arguments: {' '.join(settings.extra_args)}")
-      cmd_result = commands.run(settings.extra_args, settings.active_conversation, is_interactive=False)
+    if action == "help":
+      tokens = ["help"]
 
-      if cmd_result.is_success():
-        data = cmd_result.get_data()
-        if data is not None:
-          print(data)
-      else:
-        print(f"Error: {cmd_result.get_message()}")
+    logger.info(f"Processing command: {' '.join(tokens)}")
+    result = commands.run(tokens, settings.active_conversation)
 
-      # Check if command requested exit
-      if cmd_result.is_exit():
-        logger.info(f"CLAIA exiting: {cmd_result.get_message()}")
-        registry.stop_workers()
-        sys.exit(cmd_result.get_exit_code())
+    if result.is_success():
+      data = result.get_data()
+      if data is not None:
+        print(data)
+    else:
+      message = result.get_message()
+      if message:
+        print(f"Error: {message}", file=sys.stderr)
 
-      # Exit after running the command
-      logger.info("CLAIA exiting after CLI command execution")
-      registry.stop_workers()
-      return
+    if action == "help":
+      print(HELP_POINTER)
 
-    logger.info("CLAIA initialization complete, entering main loop")
-    # Show a friendly header only for interactive mode
-    print_header(settings)
-
-    # Main application loop
-    result = Result()
-    while not result.is_exit():
-
-      # Wait for user input
-      user_input = get_user_input()
-
-      # Process user input as either a command or a query
-      if user_input and user_input[0] == COMMAND_CHARACTER:
-        logger.debug(f"Processing as command: {user_input[1:]}")
-        tokens = user_input[1:].split()
-        if not tokens:
-          tokens = ["help"]
-
-        cmd_result = commands.run(tokens, settings.active_conversation, is_interactive=True)
-
-        if cmd_result.is_success():
-          data = cmd_result.get_data()
-          if data is not None:
-            print(data)
-        else:
-          print(f"Error: {cmd_result.get_message()}")
-
-        if cmd_result.is_exit():
-          result = cmd_result
-      elif not user_input.strip():
-        pass  # Blank / whitespace-only line — behave like a normal shell newline
-      else:
-        conversation = ensure_active_conversation(settings)
-
-        if not settings.active_agent:
-          settings.active_agent = settings.default_agent or DEFAULT_AGENT
-
-        conversation.add_message(MessageRole.USER, user_input)
-
-        done_event = threading.Event()
-
-        parameters = {
-          "source_preference": SourcePreference.ANY,
-          "model_id": settings.active_model,
-          **user_kwargs
-        }
-        system = active_system(settings)
-        if system:
-          parameters["system"] = system
-
-        task = Task(
-          agent_type=settings.active_agent,
-          conversation=conversation,
-          parameters=parameters
-        )
-
-        # Stream tokens through a paced renderer so bursty deltas
-        # (e.g. multiple SSE events landing in one TCP segment) appear
-        # as smooth typing rather than chunky bursts.
-        renderer = PacedRenderer()
-        renderer.start()
-        task.on(TaskEvent.CHUNK, renderer.feed_chunk)
-        saved_artifacts = []
-
-        def on_artifact(artifact, message_id):
-          if file_repo and file_repo.save(artifact):
-            saved_artifacts.append(artifact)
-            logger.debug(f"Saved artifact {artifact.id} for message {message_id}")
-          else:
-            logger.error(f"Failed to save artifact for message {message_id}")
-
-        def on_complete(full_response):
-          renderer.finish(drain=True)
-          if full_response and not full_response.endswith('\n'):
-            print()
-          for artifact in saved_artifacts:
-            print(f"[Saved attachment: {artifact.name}]")
-          # Persist only if domain events indicate conversation mutations.
-          # Tool calls are dispatched inline by the agent loop, so by
-          # the time we reach here the conversation already reflects
-          # every tool result and utility message.
-          pending_events = task.conversation.pull_events()
-          if file_repo and pending_events:
-            if not file_repo.save(task.conversation):
-              logger.error("Failed to save conversation")
-          done_event.set()
-
-        def on_error(error_msg):
-          renderer.finish(drain=False)
-          print(f"\nError: {error_msg}")
-          done_event.set()
-
-        def on_cancelled(_full_response=None):
-          renderer.finish(drain=True)
-          pending_events = task.conversation.pull_events()
-          if file_repo and pending_events:
-            if not file_repo.save(task.conversation):
-              logger.error("Failed to save conversation")
-          done_event.set()
-
-        task.on(TaskEvent.COMPLETE, on_complete)
-        task.on(TaskEvent.ERROR, on_error)
-        task.on(TaskEvent.CANCELLED, on_cancelled)
-        task.on(TaskEvent.ARTIFACT, on_artifact)
-
-        task_id = registry.add_task(task)
-        logger.debug(f"Task added with ID: {task_id}")
-
-        # Block until the worker thread signals completion
-        done_event.wait()
-
-      if result.is_error():
-        logger.debug(f"Error result: {result.get_message()}")
-        print(f"Error: {result.get_message()}")
-
-    logger.info(f"CLAIA application exiting: {result.get_message()}")
+    logger.info("CLAIA exiting after command execution")
     registry.stop_workers()
+
+    # A downstream pipe may have closed mid-stream; flush what's
+    # left into the void so the interpreter's shutdown flush cannot
+    # fail (which would turn a clean run into exit code 120).
+    try:
+      sys.stdout.flush()
+    except BrokenPipeError:
+      os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+
+    code = result_exit_code(result)
+    if code:
+      sys.exit(code)
 
   except Exception as e:
     logger.critical(f"Unhandled exception in main: {str(e)}", exc_info=True)

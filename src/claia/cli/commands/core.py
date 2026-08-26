@@ -1,8 +1,9 @@
 """
 Core command processing for the CLAIA CLI.
 
-Handles command routing and execution for both CLI-style (--flag) and
-interactive (:command) modes.
+Routes one-shot invocations: bare subcommands (``claia model list``),
+generated flag aliases (``--model``, ``-m``), and implicit queries
+(``claia hello there``) all resolve against the same spec list.
 """
 
 import logging
@@ -50,16 +51,15 @@ COMMAND_REGISTRY: Dict[str, Type[BaseCommand]] = {
 
 
 class Commands:
-  """Processes and executes commands for CLI and interactive modes."""
+  """Processes and executes one-shot commands."""
   
   def __init__(self, registry: Registry, settings: Any):
     self.registry = registry
     self.settings = settings
-    self._current_mode = 'interactive'
     
     # Maps alias -> (command_class, help_text, needs_args, needs_conversation, priority)
-    self._cli_command_map: Dict[str, Tuple[Type[BaseCommand], str, bool, bool, CommandPriority]] = {}
-    self._interactive_command_map: Dict[str, Tuple[Type[BaseCommand], str, bool, bool, CommandPriority]] = {}
+    self._word_command_map: Dict[str, Tuple[Type[BaseCommand], str, bool, bool, CommandPriority]] = {}
+    self._flag_command_map: Dict[str, Tuple[Type[BaseCommand], str, bool, bool, CommandPriority]] = {}
     self._build_command_maps()
   
   def _build_command_maps(self) -> None:
@@ -72,45 +72,39 @@ class Commands:
       
       for alias in aliases:
         entry = (command_class, help_text, needs_args, needs_conversation, priority)
-        self._interactive_command_map[alias.lower()] = entry
-        self._cli_command_map[generate_cli_alias(alias)] = entry
+        self._word_command_map[alias.lower()] = entry
+        self._flag_command_map[generate_cli_alias(alias)] = entry
   
-  def run(self, tokens: List[str], conversation: Optional[Any] = None, 
-          is_interactive: bool = False) -> Result:
+  def run(self, tokens: List[str], conversation: Optional[Any] = None) -> Result:
     """
-    Process and execute a command from tokens.
+    Process and execute one or more commands from tokens.
     
-    In CLI mode, supports multiple commands delimited by dash-prefixed tokens.
-    In interactive mode, processes one command per call.
+    Supports multiple commands delimited by flag-alias tokens; a
+    leading unknown word wraps the whole group into an implicit query.
     """
     if not tokens:
       return Result(success=True)
     
-    self._current_mode = 'interactive' if is_interactive else 'cli'
-    
-    # Handle multiple CLI commands
-    if not is_interactive:
-      command_groups = self._split_cli_commands(tokens)
-      command_groups = [self._maybe_implicit_query_group(g) for g in command_groups]
-      if len(command_groups) > 1:
-        return self._execute_multiple_commands(command_groups, conversation)
-      tokens = command_groups[0]
+    command_groups = self._split_cli_commands(tokens)
+    command_groups = [self._maybe_implicit_query_group(g) for g in command_groups]
+    if len(command_groups) > 1:
+      return self._execute_multiple_commands(command_groups, conversation)
+    tokens = command_groups[0]
     
     cmd, args = tokens[0], tokens[1:]
     
-    # Try CLI-style flags first (--flag or -f)
-    if not is_interactive and cmd in self._cli_command_map:
-      return self._execute_command(cmd, args, conversation, self._cli_command_map)
+    # Try flag aliases first (--flag or -f)
+    if cmd in self._flag_command_map:
+      return self._execute_command(cmd, args, conversation, self._flag_command_map)
     
-    # Try interactive-style commands
+    # Then bare subcommand words
     cmd_lower = cmd.lower()
-    if cmd_lower in self._interactive_command_map:
-      return self._execute_command(cmd_lower, args, conversation, self._interactive_command_map)
+    if cmd_lower in self._word_command_map:
+      return self._execute_command(cmd_lower, args, conversation, self._word_command_map)
     
     # Unknown command
-    prefix = ':' if is_interactive else '--'
     output = f"Unknown command: {cmd}\n"
-    output += f"Use '{prefix}help' to see available commands or '{prefix}tool' to see available tools."
+    output += "Use 'claia help' to see available commands or 'claia tool' to see available tools."
     return Result(success=False, message=output)
   
   def _execute_command(self, cmd: str, args: List[str], conversation: Optional[Any],
@@ -124,9 +118,9 @@ class Commands:
     
     # Instantiate command
     if command_class == HelpCommand:
-      instance = command_class(self.registry, self.settings, self._current_mode, command_specs=COMMAND_SPECS)
+      instance = command_class(self.registry, self.settings, command_specs=COMMAND_SPECS)
     else:
-      instance = command_class(self.registry, self.settings, self._current_mode)
+      instance = command_class(self.registry, self.settings)
     
     try:
       return instance.execute(args, conversation) if needs_conversation else instance.execute(args)
@@ -135,13 +129,13 @@ class Commands:
       return Result(success=False, message=f"Error executing command: {str(e)}")
   
   def _split_cli_commands(self, tokens: List[str]) -> List[List[str]]:
-    """Split CLI tokens into command groups based on dash prefixes."""
+    """Split tokens into command groups based on flag-alias prefixes."""
     if not tokens:
       return []
     
     groups, current = [], []
     for token in tokens:
-      if token in self._cli_command_map and current:
+      if token in self._flag_command_map and current:
         groups.append(current)
         current = [token]
       else:
@@ -155,17 +149,18 @@ class Commands:
     """
     Treat `claia hello world` like `claia --query hello world`.
 
-    Skips wrapping when the group already starts with a CLI command, looks like
-    an unknown flag, or matches an interactive alias (e.g. ``query``, ``h``).
+    Skips wrapping when the group already starts with a flag alias,
+    looks like an unknown flag, or matches a bare subcommand word
+    (e.g. ``query``, ``h``).
     """
     if not group:
       return group
     head = group[0]
-    if head in self._cli_command_map:
+    if head in self._flag_command_map:
       return group
     if head.startswith('-'):
       return group
-    if head.lower() in self._interactive_command_map:
+    if head.lower() in self._word_command_map:
       return group
     return [generate_cli_alias('query')] + group
   
@@ -180,12 +175,12 @@ class Commands:
     prioritized = []
     for group in groups:
       cmd = group[0]
-      if cmd not in self._cli_command_map:
+      if cmd not in self._flag_command_map:
         output = f"Unknown command: {cmd}\n"
-        output += "Use '--help' to see available commands or '--tool' to see available tools."
+        output += "Use 'claia help' to see available commands or 'claia tool' to see available tools."
         return Result(success=False, message=output)
       
-      _, _, _, _, priority = self._cli_command_map[cmd]
+      _, _, _, _, priority = self._flag_command_map[cmd]
       prioritized.append((priority, group))
     
     prioritized.sort(key=lambda x: x[0])
@@ -193,13 +188,13 @@ class Commands:
     # IMMEDIATE commands execute exclusively
     if prioritized[0][0] == CommandPriority.IMMEDIATE:
       group = prioritized[0][1]
-      return self._execute_command(group[0], group[1:], conversation, self._cli_command_map)
+      return self._execute_command(group[0], group[1:], conversation, self._flag_command_map)
     
     # Execute in priority order
     output_parts = []
     for priority, group in prioritized:
       cmd, args = group[0], group[1:]
-      result = self._execute_command(cmd, args, conversation, self._cli_command_map)
+      result = self._execute_command(cmd, args, conversation, self._flag_command_map)
       
       if not result.is_success() or result.is_exit():
         if output_parts:

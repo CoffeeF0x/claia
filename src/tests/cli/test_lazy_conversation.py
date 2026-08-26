@@ -20,7 +20,7 @@ def test_ensure_creates_once_and_reuses():
 
 def test_conversation_clear_does_not_allocate():
   settings = SimpleNamespace(active_conversation=Conversation(title="Old"))
-  command = ConversationCommand(registry=object(), settings=settings, current_mode="interactive")
+  command = ConversationCommand(registry=object(), settings=settings)
 
   result = command._clear_conversation()
 
@@ -32,7 +32,7 @@ def test_conversation_clear_does_not_allocate():
 
 def test_conversation_clear_when_none_stays_none():
   settings = SimpleNamespace(active_conversation=None)
-  command = ConversationCommand(registry=object(), settings=settings, current_mode="interactive")
+  command = ConversationCommand(registry=object(), settings=settings)
 
   result = command._clear_conversation()
 

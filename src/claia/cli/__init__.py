@@ -1,10 +1,10 @@
 """
 claia.cli — the CLAIA command-line application.
 
-Implements the interactive REPL, ``setup``/``set``/``get`` configuration
-commands, the JSON-file-backed conversation store, and the CLI-only
-``WriterAgent`` that's registered programmatically against the
-``Registry`` at startup.
+Implements the one-shot command surface (``claia <command> [args…]``),
+the ``setup``/``set``/``get`` configuration commands, the
+JSON-file-backed conversation store, and the CLI-only ``WriterAgent``
+that's registered programmatically against the ``Registry`` at startup.
 
 For library use the canonical convenience hub is ``claia.framework`` —
 e.g. ``from claia.framework import Registry, Conversation, Result``. The

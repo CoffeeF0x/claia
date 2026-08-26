@@ -77,6 +77,22 @@ class TagParser:
       self._buffer += chunk
     yield from self._scan()
 
+  def confirmed_text(self, start: int) -> Tuple[str, int]:
+    """Plain text confirmed between ``start`` and the scan watermark.
+
+    Everything before the scan position and outside any open tag can
+    no longer become part of a tag, so streaming consumers may
+    display it before the next tag boundary produces a ``TextEvent``.
+    Returns ``(text, new_start)``; pass ``new_start`` back on the
+    next call. Inside an open tag the result is ``("", start)`` —
+    that content belongs to the pending ``TagEvent``. Spans returned
+    here are later covered by ``TextEvent``s too; consumers that use
+    both must dedup by buffer index.
+    """
+    if self._stack or self._scan_pos <= start:
+      return ("", start)
+    return (self._buffer[start:self._scan_pos], self._scan_pos)
+
   def flush(self) -> Iterator[ParseEvent]:
     """Signal end-of-stream. Yield any final events.
 

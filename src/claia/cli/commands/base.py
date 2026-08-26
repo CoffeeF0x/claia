@@ -13,10 +13,9 @@ from ...framework.registry import Registry
 class BaseCommand(ABC):
   """Base class for all CLAIA CLI commands."""
   
-  def __init__(self, registry: Registry, settings: Any, current_mode: str = 'interactive'):
+  def __init__(self, registry: Registry, settings: Any):
     self.registry = registry
     self.settings = settings
-    self._current_mode = current_mode
     self.logger = logging.getLogger(self.__class__.__name__)
   
   @abstractmethod
@@ -25,9 +24,9 @@ class BaseCommand(ABC):
     pass
   
   def get_help_prefix(self) -> str:
-    """Get the command prefix (':' for interactive, '--' for CLI)."""
-    return ':' if self._current_mode == 'interactive' else '--'
+    """Prefix for presenting commands in usage text."""
+    return 'claia '
   
   def format_command(self, cmd: str) -> str:
-    """Format a command string with the appropriate prefix."""
-    return f':{cmd}' if self._current_mode == 'interactive' else f'--{cmd}'
+    """Present a command in the leading subcommand form."""
+    return f'claia {cmd}'
