@@ -315,7 +315,7 @@ class CLIToolModule(BaseToolModule):
   # ======================================================================
   def _model_list(self, filter: str = None, active_model: str = None,
                   default_model: str = None, registry=None, **kwargs) -> str:
-    """List all available models."""
+    """List all available models, as markdown grouped by company."""
     if not registry:
       return "Error: Registry not available"
 
@@ -328,8 +328,6 @@ class CLIToolModule(BaseToolModule):
       filter_text = filter.lower() if filter else None
 
       output_lines = []
-      output_lines.append("\nAvailable models:")
-      output_lines.append(DIVIDER)
 
       # Sort models by company and then name
       sorted_models = sorted(
@@ -350,58 +348,55 @@ class CLIToolModule(BaseToolModule):
         # Group by company
         company = getattr(model_def, 'company', None)
         if company != current_company:
-          if current_company is not None:
-            output_lines.append("")
           current_company = company
-          output_lines.append(f"\n{current_company or 'Other'}:")
-          output_lines.append("-" * 40)
+          output_lines.append(f"### {current_company or 'Other'}")
+          output_lines.append("")
 
         # Mark the current active model
-        marker = " (active)" if model_name == active_model else ""
-        marker += " (default)" if model_name == default_model else ""
+        marker = ""
+        if model_name == active_model:
+          marker += " *(active)*"
+        if model_name == default_model:
+          marker += " *(default)*"
 
-        # Build model line
+        # Model item: bold name, title after an em dash
         title = getattr(model_def, 'title', None) or model_name
-        line = f"  • {model_name}{marker}"
+        line = f"- **{model_name}**{marker}"
         if title != model_name:
-          line += f" - {title}"
-
+          line += f" — {title}"
         output_lines.append(line)
 
-        # Add description if available
+        # Description and key metadata as one nested sub-item
+        detail_parts = []
         description = getattr(model_def, 'description', None)
         if description:
           desc_preview = description[:80]
           if len(description) > 80:
-            desc_preview += "..."
-          output_lines.append(f"    {desc_preview}")
+            desc_preview += "…"
+          detail_parts.append(desc_preview)
 
-        # Add key metadata on one line
-        meta_parts = []
         parameters = getattr(model_def, 'parameters', None)
         context_length = getattr(model_def, 'context_length', None)
         capabilities = getattr(model_def, 'capabilities', None)
 
         if parameters:
-          meta_parts.append(f"Size: {parameters}")
+          detail_parts.append(f"Size: {parameters}")
         if context_length:
           context_kb = context_length / 1000
-          meta_parts.append(f"Context: {context_kb:.0f}k")
+          detail_parts.append(f"Context: {context_kb:.0f}k")
         if capabilities:
-          meta_parts.append(f"Capabilities: {', '.join(capabilities[:3])}")
+          detail_parts.append(', '.join(capabilities[:3]))
 
-        if meta_parts:
-          output_lines.append(f"    {' | '.join(meta_parts)}")
+        if detail_parts:
+          output_lines.append(f"  - {' · '.join(detail_parts)}")
 
         model_count += 1
 
       if model_count == 0:
-        output_lines.append(f"\nNo models matching filter: {filter_text}")
-      else:
-        output_lines.append("")
-        output_lines.append(f"Total: {model_count} model(s)")
+        return f"No models matching filter: {filter_text}"
 
       output_lines.append("")
+      output_lines.append(f"*{model_count} model(s)*")
       return "\n".join(output_lines)
 
     except Exception as e:
@@ -832,35 +827,37 @@ class CLIToolModule(BaseToolModule):
     return version_text
 
   def _help(self, registry=None, command_specs=None, **kwargs) -> str:
-    """Show help information."""
+    """Show help information, as markdown."""
     output_lines = []
-    output_lines.append("\n" + "=" * 70)
-    output_lines.append("                             CLAIA HELP                              ")
-    output_lines.append("=" * 70)
+    output_lines.append("## CLAIA")
+    output_lines.append("")
+    output_lines.append("`claia <command> [args…]`")
+    output_lines.append("")
 
     # Built-in Commands
-    output_lines.append("USAGE")
-    output_lines.append("-" * 70)
-    output_lines.append("  claia <command> [args…]")
+    output_lines.append("### Commands")
     output_lines.append("")
 
     if command_specs:
-      output_lines.append("  Commands:")
       for aliases, cmd_name, help_desc, _, _, _ in command_specs:
         others = [a for a in aliases if a != cmd_name]
-        display = cmd_name + (f" ({', '.join(others)})" if others else "")
-        output_lines.append(f"    {display:28s} - {help_desc}")
+        display = f"**{cmd_name}**"
+        if others:
+          display += f" ({', '.join(others)})"
+        output_lines.append(f"- {display} — {help_desc}")
       output_lines.append("")
-      output_lines.append("  Every command also has a generated flag alias (--query / -q,")
-      output_lines.append("  --help / -h, …) usable anywhere in the argument list.")
+      output_lines.append(
+        "Every command also has a generated flag alias (`--query` / `-q`, "
+        "`--help` / `-h`, …) usable anywhere in the argument list."
+      )
     else:
-      output_lines.append("  (Command specifications not available)")
+      output_lines.append("(Command specifications not available)")
 
     output_lines.append("")
 
     # Available Tools/Modules
-    output_lines.append("AVAILABLE TOOLS & MODULES")
-    output_lines.append("-" * 70)
+    output_lines.append("### Tools & modules")
+    output_lines.append("")
 
     if registry:
       catalog = registry.get_all_commands()
@@ -871,32 +868,30 @@ class CLIToolModule(BaseToolModule):
           title = getattr(info, 'title', None) if info else None
           desc = getattr(info, 'description', None) if info else None
 
-          line = f"  [{mod_name}]"
+          line = f"**{mod_name}**"
           if title:
-            line += f" {title}"
+            line += f" — {title}"
           output_lines.append(line)
           if desc:
-            output_lines.append(f"    {desc}")
+            output_lines.append(f"*{desc}*")
+          output_lines.append("")
 
           tools = mod.get('list_of_tools', [])
           if tools:
             for tool in tools:
               tool_name = tool.get('tool_name')
               tool_desc = tool.get('tool_description', '')
-              output_lines.append(f"    • {mod_name}.{tool_name:20s} - {tool_desc}")
+              output_lines.append(f"- `{mod_name}.{tool_name}` — {tool_desc}")
               total_tools += 1
           else:
-            output_lines.append(f"    (no tools available)")
+            output_lines.append("- (no tools available)")
           output_lines.append("")
 
-        output_lines.append(f"  Total: {len(catalog)} module(s), {total_tools} tool(s)")
+        output_lines.append(f"*{len(catalog)} module(s), {total_tools} tool(s)*")
       else:
-        output_lines.append("  No modules loaded")
+        output_lines.append("No modules loaded")
     else:
-      output_lines.append("  (Registry not available)")
-
-    output_lines.append("")
-    output_lines.append("=" * 70)
+      output_lines.append("(Registry not available)")
 
     return "\n".join(output_lines)
 

@@ -14,12 +14,13 @@ widget mutation happens on the UI thread.
 """
 
 # External dependencies
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container
+from textual.containers import Container, Horizontal
 from textual.timer import Timer
+from textual.widgets import Static
 
 # Internal dependencies
 from ..commands import Commands
@@ -32,9 +33,9 @@ from .actions import (
 )
 from .composer import Composer
 from .help import HelpScreen
+from .ledger import Ledger
 from .log_bridge import LogNotice, install, restore
 from .pacer import TICK
-from .panel import ActionPanel
 from .seam import Seam
 from .status import StatusBar
 from .switchboard import StreamBlocks, Switchboard
@@ -51,11 +52,50 @@ class ClaiaApp(App):
   TITLE = "CLAIA"
 
   CSS = """
-  Screen {
-    layers: base actions;
+  * {
+    scrollbar-size: 1 1;
   }
   #tracks {
     height: 1fr;
+  }
+  #composer-bar {
+    height: auto;
+    max-height: 8;
+    margin: 0 1;
+
+    & > .composer-prompt {
+      width: 2;
+      height: 1;
+      color: $text-muted;
+      text-style: bold;
+    }
+  }
+  /* Flat on purpose: the nested &:focus-within form fails to match. */
+  #composer-bar:focus-within > .composer-prompt {
+    color: $primary;
+  }
+
+  /* Toasts as stone chips: content-sized, one severity vein. */
+  Toast {
+    width: auto;
+    min-width: 24;
+    max-width: 50%;
+    padding: 0 2 0 1;
+    background: $panel;
+    color: $foreground;
+
+    &.-information {
+      border-left: outer $user-label;
+    }
+    &.-warning {
+      border-left: outer $warning;
+    }
+    &.-error {
+      border-left: outer $error;
+    }
+  }
+  ToastRack {
+    margin: 0 1 2 0;
   }
   """
 
@@ -90,6 +130,7 @@ class ClaiaApp(App):
     self.registry = registry
     self.settings = settings
     self.switchboard = Switchboard(self)
+    self.actions: List[Action] = []
     self._commands = Commands(registry, settings)
     self._lane = ActionLane(self, self._commands, settings)
     self._log_state = None
@@ -99,9 +140,10 @@ class ClaiaApp(App):
 
   def compose(self) -> ComposeResult:
     yield Container(id="tracks")
-    yield ActionPanel(id="actions")
     yield Seam(id="seam")
-    yield Composer(id="composer")
+    with Horizontal(id="composer-bar"):
+      yield Static("❯", classes="composer-prompt")
+      yield Composer(id="composer")
     yield StatusBar(id="status")
 
   def get_theme_variable_defaults(self) -> Dict[str, str]:
@@ -145,13 +187,21 @@ class ClaiaApp(App):
     self.switchboard.hop(-1)
 
   def action_toggle_actions(self) -> None:
-    self.query_one(ActionPanel).toggle()
+    if isinstance(self.screen, Ledger):
+      self.pop_screen()
+    else:
+      self.push_screen(Ledger())
 
   def action_help(self) -> None:
     if isinstance(self.screen, HelpScreen):
       self.pop_screen()
     else:
       self.push_screen(HelpScreen())
+
+  def _ledger(self) -> Optional[Ledger]:
+    """The ledger screen, when it is the one on top."""
+    screen = self.screen
+    return screen if isinstance(screen, Ledger) else None
 
   # ── Composer routing ─────────────────────────────────────────────
 
@@ -187,7 +237,7 @@ class ClaiaApp(App):
     Special cases stay minimal: ``query`` redirects to a chat
     submit (its one-shot wiring blocks a thread), ``setup`` is
     refused (its ``input()`` wizard needs a real terminal),
-    ``actions`` toggles the panel (the fallback for terminals
+    ``actions`` opens the ledger (the fallback for terminals
     that never deliver Alt+A), and an unknown command fails
     without running so it can never wrap into an implicit query
     on the lane.
@@ -200,7 +250,7 @@ class ClaiaApp(App):
       )
       return False
     if tokens == ["actions"]:
-      self.query_one(ActionPanel).toggle()
+      self.action_toggle_actions()
       return True
     name = self._commands.resolve_name(tokens[0])
     if name == "query":
@@ -214,7 +264,7 @@ class ClaiaApp(App):
       return await self._submit_chat(rest)
 
     action = Action(line=line, tokens=tokens)
-    self.query_one(ActionPanel).add_record(action)
+    self.actions.insert(0, action)
     if name is None:
       self._refuse_action(
         action, f"No command called '{tokens[0]}' — :help knows the way.",
@@ -229,18 +279,24 @@ class ClaiaApp(App):
 
   def _refuse_action(self, action: Action, message: str) -> None:
     action.fail(message)
-    self.query_one(ActionPanel).update_record(action)
+    ledger = self._ledger()
+    if ledger is not None:
+      ledger.record_update(action)
     self.query_one(StatusBar).set_action_failed(True)
     self.notify(message, severity="error")
 
   # ── Action lane results ──────────────────────────────────────────
 
   def on_action_started(self, message: ActionStarted) -> None:
-    self.query_one(ActionPanel).update_record(message.action)
+    ledger = self._ledger()
+    if ledger is not None:
+      ledger.record_update(message.action)
 
   async def on_action_finished(self, message: ActionFinished) -> None:
     action = message.action
-    self.query_one(ActionPanel).update_record(action)
+    ledger = self._ledger()
+    if ledger is not None:
+      ledger.record_update(action)
     failed = action.state is ActionState.FAILED
     self.query_one(StatusBar).set_action_failed(failed)
     if failed:

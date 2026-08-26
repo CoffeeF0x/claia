@@ -26,7 +26,7 @@ ROWS = [
   ("up / down", "history at an empty composer"),
   ("esc", "cancel the streaming turn"),
   ("alt+n / alt+p", "next / previous track"),
-  ("alt+a", "toggle the action panel"),
+  ("alt+a", "open the action ledger"),
   ("f1 / alt+h", "this card"),
   ("ctrl+q / alt+q", "quit"),
 ]

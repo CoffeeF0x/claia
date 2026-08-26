@@ -54,6 +54,7 @@ class Action:
   state: ActionState = ActionState.PENDING
   message: Optional[str] = None
   output: Optional[str] = None
+  format: str = "text"
   created: float = field(default_factory=time.time)
   finished: Optional[float] = None
 
@@ -67,6 +68,7 @@ class Action:
     self.message = result.get_message()
     data = result.get_data()
     self.output = str(data) if data is not None else None
+    self.format = result.format
     self.finished = time.time()
 
   def fail(self, message: str) -> None:

@@ -227,7 +227,12 @@ def main() -> None:
     if result.is_success():
       data = result.get_data()
       if data is not None:
-        print(data)
+        if result.format == "markdown" and sys.stdout.isatty():
+          from rich.console import Console
+          from rich.markdown import Markdown
+          Console().print(Markdown(str(data)))
+        else:
+          print(data)
     else:
       message = result.get_message()
       if message:

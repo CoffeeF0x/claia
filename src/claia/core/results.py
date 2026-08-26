@@ -21,13 +21,14 @@ class DeploymentError(Exception):
 #                              RESULT                                  #
 ########################################################################
 class Result:
-  def __init__(self, success: bool = True, data: Any = None, message: str = None, fatal: bool = False, exit: bool = False, exit_code: int = 0):
+  def __init__(self, success: bool = True, data: Any = None, message: str = None, fatal: bool = False, exit: bool = False, exit_code: int = 0, format: str = "text"):
     self.success = success
     self.data = data
     self.message = message
     self.fatal = fatal
     self.exit = exit
     self.exit_code = exit_code
+    self.format = format  # how string data prefers rendering: "text" | "markdown"
 
   def is_success(self) -> bool:
     return self.success

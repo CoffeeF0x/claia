@@ -38,7 +38,10 @@ class Transcript(VerticalScroll):
   DEFAULT_CSS = """
   Transcript {
     height: 1fr;
-    padding: 0 1;
+    /* The stable gutter is the right-hand breathing room: content
+       never shifts when the (track-invisible) scrollbar appears. */
+    padding: 0 0 0 1;
+    scrollbar-gutter: stable;
 
     &.-empty {
       align: center middle;
@@ -80,7 +83,9 @@ class Transcript(VerticalScroll):
   """
 
   def on_mount(self) -> None:
-    self.anchor()
+    # Anchoring while the greeting is centered drags the scroll
+    # negative and pins the greeting to the bottom; follow-tail
+    # engages once real content exists instead.
     if not self.children:
       self.add_class("-empty")
       self.mount(Vertical(
@@ -89,6 +94,8 @@ class Transcript(VerticalScroll):
         Static(Text(GREETING_HINTS), classes="greeting-hints"),
         classes="transcript-greeting",
       ))
+    else:
+      self.anchor()
 
   def add_user(self, text: str) -> None:
     """Append a user message: the YOU micro-label plus its text."""
@@ -113,3 +120,4 @@ class Transcript(VerticalScroll):
       self.remove_class("-empty")
       for node in self.query(".transcript-greeting"):
         node.remove()
+      self.anchor()

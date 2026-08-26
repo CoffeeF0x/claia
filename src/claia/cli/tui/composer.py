@@ -1,10 +1,12 @@
 """
 Composer: the multiline input at the bottom of the app.
 
-Enter submits; Shift+Enter inserts a newline where the terminal
-reports it (Kitty keyboard protocol — Textual delivers the key as
-``shift+enter``); Ctrl+J is the documented fallback newline for
-terminals that cannot. Up/Down at an empty composer recall the
+No box — the seam above is its top edge and a prompt glyph in the
+app's composer bar marks the line, so typing happens straight into
+the surface. Enter submits; Shift+Enter inserts a newline where the
+terminal reports it (Kitty keyboard protocol — Textual delivers the
+key as ``shift+enter``); Ctrl+J is the documented fallback newline
+for terminals that cannot. Up/Down at an empty composer recall the
 in-session submission history; any edit to a recalled entry drops
 back to normal cursor movement. Paste is Textual-native
 (bracketed). The widget never clears itself — the app clears it
@@ -29,15 +31,16 @@ class Composer(TextArea):
   DEFAULT_CSS = """
   Composer {
     height: auto;
-    min-height: 3;
+    min-height: 1;
     max-height: 8;
-    margin: 1 1 0 1;
+    margin: 0;
     padding: 0;
-    border: tall $border-blurred;
-    background: $surface;
+    border: none;
+    background: transparent;
 
     &:focus {
-      border: tall $primary;
+      border: none;
+      background: transparent;
     }
   }
   """

@@ -57,24 +57,24 @@ class HelpCommand(BaseCommand):
       return result
     
     # Append configuration settings help
-    lines = [result.get_data() or "", "", "CONFIGURATION SETTINGS", "-" * 70]
+    lines = [result.get_data() or "", "", "### Configuration"]
     lines.extend(self._get_settings_help())
-    lines.extend(["", "=" * 70])
     
-    return Result(success=True, data="\n".join(lines))
+    return Result(success=True, data="\n".join(lines), format="markdown")
   
   def _get_settings_help(self) -> List[str]:
-    """Generate help text for configuration settings."""
-    lines = ["  Settings can be configured via:"]
-    lines.extend([
-      "    • Persisted: claia set <setting> <value> (view: claia get)",
-      "    • Command line: --setting-name value (this run only)",
-      "    • Environment: CLAIA_SETTING_NAME=value",
-      "    • .env file (default: .env)",
-      "    • settings.json (in files directory)",
-    ])
-    
-    lines.append("")
+    """Generate markdown help for configuration settings."""
+    lines = [
+      "",
+      "Settings can be configured via:",
+      "",
+      "- Persisted: `claia set <setting> <value>` (view: `claia get`)",
+      "- Command line: `--setting-name value` (this run only)",
+      "- Environment: `CLAIA_SETTING_NAME=value`",
+      "- `.env` file (default: `.env`)",
+      "- `settings.json` (in files directory)",
+      "",
+    ]
     
     # Group settings by category (ParamSpec-driven).
     categorized = defaultdict(list)
@@ -82,16 +82,17 @@ class HelpCommand(BaseCommand):
       if not spec.externally_settable:
         continue
       help_desc = spec.description or ""
-      setting_line = f"    {spec.name:32s} {help_desc}"
+      setting_line = f"- `{spec.name}` — {help_desc}"
       category = spec.category if spec.category is not None else ParamCategory.MISC
       categorized[category].append(setting_line)
 
     for category in ParamCategory:
       if category in categorized:
-        lines.append(f"  {category.value}:")
+        lines.append(f"**{category.value}**")
+        lines.append("")
         lines.extend(categorized[category])
         lines.append("")
     
-    lines.append("  Use 'claia help' to see this help message anytime.")
+    lines.append("Use `claia help` to see this help message anytime.")
     
     return lines

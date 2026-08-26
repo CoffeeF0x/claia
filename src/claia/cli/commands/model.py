@@ -69,7 +69,10 @@ class ModelCommand(BaseCommand):
     params = self._get_tool_params()
     if args:
       params['filter'] = ' '.join(args)
-    return self.registry.run_command('cli.model_list', params, None)
+    result = self.registry.run_command('cli.model_list', params, None)
+    if result.is_success():
+      result.format = "markdown"
+    return result
   
   def _show_current(self) -> Result:
     """Show current active model info."""

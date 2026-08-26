@@ -11,7 +11,7 @@ real ``sample.echo`` tool with ``MAX_TOOL_ROUNDS`` pinned to one.
 
 Phase-4 coverage drives the switchboard (two concurrent tracks,
 hopping, unseen badges), per-track queueing, and the ``:`` action
-lane (panel records, reconciliation, quit, serial ordering).
+lane (ledger records, reconciliation, quit, serial ordering).
 """
 
 import json
@@ -34,7 +34,7 @@ from claia.cli.tui import ClaiaApp
 from claia.cli.tui.actions import ActionState
 from claia.cli.tui.composer import Composer
 from claia.cli.tui.help import HelpScreen
-from claia.cli.tui.panel import ActionPanel, ActionRecord
+from claia.cli.tui.ledger import ActionRecord, Ledger
 from claia.cli.tui.seam import Phase, Seam
 from claia.cli.tui.status import StatusBar, StatusLine
 from claia.cli.tui.turn import ToolBlock, TurnLabel, TurnView
@@ -152,8 +152,8 @@ def markdown_size(app, track=None):
 
 
 def records(app):
-  """Action records in panel order (newest first)."""
-  return list(app.query_one(ActionPanel).query(ActionRecord))
+  """The session's actions, newest first (the ledger's source)."""
+  return list(app.actions)
 
 
 async def submit(app, pilot, text):
@@ -179,12 +179,12 @@ async def act(app, pilot, line, timeout=15.0):
 
   def settled():
     recs = records(app)
-    return bool(recs) and recs[0].action.state in (
+    return bool(recs) and recs[0].state in (
       ActionState.DONE, ActionState.FAILED,
     )
 
   assert await wait_for(pilot, settled, timeout), f"action never settled: {line}"
-  return records(app)[0].action
+  return records(app)[0]
 
 
 async def wait_idle(app, pilot, timeout=15.0):
@@ -592,12 +592,13 @@ class TestSwitchboard:
 #                               ACTIONS                                #
 ########################################################################
 class TestActions:
-  async def test_model_list_lands_in_panel_not_transcript(self, app):
+  async def test_model_list_lands_in_ledger_not_transcript(self, app):
     async with app.run_test() as pilot:
       action = await act(app, pilot, ":model list")
       assert action.state is ActionState.DONE
       assert action.line == "model list"
       assert "dummy" in (action.output or "").lower()
+      assert action.format == "markdown"
       assert flatten(app) == []  # command output never hits the transcript
       assert len(records(app)) == 1
       assert not app.query_one(StatusBar).action_failed
@@ -702,7 +703,7 @@ class TestActions:
       def all_done():
         recs = records(app)
         return len(recs) == 2 and all(
-          r.action.state is ActionState.DONE for r in recs
+          r.state is ActionState.DONE for r in recs
         )
 
       assert await wait_for(pilot, all_done)
@@ -710,8 +711,8 @@ class TestActions:
         ("start", "version"), ("end", "version"),
         ("start", "model"), ("end", "model"),
       ]
-      # Newest first in the panel.
-      assert [r.action.line for r in records(app)] == [
+      # Newest first in the ledger.
+      assert [a.line for a in records(app)] == [
         "model current", "version",
       ]
 
@@ -734,14 +735,53 @@ class TestActions:
       time.sleep(0.05)
     assert task.status is TaskStatus.CANCELLED
 
-  async def test_panel_toggles_with_alt_a(self, app):
+  async def test_ledger_page_toggles_with_alt_a(self, app):
     async with app.run_test() as pilot:
-      panel = app.query_one(ActionPanel)
-      assert not panel.display  # hidden by default
+      assert not isinstance(app.screen, Ledger)
       await pilot.press("alt+a")
-      assert panel.display
+      assert isinstance(app.screen, Ledger)
       await pilot.press("alt+a")
-      assert not panel.display
+      assert not isinstance(app.screen, Ledger)
+      await pilot.press("alt+a")
+      await pilot.press("escape")
+      assert not isinstance(app.screen, Ledger)
+
+  async def test_ledger_shows_records_counts_and_markdown(self, app):
+    async with app.run_test() as pilot:
+      await act(app, pilot, ":model list")
+      await act(app, pilot, ":frobnicate")
+      await pilot.press("alt+a")
+      assert isinstance(app.screen, Ledger)
+      await pilot.pause()
+      recs = list(app.screen.query(ActionRecord))
+      assert [r.action.line for r in recs] == ["frobnicate", "model list"]
+      assert recs[0].has_class("-failed")
+      assert recs[1].has_class("-done")
+      # A markdown result renders as a Markdown widget, not raw text.
+      assert recs[1].query(Markdown)
+      assert not recs[0].query(Markdown)
+      heading = app.screen.query_one(TurnLabel)
+      assert heading.meta == "2 run · 1 failed"
+
+  async def test_ledger_updates_live_while_open(self, app, monkeypatch):
+    original_run = app._commands.run
+
+    def slow_run(tokens, conversation=None):
+      time.sleep(0.2)
+      return original_run(tokens, conversation)
+
+    monkeypatch.setattr(app._commands, "run", slow_run)
+    async with app.run_test() as pilot:
+      await submit(app, pilot, ":version")
+      await pilot.press("alt+a")
+      assert isinstance(app.screen, Ledger)
+
+      def settled():
+        recs = list(app.screen.query(ActionRecord))
+        return bool(recs) and recs[0].has_class("-done")
+
+      assert await wait_for(pilot, settled)
+      assert app.screen.query_one(Seam).phase is Phase.IDLE
 
 
 ########################################################################
