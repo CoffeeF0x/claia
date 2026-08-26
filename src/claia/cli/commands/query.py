@@ -11,21 +11,17 @@ import logging
 import threading
 from typing import Any, List, Optional
 
-from ...core.enums.conversation import MessageRole
-from ...core.enums.model import SourcePreference
 from ...core.enums.task import TaskEvent, TaskStatus
-from ...core.parser import resolve_tag_specs
 from ...core.results import Result
 from ...framework.task import Task
 from ..renderer import BlockRenderer
 from ..storage import JsonStore
 from ..stream import StreamRouter
-from ..utils import active_system, ensure_active_conversation
+from ..utils import prepare_query_task, stream_tag_specs
 from .base import BaseCommand
 
 
 logger = logging.getLogger(__name__)
-DEFAULT_AGENT = "simple"
 
 
 class QueryCommand(BaseCommand):
@@ -39,14 +35,7 @@ class QueryCommand(BaseCommand):
     query_text = ' '.join(args)
 
     try:
-      conversation = ensure_active_conversation(self.settings)
-
-      if not self.settings.active_agent:
-        self.settings.active_agent = self.settings.default_agent or DEFAULT_AGENT
-
-      conversation.add_message(MessageRole.USER, query_text)
-
-      task = self._build_task(conversation)
+      task = prepare_query_task(self.settings, query_text)
       renderer = BlockRenderer(verbose=bool(getattr(self.settings, "verbose", False)))
       error = self._run_task(task, renderer)
 
@@ -61,30 +50,13 @@ class QueryCommand(BaseCommand):
       self.logger.error(f"Error processing query: {e}", exc_info=True)
       return Result(success=False, message=f"Error processing query: {str(e)}")
 
-  def _build_task(self, conversation: Any) -> Task:
-    """Assemble the task from the active settings."""
-    parameters = {
-      "source_preference": SourcePreference.ANY,
-      "model_id": self.settings.active_model,
-      **self.settings.get_user_kwargs(),
-    }
-    system = active_system(self.settings)
-    if system:
-      parameters["system"] = system
-
-    return Task(
-      agent_type=self.settings.active_agent,
-      conversation=conversation,
-      parameters=parameters,
-    )
-
   def _run_task(self, task: Task, renderer: BlockRenderer) -> Optional[str]:
     """Submit ``task`` and stream its output through router + renderer.
 
     Blocks until the task is terminal. Returns the error message on
     failure, ``None`` otherwise.
     """
-    router = StreamRouter(self._tag_specs(task.parameters.get("model_id")))
+    router = StreamRouter(stream_tag_specs(self.registry, task.parameters.get("model_id")))
     store = JsonStore(self.settings.files_directory)
     done = threading.Event()
     error_holder: List[Optional[str]] = [None]
@@ -137,11 +109,3 @@ class QueryCommand(BaseCommand):
     self.registry.add_task(task)
     done.wait()
     return error_holder[0]
-
-  def _tag_specs(self, model_id: Optional[str]):
-    """Mirror the agent's spec resolution: exact id, else defaults."""
-    definitions = self.registry.get_supported_models()
-    model_def = None
-    if isinstance(definitions, dict) and model_id in definitions:
-      model_def = definitions[model_id]
-    return resolve_tag_specs(model_def)

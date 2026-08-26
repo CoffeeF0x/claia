@@ -1,8 +1,8 @@
 """
-Dispatch matrix for the one-shot entry point.
+Dispatch matrix for the entry point.
 
-Covers the args / TTY / piped-stdin combinations and the exit-code
-mapping (failures must exit non-zero).
+Covers the args / TTY / piped-stdin / TERM combinations and the
+exit-code mapping (failures must exit non-zero).
 """
 
 from claia.cli.__main__ import resolve_invocation, result_exit_code
@@ -32,8 +32,17 @@ class TestResolveInvocation:
   def test_empty_pipe_with_args_still_runs(self):
     assert resolve_invocation(["help"], False, None) == ("run", ["help"])
 
-  def test_terminal_without_args_shows_help(self):
-    assert resolve_invocation([], True, None) == ("help", [])
+  def test_terminal_without_args_launches_tui(self):
+    assert resolve_invocation([], True, None, "xterm-256color") == ("tui", [])
+
+  def test_terminal_without_term_still_launches_tui(self):
+    assert resolve_invocation([], True, None, None) == ("tui", [])
+
+  def test_dumb_terminal_without_args_shows_help(self):
+    assert resolve_invocation([], True, None, "dumb") == ("help", [])
+
+  def test_args_on_a_dumb_terminal_still_run(self):
+    assert resolve_invocation(["help"], True, None, "dumb") == ("run", ["help"])
 
   def test_empty_pipe_without_args_is_usage_error(self):
     assert resolve_invocation([], False, None) == ("usage", [])

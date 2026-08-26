@@ -96,6 +96,7 @@ def resolve_invocation(
   args: List[str],
   stdin_tty: bool,
   stdin_data: Optional[str],
+  term: Optional[str] = None,
 ) -> Tuple[str, List[str]]:
   """Map startup inputs to a dispatch action.
 
@@ -103,7 +104,9 @@ def resolve_invocation(
 
   - ``"run"`` — execute ``tokens`` as a one-shot command; piped
     stdin becomes an implicit leading query.
-  - ``"help"`` — no input on a terminal: print help and a pointer.
+  - ``"tui"`` — no input on a terminal: launch the full-screen app.
+  - ``"help"`` — no input on a terminal that cannot host the app
+    (``TERM=dumb``): print help and a pointer.
   - ``"usage"`` — no input and no terminal: usage error, exit
     non-zero.
   """
@@ -113,7 +116,9 @@ def resolve_invocation(
   if tokens:
     return ("run", tokens)
   if stdin_tty:
-    return ("help", [])
+    if term == "dumb":
+      return ("help", [])
+    return ("tui", [])
   return ("usage", [])
 
 
@@ -181,7 +186,9 @@ def main() -> None:
       if stdin_data:
         logger.info("Treating stdin as query command")
 
-    action, tokens = resolve_invocation(settings.extra_args, stdin_tty, stdin_data)
+    action, tokens = resolve_invocation(
+      settings.extra_args, stdin_tty, stdin_data, os.environ.get("TERM"),
+    )
 
     if action == "usage":
       print(USAGE_LINE, file=sys.stderr)
@@ -192,6 +199,15 @@ def main() -> None:
     register_cli_agents(registry)
 
     registry.start_workers(2)  # Start n worker threads
+
+    if action == "tui":
+      # Lazy import: one-shot startup never pays for Textual.
+      from .tui import ClaiaApp
+      logger.info("Launching TUI")
+      ClaiaApp(registry=registry, settings=settings).run()
+      logger.info("CLAIA exiting after TUI session")
+      registry.stop_workers()
+      return
 
     # Initialize command processor
     logger.debug("Initializing command processor")

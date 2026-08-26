@@ -41,6 +41,33 @@ logger = logging.getLogger(__name__)
 
 
 ########################################################################
+#                              FUNCTIONS                               #
+########################################################################
+def stream_summary(end: StreamEnd) -> Optional[str]:
+  """One-line usage/duration summary for a stream end, or None.
+
+  Shared presentation: the one-shot renderer prints it bracketed in
+  verbose mode; the TUI status bar shows it after every turn.
+  """
+  parts = []
+  usage = end.usage
+  if usage is not None:
+    tokens = []
+    if usage.prompt_tokens is not None:
+      tokens.append(f"{usage.prompt_tokens} in")
+    if usage.completion_tokens is not None:
+      tokens.append(f"{usage.completion_tokens} out")
+    if not tokens and usage.total_tokens is not None:
+      tokens.append(f"{usage.total_tokens} total")
+    if tokens:
+      parts.append("tokens: " + ", ".join(tokens))
+  if end.metrics is not None and end.metrics.duration is not None:
+    parts.append(f"{end.metrics.duration:.2f}s")
+  return " | ".join(parts) if parts else None
+
+
+
+########################################################################
 #                               CLASSES                                #
 ########################################################################
 class PacedRenderer:
@@ -266,28 +293,10 @@ class BlockRenderer:
       self._pacer.finish(drain=drain)
       self._pacer = None
     if self._verbose:
-      summary = self._summary(end)
+      summary = stream_summary(end)
       if summary:
-        self._sink_write(self._dim(summary) + "\n")
+        self._sink_write(self._dim(f"[{summary}]") + "\n")
     if end.error:
       prefix = "" if self._at_line_start else "\n"
       self._err.write(f"{prefix}Error: {end.error}\n")
       self._err.flush()
-
-  @staticmethod
-  def _summary(end: StreamEnd) -> Optional[str]:
-    parts = []
-    usage = end.usage
-    if usage is not None:
-      tokens = []
-      if usage.prompt_tokens is not None:
-        tokens.append(f"{usage.prompt_tokens} in")
-      if usage.completion_tokens is not None:
-        tokens.append(f"{usage.completion_tokens} out")
-      if not tokens and usage.total_tokens is not None:
-        tokens.append(f"{usage.total_tokens} total")
-      if tokens:
-        parts.append("tokens: " + ", ".join(tokens))
-    if end.metrics is not None and end.metrics.duration is not None:
-      parts.append(f"{end.metrics.duration:.2f}s")
-    return f"[{' | '.join(parts)}]" if parts else None

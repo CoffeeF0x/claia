@@ -212,6 +212,7 @@ class BaseAgent:
     native_tools = kwargs.pop("tools", None)
     conversation = task.conversation
     streaming_message = conversation.start_streaming_message(MessageRole.ASSISTANT)
+    streaming_message.attributes["agent"] = task.agent_type
     parser = TagParser(tag_specs)
     cancelled = False
     round_text = ""

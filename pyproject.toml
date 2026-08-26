@@ -22,6 +22,8 @@ dependencies = [
   "python-dotenv",
   "beautifulsoup4",
   "chardet<6",
+  # claia.cli
+  "textual>=8.2",
 ]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
@@ -46,7 +48,9 @@ core = [
   "chardet<6",
 ]
 framework = []
-cli = []
+cli = [
+  "textual>=8.2",
+]
 
 # Optional model backends
 local = [
@@ -69,6 +73,7 @@ dev = [
   "build",
   "pyinstaller",
   "pytest",
+  "pytest-asyncio",
   "pytest-mock",
   "pytest-playwright",
   "playwright",
@@ -153,6 +158,8 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --import-mode=importlib --junitxml=report.xml"
 pythonpath = ["src"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["src"]
