@@ -31,6 +31,14 @@ class Composer(TextArea):
     height: auto;
     min-height: 3;
     max-height: 8;
+    margin: 1 1 0 1;
+    padding: 0;
+    border: tall $border-blurred;
+    background: $surface;
+
+    &:focus {
+      border: tall $primary;
+    }
   }
   """
 

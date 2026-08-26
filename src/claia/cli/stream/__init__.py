@@ -4,9 +4,11 @@ Display-side stream routing for the CLI.
 Public names:
 
 - ``StreamRouter`` — chunks/artifacts in, block events out.
+- ``replay_turn`` — persisted assistant turn in, block events out.
 - ``Channel`` / ``ToolSource`` — block-event enums.
-- ``TextDelta`` / ``ToolCall`` / ``ArtifactNotice`` / ``StreamEnd`` —
-  the block events themselves (``BlockEvent`` is the union alias).
+- ``TextDelta`` / ``ToolCall`` / ``ToolResult`` / ``ArtifactNotice``
+  / ``StreamEnd`` — the block events themselves (``BlockEvent`` is
+  the union alias).
 """
 
 from .blocks import (
@@ -16,8 +18,10 @@ from .blocks import (
   StreamEnd,
   TextDelta,
   ToolCall,
+  ToolResult,
   ToolSource,
 )
+from .replay import replay_turn
 from .router import StreamRouter
 
 __all__ = [
@@ -28,5 +32,7 @@ __all__ = [
   "StreamRouter",
   "TextDelta",
   "ToolCall",
+  "ToolResult",
   "ToolSource",
+  "replay_turn",
 ]

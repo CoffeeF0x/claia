@@ -1,44 +1,51 @@
 """
-The CLAIA Textual app: one conversation, a live composer, a
-streamed plain-text tail, and a status bar.
+The CLAIA Textual app: one conversation, a live composer, paced
+turn-view rendering, and a status bar.
 
 Task wiring mirrors the one-shot query path but never blocks the
 UI loop: submit goes through ``registry.add_task`` and every
 ``TaskEvent`` callback (fired on worker threads) is marshalled
 into the app as a posted message — all widget mutation happens on
-the UI thread. Persistence (``pull_events`` → ``JsonStore.save``)
-stays in the terminal callbacks on the worker thread, exactly as
-in ``QueryCommand``.
+the UI thread. Posted block events pass through a per-turn
+``Pacer`` (a ~40ms timer drips text, structural events are
+barriers) before reaching the live ``TurnView``; reloaded history
+replays through the same turn pipeline instantly. Persistence
+(``pull_events`` → ``JsonStore.save``) stays in the terminal
+callbacks on the worker thread, exactly as in ``QueryCommand``.
 """
 
 # External dependencies
+import asyncio
 import logging
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.message import Message
+from textual.timer import Timer
 
 # Internal dependencies
+from ...core.data.artifacts import ToolArtifact
 from ...core.enums.conversation import MessageRole
 from ...core.enums.task import TaskEvent, TaskStatus
 from ...framework.task import Task
 from ..renderer import stream_summary
 from ..storage import JsonStore
 from ..stream import (
-  ArtifactNotice,
   BlockEvent,
-  Channel,
   StreamEnd,
   StreamRouter,
-  TextDelta,
-  ToolCall,
+  ToolResult,
+  replay_turn,
 )
 from ..utils import prepare_query_task, stream_tag_specs
 from .composer import Composer
 from .log_bridge import LogNotice, install, restore
+from .pacer import TICK, Pacer
 from .status import StatusBar
+from .theme import EXOFOX_DARK, EXOFOX_LIGHT
 from .transcript import Transcript
+from .turn import TurnView
 
 
 
@@ -46,8 +53,6 @@ from .transcript import Transcript
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
-
-USER_LABEL = "YOU"
 
 
 
@@ -72,7 +77,14 @@ class ClaiaApp(App):
   TITLE = "CLAIA"
 
   BINDINGS = [
-    Binding("escape", "cancel_task", "Cancel", show=False),
+    Binding("escape", "cancel_task", "Cancel", show=False,
+            id="cancel-task"),
+    Binding("ctrl+q", "quit", "Quit", show=False, priority=True,
+            id="quit"),
+    # Cursor's terminal captures Ctrl+Q; Alt+letter survives
+    # everywhere (ESC-prefix), so alt+q is the portable alias.
+    Binding("alt+q", "quit", "Quit", show=False, priority=True,
+            id="quit-alt"),
   ]
 
   def __init__(self, registry, settings, **kwargs):
@@ -85,17 +97,32 @@ class ClaiaApp(App):
     self._pending: Optional[str] = None
     self._exiting = False
     self._log_state = None
+    self._live_turn: Optional[TurnView] = None
+    self._pacer: Optional[Pacer] = None
+    self._pace_timer: Optional[Timer] = None
+    self._deliver_lock = asyncio.Lock()
 
-  # ── Layout ───────────────────────────────────────────────────────
+  # ── Layout and theme ─────────────────────────────────────────────
 
   def compose(self) -> ComposeResult:
     yield Transcript(id="transcript")
     yield Composer(id="composer")
     yield StatusBar(id="status")
 
-  def on_mount(self) -> None:
+  def get_theme_variable_defaults(self) -> Dict[str, str]:
+    # Custom variables must resolve under any theme.
+    return {"user-label": "#4A8B8C"}
+
+  async def on_mount(self) -> None:
+    self.register_theme(EXOFOX_DARK)
+    self.register_theme(EXOFOX_LIGHT)
+    self.theme = "exofox"
     self._log_state = install(self)
-    self._render_history()
+    # One persistent timer: ticks run in the timer's own task, so a
+    # stop() from inside a tick would cancel the running tick's work
+    # (including a pending queued submit). Pause/resume instead.
+    self._pace_timer = self.set_interval(TICK, self._pace_tick, pause=True)
+    await self._render_history()
     self._refresh_context()
     self.query_one(Composer).focus()
 
@@ -118,7 +145,9 @@ class ClaiaApp(App):
 
   # ── Composer ─────────────────────────────────────────────────────
 
-  def on_composer_submitted(self, message: Composer.Submitted) -> None:
+  async def on_composer_submitted(
+    self, message: Composer.Submitted,
+  ) -> None:
     composer = message.composer
     if self._active_task is not None:
       if self._pending is not None:
@@ -126,13 +155,13 @@ class ClaiaApp(App):
         return
       self._pending = message.text
     else:
-      self._submit(message.text)
+      await self._submit(message.text)
     composer.remember(message.text)
     composer.clear()
 
   # ── Task lifecycle ───────────────────────────────────────────────
 
-  def _submit(self, text: str) -> None:
+  async def _submit(self, text: str) -> None:
     """Start a turn: record the user line, wire the task, enqueue."""
     task = prepare_query_task(self.settings, text)
     router = StreamRouter(
@@ -141,8 +170,11 @@ class ClaiaApp(App):
     store = self._store
 
     transcript = self.query_one(Transcript)
-    transcript.add_message(USER_LABEL, text)
-    transcript.begin_turn(self._assistant_label())
+    transcript.add_user(text)
+    self._live_turn = await transcript.begin_turn(self._assistant_label())
+    self._pacer = Pacer()
+    if self._pace_timer is not None:
+      self._pace_timer.resume()
     self._refresh_context()
     self.query_one(StatusBar).set_state("streaming")
 
@@ -162,10 +194,17 @@ class ClaiaApp(App):
       post(router.feed(chunk))
 
     def on_artifact(artifact, message_id):
-      if store.save(artifact):
-        post(router.feed_artifact(artifact))
-      else:
+      if not store.save(artifact):
         logger.error(f"Failed to save artifact for message {message_id}")
+        return
+      if isinstance(artifact, ToolArtifact) and artifact.is_result:
+        post([ToolResult(
+          name=artifact.tool_name,
+          body=artifact.payload_text(),
+          call_id=artifact.call_id,
+        )])
+      else:
+        post(router.feed_artifact(artifact))
 
     def on_complete(_result):
       persist()
@@ -187,26 +226,38 @@ class ClaiaApp(App):
     self._active_task = task
     self.registry.add_task(task)
 
-  def on_stream_blocks(self, message: StreamBlocks) -> None:
-    transcript = self.query_one(Transcript)
-    for event in message.events:
-      if isinstance(event, TextDelta):
-        if event.channel is Channel.TEXT:
-          transcript.append_stream(event.text)
-      elif isinstance(event, ToolCall):
-        transcript.add_notice(f"[tool {event.name or 'unknown'}]")
-      elif isinstance(event, ArtifactNotice):
-        transcript.add_notice(f"[saved: {event.name}]")
-      elif isinstance(event, StreamEnd):
-        self._end_turn(event)
+  async def on_stream_blocks(self, message: StreamBlocks) -> None:
+    if self._pacer is None:
+      return
+    released = self._pacer.feed(message.events)
+    if released:
+      await self._deliver(released)
 
-  def _end_turn(self, end: StreamEnd) -> None:
-    transcript = self.query_one(Transcript)
-    transcript.end_block()
-    if end.status is TaskStatus.CANCELLED:
-      transcript.add_notice("[cancelled]")
+  async def _pace_tick(self) -> None:
+    if self._pacer is None:
+      return
+    events = self._pacer.tick()
+    if events:
+      await self._deliver(events)
+
+  async def _deliver(self, events: List[BlockEvent]) -> None:
+    # Ticks and cancel flushes interleave on the loop; the lock keeps
+    # event order intact across await points.
+    async with self._deliver_lock:
+      for event in events:
+        turn = self._live_turn
+        if turn is None:
+          return
+        await turn.handle(event)
+        if isinstance(event, StreamEnd):
+          await self._end_turn(event)
+
+  async def _end_turn(self, end: StreamEnd) -> None:
+    if self._pace_timer is not None:
+      self._pace_timer.pause()
+    self._pacer = None
+    self._live_turn = None
     if end.error:
-      transcript.add_notice(f"[error: {end.error}]")
       self.notify(str(end.error), severity="error")
 
     status = self.query_one(StatusBar)
@@ -216,7 +267,7 @@ class ClaiaApp(App):
 
     if self._pending is not None and not self._exiting:
       text, self._pending = self._pending, None
-      self._submit(text)
+      await self._submit(text)
 
   # ── Notifications ────────────────────────────────────────────────
 
@@ -225,18 +276,36 @@ class ClaiaApp(App):
 
   # ── Helpers ──────────────────────────────────────────────────────
 
-  def _render_history(self) -> None:
-    """Render the active conversation's prior messages, if any."""
+  async def _render_history(self) -> None:
+    """Replay the active conversation's prior turns, if any.
+
+    Consecutive same-label assistant messages (the rounds of one
+    multi-round task) merge into one turn view, so a reloaded
+    conversation matches its live rendering by construction.
+    """
     conversation = getattr(self.settings, "active_conversation", None)
     if conversation is None:
       return
     transcript = self.query_one(Transcript)
-    for msg in conversation.get_thread():
+    thread = conversation.get_thread(include_utility=True)
+
+    utilities: Dict[str, List] = {}
+    for msg in thread:
+      if msg.role is MessageRole.UTILITY and msg.source_message_id:
+        utilities.setdefault(msg.source_message_id, []).append(msg)
+
+    view: Optional[TurnView] = None
+    for msg in thread:
+      if msg.role is MessageRole.UTILITY:
+        continue
       if msg.role is MessageRole.USER:
-        label = USER_LABEL
-      else:
-        label = (msg.attributes.get("agent") or msg.role.value).upper()
-      transcript.add_message(label, msg.content or "")
+        transcript.add_user(msg.content or "")
+        view = None
+        continue
+      label = (msg.attributes.get("agent") or msg.role.value).upper()
+      if view is None or view.label != label:
+        view = await transcript.begin_turn(label)
+      await view.load(replay_turn(msg, utilities.get(msg.message_id, [])))
 
   def _assistant_label(self) -> str:
     agent = getattr(self.settings, "active_agent", None)

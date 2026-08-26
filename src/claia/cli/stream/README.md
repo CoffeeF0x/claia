@@ -9,9 +9,13 @@ tools (the agent layer already did that).
 
 - `blocks.py` — the block-event dataclasses: `TextDelta` (with a
   `Channel` of TEXT or THINKING), `ToolCall` (normalized from both
-  sources, tagged with `ToolSource`), `ArtifactNotice`, and
-  `StreamEnd` (terminal status plus usage/metrics/parse errors).
+  sources, tagged with `ToolSource`), `ToolResult`,
+  `ArtifactNotice`, and `StreamEnd` (terminal status plus
+  usage/metrics/parse errors).
 - `router.py` — `StreamRouter`, the per-task translator.
+- `replay.py` — `replay_turn`, the router's mirror for persisted
+  data: one assistant message plus its `UTILITY` siblings back
+  into the block events the router would have emitted live.
 - `__init__.py` — re-exports the public names.
 
 ## How It Fits
@@ -38,5 +42,7 @@ task.on(TaskEvent.ARTIFACT, lambda a, _: handle(router.feed_artifact(a)))
 handle(router.end(TaskStatus.COMPLETED))
 ```
 
-`QueryCommand` is the only production consumer today; the upcoming
-TUI will consume the same events with a different renderer.
+`QueryCommand` renders the events as plaintext; the TUI feeds the
+same events through a display pacer into turn-view widgets, and
+uses `replay_turn` to rebuild persisted turns as the identical
+event sequence.

@@ -48,6 +48,27 @@ from .blocks import (
 
 
 ########################################################################
+#                              FUNCTIONS                               #
+########################################################################
+def manual_tool_name(attributes, content: str) -> str:
+  """Resolve a MANUAL tool call's name the way the agent does.
+
+  Tag attribute first, then the payload's ``"name"`` field; empty
+  string when neither yields one. Shared with replay so persisted
+  TOOL utilities resolve identically.
+  """
+  name = (attributes.get("name") or "").strip() if attributes else ""
+  if not name:
+    try:
+      _params, hint = decode_payload(content)
+      name = (hint or "").strip()
+    except ValueError:
+      name = ""
+  return name
+
+
+
+########################################################################
 #                             STREAM ROUTER                            #
 ########################################################################
 class StreamRouter:
@@ -162,17 +183,8 @@ class StreamRouter:
 
   @staticmethod
   def _manual_tool(ev: TagEvent) -> ToolCall:
-    # Same name resolution the agent uses: tag attribute first, then
-    # the payload's "name" field.
-    name = (ev.attributes.get("name") or "").strip() if ev.attributes else ""
-    if not name:
-      try:
-        _params, hint = decode_payload(ev.content)
-        name = (hint or "").strip()
-      except ValueError:
-        name = ""
     return ToolCall(
-      name=name,
+      name=manual_tool_name(ev.attributes, ev.content),
       args=ev.content,
       call_id=None,
       source=ToolSource.MANUAL,

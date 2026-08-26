@@ -61,8 +61,23 @@ class ToolCall:
 
 
 @dataclass(frozen=True)
+class ToolResult:
+  """The result body of a dispatched tool call.
+
+  Not produced by the router (the one-shot path renders results as
+  artifact notices). The TUI maps result ``ToolArtifact``s onto this
+  event — live from ``TaskEvent.ARTIFACT``, replayed from the
+  artifacts persisted on TOOL utilities — so tool blocks render
+  results the same way on both paths.
+  """
+  name: str
+  body: str
+  call_id: Optional[str] = None
+
+
+@dataclass(frozen=True)
 class ArtifactNotice:
-  """An artifact was attached to the turn (tool result, image, …)."""
+  """An artifact was attached to the turn (image, audio, file, …)."""
   name: str
 
 
@@ -80,4 +95,4 @@ class StreamEnd:
   parse_errors: Tuple[ParseError, ...] = field(default_factory=tuple)
 
 
-BlockEvent = Union[TextDelta, ToolCall, ArtifactNotice, StreamEnd]
+BlockEvent = Union[TextDelta, ToolCall, ToolResult, ArtifactNotice, StreamEnd]

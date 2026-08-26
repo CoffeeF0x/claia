@@ -3,30 +3,41 @@ Headless TUI tests: real end-to-end turns through ``ClaiaApp``.
 
 A real ``Registry`` (with workers) serves the in-repo dummy model,
 so submits exercise the full path: composer → task queue → worker
-threads → ``StreamRouter`` → posted messages → widgets. The dummy
+threads → ``StreamRouter`` → pacer → turn views. The dummy
 architecture's module constants are patched per test to control
 story content and pace; ``unload_all_models`` forces a fresh
-instance so the new story takes effect.
+instance so the new story takes effect. Tool turns dispatch the
+real ``sample.echo`` tool with ``MAX_TOOL_ROUNDS`` pinned to one.
 """
 
+import json
 import logging
 import time
 from types import SimpleNamespace
 
 import pytest
+from textual.widgets import Markdown
 
 import claia.core.architectures.dummy.dummy as dummy_module
 from claia.core.enums.conversation import MessageRole
 from claia.core.enums.task import TaskStatus
+from claia.framework.agents.base import BaseAgent
 from claia.framework.registry import Registry
 
+from claia.cli.storage import JsonStore
 from claia.cli.tui import ClaiaApp
 from claia.cli.tui.composer import Composer
 from claia.cli.tui.status import StatusBar
 from claia.cli.tui.transcript import Transcript
+from claia.cli.tui.turn import ToolBlock, TurnView
 
 
 SHORT_STORY = "Hello from the dummy model."
+TOOL_STORY = (
+  "Let me check.<think>quietly</think>"
+  '[TOOL_CALL]{"name": "sample.echo", "parameters": {"message": "ping"}}'
+  "[/TOOL_CALL] All done."
+)
 FAST = 1_000_000  # chars/second: effectively instant streaming
 SLOW = 400        # chars/second: a comfortably long live window
 
@@ -87,10 +98,41 @@ async def wait_for(pilot, condition, timeout=15.0):
   return False
 
 
-def blocks(app):
-  """Plain text of every transcript block, top to bottom."""
-  transcript = app.query_one(Transcript)
-  return [str(s.content) for s in transcript.query("Static").results()]
+def flatten(app):
+  """(kind, …) tuples for every transcript block, top to bottom.
+
+  Markdown segments carry their source, thinking/notice/label blocks
+  their text, tool blocks their name, pretty args, and result body.
+  """
+  out = []
+  for node in app.query_one(Transcript).children:
+    if isinstance(node, TurnView):
+      for child in node.children:
+        if isinstance(child, Markdown):
+          out.append(("markdown", child.source))
+        elif isinstance(child, ToolBlock):
+          out.append((
+            "tool", child.tool_name, child.args_text, child.result_body,
+          ))
+        elif child.has_class("turn-thinking"):
+          out.append(("thinking", str(child.content)))
+        elif child.has_class("turn-notice"):
+          out.append(("notice", str(child.content)))
+        elif child.has_class("turn-label"):
+          out.append(("label", str(child.content)))
+    elif node.has_class("user-label"):
+      out.append(("user-label", str(node.content)))
+    elif node.has_class("user-text"):
+      out.append(("user-text", str(node.content)))
+  return out
+
+
+def kinds(app):
+  return [item[0] for item in flatten(app)]
+
+
+def texts_of(app, kind):
+  return [item[1] for item in flatten(app) if item[0] == kind]
 
 
 async def submit(app, pilot, text):
@@ -129,14 +171,13 @@ class TestTurnFlow:
       await pilot.press("h", "i", "enter")
       await pilot.pause()
 
-      content = blocks(app)
-      assert "YOU" in content
-      assert "hi" in content
+      flat = flatten(app)
+      assert ("user-label", "YOU") in flat
+      assert ("user-text", "hi") in flat
 
       await wait_idle(app, pilot)
-      content = blocks(app)
-      assert any(SHORT_STORY in text for text in content)
-      assert "SIMPLE" in content  # live turns carry the agent name
+      assert ("label", "SIMPLE") in flatten(app)  # live agent label
+      assert any(SHORT_STORY in s for s in texts_of(app, "markdown"))
 
       conversation = tui_settings.active_conversation
       roles = [m.role for m in conversation.messages]
@@ -148,17 +189,21 @@ class TestTurnFlow:
       saved = tmp_path / "storage" / "conversations" / f"{conversation.id}.json"
       assert saved.exists()
 
-  async def test_thinking_is_dropped_from_the_transcript(
-    self, app, set_dummy,
-  ):
+  async def test_thinking_renders_muted_inline(self, app, set_dummy):
     set_dummy("Answer.<think>hidden reasoning</think> More answer.")
     async with app.run_test() as pilot:
       await submit(app, pilot, "hello")
       await wait_idle(app, pilot)
-      text = "\n".join(blocks(app))
-      assert "hidden reasoning" not in text
-      assert "Answer." in text
-      assert "More answer." in text
+
+      assert texts_of(app, "thinking") == ["hidden reasoning"]
+      assert app.query(".turn-thinking")  # the muted class is applied
+      # Thinking splits the text into two markdown segments around it
+      # and never leaks into them.
+      markdown = texts_of(app, "markdown")
+      assert len(markdown) == 2
+      assert "Answer." in markdown[0]
+      assert "More answer." in markdown[1]
+      assert not any("hidden reasoning" in s for s in markdown)
 
   async def test_prior_messages_render_on_launch(
     self, tui_registry, tui_settings,
@@ -175,14 +220,91 @@ class TestTurnFlow:
     app = ClaiaApp(registry=tui_registry, settings=tui_settings)
     async with app.run_test() as pilot:
       await pilot.pause()
-      assert blocks(app) == [
-        "YOU", "old question",
-        "WRITER", "old answer",
-        "YOU", "and this?",
-        "ASSISTANT", "unstamped answer",
+      assert flatten(app) == [
+        ("user-label", "YOU"), ("user-text", "old question"),
+        ("label", "WRITER"), ("markdown", "old answer"),
+        ("user-label", "YOU"), ("user-text", "and this?"),
+        ("label", "ASSISTANT"), ("markdown", "unstamped answer"),
       ]
       bar = app.query_one(StatusBar)
       assert bar.conversation == "Earlier"
+
+
+########################################################################
+#                              TOOL TURNS                              #
+########################################################################
+class TestToolTurns:
+  async def test_tool_turn_segments_mount_in_order(
+    self, app, set_dummy, monkeypatch,
+  ):
+    monkeypatch.setattr(BaseAgent, "MAX_TOOL_ROUNDS", 1)
+    set_dummy(TOOL_STORY)
+    async with app.run_test() as pilot:
+      await submit(app, pilot, "run the check")
+      await wait_idle(app, pilot)
+
+      assert kinds(app) == [
+        "user-label", "user-text",
+        "label", "markdown", "thinking", "tool", "markdown",
+      ]
+      flat = flatten(app)
+      tool = next(item for item in flat if item[0] == "tool")
+      assert tool[1] == "sample.echo"
+      assert tool[2] == json.dumps({"message": "ping"}, indent=2)
+      assert tool[3] == "ping"  # live result attached from ARTIFACT
+      markdown = texts_of(app, "markdown")
+      assert "Let me check." in markdown[0]
+      assert "All done." in markdown[1]
+      # Raw tag delimiters never hit the screen.
+      assert not any("[TOOL_CALL]" in s for s in markdown)
+
+  async def test_stream_end_closes_the_live_turn(self, app, set_dummy):
+    set_dummy(SHORT_STORY)
+    async with app.run_test() as pilot:
+      await submit(app, pilot, "go")
+      await wait_idle(app, pilot)
+      assert app._live_turn is None
+      assert app._pacer is None
+      view = app.query(TurnView).last()
+      assert view._stream is None  # the markdown stream was stopped
+
+
+########################################################################
+#                                RELOAD                                #
+########################################################################
+class TestReload:
+  async def test_reload_renders_identical_widget_sequence(
+    self, app, tui_registry, tui_settings, set_dummy, monkeypatch,
+  ):
+    monkeypatch.setattr(BaseAgent, "MAX_TOOL_ROUNDS", 1)
+    set_dummy(TOOL_STORY)
+    async with app.run_test() as pilot:
+      await submit(app, pilot, "run the check")
+      await wait_idle(app, pilot)
+      live = flatten(app)
+
+    store = JsonStore(tui_settings.files_directory)
+    loaded = store.load(tui_settings.active_conversation.id)
+    assert loaded is not None
+    utilities = [
+      m for m in loaded.get_thread(include_utility=True)
+      if m.role is MessageRole.UTILITY
+    ]
+    assert len(utilities) == 2  # the thinking span and the tool call
+
+    fresh = SimpleNamespace(
+      files_directory=tui_settings.files_directory,
+      active_model="dummy-model",
+      active_agent="simple",
+      default_agent="simple",
+      active_prompt=None,
+      active_conversation=loaded,
+      get_user_kwargs=lambda: {},
+    )
+    reloaded = ClaiaApp(registry=tui_registry, settings=fresh)
+    async with reloaded.run_test() as pilot:
+      await pilot.pause()
+      assert flatten(reloaded) == live
 
 
 ########################################################################
@@ -219,7 +341,7 @@ class TestBusyComposer:
       # Still one task in flight; the second message is queued, and
       # a third submit is refused while the slot is taken.
       assert bar.state == "streaming"
-      assert blocks(app).count("YOU") == 1
+      assert texts_of(app, "user-label") == ["YOU"]
       await submit(app, pilot, "third")
       assert app._pending == "second"
 
@@ -235,10 +357,10 @@ class TestBusyComposer:
         MessageRole.USER, MessageRole.ASSISTANT,
         MessageRole.USER, MessageRole.ASSISTANT,
       ]
-      content = blocks(app)
-      assert content.count("YOU") == 2
-      assert "second" in content
-      assert "third" not in content
+      assert texts_of(app, "user-label") == ["YOU", "YOU"]
+      user_texts = texts_of(app, "user-text")
+      assert "second" in user_texts
+      assert "third" not in user_texts
 
 
 ########################################################################
@@ -259,14 +381,14 @@ class TestCancel:
       await wait_idle(app, pilot)
 
       assert task.status is TaskStatus.CANCELLED
-      assert "[cancelled]" in blocks(app)
+      assert ("notice", "[cancelled]") in flatten(app)
       assert app._active_task is None
 
       # The shell is still usable: a fresh fast turn completes.
       set_dummy(SHORT_STORY)
       await submit(app, pilot, "again")
       await wait_idle(app, pilot)
-      assert any(SHORT_STORY in text for text in blocks(app))
+      assert any(SHORT_STORY in s for s in texts_of(app, "markdown"))
 
 
 ########################################################################
@@ -276,8 +398,10 @@ class TestFollowTail:
   async def test_scrolled_up_view_does_not_jump_on_new_chunks(
     self, app, set_dummy,
   ):
-    story = "line\n" * 400
-    set_dummy(story, chars_per_second=1000, chars_per_chunk=40)
+    # Blank lines keep each "line" its own markdown paragraph so the
+    # transcript grows tall instead of wrapping one paragraph.
+    story = "line\n\n" * 400
+    set_dummy(story, chars_per_second=2000, chars_per_chunk=40)
     async with app.run_test() as pilot:
       await submit(app, pilot, "go")
       transcript = app.query_one(Transcript)
