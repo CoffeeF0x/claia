@@ -1,12 +1,16 @@
 """
-Composer: the multiline input at the bottom of the app.
+Composer: the multiline input line, and the bar that frames it.
 
-No box — the seam above is its top edge and a prompt glyph in the
-app's composer bar marks the line, so typing happens straight into
-the surface. Enter submits; Shift+Enter inserts a newline where the
-terminal reports it (Kitty keyboard protocol — Textual delivers the
-key as ``shift+enter``); Ctrl+J is the documented fallback newline
-for terminals that cannot. Up/Down at an empty composer recall the
+No box — a ``❯`` prompt glyph in a two-cell gutter marks the line
+(gold while focused), so typing happens straight into the surface.
+``ComposerBar`` packages glyph + composer for any screen that
+takes input: the main screen (below the seam) and the ledger page
+both mount one, sharing the app's one submission history list.
+
+Enter submits; Shift+Enter inserts a newline where the terminal
+reports it (Kitty keyboard protocol — Textual delivers the key as
+``shift+enter``); Ctrl+J is the documented fallback newline for
+terminals that cannot. Up/Down at an empty composer recall the
 in-session submission history; any edit to a recalled entry drops
 back to normal cursor movement. Paste is Textual-native
 (bracketed). The widget never clears itself — the app clears it
@@ -17,8 +21,10 @@ once a submission is accepted, so a rejected submit keeps its text.
 from typing import List, Optional
 
 from textual import events
+from textual.app import ComposeResult
+from textual.containers import Horizontal
 from textual.message import Message
-from textual.widgets import TextArea
+from textual.widgets import Static, TextArea
 
 
 
@@ -53,9 +59,10 @@ class Composer(TextArea):
       self.composer = composer
       self.text = text
 
-  def __init__(self, **kwargs):
+  def __init__(self, history: Optional[List[str]] = None, **kwargs):
     super().__init__(**kwargs)
-    self._history: List[str] = []
+    # A shared list keeps recall seamless across screens' composers.
+    self._history: List[str] = history if history is not None else []
     self._history_pos: Optional[int] = None
 
   # ── Key handling ─────────────────────────────────────────────────
@@ -126,3 +133,38 @@ class Composer(TextArea):
   def _set_text(self, text: str) -> None:
     self.load_text(text)
     self.move_cursor(self.document.end)
+
+
+
+########################################################################
+#                             COMPOSER BAR                             #
+########################################################################
+class ComposerBar(Horizontal):
+  """Prompt glyph + composer: the input line of a screen."""
+
+  DEFAULT_CSS = """
+  ComposerBar {
+    height: auto;
+    max-height: 8;
+    margin: 0 1;
+
+    & > .composer-prompt {
+      width: 2;
+      height: 1;
+      color: $text-muted;
+      text-style: bold;
+    }
+  }
+  /* Flat on purpose: the nested &:focus-within form fails to match. */
+  ComposerBar:focus-within > .composer-prompt {
+    color: $primary;
+  }
+  """
+
+  def __init__(self, history: Optional[List[str]] = None, **kwargs):
+    super().__init__(**kwargs)
+    self._history = history
+
+  def compose(self) -> ComposeResult:
+    yield Static("❯", classes="composer-prompt")
+    yield Composer(history=self._history)

@@ -746,12 +746,21 @@ class TestActions:
       await pilot.press("escape")
       assert not isinstance(app.screen, Ledger)
 
+  async def test_commands_auto_open_the_ledger(self, app):
+    async with app.run_test() as pilot:
+      await act(app, pilot, ":version")
+      assert isinstance(app.screen, Ledger)
+      await pilot.press("escape")
+      assert not isinstance(app.screen, Ledger)
+      # Quiet-listed: its payoff is the fresh transcript, not a record.
+      await act(app, pilot, ":conversation new")
+      assert not isinstance(app.screen, Ledger)
+
   async def test_ledger_shows_records_counts_and_markdown(self, app):
     async with app.run_test() as pilot:
-      await act(app, pilot, ":model list")
-      await act(app, pilot, ":frobnicate")
-      await pilot.press("alt+a")
+      await act(app, pilot, ":model list")   # auto-opens the ledger
       assert isinstance(app.screen, Ledger)
+      await act(app, pilot, ":frobnicate")   # prepends live while open
       await pilot.pause()
       recs = list(app.screen.query(ActionRecord))
       assert [r.action.line for r in recs] == ["frobnicate", "model list"]
@@ -772,8 +781,7 @@ class TestActions:
 
     monkeypatch.setattr(app._commands, "run", slow_run)
     async with app.run_test() as pilot:
-      await submit(app, pilot, ":version")
-      await pilot.press("alt+a")
+      await submit(app, pilot, ":version")   # auto-opens the ledger
       assert isinstance(app.screen, Ledger)
 
       def settled():
@@ -782,6 +790,29 @@ class TestActions:
 
       assert await wait_for(pilot, settled)
       assert app.screen.query_one(Seam).phase is Phase.IDLE
+
+  async def test_ledger_composer_chats_back_to_the_transcript(
+    self, app, set_dummy,
+  ):
+    set_dummy(SHORT_STORY)
+    async with app.run_test() as pilot:
+      await pilot.press("alt+a")
+      assert isinstance(app.screen, Ledger)
+      ledger_composer = app.screen.query_one(Composer)
+      assert app.focused is ledger_composer
+      ledger_composer.load_text("hi from the ledger")
+      ledger_composer.post_message(
+        Composer.Submitted(ledger_composer, "hi from the ledger"),
+      )
+      assert await wait_for(
+        pilot, lambda: not isinstance(app.screen, Ledger),
+      )
+      await wait_idle(app, pilot)
+      flat = flatten(app)
+      assert ("user-text", "hi from the ledger") in flat
+      assert any(SHORT_STORY in s for s in texts_of(app, "markdown"))
+      # The shared history recalls across composers.
+      assert app.composer_history == ["hi from the ledger"]
 
 
 ########################################################################

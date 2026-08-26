@@ -1,7 +1,8 @@
 """
 The ledger: a full page recording every action this session,
-newest first. Toggled with Alt+A (or ``:actions``); Escape returns
-to the conversation.
+newest first — and the command surface itself. Submitting any
+command opens it (quiet-listed ones excepted), Alt+A toggles it,
+Escape returns to the conversation.
 
 Not a modal — a place. A vertical kintsugi seam spines the left
 edge and carries the action lane's liveness (amber while a command
@@ -9,7 +10,10 @@ runs, red flash on failure); the heading counts the session's
 actions; each record shows a status glyph, the command as typed, a
 duration whisper, and the full ``Result`` message/output — toasts
 are the notification, this is the record. Records whose result
-declares ``format="markdown"`` render as markdown.
+declares ``format="markdown"`` render as markdown. Its own
+composer bar (shared submission history) keeps the conversation
+going: ``:`` lines run and prepend their record live, plain text
+sends as chat and returns to the transcript.
 
 Actions live on the app (``app.actions``); the screen composes from
 that list each time it opens and the app forwards state changes
@@ -28,6 +32,7 @@ from textual.widgets import Markdown, Static
 
 # Internal dependencies
 from .actions import Action, ActionState
+from .composer import Composer, ComposerBar
 from .seam import Phase, Seam
 from .turn import TurnLabel
 
@@ -151,10 +156,14 @@ class Ledger(Screen):
       & > .ledger-list {
         height: 1fr;
         scrollbar-gutter: stable;
+        margin-bottom: 1;
 
         & > .ledger-empty {
           color: $text-muted;
         }
+      }
+      & > ComposerBar {
+        margin: 0;
       }
       & > .ledger-footer {
         height: 1;
@@ -175,7 +184,8 @@ class Ledger(Screen):
             yield ActionRecord(action)
         else:
           yield Static(EMPTY_LINE, classes="ledger-empty")
-      yield Static("esc back", classes="ledger-footer")
+      yield ComposerBar(history=self.app.composer_history)
+      yield Static("esc back · plain text chats", classes="ledger-footer")
 
   def on_mount(self) -> None:
     self._refresh_summary()
@@ -184,9 +194,23 @@ class Ledger(Screen):
     )
     if running:
       self.query_one(Seam).set_phase(Phase.TOOL)
+    self.query_one(Composer).focus()
+
+  def record_add(self, action: Action) -> None:
+    """Prepend a record for an action minted while the page is up."""
+    if not self.children:
+      return
+    lst = self.query_one(".ledger-list", VerticalScroll)
+    for node in lst.query(".ledger-empty"):
+      node.remove()
+    first = lst.children[0] if lst.children else None
+    lst.mount(ActionRecord(action), before=first)
+    self._refresh_summary()
 
   def record_update(self, action: Action) -> None:
     """Re-render the record whose action changed state."""
+    if not self.children:
+      return  # pushed but not composed; compose reads current state
     for record in self.query(ActionRecord):
       if record.action is action:
         record.refresh_record()

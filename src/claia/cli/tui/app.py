@@ -18,9 +18,8 @@ from typing import Dict, List, Optional
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal
+from textual.containers import Container
 from textual.timer import Timer
-from textual.widgets import Static
 
 # Internal dependencies
 from ..commands import Commands
@@ -31,7 +30,7 @@ from .actions import (
   ActionStarted,
   ActionState,
 )
-from .composer import Composer
+from .composer import Composer, ComposerBar
 from .help import HelpScreen
 from .ledger import Ledger
 from .log_bridge import LogNotice, install, restore
@@ -40,6 +39,20 @@ from .seam import Seam
 from .status import StatusBar
 from .switchboard import StreamBlocks, Switchboard
 from .theme import EXOFOX_DARK, EXOFOX_LIGHT
+
+
+
+########################################################################
+#                              CONSTANTS                               #
+########################################################################
+# Every command opens the ledger — its record is the feedback —
+# except these, whose payoff is on the main screen. ``None``
+# matches any subcommand.
+LEDGER_QUIET = {
+  ("conversation", "new"),
+  ("conversation", "load"),
+  ("quit", None),
+}
 
 
 
@@ -57,22 +70,6 @@ class ClaiaApp(App):
   }
   #tracks {
     height: 1fr;
-  }
-  #composer-bar {
-    height: auto;
-    max-height: 8;
-    margin: 0 1;
-
-    & > .composer-prompt {
-      width: 2;
-      height: 1;
-      color: $text-muted;
-      text-style: bold;
-    }
-  }
-  /* Flat on purpose: the nested &:focus-within form fails to match. */
-  #composer-bar:focus-within > .composer-prompt {
-    color: $primary;
   }
 
   /* Toasts as stone chips: content-sized, one severity vein. */
@@ -131,6 +128,7 @@ class ClaiaApp(App):
     self.settings = settings
     self.switchboard = Switchboard(self)
     self.actions: List[Action] = []
+    self.composer_history: List[str] = []
     self._commands = Commands(registry, settings)
     self._lane = ActionLane(self, self._commands, settings)
     self._log_state = None
@@ -141,9 +139,7 @@ class ClaiaApp(App):
   def compose(self) -> ComposeResult:
     yield Container(id="tracks")
     yield Seam(id="seam")
-    with Horizontal(id="composer-bar"):
-      yield Static("❯", classes="composer-prompt")
-      yield Composer(id="composer")
+    yield ComposerBar(history=self.composer_history)
     yield StatusBar(id="status")
 
   def get_theme_variable_defaults(self) -> Dict[str, str]:
@@ -217,7 +213,11 @@ class ClaiaApp(App):
       message.composer.clear()
 
   async def _submit_chat(self, text: str) -> bool:
-    """Chat into the bound track; queue one message while busy."""
+    """Chat into the bound track; queue one message while busy.
+
+    A chat accepted from the ledger's composer pops back to the
+    transcript — that is where the answer lands.
+    """
     track = self.switchboard.bound
     if track.busy:
       if track.pending is not None:
@@ -227,20 +227,23 @@ class ClaiaApp(App):
         )
         return False
       track.pending = text
-      return True
-    await self.switchboard.submit(track, text)
+    else:
+      await self.switchboard.submit(track, text)
+    if self._ledger() is not None:
+      self.pop_screen()
     return True
 
   async def _submit_action(self, text: str) -> bool:
     """Mint an action from a ``:`` line and hand it to the lane.
 
-    Special cases stay minimal: ``query`` redirects to a chat
-    submit (its one-shot wiring blocks a thread), ``setup`` is
-    refused (its ``input()`` wizard needs a real terminal),
-    ``actions`` opens the ledger (the fallback for terminals
-    that never deliver Alt+A), and an unknown command fails
-    without running so it can never wrap into an implicit query
-    on the lane.
+    The ledger is the command surface: submitting a command opens
+    it (unless the command is on the quiet list — its payoff is
+    the main screen) or, when it is already up, prepends the new
+    record live. Special cases stay minimal: ``query`` redirects
+    to a chat submit (its one-shot wiring blocks a thread),
+    ``setup`` is refused (its ``input()`` wizard needs a real
+    terminal), and an unknown command fails without running so it
+    can never wrap into an implicit query on the lane.
     """
     line = text[1:].strip()
     tokens = line.split()
@@ -249,9 +252,6 @@ class ClaiaApp(App):
         "A lonely ':' — try :help for the menu.", severity="warning",
       )
       return False
-    if tokens == ["actions"]:
-      self.action_toggle_actions()
-      return True
     name = self._commands.resolve_name(tokens[0])
     if name == "query":
       rest = " ".join(tokens[1:])
@@ -265,6 +265,9 @@ class ClaiaApp(App):
 
     action = Action(line=line, tokens=tokens)
     self.actions.insert(0, action)
+    ledger = self._ledger()
+    if ledger is not None:
+      ledger.record_add(action)
     if name is None:
       self._refuse_action(
         action, f"No command called '{tokens[0]}' — :help knows the way.",
@@ -275,7 +278,17 @@ class ClaiaApp(App):
       )
     else:
       self._lane.submit(action)
+    if ledger is None and self._opens_ledger(name, tokens):
+      self.push_screen(Ledger())
     return True
+
+  @staticmethod
+  def _opens_ledger(name: Optional[str], tokens: List[str]) -> bool:
+    sub = tokens[1] if len(tokens) > 1 else None
+    return (
+      (name, sub) not in LEDGER_QUIET
+      and (name, None) not in LEDGER_QUIET
+    )
 
   def _refuse_action(self, action: Action, message: str) -> None:
     action.fail(message)

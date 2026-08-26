@@ -16,9 +16,9 @@ chips with a severity vein).
 
 ## What Lives Here
 
-- `app.py` — `ClaiaApp`: layout (including the composer bar's
-  prompt glyph and the toast/scrollbar restyle), bindings,
-  composer routing (`:` → action, else chat), the session's
+- `app.py` — `ClaiaApp`: layout (and the toast/scrollbar
+  restyle), bindings, composer routing (`:` → action, else chat),
+  the ledger auto-open policy (`LEDGER_QUIET`), the session's
   action list (`app.actions`, the ledger's source of truth), the
   worker→UI thread bridge, the one pacer timer, action-lane
   outcomes (exit / toast / reconcile), and logging ownership.
@@ -34,11 +34,14 @@ chips with a severity vein).
   worker thread feeding `Commands.run` and posting transitions
   back into the UI loop.
 - `ledger.py` — `Ledger`, the full-page newest-first record of
-  every action (Alt+A / `:actions`; Esc returns), spined by a
-  vertical seam that carries the lane's liveness, headed by
-  run/failure counts; and `ActionRecord` (status glyph, command,
-  duration whisper, full output — rendered as markdown when the
-  `Result` declares it).
+  every action and the command surface itself: submitting any
+  command opens it (quiet-listed ones excepted), Alt+A toggles,
+  Esc returns. Spined by a vertical seam that carries the lane's
+  liveness, headed by run/failure counts, and closed by its own
+  composer bar — `:` lines prepend their record live, plain text
+  chats and returns to the transcript. Plus `ActionRecord`
+  (status glyph, command, duration whisper, full output —
+  rendered as markdown when the `Result` declares it).
 - `transcript.py` — `Transcript`, a scrolling pane of user label
   blocks and `TurnView`s with follow-tail (Textual anchor)
   scrolling; one per track. An empty transcript centers a brand
@@ -68,11 +71,12 @@ chips with a severity vein).
   (dark, default) and `exofox-light`, including the scrollbar
   tokens (invisible track, stone thumb, gold under the hand).
 - `composer.py` — `Composer`, a borderless multiline `TextArea`
-  flush with the surface (the seam is its top edge; the app's
-  composer bar provides the `❯` prompt gutter): Enter submits,
-  Shift+Enter (or Ctrl+J where the terminal cannot report it)
-  inserts a newline, Up/Down at an empty composer recall the
-  in-session submission history.
+  flush with the surface, and `ComposerBar`, the `❯`-guttered
+  input line (glyph gold while focused) mounted by both the main
+  screen and the ledger: Enter submits, Shift+Enter (or Ctrl+J
+  where the terminal cannot report it) inserts a newline, Up/Down
+  at an empty composer recall the submission history — one shared
+  list (`app.composer_history`) across every composer.
 - `status.py` — `StatusBar` and `StatusLine`: the instrument
   cluster. Identity (`◆ agent · model`), a braille spinner with
   elapsed time while the bound track works (amber during a tool
@@ -107,18 +111,20 @@ terminal callbacks on the worker thread, exactly as in
 `QueryCommand`.
 
 A `:` line becomes an `Action` on the serial lane: tokens after
-the colon go to `Commands.run` untouched, the `Result` lands in
-the session's action list and on the ledger page when it is open
-(failures also toast), `Result.is_exit()` maps to `app.exit()`,
-and the switchboard reconciles the bound track against
-`settings.active_conversation` after every action — so
-`conversation new`/`load` rebind or create tracks with no command
-interception. Commands whose `Result` sets `format="markdown"`
-(`help`, `model list` so far) render as markdown in the ledger
-and through rich in one-shot mode. `query` redirects to a chat
-submit; `setup` is refused with a pointer to one-shot; `actions`
-opens the ledger (the key-free fallback for terminals that never
-deliver Alt+A).
+the colon go to `Commands.run` untouched and the ledger opens to
+show the record (already open: the record prepends live) — except
+for quiet-listed commands (`conversation new`/`load`, `quit`)
+whose payoff is the main screen. Failures also toast,
+`Result.is_exit()` maps to `app.exit()`, and the switchboard
+reconciles the bound track against `settings.active_conversation`
+after every action — so `conversation new`/`load` rebind or
+create tracks with no command interception. Commands whose
+`Result` sets `format="markdown"` (`help`, `model list` so far)
+render as markdown in the ledger and through rich in one-shot
+mode. From the ledger's own composer, another `:` line runs in
+place while plain text submits as chat and returns to the
+transcript. `query` redirects to a chat submit; `setup` is
+refused with a pointer to one-shot.
 
 On launch (and when a load names a conversation with no track),
 prior turns rebuild through `replay_turn` (from `..stream`) into
