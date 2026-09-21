@@ -34,7 +34,6 @@ API_ARCHITECTURES = ("openai", "anthropic", "openrouter")
 PROMPT = "Reply with the single word pong."
 GENERATE_ARGS = {
   "stream": False,
-  "max_tokens": 1024,
   "effort": "low",
 }
 
