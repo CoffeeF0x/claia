@@ -91,6 +91,7 @@ def test_openai_blocking_text_omits_tools():
   assert data["instructions"] == "Be brief"
   assert "tools" not in data
   assert "temperature" not in data
+  assert "max_output_tokens" not in data
   assert model.session.headers["Authorization"] == "Bearer secret"
 
 

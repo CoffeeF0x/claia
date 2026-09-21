@@ -26,10 +26,13 @@ kwargs feed the constructor at deploy time.
 list that most text architectures spread into their params; per-
 architecture overrides (e.g. Gemma3's higher `max_tokens` default) are
 expressed by declaring the override spec on a subclass. Hosted API
-architectures prepend `API_OPTIONAL_SAMPLING_PARAMS` and `EFFORT_PARAM`
-so temperature is omitted unless set — GPT-5+/Claude adaptive-thinking
-models reject sampling — and `effort` maps onto each provider's
-reasoning field. Modifier
+architectures prepend `API_MAX_TOKENS_PARAM` (unset unless the caller
+asks), `API_OPTIONAL_SAMPLING_PARAMS`, and `EFFORT_PARAM` so
+temperature and `max_tokens` are omitted unless set — GPT-5+/Claude
+adaptive-thinking models reject sampling — and `effort` maps onto each
+provider's reasoning field. Anthropic still sends `max_tokens` (the
+field is required) using the model's output ceiling when unset.
+Modifier
 decorators copy the inherited `info` and prepend the overrides
 (first-match-wins by name).
 

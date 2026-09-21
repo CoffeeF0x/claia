@@ -95,6 +95,7 @@ def test_anthropic_blocking_text_omits_tools():
   assert data["system"] == "Be brief"
   assert data["thinking"] == {"type": "adaptive"}
   assert data["output_config"] == {"effort": "low"}
+  assert data["max_tokens"] == 128000
   assert "temperature" not in data
   assert "tools" not in data
   assert model.session.headers["x-api-key"] == "secret"
@@ -217,3 +218,31 @@ def test_anthropic_haiku_sends_temperature_without_thinking():
   assert data["temperature"] == 0
   assert "thinking" not in data
   assert "output_config" not in data
+
+
+def test_anthropic_sends_caller_max_tokens():
+  response = FakeResponse({
+    "content": [{"type": "text", "text": "ok"}],
+  })
+  model = RecordingAnthropicArchitecture("claude-sonnet-5", response=response)
+
+  list(model.generate(_request(
+    _sequence(_conversation()),
+    stream=False,
+    max_tokens=256,
+  )))
+
+  _, data, _ = model.calls[0]
+  assert data["max_tokens"] == 256
+
+
+def test_anthropic_haiku_uses_64k_output_ceiling():
+  response = FakeResponse({
+    "content": [{"type": "text", "text": "ok"}],
+  })
+  model = RecordingAnthropicArchitecture("claude-haiku-4-5-20251001", response=response)
+
+  list(model.generate(_request(_sequence(_conversation()), stream=False)))
+
+  _, data, _ = model.calls[0]
+  assert data["max_tokens"] == 64000

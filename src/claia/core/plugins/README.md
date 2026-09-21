@@ -8,7 +8,7 @@ Shared metadata and configuration contracts for CLAIA extensions. This package t
 - `ParamSpec`, `ParamScope`, and `ParamCategory` for declaring plugin settings and runtime parameters.
 - `ServingPlan`, `ToolDefinition`, `ArgumentDefinition`, and `ToolReference` for model and tool execution contracts.
 - `COMMON_TEXT_RUNTIME_PARAMS` for common generation parameters such as `temperature`, `max_tokens`, and `stream`.
-- `API_OPTIONAL_SAMPLING_PARAMS`, `API_MAX_TOKENS_PARAM`, and `EFFORT_PARAM` for hosted APIs: sampling is omitted unless set, and `effort` is the shared reasoning/thinking knob.
+- `API_OPTIONAL_SAMPLING_PARAMS`, `API_MAX_TOKENS_PARAM` (unset unless asked; includes reasoning), and `EFFORT_PARAM` for hosted APIs: sampling is omitted unless set, and `effort` is the shared reasoning/thinking knob.
 
 Agent metadata (`AgentInfo`) lives in `claia.framework.agents.base` because it references `BaseAgent`.
 

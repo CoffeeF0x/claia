@@ -118,9 +118,9 @@ API_OPTIONAL_SAMPLING_PARAMS: List[ParamSpec] = [
 ]
 
 API_MAX_TOKENS_PARAM = ParamSpec(
-  name="max_tokens", type=int, scope=ParamScope.RUNTIME, default=4096,
+  name="max_tokens", type=int, scope=ParamScope.RUNTIME, default=None,
   category=ParamCategory.GENERATION,
-  description="Maximum number of tokens to generate, including reasoning tokens.",
+  description="Maximum number of tokens to generate, including reasoning. Omitted unless set.",
 )
 
 EFFORT_PARAM = ParamSpec(

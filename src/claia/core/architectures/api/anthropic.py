@@ -48,6 +48,14 @@ def _supports_effort(model_name: str) -> bool:
   return _uses_adaptive_thinking(model_name) or "opus-4-5" in name
 
 
+def _max_output_tokens(model_name: str) -> int:
+  """Anthropic requires max_tokens; fill with the model's output ceiling."""
+  name = model_name.lower()
+  if "haiku" in name or "4-5" in name:
+    return 64000
+  return 128000
+
+
 ########################################################################
 #                            INITIALIZATION                            #
 ########################################################################
@@ -103,10 +111,11 @@ class AnthropicArchitecture(APIArchitecture):
     tools = args.get("tools")
     system_message, messages = self._convert_sequence(inputs, native=bool(tools))
 
+    max_tokens = args.get("max_tokens")
     request_data: Dict[str, Any] = {
       "model": self.model_name,
       "messages": messages,
-      "max_tokens": args.get("max_tokens", 4096),
+      "max_tokens": max_tokens if max_tokens is not None else _max_output_tokens(self.model_name),
     }
     if tools:
       request_data["tools"] = anthropic_tools(tools)

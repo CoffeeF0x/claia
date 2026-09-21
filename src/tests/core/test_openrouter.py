@@ -136,6 +136,18 @@ def test_openrouter_model_raises_on_api_errors():
     list(model.generate(_request(_sequence(_conversation()), stream=False)))
 
 
+def test_openrouter_omits_max_tokens_unless_set():
+  response = FakeResponse({
+    "choices": [{"message": {"content": "ok"}}],
+  })
+  model = RecordingOpenRouterArchitecture("openai/gpt-4o-mini", response=response)
+
+  list(model.generate(_request(_sequence(_conversation()), stream=False)))
+
+  _, data, _ = model.calls[0]
+  assert "max_tokens" not in data
+
+
 def _echo_ref():
   from claia.core.plugins.base import ArgumentDefinition, ToolReference
   return ToolReference(
