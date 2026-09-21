@@ -54,9 +54,9 @@ def test_run_with_prefetched_solution_skips_second_solve(registry_with_fake_mana
   calls = {"n": 0}
 
   class _CountingSolver(Solver):
-    def solve(self, model_name, deployment_preference=DeploymentPreference.ANY):
+    def solve(self, model_name, deployment_preference=DeploymentPreference.ANY, **kwargs):
       calls["n"] += 1
-      return original.solve(model_name, deployment_preference)
+      return original.solve(model_name, deployment_preference, **kwargs)
 
   reg.solver = _CountingSolver(reg.manager)
   solution = reg.solver.solve("dummy")

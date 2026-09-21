@@ -20,7 +20,10 @@ from ...data.request import AgentRequest
 from ...decorators import architecture
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import (
+  API_MAX_TOKENS_PARAM,
+  API_OPTIONAL_SAMPLING_PARAMS,
   COMMON_TEXT_RUNTIME_PARAMS,
+  EFFORT_PARAM,
   ParamSpec,
 )
 from ...results import DeploymentError
@@ -31,6 +34,16 @@ from ..base import APIArchitecture
 #                            INITIALIZATION                            #
 ########################################################################
 logger = logging.getLogger(__name__)
+
+
+def _accepts_sampling(model_name: str) -> bool:
+  """True when the Responses API still accepts temperature/top_p."""
+  return model_name.lower().startswith("gpt-4o")
+
+
+def _is_reasoning_model(model_name: str) -> bool:
+  name = model_name.lower()
+  return name.startswith(("gpt-5", "gpt-6", "o1", "o3", "o4"))
 
 
 ########################################################################
@@ -49,6 +62,9 @@ logger = logging.getLogger(__name__)
   category=ParamCategory.API,
   description="OpenAI API Token",
 ))
+@architecture.param(API_MAX_TOKENS_PARAM)
+@architecture.param(*API_OPTIONAL_SAMPLING_PARAMS)
+@architecture.param(EFFORT_PARAM)
 @architecture.param(TOOLS_PARAM)
 @architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)
 class OpenAIArchitecture(APIArchitecture):
@@ -71,12 +87,10 @@ class OpenAIArchitecture(APIArchitecture):
     tools = args.get("tools")
     instructions, input_messages = self._convert_sequence(inputs, native=bool(tools))
 
-    _skip = {"stream", "max_tokens", "n", "stop", "top_k", "tools"}
     request_data: Dict[str, Any] = {
       "model": self.model_name,
       "input": input_messages,
       "store": False,
-      **{k: v for k, v in args.items() if v is not None and k not in _skip},
     }
     if tools:
       request_data["tools"] = openai_responses_tools(tools)
@@ -87,6 +101,20 @@ class OpenAIArchitecture(APIArchitecture):
     max_tokens = args.get("max_tokens")
     if max_tokens is not None:
       request_data["max_output_tokens"] = max_tokens
+
+    if _accepts_sampling(self.model_name):
+      temperature = args.get("temperature")
+      top_p = args.get("top_p")
+      if temperature is not None:
+        request_data["temperature"] = temperature
+      if top_p is not None:
+        request_data["top_p"] = top_p
+
+    effort = args.get("effort")
+    if effort and _is_reasoning_model(self.model_name):
+      # GPT-6 Astra rejects reasoning.effort=none.
+      if not (effort == "none" and self.model_name.lower().startswith("gpt-6")):
+        request_data["reasoning"] = {"effort": effort}
 
     if args.get("stream", False):
       return (yield from self._generate_streaming(request_data, tools=tools))

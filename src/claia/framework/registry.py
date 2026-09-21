@@ -419,7 +419,9 @@ class Registry:
     deployment_preference = combined_kwargs.pop("deployment_preference", None)
 
     if solution is None:
-      solution = self.solver.solve(model_name, deployment_preference)
+      solution = self.solver.solve(
+        model_name, deployment_preference, init_kwargs=combined_kwargs,
+      )
     plan = solution.plan
     definition = solution.definition
     architecture_class = solution.architecture_class

@@ -19,5 +19,10 @@ These classes are the architecture plugins: they inherit
 `deployment = "api"` and provides the shared `requests.Session` and
 key/header handling, and declare their `ArchitectureInfo` via
 `@architecture` / `@architecture.param` (credentials, endpoints, and
-generation knobs). The `claia.architectures` entry points target
-these classes directly.
+generation knobs). Failed HTTP responses raise `DeploymentError`.
+The `claia.architectures` entry points target these classes directly.
+
+OpenAI uses the Responses API (`reasoning.effort`, no sampling on
+GPT-5+). Anthropic uses Messages with `thinking: {type: adaptive}`
+and `output_config.effort` on current models. OpenRouter is chat
+completions with an optional `reasoning` object.

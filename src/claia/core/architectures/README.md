@@ -25,7 +25,11 @@ kwargs feed the constructor at deploy time.
 `claia.core.plugins.base` exports a shared `COMMON_TEXT_RUNTIME_PARAMS`
 list that most text architectures spread into their params; per-
 architecture overrides (e.g. Gemma3's higher `max_tokens` default) are
-expressed by declaring the override spec on a subclass. Modifier
+expressed by declaring the override spec on a subclass. Hosted API
+architectures prepend `API_OPTIONAL_SAMPLING_PARAMS` and `EFFORT_PARAM`
+so temperature is omitted unless set — GPT-5+/Claude adaptive-thinking
+models reject sampling — and `effort` maps onto each provider's
+reasoning field. Modifier
 decorators copy the inherited `info` and prepend the overrides
 (first-match-wins by name).
 

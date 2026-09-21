@@ -2,9 +2,10 @@
 OpenAI model definitions.
 
 Alias convention (Docker-style rolling tags):
-  Model keys use the vendor id: gpt-5.6-sol
+  Model keys use the vendor id: gpt-6-astra
   Aliases omit version/class segments for rolling resolution:
     gpt          →  latest flagship
+    gpt-6        →  latest in the 6 family
     gpt-5.6      →  latest in the 5.6 family
 
 Only the newest model in a class carries the shorter rolling aliases.
@@ -32,11 +33,29 @@ class OpenAIDefinitions(BaseDefinitionProvider):
     """Get OpenAI model definitions."""
     return {
       # ----------------------------------------------------------------
-      # GPT-5.6 Series — current frontier
+      # GPT-6 — current frontier
+      # ----------------------------------------------------------------
+      "gpt-6-astra": ModelDefinition(
+        title="GPT-6 Astra",
+        aliases=["gpt", "gpt-6", "astra"],
+        company="OpenAI",
+        architectures=["openai", "openrouter"],
+        description="Flagship model for demanding end-to-end reasoning, coding, and professional work",
+        context_length=1050000,
+        capabilities=["chat", "code", "reasoning", "vision", "web_search", "computer_use", "file_search"],
+        license="Commercial",
+        url="https://developers.openai.com/api/docs/models/gpt-6-astra",
+        identifiers={"openai": "gpt-6-astra", "openrouter": "openai/gpt-6-astra"},
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk, ToolChunk],
+      ),
+
+      # ----------------------------------------------------------------
+      # GPT-5.6 Series
       # ----------------------------------------------------------------
       "gpt-5.6-sol": ModelDefinition(
         title="GPT-5.6 Sol",
-        aliases=["gpt", "gpt-5.6"],
+        aliases=["gpt-5.6", "gpt-sol"],
         company="OpenAI",
         architectures=["openai", "openrouter"],
         description="Frontier model for complex reasoning, coding, and professional work",

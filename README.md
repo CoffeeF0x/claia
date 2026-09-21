@@ -217,6 +217,8 @@ Build the module against its contract, and make it work standalone before wiring
 
 Hands-on human validation. The sanity module/folder under claia is a space for simple validation, and is disposable by design. The code is minimal and readable, and edge cases are explicitly not its concern. It answers "does this behave the way I expect when I use it?" — a simple validation process with an easily modifiable design quickly adapt for your own validation.
 
+Hosted API catalogs are pinged with `PYTHONPATH=src python -m sanity.api_models` (optional `--only openai` or a model name). Access-tier and rate-limit misses print as skip, not fail.
+
 The sanity folder is not a comprehensive test suite and must never grow into one.
 
 #### Comprehensive testing

@@ -86,14 +86,16 @@ def test_anthropic_blocking_text_omits_tools():
   chunks = list(model.generate(_request(
     _sequence(_conversation(), system="Be brief"),
     stream=False,
-    temperature=0,
+    effort="low",
   )))
 
   endpoint, data, _ = model.calls[0]
   assert [c.data for c in chunks] == ["Hi there"]
   assert endpoint == "messages"
   assert data["system"] == "Be brief"
-  assert data["temperature"] == 0
+  assert data["thinking"] == {"type": "adaptive"}
+  assert data["output_config"] == {"effort": "low"}
+  assert "temperature" not in data
   assert "tools" not in data
   assert model.session.headers["x-api-key"] == "secret"
 
@@ -193,3 +195,25 @@ def test_anthropic_raises_on_api_errors():
 
   with pytest.raises(DeploymentError, match=r"Anthropic error \(invalid_request_error\): Unknown model"):
     list(model.generate(_request(_sequence(_conversation()), stream=False)))
+
+
+def test_anthropic_haiku_sends_temperature_without_thinking():
+  response = FakeResponse({
+    "content": [{"type": "text", "text": "Hi there"}],
+  })
+  model = RecordingAnthropicArchitecture(
+    "claude-haiku-4-5-20251001",
+    response=response,
+  )
+
+  list(model.generate(_request(
+    _sequence(_conversation()),
+    stream=False,
+    temperature=0,
+    effort="low",
+  )))
+
+  _, data, _ = model.calls[0]
+  assert data["temperature"] == 0
+  assert "thinking" not in data
+  assert "output_config" not in data

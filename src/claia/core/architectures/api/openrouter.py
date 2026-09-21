@@ -18,7 +18,10 @@ from ...data.request import AgentRequest
 from ...decorators import architecture
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import (
+  API_MAX_TOKENS_PARAM,
+  API_OPTIONAL_SAMPLING_PARAMS,
   COMMON_TEXT_RUNTIME_PARAMS,
+  EFFORT_PARAM,
   ParamSpec,
 )
 from ...results import DeploymentError
@@ -80,6 +83,9 @@ logger = logging.getLogger(__name__)
   category=ParamCategory.APPLICATION,
   description="X-Title header sent to OpenRouter for app attribution.",
 ))
+@architecture.param(API_MAX_TOKENS_PARAM)
+@architecture.param(*API_OPTIONAL_SAMPLING_PARAMS)
+@architecture.param(EFFORT_PARAM)
 @architecture.param(TOOLS_PARAM)
 @architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)
 class OpenRouterArchitecture(APIArchitecture):
@@ -131,6 +137,10 @@ class OpenRouterArchitecture(APIArchitecture):
         request_data[param] = value
     if tools:
       request_data["tools"] = openai_chat_tools(tools)
+
+    effort = args.get("effort")
+    if effort:
+      request_data["reasoning"] = {"effort": effort}
 
     if args.get("stream", False):
       return (yield from self._generate_streaming(request_data, tools=tools))

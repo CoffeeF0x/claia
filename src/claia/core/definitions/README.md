@@ -28,3 +28,9 @@ and unions lists and overlays dicts.
 
 - You’re adding a new model ID or alias.
 - You’re changing which deployments/architectures are allowed for an existing model.
+
+After catalog or architecture changes, ping the hosted rows:
+
+```
+PYTHONPATH=src python -m sanity.api_models
+```

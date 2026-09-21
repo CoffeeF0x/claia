@@ -15,7 +15,10 @@ from ...data.request import AgentRequest
 from ...decorators import architecture
 from ...enums.plugins import ParamScope, ParamCategory
 from ...plugins.base import (
+  API_MAX_TOKENS_PARAM,
+  API_OPTIONAL_SAMPLING_PARAMS,
   COMMON_TEXT_RUNTIME_PARAMS,
+  EFFORT_PARAM,
   ParamSpec,
 )
 from ...results import DeploymentError
@@ -26,6 +29,23 @@ from ..base import APIArchitecture
 #                              CONSTANTS                               #
 ########################################################################
 REFUSAL_NOTE = "\n\n[Note: Claude declined to complete this response for safety reasons]"
+
+
+def _uses_adaptive_thinking(model_name: str) -> bool:
+  """Claude 4.6+ (and Fable) use adaptive thinking, not a token budget."""
+  name = model_name.lower()
+  if "haiku" in name:
+    return False
+  if any(tag in name for tag in ("opus-4-5", "opus-4-1", "sonnet-4-5")):
+    return False
+  return name.startswith(("claude-fable", "claude-opus", "claude-sonnet"))
+
+
+def _supports_effort(model_name: str) -> bool:
+  name = model_name.lower()
+  if "haiku" in name or "opus-4-1" in name or "sonnet-4-5" in name:
+    return False
+  return _uses_adaptive_thinking(model_name) or "opus-4-5" in name
 
 
 ########################################################################
@@ -50,6 +70,9 @@ logger = logging.getLogger(__name__)
   category=ParamCategory.API,
   description="Anthropic API Token",
 ))
+@architecture.param(API_MAX_TOKENS_PARAM)
+@architecture.param(*API_OPTIONAL_SAMPLING_PARAMS)
+@architecture.param(EFFORT_PARAM)
 @architecture.param(TOOLS_PARAM)
 @architecture.param(*COMMON_TEXT_RUNTIME_PARAMS)
 class AnthropicArchitecture(APIArchitecture):
@@ -83,7 +106,7 @@ class AnthropicArchitecture(APIArchitecture):
     request_data: Dict[str, Any] = {
       "model": self.model_name,
       "messages": messages,
-      "max_tokens": args.get("max_tokens", 1000),
+      "max_tokens": args.get("max_tokens", 4096),
     }
     if tools:
       request_data["tools"] = anthropic_tools(tools)
@@ -91,19 +114,28 @@ class AnthropicArchitecture(APIArchitecture):
     if system_message:
       request_data["system"] = system_message
 
-    # Anthropic rejects requests that include both temperature and top_p.
-    # Prefer temperature; only send top_p when temperature is absent.
-    temperature = args.get("temperature")
-    top_p = args.get("top_p")
-    top_k = args.get("top_k")
+    adaptive = _uses_adaptive_thinking(self.model_name)
+    if adaptive:
+      request_data["thinking"] = {"type": "adaptive"}
+    else:
+      # Anthropic rejects requests that include both temperature and top_p.
+      # Prefer temperature; only send top_p when temperature is absent.
+      # Adaptive thinking also rejects custom sampling, so skip it there.
+      temperature = args.get("temperature")
+      top_p = args.get("top_p")
+      top_k = args.get("top_k")
 
-    if temperature is not None:
-      request_data["temperature"] = temperature
-    elif top_p is not None:
-      request_data["top_p"] = top_p
+      if temperature is not None:
+        request_data["temperature"] = temperature
+      elif top_p is not None:
+        request_data["top_p"] = top_p
 
-    if top_k is not None:
-      request_data["top_k"] = top_k
+      if top_k is not None:
+        request_data["top_k"] = top_k
+
+    effort = args.get("effort")
+    if effort and effort != "none" and _supports_effort(self.model_name):
+      request_data["output_config"] = {"effort": effort}
 
     if args.get("stream", False):
       return (yield from self._generate_streaming(request_data, tools=tools))

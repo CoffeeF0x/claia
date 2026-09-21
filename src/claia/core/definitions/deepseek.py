@@ -20,6 +20,21 @@ class DeepSeekDefinitions(BaseDefinitionProvider):
   def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get DeepSeek model definitions."""
     return {
+      "deepseek-v4.1-flash": ModelDefinition(
+        title="DeepSeek V4.1 Flash",
+        aliases=["deepseek-flash", "deepseek-v4.1"],
+        company="DeepSeek",
+        architectures=["openrouter"],
+        description="Causal encoder-decoder MoE for fast reasoning, coding, and native image understanding",
+        context_length=1048576,
+        capabilities=["chat", "code", "reasoning", "vision", "tool_use"],
+        license="Open Source",
+        url="https://openrouter.ai/models/deepseek/deepseek-v4.1-flash",
+        identifiers={"openrouter": "deepseek/deepseek-v4.1-flash"},
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk, ToolChunk],
+      ),
+
       "deepseek-v4-pro": ModelDefinition(
         title="DeepSeek V4 Pro",
         aliases=["deepseek-pro", "deepseek-v4"],
@@ -37,7 +52,7 @@ class DeepSeekDefinitions(BaseDefinitionProvider):
 
       "deepseek-v4-flash": ModelDefinition(
         title="DeepSeek V4 Flash",
-        aliases=["deepseek-flash"],
+        aliases=None,
         company="DeepSeek",
         architectures=["openrouter"],
         description="Efficiency-optimized DeepSeek V4 MoE model for fast, high-throughput reasoning and coding",

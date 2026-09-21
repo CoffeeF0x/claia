@@ -14,6 +14,7 @@ from ..core.data.chunks import ToolChunk
 from ..core.enums.deployment import DeploymentPreference
 from ..core.plugins.base import ServingPlan
 from ..core.results import ResolveError
+from .manager import Manager
 
 
 logger = logging.getLogger(__name__)
@@ -90,9 +91,11 @@ class Solver:
     self,
     model_name: str,
     deployment_preference=DeploymentPreference.ANY,
+    init_kwargs: Optional[Dict[str, Any]] = None,
   ) -> SolverResult:
     """Solve ``model_name`` into a serving pairing."""
     deployment_preference = self.coerce_preference(deployment_preference)
+    init_kwargs = init_kwargs or {}
 
     definitions = self.manager.get_supported_models()
     resolved_name = self.resolve_model_name(model_name, definitions)
@@ -109,6 +112,16 @@ class Solver:
       architecture_class = self.manager.get_architecture_class(architecture_name)
       if architecture_class is None:
         rejected.append(f"{architecture_name}: not installed")
+        continue
+
+      missing = Manager.validate_required_init_kwargs(
+        init_kwargs,
+        getattr(getattr(architecture_class, "info", None), "params", None),
+      )
+      if missing:
+        rejected.append(
+          f"{architecture_name}: missing {', '.join(missing)}"
+        )
         continue
 
       deployment_name = getattr(architecture_class, "deployment", "")

@@ -20,12 +20,27 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
   def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get MiniMax model definitions."""
     return {
-      "minimax-m2.7": ModelDefinition(
-        title="MiniMax M2.7",
+      "minimax-m3": ModelDefinition(
+        title="MiniMax M3",
         aliases=["minimax"],
         company="MiniMax",
         architectures=["openrouter"],
-        description="Next-generation productivity and autonomous-agent model for multi-agent collaboration",
+        description="Multimodal foundation model for long-horizon agentic work and coding",
+        context_length=1048576,
+        capabilities=["chat", "code", "reasoning", "vision", "tool_use", "agentic"],
+        license="Open Weights",
+        url="https://openrouter.ai/models/minimax/minimax-m3",
+        identifiers={"openrouter": "minimax/minimax-m3"},
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk, ToolChunk],
+      ),
+
+      "minimax-m2.7": ModelDefinition(
+        title="MiniMax M2.7",
+        aliases=["minimax-m2-7"],
+        company="MiniMax",
+        architectures=["openrouter"],
+        description="Previous-generation productivity and autonomous-agent model for multi-agent collaboration",
         context_length=204800,
         capabilities=["chat", "code", "reasoning", "tool_use", "agentic"],
         license="Open Weights",
@@ -61,21 +76,6 @@ class MiniMaxDefinitions(BaseDefinitionProvider):
         license="Open Weights",
         url="https://openrouter.ai/models/minimax/minimax-m2",
         identifiers={"openrouter": "minimax/minimax-m2"},
-        inputs=[ArtifactType.TEXT, MessageSequence],
-        outputs=[TextChunk, ToolChunk],
-      ),
-
-      "minimax-m1": ModelDefinition(
-        title="MiniMax M1",
-        aliases=None,
-        company="MiniMax",
-        architectures=["openrouter"],
-        description="Large-scale MoE reasoning model with a 1M-token context window",
-        context_length=1000000,
-        capabilities=["chat", "code", "reasoning", "tool_use"],
-        license="Open Weights",
-        url="https://openrouter.ai/models/minimax/minimax-m1",
-        identifiers={"openrouter": "minimax/minimax-m1"},
         inputs=[ArtifactType.TEXT, MessageSequence],
         outputs=[TextChunk, ToolChunk],
       ),

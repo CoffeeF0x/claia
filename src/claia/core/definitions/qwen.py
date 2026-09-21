@@ -20,9 +20,39 @@ class QwenDefinitions(BaseDefinitionProvider):
   def get_definitions(self) -> Dict[str, ModelDefinition]:
     """Get Qwen model definitions."""
     return {
+      "qwen3.8-max": ModelDefinition(
+        title="Qwen3.8 Max",
+        aliases=["qwen", "qwen3.8", "qwen-max"],
+        company="Alibaba Cloud",
+        architectures=["openrouter"],
+        description="Flagship Qwen3.8 MoE for agentic coding, reasoning, and multimodal work",
+        context_length=1000000,
+        capabilities=["chat", "code", "reasoning", "vision", "tool_use", "agentic", "multilingual"],
+        license="Commercial",
+        url="https://openrouter.ai/models/qwen/qwen3.8-max-0902",
+        identifiers={"openrouter": "qwen/qwen3.8-max-0902"},
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk, ToolChunk],
+      ),
+
+      "qwen3.8-flash": ModelDefinition(
+        title="Qwen3.8 Flash",
+        aliases=["qwen-flash", "qwen3.8-fast"],
+        company="Alibaba Cloud",
+        architectures=["openrouter"],
+        description="Fast Qwen3.8 multimodal reasoning model for coding and agent workflows",
+        context_length=1000000,
+        capabilities=["chat", "code", "reasoning", "vision", "tool_use", "agentic", "multilingual"],
+        license="Commercial",
+        url="https://openrouter.ai/models/qwen/qwen3.8-flash",
+        identifiers={"openrouter": "qwen/qwen3.8-flash"},
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
+        outputs=[TextChunk, ToolChunk],
+      ),
+
       "qwen3.6-plus": ModelDefinition(
         title="Qwen3.6 Plus",
-        aliases=["qwen3.6", "qwen-plus", "qwen"],
+        aliases=["qwen3.6", "qwen-plus"],
         company="Alibaba Cloud",
         architectures=["openrouter"],
         description="Hybrid architecture model with 1M-token context for agentic coding, front-end work, and reasoning",
@@ -31,21 +61,6 @@ class QwenDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://openrouter.ai/models/qwen/qwen3.6-plus",
         identifiers={"openrouter": "qwen/qwen3.6-plus"},
-        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
-        outputs=[TextChunk, ToolChunk],
-      ),
-
-      "qwen3.6-plus-preview": ModelDefinition(
-        title="Qwen3.6 Plus Preview",
-        aliases=["qwen3.6-preview"],
-        company="Alibaba Cloud",
-        architectures=["openrouter"],
-        description="Preview release of Qwen3.6 Plus with 1M-token context for coding and reasoning workflows",
-        context_length=1000000,
-        capabilities=["chat", "code", "reasoning", "vision", "tool_use", "agentic", "multilingual"],
-        license="Commercial",
-        url="https://openrouter.ai/models/qwen/qwen3.6-plus-preview",
-        identifiers={"openrouter": "qwen/qwen3.6-plus-preview"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequence],
         outputs=[TextChunk, ToolChunk],
       ),
@@ -127,7 +142,7 @@ class QwenDefinitions(BaseDefinitionProvider):
 
       "qwen3-max": ModelDefinition(
         title="Qwen3 Max",
-        aliases=["qwen-max"],
+        aliases=None,
         company="Alibaba Cloud",
         architectures=["openrouter"],
         description="Large Qwen model for reasoning, multilingual work, coding, and tool calling",

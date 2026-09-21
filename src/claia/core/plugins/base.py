@@ -105,6 +105,34 @@ COMMON_TEXT_RUNTIME_PARAMS: List[ParamSpec] = [
             description="Whether the model should stream partial output."),
 ]
 
+# Hosted APIs omit sampling unless the caller sets it. GPT-5+/Claude
+# adaptive-thinking models reject temperature and top_p. Declare these
+# before spreading COMMON_TEXT_RUNTIME_PARAMS (first-match-wins).
+API_OPTIONAL_SAMPLING_PARAMS: List[ParamSpec] = [
+  ParamSpec(name="temperature", type=float, scope=ParamScope.RUNTIME, default=None,
+            category=ParamCategory.GENERATION,
+            description="Sampling temperature. Omitted unless set; many reasoning models reject it."),
+  ParamSpec(name="top_p", type=float, scope=ParamScope.RUNTIME, default=None,
+            category=ParamCategory.GENERATION,
+            description="Nucleus sampling probability mass. Omitted unless set."),
+]
+
+API_MAX_TOKENS_PARAM = ParamSpec(
+  name="max_tokens", type=int, scope=ParamScope.RUNTIME, default=4096,
+  category=ParamCategory.GENERATION,
+  description="Maximum number of tokens to generate, including reasoning tokens.",
+)
+
+EFFORT_PARAM = ParamSpec(
+  name="effort",
+  type=str,
+  scope=ParamScope.RUNTIME,
+  default=None,
+  choices=["none", "low", "medium", "high", "xhigh", "max"],
+  category=ParamCategory.GENERATION,
+  description="Reasoning/thinking effort. Provider default if unset.",
+)
+
 
 ########################################################################
 #                       BASE EXTENSION METADATA                        #

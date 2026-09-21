@@ -12,6 +12,7 @@ from typing import Optional, Dict
 
 # Internal dependencies
 from .base import BaseArchitecture
+from ...results import DeploymentError
 
 
 ########################################################################
@@ -59,12 +60,12 @@ class APIArchitecture(BaseArchitecture):
   def request(self, method: str, endpoint: str, data: Optional[Dict] = None, params: Optional[Dict] = None, *args, **kwargs) -> requests.Response:
     """Make an API request with the configured session."""
     url = f"{self.base_url}/{endpoint}"
+    kwargs.setdefault("timeout", 120)
     response = self.session.request(method, url, json=data, params=params, *args, **kwargs)
     if not response.ok:
       detail = _response_error_detail(response)
-      raise requests.HTTPError(
+      raise DeploymentError(
         f"{response.status_code} {response.reason} for url: {url}: {detail}",
-        response=response,
       )
     return response
 

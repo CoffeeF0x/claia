@@ -90,6 +90,7 @@ def test_openai_blocking_text_omits_tools():
   assert data["model"] == "gpt-4o-mini"
   assert data["instructions"] == "Be brief"
   assert "tools" not in data
+  assert "temperature" not in data
   assert model.session.headers["Authorization"] == "Bearer secret"
 
 
@@ -196,3 +197,49 @@ def test_openai_raises_on_api_errors():
 
   with pytest.raises(DeploymentError, match=r"OpenAI error \(invalid_model\): Unknown model"):
     list(model.generate(_request(_sequence(_conversation()), stream=False)))
+
+
+def test_openai_reasoning_model_maps_effort_and_omits_sampling():
+  response = FakeResponse({
+    "output": [{
+      "type": "message",
+      "content": [{"type": "output_text", "text": "ok"}],
+    }],
+  })
+  model = RecordingOpenAIArchitecture("gpt-6-astra", response=response)
+
+  list(model.generate(_request(
+    _sequence(_conversation()),
+    stream=False,
+    max_tokens=256,
+    temperature=0.7,
+    top_p=1.0,
+    effort="low",
+  )))
+
+  _, data, _ = model.calls[0]
+  assert data["max_output_tokens"] == 256
+  assert data["reasoning"] == {"effort": "low"}
+  assert "temperature" not in data
+  assert "top_p" not in data
+  assert "effort" not in data
+
+
+def test_openai_gpt4o_still_sends_sampling():
+  response = FakeResponse({
+    "output": [{
+      "type": "message",
+      "content": [{"type": "output_text", "text": "ok"}],
+    }],
+  })
+  model = RecordingOpenAIArchitecture("gpt-4o-mini", response=response)
+
+  list(model.generate(_request(
+    _sequence(_conversation()),
+    stream=False,
+    temperature=0.2,
+  )))
+
+  _, data, _ = model.calls[0]
+  assert data["temperature"] == 0.2
+  assert "reasoning" not in data

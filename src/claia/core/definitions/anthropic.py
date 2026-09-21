@@ -39,14 +39,30 @@ class AnthropicDefinitions(BaseDefinitionProvider):
     """Get Anthropic model definitions."""
     return {
       # ----------------------------------------------------------------
-      # Claude Fable
+      # Claude Fable  (newest → carries all rolling aliases)
       # ----------------------------------------------------------------
-      "claude-fable-5": ModelDefinition(
-        title="Claude Fable 5",
-        aliases=["fable-5", "claude-fable", "fable"],
+      "claude-fable-5-1": ModelDefinition(
+        title="Claude Fable 5.1",
+        aliases=["fable-5.1", "claude-fable-5.1",
+                 "claude-fable", "fable"],
         company="Anthropic",
         architectures=["anthropic", "openrouter"],
-        description="Most capable widely released model for long-running agents",
+        description="Most capable widely released model for long-horizon agents and demanding reasoning",
+        context_length=1000000,
+        capabilities=["chat", "reasoning", "analysis", "vision", "adaptive_thinking"],
+        license="Commercial",
+        url="https://platform.claude.com/docs/en/about-claude/models/overview",
+        identifiers={"anthropic": "claude-fable-5-1", "openrouter": "anthropic/claude-fable-5.1"},
+        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
+        outputs=[TextChunk, ToolChunk],
+      ),
+
+      "claude-fable-5": ModelDefinition(
+        title="Claude Fable 5",
+        aliases=["fable-5", "claude-fable-5"],
+        company="Anthropic",
+        architectures=["anthropic", "openrouter"],
+        description="Previous Fable generation for long-running agents",
         context_length=1000000,
         capabilities=["chat", "reasoning", "analysis", "vision", "adaptive_thinking"],
         license="Commercial",
@@ -132,21 +148,6 @@ class AnthropicDefinitions(BaseDefinitionProvider):
         license="Commercial",
         url="https://platform.claude.com/docs/en/about-claude/models/overview",
         identifiers={"anthropic": "claude-opus-4-5-20251101", "openrouter": "anthropic/claude-opus-4.5"},
-        inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
-        outputs=[TextChunk, ToolChunk],
-      ),
-
-      "claude-opus-4-1": ModelDefinition(
-        title="Claude Opus 4.1",
-        aliases=["opus-4.1", "claude-opus-4.1"],
-        company="Anthropic",
-        architectures=["anthropic", "openrouter"],
-        description="Incremental update to Claude Opus 4 with enhanced capabilities",
-        context_length=200000,
-        capabilities=["chat", "reasoning", "analysis", "vision", "extended_thinking"],
-        license="Commercial",
-        url="https://platform.claude.com/docs/en/about-claude/models/overview",
-        identifiers={"anthropic": "claude-opus-4-1-20250805", "openrouter": "anthropic/claude-opus-4.1"},
         inputs=[ArtifactType.TEXT, ArtifactType.IMAGE, MessageSequenceOrdered],
         outputs=[TextChunk, ToolChunk],
       ),

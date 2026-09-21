@@ -84,9 +84,7 @@ def test_openrouter_model_builds_non_streaming_request():
     _sequence(_conversation(), system="Be brief"),
     stream=False,
     max_tokens=25,
-    temperature=0,
-    top_p=1,
-    top_k=None,
+    effort="low",
   )))
 
   endpoint, data, request_kwargs = model.calls[0]
@@ -94,7 +92,9 @@ def test_openrouter_model_builds_non_streaming_request():
   assert endpoint == "chat/completions"
   assert request_kwargs == {}
   assert data["model"] == "openai/gpt-4o-mini"
-  assert data["temperature"] == 0
+  assert data["max_tokens"] == 25
+  assert data["reasoning"] == {"effort": "low"}
+  assert "temperature" not in data
   assert "top_k" not in data
   assert data["messages"] == [
     {"role": "system", "content": "Be brief"},
@@ -259,23 +259,28 @@ def test_openrouter_architecture_exposes_model_and_params():
 
 
 def test_native_provider_definitions_include_openrouter_endpoint():
-  gpt = OpenAIDefinitions().get_definitions()["gpt-5.6-sol"]
+  gpt = OpenAIDefinitions().get_definitions()["gpt-6-astra"]
   openai = OpenAIDefinitions().get_definitions()["gpt-4o-mini"]
   anthropic = AnthropicDefinitions().get_definitions()["claude-sonnet-5"]
+  fable = AnthropicDefinitions().get_definitions()["claude-fable-5-1"]
 
-  assert gpt.aliases == ["gpt", "gpt-5.6"]
-  assert gpt.identifiers == {"openai": "gpt-5.6-sol", "openrouter": "openai/gpt-5.6-sol"}
+  assert gpt.aliases == ["gpt", "gpt-6", "astra"]
+  assert gpt.identifiers == {"openai": "gpt-6-astra", "openrouter": "openai/gpt-6-astra"}
   assert openai.architectures == ["openai", "openrouter"]
   assert openai.identifiers["openrouter"] == "openai/gpt-4o-mini"
   assert anthropic.architectures == ["anthropic", "openrouter"]
   assert anthropic.identifiers["openrouter"] == "anthropic/claude-sonnet-5"
+  assert fable.identifiers == {
+    "anthropic": "claude-fable-5-1",
+    "openrouter": "anthropic/claude-fable-5.1",
+  }
 
 
 def test_openrouter_company_definitions_are_large_open_models():
   kimi = MoonshotDefinitions().get_definitions()["kimi-k3"]
-  deepseek = DeepSeekDefinitions().get_definitions()["deepseek-v4-pro"]
+  deepseek = DeepSeekDefinitions().get_definitions()["deepseek-v4.1-flash"]
   glm = ZaiDefinitions().get_definitions()["glm-5.3"]
-  qwen36 = QwenDefinitions().get_definitions()["qwen3.6-plus"]
+  qwen38 = QwenDefinitions().get_definitions()["qwen3.8-max"]
   qwen35 = QwenDefinitions().get_definitions()["qwen3.5-397b-a17b"]
   llama = MetaDefinitions().get_definitions()["llama-4-maverick"]
   llama_scout = MetaDefinitions().get_definitions()["llama-4-scout"]
@@ -283,10 +288,12 @@ def test_openrouter_company_definitions_are_large_open_models():
   assert "openrouter-gpt-4o-mini" not in MoonshotDefinitions().get_definitions()
   assert kimi.architectures == ["openrouter"]
   assert kimi.identifiers == {"openrouter": "moonshotai/kimi-k3"}
-  assert deepseek.identifiers == {"openrouter": "deepseek/deepseek-v4-pro"}
+  assert deepseek.identifiers == {"openrouter": "deepseek/deepseek-v4.1-flash"}
+  assert ArtifactType.IMAGE in deepseek.inputs
   assert glm.identifiers == {"openrouter": "z-ai/glm-5.3"}
-  assert qwen36.context_length == 1000000
-  assert ArtifactType.IMAGE in qwen36.inputs
+  assert qwen38.context_length == 1000000
+  assert ArtifactType.IMAGE in qwen38.inputs
+  assert qwen38.identifiers == {"openrouter": "qwen/qwen3.8-max-0902"}
   assert qwen35.identifiers == {"openrouter": "qwen/qwen3.5-397b-a17b"}
   assert llama.context_length == 1000000
   assert ArtifactType.IMAGE in kimi.inputs
