@@ -19,8 +19,8 @@ class UsageChunk(BaseChunk):
 
   def __init__(
     self,
-    prompt_tokens: Optional[int] = None,
-    completion_tokens: Optional[int] = None,
+    token_input: Optional[int] = None,
+    token_output: Optional[int] = None,
     total_tokens: Optional[int] = None,
     cached_tokens: Optional[int] = None,
     reasoning_tokens: Optional[int] = None,
@@ -36,8 +36,8 @@ class UsageChunk(BaseChunk):
       name=name,
       metadata=metadata,
       data={
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
+        "token_input": token_input,
+        "token_output": token_output,
         "total_tokens": total_tokens,
         "cached_tokens": cached_tokens,
         "reasoning_tokens": reasoning_tokens,
@@ -46,8 +46,8 @@ class UsageChunk(BaseChunk):
         "provider_model": provider_model,
       },
     )
-    self.prompt_tokens = prompt_tokens
-    self.completion_tokens = completion_tokens
+    self.token_input = token_input
+    self.token_output = token_output
     self.total_tokens = total_tokens
     self.cached_tokens = cached_tokens
     self.reasoning_tokens = reasoning_tokens

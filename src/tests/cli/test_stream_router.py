@@ -210,7 +210,7 @@ class TestTagsAndErrors:
 ########################################################################
 class TestAccountingAndNotices:
   def test_usage_and_metrics_collected_on_stream_end(self):
-    usage = UsageChunk(prompt_tokens=10, completion_tokens=20)
+    usage = UsageChunk(token_input=10, token_output=20)
     metrics = MetricsChunk(duration=1.5)
     events = run_stream([TextChunk(data="hi"), usage, metrics])
     assert text_of(events) == "hi"

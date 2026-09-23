@@ -112,7 +112,7 @@ class GenericTransformerArchitecture(LocalArchitecture):
       raise TypeError("GenericTransformerArchitecture expects a MessageSequence input")
     prompt = self._convert_sequence_to_prompt(inputs)
     tokenized = self._tokenize_prompt(prompt)
-    prompt_tokens = tokenized["input_ids"].shape[1]
+    token_input = tokenized["input_ids"].shape[1]
 
     if args.get("stream", False):
       token_gen = self._generate_streaming(tokenized, args)
@@ -124,23 +124,23 @@ class GenericTransformerArchitecture(LocalArchitecture):
           yield TextChunk(data=token) if isinstance(token, str) else token
       except StopIteration:
         pass
-      completion_tokens = self._count_tokens("".join(collected))
-      if prompt_tokens or completion_tokens:
+      token_output = self._count_tokens("".join(collected))
+      if token_input or token_output:
         yield UsageChunk(
-          prompt_tokens=prompt_tokens,
-          completion_tokens=completion_tokens,
-          total_tokens=prompt_tokens + completion_tokens,
+          token_input=token_input,
+          token_output=token_output,
+          total_tokens=token_input + token_output,
           provider="transformers_generic",
           provider_model=self.model_name,
         )
     else:
-      response, completion_tokens = self._generate_blocking(tokenized, args)
+      response, token_output = self._generate_blocking(tokenized, args)
       yield TextChunk(data=response)
-      if prompt_tokens or completion_tokens:
+      if token_input or token_output:
         yield UsageChunk(
-          prompt_tokens=prompt_tokens,
-          completion_tokens=completion_tokens,
-          total_tokens=prompt_tokens + completion_tokens,
+          token_input=token_input,
+          token_output=token_output,
+          total_tokens=token_input + token_output,
           provider="transformers_generic",
           provider_model=self.model_name,
         )
@@ -174,7 +174,7 @@ class GenericTransformerArchitecture(LocalArchitecture):
   def _generate_blocking(self, inputs: Dict[str, Any], kwargs: Dict[str, Any]) -> tuple:
     """Generate the complete response before yielding it.
 
-    Returns ``(text, completion_token_count)`` from the real generate output.
+    Returns ``(text, output_token_count)`` from the real generate output.
     """
     with torch.no_grad():
       outputs = self.model.generate(
@@ -185,12 +185,12 @@ class GenericTransformerArchitecture(LocalArchitecture):
     input_length = inputs["input_ids"].shape[1]
     generated_tokens = outputs[0][input_length:]
     response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
-    completion_tokens = (
+    token_output = (
       int(generated_tokens.shape[-1])
       if hasattr(generated_tokens, "shape")
       else len(generated_tokens)
     )
-    return self._postprocess_response(response), completion_tokens
+    return self._postprocess_response(response), token_output
 
   def _generate_streaming(self, inputs: Dict[str, Any], kwargs: Dict[str, Any]) -> Generator[str, None, str]:
     """Generate text in a background thread and yield decoded deltas."""

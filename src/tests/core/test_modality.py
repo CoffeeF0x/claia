@@ -51,7 +51,7 @@ def test_agent_response_error():
 
 
 def test_agent_response_usage_and_metrics():
-  usage = UsageChunk(prompt_tokens=3, completion_tokens=2, total_tokens=5, provider="openai")
+  usage = UsageChunk(token_input=3, token_output=2, total_tokens=5, provider="openai")
   metrics = MetricsChunk(duration=0.12, time_to_first_chunk=0.01, chunk_count=2)
   response = AgentResponse(chunks=[TextChunk(data="hi"), usage, metrics])
   assert response.usage is usage
@@ -74,8 +74,8 @@ def test_usage_chunk_maps_openai_and_anthropic_fields():
     provider_model="gpt-4o-mini",
     finish_reason="completed",
   )
-  assert openai.prompt_tokens == 10
-  assert openai.completion_tokens == 4
+  assert openai.token_input == 10
+  assert openai.token_output == 4
   assert openai.cached_tokens == 2
   assert openai.reasoning_tokens == 1
   assert openai.provider == "openai"
@@ -85,7 +85,7 @@ def test_usage_chunk_maps_openai_and_anthropic_fields():
     provider="anthropic",
     provider_model="claude-sonnet-5",
   )
-  assert anthropic.prompt_tokens == 8
+  assert anthropic.token_input == 8
   assert anthropic.total_tokens == 11
   assert anthropic.cached_tokens == 5
   assert usage_chunk(None, provider="x", provider_model="y") is None

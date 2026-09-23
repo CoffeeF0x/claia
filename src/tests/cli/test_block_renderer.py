@@ -72,7 +72,7 @@ class TestDefaultMode:
       TextDelta(text="hi\n"),
       StreamEnd(
         status=TaskStatus.COMPLETED,
-        usage=UsageChunk(prompt_tokens=1, completion_tokens=2),
+        usage=UsageChunk(token_input=1, token_output=2),
         metrics=MetricsChunk(duration=0.5),
       ),
     ])
@@ -99,7 +99,7 @@ class TestVerboseMode:
         TextDelta(text="think hard", channel=Channel.THINKING),
         StreamEnd(
           status=TaskStatus.COMPLETED,
-          usage=UsageChunk(prompt_tokens=10, completion_tokens=20),
+          usage=UsageChunk(token_input=10, token_output=20),
           metrics=MetricsChunk(duration=1.5),
         ),
       ],

@@ -150,8 +150,8 @@ def test_generic_transformer_streams_text_deltas(monkeypatch):
 
   assert [c.data for c in chunks if isinstance(c, TextChunk)] == ["hello ", "world"]
   usage = next(c for c in chunks if isinstance(c, UsageChunk))
-  assert usage.prompt_tokens == 3
-  assert usage.completion_tokens == 2
+  assert usage.token_input == 3
+  assert usage.token_output == 2
 
 
 def test_generic_transformer_omits_unset_top_k(monkeypatch):
@@ -165,6 +165,6 @@ def test_generic_transformer_omits_unset_top_k(monkeypatch):
 
   assert [c.data for c in chunks if isinstance(c, TextChunk)] == ["blocked response"]
   usage = next(c for c in chunks if isinstance(c, UsageChunk))
-  assert usage.prompt_tokens == 3
-  assert usage.completion_tokens == 2
+  assert usage.token_input == 3
+  assert usage.token_output == 2
   assert "top_k" not in model.model.calls[0]

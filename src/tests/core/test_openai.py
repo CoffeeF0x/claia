@@ -142,7 +142,7 @@ def test_openai_streams_text_and_function_call():
   assert tool.payload == {"message": "hi"}
   assert tool.call_id == "call_1"
   usage = next(c for c in chunks if isinstance(c, UsageChunk))
-  assert usage.completion_tokens == 4
+  assert usage.token_output == 4
   assert usage.provider == "openai"
 
 

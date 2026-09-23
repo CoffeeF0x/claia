@@ -47,19 +47,20 @@ def usage_chunk(
 
   Accepts OpenAI-style (``prompt_tokens`` / ``completion_tokens``) and
   Anthropic/Responses-style (``input_tokens`` / ``output_tokens``)
-  field names. Returns ``None`` when there is nothing real to report.
+  field names, and maps both onto ``token_input`` / ``token_output``.
+  Returns ``None`` when there is nothing real to report.
   """
   if not payload and not finish_reason:
     return None
 
   raw = payload if isinstance(payload, dict) else {}
-  prompt_tokens = _as_int(raw.get("prompt_tokens") if raw.get("prompt_tokens") is not None else raw.get("input_tokens"))
-  completion_tokens = _as_int(
+  token_input = _as_int(raw.get("prompt_tokens") if raw.get("prompt_tokens") is not None else raw.get("input_tokens"))
+  token_output = _as_int(
     raw.get("completion_tokens") if raw.get("completion_tokens") is not None else raw.get("output_tokens")
   )
   total_tokens = _as_int(raw.get("total_tokens"))
-  if total_tokens is None and prompt_tokens is not None and completion_tokens is not None:
-    total_tokens = prompt_tokens + completion_tokens
+  if total_tokens is None and token_input is not None and token_output is not None:
+    total_tokens = token_input + token_output
 
   cached_tokens = (
     _as_int(raw.get("cached_tokens"))
@@ -74,8 +75,8 @@ def usage_chunk(
   )
 
   if (
-    prompt_tokens is None
-    and completion_tokens is None
+    token_input is None
+    and token_output is None
     and total_tokens is None
     and cached_tokens is None
     and reasoning_tokens is None
@@ -84,8 +85,8 @@ def usage_chunk(
     return None
 
   return UsageChunk(
-    prompt_tokens=prompt_tokens,
-    completion_tokens=completion_tokens,
+    token_input=token_input,
+    token_output=token_output,
     total_tokens=total_tokens,
     cached_tokens=cached_tokens,
     reasoning_tokens=reasoning_tokens,

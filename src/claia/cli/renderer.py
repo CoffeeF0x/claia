@@ -53,10 +53,10 @@ def stream_summary(end: StreamEnd) -> Optional[str]:
   usage = end.usage
   if usage is not None:
     tokens = []
-    if usage.prompt_tokens is not None:
-      tokens.append(f"{usage.prompt_tokens} in")
-    if usage.completion_tokens is not None:
-      tokens.append(f"{usage.completion_tokens} out")
+    if usage.token_input is not None:
+      tokens.append(f"{usage.token_input} in")
+    if usage.token_output is not None:
+      tokens.append(f"{usage.token_output} out")
     if not tokens and usage.total_tokens is not None:
       tokens.append(f"{usage.total_tokens} total")
     if tokens:
@@ -76,11 +76,11 @@ def compact_summary(end: StreamEnd) -> Optional[str]:
   parts = []
   usage = end.usage
   if usage is not None:
-    prompt, completion = usage.prompt_tokens, usage.completion_tokens
-    if prompt is not None and completion is not None:
-      parts.append(f"{prompt}→{completion} tok")
-    elif completion is not None:
-      parts.append(f"{completion} tok")
+    token_input, token_output = usage.token_input, usage.token_output
+    if token_input is not None and token_output is not None:
+      parts.append(f"{token_input}→{token_output} tok")
+    elif token_output is not None:
+      parts.append(f"{token_output} tok")
     elif usage.total_tokens is not None:
       parts.append(f"{usage.total_tokens} tok")
   if end.metrics is not None and end.metrics.duration is not None:
